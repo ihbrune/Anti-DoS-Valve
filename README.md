@@ -175,6 +175,6 @@ Finally, the value for _relevantPaths_ must be developed. Here, if possible, onl
 
 After the first commissioning, the valve should be closely monitored so that disturbances of regular users can be recognized and stopped early.
 
-The corresponding entries are found in the Tomcat log files, entries of locks can be found here via the text element `AntiDoSMonitor`.
+The corresponding entries are found in the Tomcat log files, entries of blocks can be found here via the keyword `AntiDoSMonitor`.
 
-An alternative is access by JMX, for example via `JConsole`. The internal states of the valve are visible via JMX and the settings of the valve can also be changed without restarting the server.
+An alternative is monitoring with JMX, for example via `JConsole`. The internal states of the valve are visible via JMX and the settings of the valve can also be changed without restarting the server.
