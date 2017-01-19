@@ -10,6 +10,10 @@ An important goal in the development is the extensive coverage of the code by un
 
 Also a simulation option in the form of Google Drive Sheets is provided. The status of the valve can be monitored and the configuration can be changed via JMX.
 
+# Which version of Tomcat
+
+The valve is build against Tomcat 8.0.* libraries. It has been tested in Tomcat 8.0.* and 8.5.*.
+
 # Implementation of dynamic access rate limiting
 
 The goal of the implementation was to get a flexible solution, which at the same time would only have a small degree of complexity and little overhead in the servers.
