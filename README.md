@@ -1,6 +1,6 @@
 
 # What is the Anti-DoS Valve
-This project implements a Tomcat Valve, which can enforce dynamic access rate limitations on requests from individual IP addresses. This can, to a certain extent, prevent overloads of Tomcat servers, eg by DoS attacks, or at least limit their effects.
+This project implements a Tomcat Valve, which can enforce dynamic access rate limitations on requests from individual IP addresses. This can, to a certain extent, prevent overloads of Tomcat servers, e.g. by DoS attacks, or at least limit their effects.
 
 The valve can not, of course, provide complete protection against any kind of maliciously caused overload. The goal is rather to get a simple usable DoS protection, which can be put into operation at short notice and with little effort, causing only a small overhead in the Tomcat server and can be used in particular to slow down aggressive web crawlers.
 
