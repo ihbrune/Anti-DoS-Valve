@@ -61,9 +61,9 @@ These are the steps to activate the valve:
 3. In the `server.xml`, the valve must be configured inside the corresponding HOST element (see the example below)
 4. Logging should be enabled so that at least messages about blocked accesses are logged (this is already the case in the standard configuration)
 
-The valve is now active!
+The valve is active now!
 
-A test of the function can be carried out on a non-existent URL, so that there is no disturbance of the real applications. To do this, you set very low thresholds, and then performs quick reloads on the test address directly in the web browser until the valve blocks your requests. This sample configuration can be used for such a test:
+A test of the function can be carried out on a non-existent URL, to avoid any influence on the real applications. For the test, you set very low thresholds, and then performs quick reloads on the test address directly in the web browser until the valve blocks your requests. This sample configuration can be used for such a test:
 
         <Valve className="org.henbru.antidos.AntiDoSValve"
                 alwaysAllowedIPs=""
@@ -80,7 +80,7 @@ The test address is here `/valvetest` and from the 6th call access should be den
 
 # Valve Configuration
 
-The real challenge when commissioning the valve is to find the right parameters. The right balance must be found between too sharp settings that would lock out regular users, too loose settings that leave unauthorized attackers untouched, and settings that hold too much data and thus unnecessarily load / slow down the Tomcat server .
+The real challenge when commissioning the valve is to find the best settings for your server. The right balance must be found between too tight settings that would lock out your regular users, too loose settings that leave attackers untouched, and settings that hold too much data and thus unnecessarily load / slow down the Tomcat server.
 
 In order to find the appropriate configuration you should make evaluations of the current server logs with the HTTP(S) requests, in particular to answer these questions:
 
