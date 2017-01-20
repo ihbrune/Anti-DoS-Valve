@@ -1,6 +1,6 @@
 
 # What is the Anti-DoS Valve
-This project implements a Tomcat Valve, which can enforce  dynamic access rate limitations on requests from individual IP addresses. This can, to a certain extent, prevent overloads of Tomcat servers, eg by DoS attacks, or at least limit their effects.
+This project implements a Tomcat Valve, which can enforce dynamic access rate limitations on requests from individual IP addresses. This can, to a certain extent, prevent overloads of Tomcat servers, eg by DoS attacks, or at least limit their effects.
 
 The valve can not, of course, provide complete protection against any kind of maliciously caused overload. The goal is rather to get a simple usable DoS protection, which can be put into operation at short notice and with little effort, causing only a small overhead in the Tomcat server and can be used in particular to slow down aggressive web crawlers.
 
@@ -94,15 +94,15 @@ There are a number of logfile analysis tools that you can use for this purpose, 
 
 In addition to the question of which usage pattern is displayed on the server in normal operation, an important point is the estimate of the access speed an attacker needs to cause overloads. The smaller the distance between regular server load and server overload, the more accurate the configuration of the Anti-DoS Valve must be.
 
-Once the values have been determined, one can develop the valve configuration, which can be controlled by these parameters:
+Once the values have been determined you can develop the valve configuration, which is controlled by these parameters:
 
 **alwaysForbiddenIPs**
 
-An optional regular expression used to define IP addresses that are always forbidden to access. This option and the following are _not part of the dynamic access rate limitation_ because they can completely block or completely remove IP addresses from a blockade.
+An optional regular expression used to define IP addresses that are always blocked. This option and the following are _not part of the dynamic access rate limitation_ because they can completely block or always allow IP addresses.
 
-Hint: You can use [this page](http://www.regexplanet.com/advanced/java/index.html) to develop and test Java RegExps.
+Hint: You can use [this page (german)](http://www.regexplanet.com/advanced/java/index.html) to develop and test Java RegExps.
 
-Hint 2: If you only want to use this function of the valve, you can use the [RemoteAddress Valve](https://tomcat.apache.org/tomcat-8.0-doc/config/valve.html#Remote_Address_Filter), which is already included in the Tomcat distribution.
+Hint 2: If you only want to use this option of the valve, you can use the [RemoteAddress Valve](https://tomcat.apache.org/tomcat-8.0-doc/config/valve.html#Remote_Address_Filter), which is already included in the Tomcat distribution.
 
 **alwaysAllowedIPs**
 
