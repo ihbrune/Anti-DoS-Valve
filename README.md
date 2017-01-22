@@ -56,7 +56,7 @@ In its first version the valve was developed for the protection of a Tomcat serv
 
 These are the steps to activate the valve:
 
-1. Clone the project from Github and build the JAR with Maven 
+1. Clone the project from Github and build the JAR with Maven `mvn install`
 2. Make the JAR available in Tomcat. Copy it for example into the same directory where your JDBC drivers are, which is probably `<CATALINA_HOME>/lib/`
 3. In the `server.xml`, the valve must be configured inside the corresponding HOST element (see the example below)
 4. Logging should be enabled so that at least messages about blocked accesses are logged (this is already the case in the standard configuration)
