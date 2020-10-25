@@ -1,6 +1,8 @@
 package org.henbru.antidos;
 
 import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 import javax.servlet.ServletException;
@@ -63,11 +65,22 @@ public class AntiDoSValve extends ValveBase {
 	 */
 	public static final String ANTIDOS_LOGGER_NAME = "org.henbru.antidos.AntiDoS";
 
+	/**
+	 * The HTTP response status code that is set during a rejection due to too many
+	 * accesses
+	 */
+	public static final int BLOCKING_HTTP_STATUS = HttpServletResponse.SC_FORBIDDEN;
+
 	public AntiDoSValve() {
 		super(true);
 	}
 
-	private static volatile AntiDoSMonitor monitor = null;
+	private static final String DEFAULT_MONITOR_NAME = "DEFAULT";
+
+	/**
+	 * Map of monitor objects for different valve instances
+	 */
+	private static volatile Map<String, AntiDoSMonitor> monitors = null;
 
 	private int maxIPCacheSize = -1;
 	private int numberOfSlots = -1;
@@ -75,6 +88,20 @@ public class AntiDoSValve extends ValveBase {
 	private int allowedRequestsPerSlot = -1;
 	private float shareOfRetainedFormerRequests = -1;
 	private boolean simulationMode = false;
+
+	/**
+	 * Internal monitor name. If not set a default name is used
+	 */
+	private volatile String monitorName = DEFAULT_MONITOR_NAME;
+
+	/**
+	 * Monitor name for logging
+	 */
+	private volatile String name4logging = provideName4logging(DEFAULT_MONITOR_NAME);
+
+	private static final String provideName4logging(String monitorName) {
+		return "AntiDoSValveAntiDoSValve [" + monitorName + "]";
+	}
 
 	/**
 	 * Regular expression with IP addresses that are always blocked
@@ -88,9 +115,9 @@ public class AntiDoSValve extends ValveBase {
 	private volatile String alwaysForbiddenIPsConfigValue = null;
 
 	/**
-	 * Variable for testing for configuration errors. <code>true</code> by
-	 * default, is set to <code>false</code> if
-	 * {@link #setAlwaysForbiddenIPs(String)} receives an invalid value
+	 * Variable for testing for configuration errors. <code>true</code> by default,
+	 * is set to <code>false</code> if {@link #setAlwaysForbiddenIPs(String)}
+	 * receives an invalid value
 	 */
 	private volatile boolean alwaysForbiddenIPsValid = true;
 
@@ -106,9 +133,9 @@ public class AntiDoSValve extends ValveBase {
 	private volatile String alwaysAllowedIPsConfigValue = null;
 
 	/**
-	 * Variable for testing for configuration errors. <code>true</code> by
-	 * default, is set to <code>false</code> if
-	 * {@link #setAlwaysAllowedIPs(String)} receives an invalid value
+	 * Variable for testing for configuration errors. <code>true</code> by default,
+	 * is set to <code>false</code> if {@link #setAlwaysAllowedIPs(String)} receives
+	 * an invalid value
 	 */
 	private volatile boolean alwaysAllowedIPsValid = true;
 
@@ -118,23 +145,71 @@ public class AntiDoSValve extends ValveBase {
 	private volatile Pattern relevantPaths = null;
 
 	/**
-	 * Configuration value for the regular expression with the paths for which
-	 * the valve becomes active. Probably not a valid {@link Pattern}.
+	 * Configuration value for the regular expression with the paths for which the
+	 * valve becomes active. Probably not a valid {@link Pattern}.
 	 */
 	private volatile String relevantPathsConfigValue = null;
 
 	/**
-	 * Variable for testing for configuration errors. <code>true</code> by
-	 * default, is set to <code>false</code> if
-	 * {@link #setRelevantPaths(String)} receives an invalid value
+	 * Variable for testing for configuration errors. <code>true</code> by default,
+	 * is set to <code>false</code> if {@link #setRelevantPaths(String)} receives an
+	 * invalid value
 	 */
 	private volatile boolean relevantPathsValid = true;
 
 	/**
-	 * The HTTP response status code that is set during a rejection due to too
-	 * many accesses
+	 * The monitor object for the monitorName in this instance. Calls
+	 * {@link #reloadMonitor()} to create monitor instance, if necessary
+	 * 
+	 * @return might be <code>null</code> if configuration is incomplete
 	 */
-	public static final int BLOCKING_HTTP_STATUS = HttpServletResponse.SC_FORBIDDEN;
+	private AntiDoSMonitor provideMonitor() {
+		if (monitors == null || !monitors.containsKey(monitorName))
+			reloadMonitor();
+
+		return monitors.get(monitorName);
+	}
+
+	/**
+	 * Creates the map for the monitors. Should be called only once in the lifetime
+	 * of the Tomcat container
+	 */
+	private static void initializeMonitors() {
+		monitors = new ConcurrentHashMap<String, AntiDoSMonitor>(1);
+	}
+
+	/**
+	 * Monitor name used by this valve instance
+	 */
+	public String getMonitorName() {
+		return monitorName;
+	}
+
+	/**
+	 * Setting of the regular expression with IP addresses that are always blocked.
+	 * Example for blocking all requests from <code>localhost</code>:
+	 * <p>
+	 * <code>"127\.\d+\.\d+\.\d+|::1|0:0:0:0:0:0:0:1"</code>
+	 *
+	 * @param monitorName The name of the monitor object used by this valve
+	 *                    instance. Might be empty and is then set to a default.
+	 */
+	public void setMonitorName(String monitorName) {
+		if (monitorName == null || monitorName.length() == 0) {
+			this.monitorName = DEFAULT_MONITOR_NAME;
+		} else {
+			this.monitorName = monitorName;
+		}
+		name4logging = provideName4logging(this.monitorName);
+	}
+
+	/**
+	 * @see {@link #setMonitorNameValid(String)}
+	 * @return always <code>true</code>
+	 */
+	public boolean isMonitorNameValid() {
+		return true;
+	}
 
 	/**
 	 * Regular expression with IP addresses that are always blocked
@@ -144,15 +219,14 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
-	 * Setting of the regular expression with IP addresses that are always
-	 * blocked. Example for blocking all requests from <code>localhost</code>:
+	 * Setting of the regular expression with IP addresses that are always blocked.
+	 * Example for blocking all requests from <code>localhost</code>:
 	 * <p>
 	 * <code>"127\.\d+\.\d+\.\d+|::1|0:0:0:0:0:0:0:1"</code>
 	 *
-	 * @param alwaysForbiddenIPs
-	 *            The regular expression. Might be empty. Whether the parameter
-	 *            was valid can be checked via the result of the method
-	 *            {@link #isAlwaysForbiddenIPsValid()}
+	 * @param alwaysForbiddenIPs The regular expression. Might be empty. Whether the
+	 *                           parameter was valid can be checked via the result
+	 *                           of the method {@link #isAlwaysForbiddenIPsValid()}
 	 */
 	public void setAlwaysForbiddenIPs(String alwaysForbiddenIPs) {
 		if (alwaysForbiddenIPs == null || alwaysForbiddenIPs.length() == 0) {
@@ -187,15 +261,14 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
-	 * Setting of the regular expression with IP addresses that are never
-	 * blocked. Example for allowing all requests from <code>localhost</code>:
+	 * Setting of the regular expression with IP addresses that are never blocked.
+	 * Example for allowing all requests from <code>localhost</code>:
 	 * <p>
 	 * <code>"127\.\d+\.\d+\.\d+|::1|0:0:0:0:0:0:0:1"</code>
 	 *
-	 * @param alwaysAllowedIPs
-	 *            The regular expression. Might be empty. Whether the parameter
-	 *            was valid can be checked via the result of the method
-	 *            {@link #isAlwaysAllowedIPsValid()}
+	 * @param alwaysAllowedIPs The regular expression. Might be empty. Whether the
+	 *                         parameter was valid can be checked via the result of
+	 *                         the method {@link #isAlwaysAllowedIPsValid()}
 	 */
 	public void setAlwaysAllowedIPs(String alwaysAllowedIPs) {
 		if (alwaysAllowedIPs == null || alwaysAllowedIPs.length() == 0) {
@@ -224,23 +297,21 @@ public class AntiDoSValve extends ValveBase {
 
 	/**
 	 * 
-	 * @return Regular expression with the paths for which the valve becomes
-	 *         active
+	 * @return Regular expression with the paths for which the valve becomes active
 	 */
 	public String getRelevantPathsConfigValue() {
 		return relevantPathsConfigValue;
 	}
 
 	/**
-	 * Setting of the regular expression with the paths for which the valve
-	 * becomes active. Example for activating the valve on all requests:
+	 * Setting of the regular expression with the paths for which the valve becomes
+	 * active. Example for activating the valve on all requests:
 	 * <p>
 	 * <code>".*"</code>
 	 * 
-	 * @param relevantPaths
-	 *            The regular expression. Might be empty. Whether the parameter
-	 *            was valid can be checked via the result of the method
-	 *            {@link #isRelevantPathsValid()}
+	 * @param relevantPaths The regular expression. Might be empty. Whether the
+	 *                      parameter was valid can be checked via the result of the
+	 *                      method {@link #isRelevantPathsValid()}
 	 */
 	public void setRelevantPaths(String relevantPaths) {
 		if (relevantPaths == null || relevantPaths.length() == 0) {
@@ -269,12 +340,11 @@ public class AntiDoSValve extends ValveBase {
 
 	/**
 	 * 
-	 * @param maxIPCacheSize
-	 *            The number of IP addresses that can be monitored within a time
-	 *            slot. Used to prevent the memory requirement from growing
-	 *            indefinitely. This value is used as
-	 *            <code>maxCountersPerSlot</code> in
-	 *            {@link AntiDoSMonitor#AntiDoSMonitor(int, int, int, int, float)}
+	 * @param maxIPCacheSize The number of IP addresses that can be monitored within
+	 *                       a time slot. Used to prevent the memory requirement
+	 *                       from growing indefinitely. This value is used as
+	 *                       <code>maxCountersPerSlot</code> in
+	 *                       {@link AntiDoSMonitor#AntiDoSMonitor(int, int, int, int, float)}
 	 */
 	public void setMaxIPCacheSize(int maxIPCacheSize) {
 		this.maxIPCacheSize = maxIPCacheSize;
@@ -282,10 +352,10 @@ public class AntiDoSValve extends ValveBase {
 
 	/**
 	 * 
-	 * @param numberOfSlots
-	 *            The number of slots to be held. More slots allow a further
-	 *            look into the past, but increase the memory requirements and
-	 *            slow down the execution to a certain degree
+	 * @param numberOfSlots The number of slots to be held. More slots allow a
+	 *                      further look into the past, but increase the memory
+	 *                      requirements and slow down the execution to a certain
+	 *                      degree
 	 */
 	public void setNumberOfSlots(int numberOfSlots) {
 		this.numberOfSlots = numberOfSlots;
@@ -293,8 +363,7 @@ public class AntiDoSValve extends ValveBase {
 
 	/**
 	 * 
-	 * @param slotLength
-	 *            The length of the individual slots in seconds
+	 * @param slotLength The length of the individual slots in seconds
 	 */
 	public void setSlotLength(int slotLength) {
 		this.slotLength = slotLength;
@@ -302,9 +371,8 @@ public class AntiDoSValve extends ValveBase {
 
 	/**
 	 * 
-	 * @param allowedRequestsPerSlot
-	 *            The number of requests from one IP address allowed within a
-	 *            slot until it is blocked
+	 * @param allowedRequestsPerSlot The number of requests from one IP address
+	 *                               allowed within a slot until it is blocked
 	 */
 	public void setAllowedRequestsPerSlot(int allowedRequestsPerSlot) {
 		this.allowedRequestsPerSlot = allowedRequestsPerSlot;
@@ -312,18 +380,23 @@ public class AntiDoSValve extends ValveBase {
 
 	/**
 	 * 
-	 * @param shareOfRetainedFormerRequests
-	 *            This parameter defines which portion of the requests from an
-	 *            IP address from previous slots is retained in a new slot. The
-	 *            higher this share, the longer it takes for an IP address to
-	 *            recover from a blocking. The value 1 would mean that the
-	 *            average number of requests for an IP address in the past slots
-	 *            is retained completely. A value of 0.5 would retain half, the
-	 *            value of 0 would completely ignore the past (is this case the
-	 *            retention of older slots would make no sense). A value greater
-	 *            than 1 would eventually lead to a block in the case of an IP
-	 *            address which remains below the
-	 *            <code>allowedRequestsPerSlot</code> per slot on average.
+	 * @param shareOfRetainedFormerRequests This parameter defines which portion of
+	 *                                      the requests from an IP address from
+	 *                                      previous slots is retained in a new
+	 *                                      slot. The higher this share, the longer
+	 *                                      it takes for an IP address to recover
+	 *                                      from a blocking. The value 1 would mean
+	 *                                      that the average number of requests for
+	 *                                      an IP address in the past slots is
+	 *                                      retained completely. A value of 0.5
+	 *                                      would retain half, the value of 0 would
+	 *                                      completely ignore the past (is this case
+	 *                                      the retention of older slots would make
+	 *                                      no sense). A value greater than 1 would
+	 *                                      eventually lead to a block in the case
+	 *                                      of an IP address which remains below the
+	 *                                      <code>allowedRequestsPerSlot</code> per
+	 *                                      slot on average.
 	 */
 	public void setShareOfRetainedFormerRequests(String shareOfRetainedFormerRequests) {
 		this.shareOfRetainedFormerRequests = -1;
@@ -335,8 +408,8 @@ public class AntiDoSValve extends ValveBase {
 
 	/**
 	 * 
-	 * @return if <code>true</code> the valve operates in simulation mode and
-	 *         will not perform actual blockings. Default is <code>false</code>
+	 * @return if <code>true</code> the valve operates in simulation mode and will
+	 *         not perform actual blockings. Default is <code>false</code>
 	 */
 	public boolean isSimulationMode() {
 		return simulationMode;
@@ -345,9 +418,8 @@ public class AntiDoSValve extends ValveBase {
 	/**
 	 * Turn simulation mode on or off
 	 * 
-	 * @param simulationMode
-	 *            if <code>true</code> the valve will operate in simulation mode
-	 *            and not perform actual blockings
+	 * @param simulationMode if <code>true</code> the valve will operate in
+	 *                       simulation mode and not perform actual blockings
 	 */
 	public void setSimulationMode(boolean simulationMode) {
 		this.simulationMode = simulationMode;
@@ -364,8 +436,8 @@ public class AntiDoSValve extends ValveBase {
 		String path = request.getRequestURI();
 
 		if (log.isDebugEnabled()) {
-			log.debug("AntiDoSValve, IP: " + ip);
-			log.debug("AntiDoSValve, Pfad: " + path);
+			log.debug(name4logging + ", IP: " + ip);
+			log.debug(name4logging + ", Pfad: " + path);
 		}
 
 		boolean allowed = isRequestAllowed(ip, path);
@@ -392,24 +464,23 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
-	 * Checks the valve configuration. Creates the internal
-	 * {@link AntiDoSMonitor} instance if it does not yet exit
+	 * Checks the valve configuration. Creates the internal {@link AntiDoSMonitor}
+	 * instance if it does not yet exit
 	 * 
-	 * @throws LifecycleException
-	 *             Thrown if configuration is invalid
+	 * @throws LifecycleException Thrown if configuration is invalid
 	 */
 	private void checkConfiguration() throws LifecycleException {
 		if (!alwaysForbiddenIPsValid)
-			throw new LifecycleException("AntiDoSValve.alwaysForbiddenIPs is invalid");
+			throw new LifecycleException(name4logging + ".alwaysForbiddenIPs is invalid");
 		if (!alwaysAllowedIPsValid)
-			throw new LifecycleException("AntiDoSValve.alwaysAllowedIPs is invalid");
+			throw new LifecycleException(name4logging + ".alwaysAllowedIPs is invalid");
 		if (!relevantPathsValid)
-			throw new LifecycleException("AntiDoSValve.relevantPaths is invalid");
+			throw new LifecycleException(name4logging + ".relevantPaths is invalid");
 
-		if (monitor == null) {
+		if (provideMonitor() == null) {
 			String monitorMsg = reloadMonitor();
 			if (monitorMsg != null)
-				throw new LifecycleException("AntiDoSValve.AntiDoSMonitor parameter is invalid: " + monitorMsg);
+				throw new LifecycleException(name4logging + ".AntiDoSMonitor parameter is invalid: " + monitorMsg);
 		}
 	}
 
@@ -419,18 +490,26 @@ public class AntiDoSValve extends ValveBase {
 	 * configuration via JMX. After a configuration change the monitor can be
 	 * reloaded.
 	 * 
-	 * @return Returns <code>null</code>, if the monitor instance has been
-	 *         created without problems. If a parameter is missing or invalid, a
-	 *         text with a corresponding message is provided
+	 * @return Returns <code>null</code>, if the monitor instance has been created
+	 *         without problems. If a parameter is missing or invalid, a text with a
+	 *         corresponding message is provided
 	 */
 	public String reloadMonitor() {
 		try {
-			monitor = new AntiDoSMonitor(maxIPCacheSize, numberOfSlots, slotLength, allowedRequestsPerSlot,
-					shareOfRetainedFormerRequests);
-			
+			if (monitors == null)
+				initializeMonitors();
+
+			AntiDoSMonitor monitor = new AntiDoSMonitor(monitorName, maxIPCacheSize, numberOfSlots, slotLength,
+					allowedRequestsPerSlot, shareOfRetainedFormerRequests);
+
+			if (monitorName == null)
+				monitorName = DEFAULT_MONITOR_NAME;
+
+			monitors.put(monitorName, monitor);
+
 			if (simulationMode && log.isInfoEnabled())
-				log.info("AntiDoSVale is in SIMULATION MODE");
-			
+				log.info(name4logging + " is in SIMULATION MODE");
+
 			return null;
 		} catch (IllegalArgumentException ex) {
 			return ex.getMessage();
@@ -438,8 +517,8 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
-	 * This method implements the actual business logic of the valve. The method
-	 * is public and can be called by JMX. The test runs in this order:
+	 * This method implements the actual business logic of the valve. The method is
+	 * public and can be called by JMX. The test runs in this order:
 	 * 
 	 * <ul>
 	 * <li>Is the IP address always blocked? Calls
@@ -447,9 +526,9 @@ public class AntiDoSValve extends ValveBase {
 	 * checks is finished and <code>false</code> returned as result, but the IP
 	 * address is not counted in the {@link AntiDoSMonitor} instance
 	 * <li>Is the IP address always allowed? Calls
-	 * {@link #isIPAddressInAlwaysAllowed(String)}. If <code>true</code> the
-	 * checks is finished and <code>true</code> returned as result, but the IP
-	 * address is not counted
+	 * {@link #isIPAddressInAlwaysAllowed(String)}. If <code>true</code> the checks
+	 * is finished and <code>true</code> returned as result, but the IP address is
+	 * not counted
 	 * <li>Is the request URI in the relevant paths? Calls
 	 * {@link #isRequestURIInRelevantPaths(String)}. If not returns
 	 * <code>true</code>, but the IP address is not counted
@@ -457,33 +536,31 @@ public class AntiDoSValve extends ValveBase {
 	 * actual rate limitation? Calls {@link #isIPAddressBlocked(String)}
 	 * </ul>
 	 *
-	 * @param ip
-	 *            The IP address
-	 * @param requestURI
-	 *            The path, should be the result of
-	 *            {@link HttpServletRequest#getRequestURI()}
-	 * @return <code>true</code> if the request is allowed, <code>false</code>
-	 *         if it should be blocked
+	 * @param ip         The IP address
+	 * @param requestURI The path, should be the result of
+	 *                   {@link HttpServletRequest#getRequestURI()}
+	 * @return <code>true</code> if the request is allowed, <code>false</code> if it
+	 *         should be blocked
 	 */
 	public boolean isRequestAllowed(String ip, String requestURI) {
 
 		if (isIPAddressInAlwaysForbidden(ip)) {
 			if (log.isDebugEnabled())
-				log.debug("Is in AlwaysForbiddenIPs: " + ip);
+				log.debug(name4logging + " Is in AlwaysForbiddenIPs: " + ip);
 
 			return false;
 		}
 
 		if (isIPAddressInAlwaysAllowed(ip)) {
 			if (log.isDebugEnabled())
-				log.debug("Is in alwaysAllowedIPs: " + ip);
+				log.debug(name4logging + " Is in alwaysAllowedIPs: " + ip);
 
 			return true;
 		}
 
 		if (!isRequestURIInRelevantPaths(requestURI)) {
 			if (log.isDebugEnabled())
-				log.debug("Not in relevantPaths: " + requestURI);
+				log.debug(name4logging + " Not in relevantPaths: " + requestURI);
 
 			return true;
 		}
@@ -494,45 +571,42 @@ public class AntiDoSValve extends ValveBase {
 	/**
 	 * This method checks if an IP address is blocked in the internal
 	 * {@link AntiDoSMonitor} instance. At the same time, the call increases the
-	 * counter for this IP address. The method is public and can be called by
-	 * JMX
+	 * counter for this IP address. The method is public and can be called by JMX
 	 * 
-	 * @param ip
-	 *            The IP address
+	 * @param ip The IP address
 	 * @see AntiDoSMonitor#registerAndCheckRequest(String)
-	 * @throws IllegalArgumentException
-	 *             If the parameter is <code>null</code> or empty
+	 * @throws IllegalArgumentException If the parameter is <code>null</code> or
+	 *                                  empty
 	 */
 	public boolean isIPAddressBlocked(String ip) throws IllegalArgumentException {
-
+		AntiDoSMonitor monitor = provideMonitor();
 		if (monitor == null || monitor.registerAndCheckRequest(ip)) {
 			if (log.isDebugEnabled())
 				if (monitor == null)
-					log.debug("AntiDoSMonitor not available");
+					log.debug(name4logging + " not available");
 				else
-					log.debug("Not blocked in AntiDoSMonitor: " + ip);
+					log.debug(name4logging + " Not blocked in AntiDoSMonitor: " + ip);
 
 			return false;
 		}
 
 		if (log.isDebugEnabled())
-			log.debug("Blocked in AntiDoSMonitor: " + ip);
+			log.debug(name4logging + " blocks: " + ip);
 
 		return true;
 	}
 
 	/**
 	 * This method returns the current status of an IP address in the internal
-	 * {@link AntiDoSMonitor} instance. This call does not alter the status of
-	 * the IP address. The method is public and can be called by JMX
+	 * {@link AntiDoSMonitor} instance. This call does not alter the status of the
+	 * IP address. The method is public and can be called by JMX
 	 * 
-	 * @param ip
-	 *            The IP address
+	 * @param ip The IP address
 	 * @see AntiDoSMonitor#provideCurrentCounter(String)
-	 * @throws IllegalArgumentException
-	 *             Thrown if parameter is empty
+	 * @throws IllegalArgumentException Thrown if parameter is empty
 	 */
 	public String getIPAddressStatus(String ip) throws IllegalArgumentException {
+		AntiDoSMonitor monitor = provideMonitor();
 
 		AntiDoSCounter ipCounter = monitor != null ? monitor.provideCurrentCounter(ip) : null;
 
@@ -541,11 +615,10 @@ public class AntiDoSValve extends ValveBase {
 
 	/**
 	 * This method checks if an IP address is matched by the pattern in
-	 * {@link #getAlwaysForbiddenIPsConfigValue()}. The method is public and can
-	 * be called by JMX
+	 * {@link #getAlwaysForbiddenIPsConfigValue()}. The method is public and can be
+	 * called by JMX
 	 *
-	 * @param ip
-	 *            The IP address
+	 * @param ip The IP address
 	 */
 	public boolean isIPAddressInAlwaysForbidden(String ip) {
 		// Local copy for thread safety
@@ -559,11 +632,10 @@ public class AntiDoSValve extends ValveBase {
 
 	/**
 	 * This method checks if an IP address is matched by the pattern in
-	 * {@link #getAlwaysAllowedIPsConfigValue()}. The method is public and can
-	 * be called by JMX
+	 * {@link #getAlwaysAllowedIPsConfigValue()}. The method is public and can be
+	 * called by JMX
 	 *
-	 * @param ip
-	 *            The IP address
+	 * @param ip The IP address
 	 */
 	public boolean isIPAddressInAlwaysAllowed(String ip) {
 		// Local copy for thread safety
@@ -577,12 +649,10 @@ public class AntiDoSValve extends ValveBase {
 
 	/**
 	 * This method checks if a URL is matched by the pattern in
-	 * {@link #getRelevantePfade()}. The method is public and can be called by
-	 * JMX
+	 * {@link #getRelevantePfade()}. The method is public and can be called by JMX
 	 *
-	 * @param requestURI
-	 *            The path. Should be the result of
-	 *            {@link HttpServletRequest#getRequestURI()}
+	 * @param requestURI The path. Should be the result of
+	 *                   {@link HttpServletRequest#getRequestURI()}
 	 */
 	public boolean isRequestURIInRelevantPaths(String requestURI) {
 		// Local copy for thread safety
@@ -595,10 +665,11 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
-	 * @return Prints the current status of the internal monitoring object, e.
-	 *         g. for JMX monitoring
+	 * @return Prints the current status of the internal monitoring object, e. g.
+	 *         for JMX monitoring
 	 */
 	public String getMonitorStatus() {
+		AntiDoSMonitor monitor = provideMonitor();
 		return monitor != null ? monitor.toString() : "NOT INITIALIZED!";
 	}
 }

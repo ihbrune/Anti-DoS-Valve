@@ -66,6 +66,7 @@ The valve is active now!
 A test of the function can be carried out on a non-existent URL, to avoid any influence on the real applications. For the test, you set very low thresholds, and then performs quick reloads on the test address directly in the web browser until the valve blocks your requests. This sample configuration can be used for such a test:
 
         <Valve className="org.henbru.antidos.AntiDoSValve"
+                monitorName="TEST VALVE"
                 alwaysAllowedIPs=""
                 alwaysForbiddenIPs=""
                 relevantPaths="/valvetest"
@@ -95,6 +96,10 @@ There are a number of logfile analysis tools that you can use for this purpose, 
 In addition to the question which usage pattern is displayed on the server in normal operation, an important point is the estimate of the access speed an attacker needs to cause overloads. The smaller the distance between regular server load and server overload, the more accurate the configuration of the Anti-DoS Valve must be.
 
 Once the values have been determined you can develop the valve configuration, which is controlled by these parameters:
+
+**monitorName**
+
+An optional parameter for naming the monitor instance. Available since version 1.1. If you are using more then one instance of the valve / monitor it is necessary to use this parameter to separate the configurations for the different instances. Also used in log messages. See the paragraph about multi-instance configurations.
 
 **alwaysForbiddenIPs**
 
@@ -169,7 +174,7 @@ The configuration shown above can be used as the starting point for the producti
 
 You can run configuration values in this [**Google Drive Sheet**](https://docs.google.com/spreadsheets/d/1eztKVnzjW9xVVia1hDAeLaiiKRAGfNKRFx5lvKkbLBs/edit?usp=sharing). To do this, you must copy the sheet into your own Google Account and then edit the fields marked with **'set me!'**. Here, the impact of different configuration values on the access patterns of attackers (or regular users) can easily be watched.
 
-Finally, the value for _relevantPaths_ must be developed. Here, if possible, only those parts of the applications that are accessible to attackers and which cause significant server loads should be covered.
+Finally, the value for *relevantPaths* must be developed. Here, if possible, only those parts of the applications that are accessible to attackers and which cause significant server loads should be covered.
 
 # Monitoring
 
@@ -178,3 +183,33 @@ After the first commissioning, the valve should be closely monitored so that dis
 The corresponding entries are found in the Tomcat log files, entries of blocks can be found here via the keyword `AntiDoSMonitor`.
 
 An alternative is monitoring with JMX, for example via `JConsole`. The internal states of the valve are visible via JMX and the settings of the valve can also be changed without restarting the server.
+
+# Multi-instance configurations
+
+In some occasions it might be useful to use different configurations for different parts of your application or some IP address ranges. This can not be accomplished today with a single valve / monitor instance. From version 1.1 on it is possible to use more then one instance of the valve / monitor. The parameter *monitorName* is necessary to separate the configurations. Here we expand the previous example and add a second valve instance:
+
+        <Valve className="org.henbru.antidos.AntiDoSValve"
+                monitorName="TEST VALVE"
+                alwaysAllowedIPs=""
+                alwaysForbiddenIPs=""
+                relevantPaths="/valvetest"
+                maxIPCacheSize="50"
+                numberOfSlots="10"
+                slotLength="30"
+                allowedRequestsPerSlot="5"
+                shareOfRetainedFormerRequests="0"
+        />
+        
+        <Valve className="org.henbru.antidos.AntiDoSValve"
+                monitorName="TEST VALVE 2"
+                alwaysAllowedIPs=""
+                alwaysForbiddenIPs=""
+                relevantPaths="/valvetest2"
+                maxIPCacheSize="50"
+                numberOfSlots="10"
+                slotLength="30"
+                allowedRequestsPerSlot="3"
+                shareOfRetainedFormerRequests="0"
+        />
+
+The second valve will only monitors request to */valvetest2* and then imposes a stricter limitation. Give it a try, in die logs you will see the different log messages from the two valves. 

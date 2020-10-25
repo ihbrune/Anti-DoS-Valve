@@ -33,42 +33,40 @@ import org.apache.juli.logging.LogFactory;
  *
  */
 public class AntiDoSSlot {
-	private static final Log log = LogFactory
-			.getLog(AntiDoSValve.ANTIDOS_LOGGER_NAME);
+	private static final Log log = LogFactory.getLog(AntiDoSValve.ANTIDOS_LOGGER_NAME);
 
 	private String key;
+	private String name4logging;
 
 	private Map<String, AntiDoSCounter> counters = null;
 
 	private int maxCountersPerSlot;
 
 	/**
-	 * @param key
-	 *            This attribute is used to name a slot. It should be unique for
-	 *            every slot used in a {@link AntiDoSMonitor} instance
+	 * @param monitorName        The monitors name. Used for logging
+	 * @param key                This attribute is used to name a slot. It should be
+	 *                           unique for every slot used in a
+	 *                           {@link AntiDoSMonitor} instance
 	 * 
-	 * @param maxCountersPerSlot
-	 *            The number of counters that can be held in the slot. If the
-	 *            number is exceeded, the counters that have not been accessed
-	 *            the longest are removed
-	 * @throws IllegalArgumentException
-	 *             Thrown if <code>key</code> is empty
+	 * @param maxCountersPerSlot The number of counters that can be held in the
+	 *                           slot. If the number is exceeded, the counters that
+	 *                           have not been accessed the longest are removed
+	 * @throws IllegalArgumentException Thrown if <code>key</code> is empty
 	 */
-	public AntiDoSSlot(String key, final int maxCountersPerSlot)
-			throws IllegalArgumentException {
+	public AntiDoSSlot(String monitorName, String key, final int maxCountersPerSlot) throws IllegalArgumentException {
 		if (key == null || key.length() == 0)
 			throw new IllegalArgumentException();
+
+		this.name4logging = "AntiDoSSlot [" + monitorName + "]";
 
 		this.key = key;
 
 		counters = Collections
-				.synchronizedMap(new LinkedHashMap<String, AntiDoSCounter>(
-						maxCountersPerSlot, 0.75f, true) {
+				.synchronizedMap(new LinkedHashMap<String, AntiDoSCounter>(maxCountersPerSlot, 0.75f, true) {
 					private static final long serialVersionUID = 1L;
 
 					@Override
-					protected boolean removeEldestEntry(
-							Map.Entry<String, AntiDoSCounter> eldest) {
+					protected boolean removeEldestEntry(Map.Entry<String, AntiDoSCounter> eldest) {
 						return size() > maxCountersPerSlot;
 					}
 				});
@@ -76,15 +74,12 @@ public class AntiDoSSlot {
 	}
 
 	/**
-	 * @param counterName
-	 *            The name of the counter (e. g. an IP address)
-	 * @return Provides the counter object for a specified name and creates it,
-	 *         if it does not yet exist
-	 * @throws IllegalArgumentException
-	 *             Thrown if parameter is empty
+	 * @param counterName The name of the counter (e. g. an IP address)
+	 * @return Provides the counter object for a specified name and creates it, if
+	 *         it does not yet exist
+	 * @throws IllegalArgumentException Thrown if parameter is empty
 	 */
-	public AntiDoSCounter getCounter(String counterName)
-			throws IllegalArgumentException {
+	public AntiDoSCounter getCounter(String counterName) throws IllegalArgumentException {
 		if (counterName == null || counterName.length() == 0)
 			throw new IllegalArgumentException();
 
@@ -93,23 +88,19 @@ public class AntiDoSSlot {
 		if (!counters.containsKey(counterName)) {
 			counters.putIfAbsent(counterName, new AntiDoSCounter());
 
-			if (log.isInfoEnabled() && slotNotFullYet
-					&& counters.size() >= maxCountersPerSlot)
-				log.info("Slot Counter Cache is full");
+			if (log.isInfoEnabled() && slotNotFullYet && counters.size() >= maxCountersPerSlot)
+				log.info(name4logging + " Counter Cache is full");
 		}
 		return counters.get(counterName);
 	}
 
 	/**
-	 * @param counterName
-	 *            The name of the counter (e. g. an IP address)
+	 * @param counterName The name of the counter (e. g. an IP address)
 	 * @return Provides the counter object for the specified name. Returns
 	 *         <code>null</code> if it does not yet exist
-	 * @throws IllegalArgumentException
-	 *             Thrown if parameter is empty
+	 * @throws IllegalArgumentException Thrown if parameter is empty
 	 */
-	public AntiDoSCounter getCounterIfExists(String counterName)
-			throws IllegalArgumentException {
+	public AntiDoSCounter getCounterIfExists(String counterName) throws IllegalArgumentException {
 		if (counterName == null || counterName.length() == 0)
 			throw new IllegalArgumentException();
 
@@ -130,8 +121,8 @@ public class AntiDoSSlot {
 		for (String _ip : counters.keySet()) {
 			AntiDoSCounter ip = counters.get(_ip);
 			if (ip.isLocked()) {
-				sb.append(_ip).append(" (").append(ip.getCount()).append("|")
-						.append(ip.getRetainedCounts()).append(")");
+				sb.append(_ip).append(" (").append(ip.getCount()).append("|").append(ip.getRetainedCounts())
+						.append(")");
 				hasLockedCounters = true;
 			}
 		}

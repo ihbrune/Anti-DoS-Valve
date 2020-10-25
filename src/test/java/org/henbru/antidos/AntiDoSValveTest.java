@@ -1,7 +1,6 @@
 package org.henbru.antidos;
 
 import org.apache.catalina.LifecycleException;
-import org.henbru.antidos.AntiDoSValve;
 
 import junit.framework.TestCase;
 
@@ -125,7 +124,7 @@ public class AntiDoSValveTest extends TestCase {
 
 	public void testIPAddressStatus() throws LifecycleException {
 		AntiDoSValve valve = new AntiDoSValve();
-		setValidAntiDoSMonitorconfiguration(valve);
+		setValidAntiDoSMonitorconfiguration(valve, "IP STATUS TEST");
 		valve.reloadMonitor();
 
 		String ipUnbekannt = "-";
@@ -141,7 +140,7 @@ public class AntiDoSValveTest extends TestCase {
 
 	public void testBlocking() throws LifecycleException {
 		AntiDoSValve valve = new AntiDoSValve();
-		setValidAntiDoSMonitorconfiguration(valve);
+		setValidAntiDoSMonitorconfiguration(valve, "BLOCK TEST");
 		valve.setAllowedRequestsPerSlot(3);
 		valve.reloadMonitor();
 
@@ -162,12 +161,67 @@ public class AntiDoSValveTest extends TestCase {
 		AntiDoSValve valve = new AntiDoSValve();
 		assertNotNull(valve.reloadMonitor());
 
-		setValidAntiDoSMonitorconfiguration(valve);
+		setValidAntiDoSMonitorconfiguration(valve, "RELOAD TEST");
 		assertNull(valve.reloadMonitor());
 
 	}
 
-	private static void setValidAntiDoSMonitorconfiguration(AntiDoSValve valve) {
+	public void testMultiAntiDoSMonitors() throws LifecycleException {
+		AntiDoSValve valve1 = new AntiDoSValve();
+		assertNotNull(valve1.reloadMonitor());
+
+		AntiDoSValve valve2 = new AntiDoSValve();
+		assertNotNull(valve2.reloadMonitor());
+
+		setValidAntiDoSMonitorconfiguration(valve1, "MULTI TEST - Instanz1");
+		assertNull(valve1.reloadMonitor());
+		assertNotNull(valve2.reloadMonitor());
+
+	}
+
+
+	public void testBlockingMulit() throws LifecycleException {
+		AntiDoSValve valve1 = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve1, "BLOCK TEST1");
+		valve1.setAllowedRequestsPerSlot(3);
+		valve1.reloadMonitor();
+		valve1.setRelevantPaths("/xyz");
+
+		AntiDoSValve valve2 = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve2, "BLOCK TEST2");
+		valve2.setAllowedRequestsPerSlot(4);
+		valve2.reloadMonitor();
+		valve2.setRelevantPaths("/xyz");
+
+		assertTrue(valve1.isRequestAllowed("127.0.0.1", "/xyz"));
+		assertTrue(valve1.isRequestAllowed("127.0.0.1", "/xyz"));
+		assertTrue(valve1.isRequestAllowed("127.0.0.1", "/xyz"));
+		assertFalse(valve1.isRequestAllowed("127.0.0.1", "/xyz"));
+
+		assertTrue(valve2.isRequestAllowed("127.0.0.1", "/xyz"));
+		assertTrue(valve2.isRequestAllowed("127.0.0.1", "/xyz"));
+		assertTrue(valve2.isRequestAllowed("127.0.0.1", "/xyz"));
+		assertTrue(valve2.isRequestAllowed("127.0.0.1", "/xyz"));
+		assertFalse(valve2.isRequestAllowed("127.0.0.1", "/xyz"));
+
+		valve2.reloadMonitor();
+		valve2.setRelevantPaths("/xyz2");
+
+		assertTrue(valve1.isRequestAllowed("127.0.0.1", "/xyz2"));
+		assertTrue(valve1.isRequestAllowed("127.0.0.1", "/xyz2"));
+		assertTrue(valve1.isRequestAllowed("127.0.0.1", "/xyz2"));
+		assertTrue(valve1.isRequestAllowed("127.0.0.1", "/xyz2"));
+
+		assertTrue(valve2.isRequestAllowed("127.0.0.1", "/xyz2"));
+		assertTrue(valve2.isRequestAllowed("127.0.0.1", "/xyz2"));
+		assertTrue(valve2.isRequestAllowed("127.0.0.1", "/xyz2"));
+		assertTrue(valve2.isRequestAllowed("127.0.0.1", "/xyz2"));
+		assertFalse(valve2.isRequestAllowed("127.0.0.1", "/xyz2"));
+	
+	}
+
+	private static void setValidAntiDoSMonitorconfiguration(AntiDoSValve valve, String monitorName) {
+		valve.setMonitorName(monitorName);
 		valve.setNumberOfSlots(10);
 		valve.setSlotLength(30);
 		valve.setShareOfRetainedFormerRequests("1");
