@@ -168,6 +168,9 @@ This parameter defines the extent to which earlier requests from an IP address a
 
 * `<NumberOfSlots>`: If the factor is set to the number of slots, then it would sufficient if an IP address had once too many accesses in the past to block it immediately in a new slot. Also a number of slots, in which the IP address has always been below the threshold, can eventually lead to a blockade. All values greater than 1 have this potential.
 
+**simulationMode**
+
+This option allows you to simulate the valves actions without actually blocking any request. It is *false* by default. When set to *true* it still prints logging information and is thus allowing you to get a feeling for the impact of your settings.
 # Sample Configuration
 
 The configuration shown above can be used as the starting point for the productive valve configuration.
@@ -212,4 +215,16 @@ In some occasions it might be useful to use different configurations for differe
                 shareOfRetainedFormerRequests="0"
         />
 
-The second valve will only monitors requests to */valvetest2* and then imposes a stricter limitation. Give it a try, in the logs you will see the different log messages from the two valves. 
+The second valve only monitors requests to */valvetest2* and imposes a stricter limitation. Give it a try, in the logs you will see the different log messages from the two valves. 
+
+Possible applications for multi-instance configurations:
+
+*Trying out a new configuration:* 
+
+In this case you add the new configuration in simulationMode and see how it behaves. To keep your server protected you leave the current configuration active until you switch to the new configuration
+
+*Allowing higher access rates for 'friendly' servers:* 
+
+If you have known servers accessing your service with a higher rate than you would like to allow everyone else you might use two valves: Your first valve defines the (lower) limits you let everyone use. In *alwaysAllowedIPs* we place the addresses of the known servers, this makes the first valve ignore requests from this servers.
+
+In the second value we define the more generous limits we impose on the known servers. We will also impose these limits on everyone else, but the other servers are already limited by the first valve, so this does not matter.
