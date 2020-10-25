@@ -47,13 +47,15 @@ import org.apache.juli.logging.LogFactory;
  * <li>{@link #setNumberOfSlots(int)}
  * <li>{@link #setSlotLength(int)}
  * <li>{@link #setShareOfRetainedFormerRequests(String)}
+ * <li>{@link #setSimulationMode(boolean)}
  * </ul>
  * 
  * @author Henning
  *
  */
 public class AntiDoSValve extends ValveBase {
-	private static final Log log = LogFactory.getLog(AntiDoSValve.class);
+
+	private static final Log log = LogFactory.getLog(AntiDoSValve.ANTIDOS_LOGGER_NAME);
 
 	/**
 	 * This logger name is used by the valve to log events that are relevant for
@@ -72,6 +74,7 @@ public class AntiDoSValve extends ValveBase {
 	private int slotLength = -1;
 	private int allowedRequestsPerSlot = -1;
 	private float shareOfRetainedFormerRequests = -1;
+	private boolean simulationMode = false;
 
 	/**
 	 * Regular expression with IP addresses that are always blocked
@@ -322,14 +325,32 @@ public class AntiDoSValve extends ValveBase {
 	 *            address which remains below the
 	 *            <code>allowedRequestsPerSlot</code> per slot on average.
 	 */
-	public void setShareOfRetainedFormerRequests(
-			String shareOfRetainedFormerRequests) {
+	public void setShareOfRetainedFormerRequests(String shareOfRetainedFormerRequests) {
 		this.shareOfRetainedFormerRequests = -1;
 		try {
-			this.shareOfRetainedFormerRequests = Float
-					.parseFloat(shareOfRetainedFormerRequests);
+			this.shareOfRetainedFormerRequests = Float.parseFloat(shareOfRetainedFormerRequests);
 		} catch (Exception ex) {
 		}
+	}
+
+	/**
+	 * 
+	 * @return if <code>true</code> the valve operates in simulation mode and
+	 *         will not perform actual blockings. Default is <code>false</code>
+	 */
+	public boolean isSimulationMode() {
+		return simulationMode;
+	}
+
+	/**
+	 * Turn simulation mode on or off
+	 * 
+	 * @param simulationMode
+	 *            if <code>true</code> the valve will operate in simulation mode
+	 *            and not perform actual blockings
+	 */
+	public void setSimulationMode(boolean simulationMode) {
+		this.simulationMode = simulationMode;
 	}
 
 	/**
@@ -337,9 +358,7 @@ public class AntiDoSValve extends ValveBase {
 	 * {@link #isRequestAllowed(String, String)} for its checks. If a request is
 	 * blocked the value of {@link #BLOCKING_HTTP_STATUS} is set as error code
 	 */
-	@Override
-	public void invoke(Request request, Response response) throws IOException,
-			ServletException {
+	public void invoke(Request request, Response response) throws IOException, ServletException {
 
 		String ip = request.getRemoteAddr();
 		String path = request.getRequestURI();
@@ -349,7 +368,8 @@ public class AntiDoSValve extends ValveBase {
 			log.debug("AntiDoSValve, Pfad: " + path);
 		}
 
-		if (isRequestAllowed(ip, path)) {
+		boolean allowed = isRequestAllowed(ip, path);
+		if (allowed || simulationMode) {
 			getNext().invoke(request, response);
 			return;
 		}
@@ -380,21 +400,16 @@ public class AntiDoSValve extends ValveBase {
 	 */
 	private void checkConfiguration() throws LifecycleException {
 		if (!alwaysForbiddenIPsValid)
-			throw new LifecycleException(
-					"AntiDoSValve.alwaysForbiddenIPs is invalid");
+			throw new LifecycleException("AntiDoSValve.alwaysForbiddenIPs is invalid");
 		if (!alwaysAllowedIPsValid)
-			throw new LifecycleException(
-					"AntiDoSValve.alwaysAllowedIPs is invalid");
+			throw new LifecycleException("AntiDoSValve.alwaysAllowedIPs is invalid");
 		if (!relevantPathsValid)
-			throw new LifecycleException(
-					"AntiDoSValve.relevantPaths is invalid");
+			throw new LifecycleException("AntiDoSValve.relevantPaths is invalid");
 
 		if (monitor == null) {
 			String monitorMsg = reloadMonitor();
 			if (monitorMsg != null)
-				throw new LifecycleException(
-						"AntiDoSValve.AntiDoSMonitor parameter is invalid: "
-								+ monitorMsg);
+				throw new LifecycleException("AntiDoSValve.AntiDoSMonitor parameter is invalid: " + monitorMsg);
 		}
 	}
 
@@ -410,9 +425,12 @@ public class AntiDoSValve extends ValveBase {
 	 */
 	public String reloadMonitor() {
 		try {
-			monitor = new AntiDoSMonitor(maxIPCacheSize, numberOfSlots,
-					slotLength, allowedRequestsPerSlot,
+			monitor = new AntiDoSMonitor(maxIPCacheSize, numberOfSlots, slotLength, allowedRequestsPerSlot,
 					shareOfRetainedFormerRequests);
+			
+			if (simulationMode && log.isInfoEnabled())
+				log.info("AntiDoSVale is in SIMULATION MODE");
+			
 			return null;
 		} catch (IllegalArgumentException ex) {
 			return ex.getMessage();
@@ -485,8 +503,7 @@ public class AntiDoSValve extends ValveBase {
 	 * @throws IllegalArgumentException
 	 *             If the parameter is <code>null</code> or empty
 	 */
-	public boolean isIPAddressBlocked(String ip)
-			throws IllegalArgumentException {
+	public boolean isIPAddressBlocked(String ip) throws IllegalArgumentException {
 
 		if (monitor == null || monitor.registerAndCheckRequest(ip)) {
 			if (log.isDebugEnabled())
@@ -517,8 +534,7 @@ public class AntiDoSValve extends ValveBase {
 	 */
 	public String getIPAddressStatus(String ip) throws IllegalArgumentException {
 
-		AntiDoSCounter ipCounter = monitor != null ? monitor
-				.provideCurrentCounter(ip) : null;
+		AntiDoSCounter ipCounter = monitor != null ? monitor.provideCurrentCounter(ip) : null;
 
 		return ipCounter != null ? ipCounter.toString() : "-";
 	}

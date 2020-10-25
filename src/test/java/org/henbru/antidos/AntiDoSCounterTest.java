@@ -1,7 +1,5 @@
 package org.henbru.antidos;
 
-import org.henbru.antidos.AntiDoSCounter;
-
 import junit.framework.TestCase;
 
 /**
