@@ -2,9 +2,6 @@ package org.henbru.antidos;
 
 import java.util.Calendar;
 
-import org.henbru.antidos.AntiDoSCounter;
-import org.henbru.antidos.AntiDoSMonitor;
-
 import junit.framework.TestCase;
 
 /**
@@ -17,7 +14,7 @@ public class AntiDoSMonitorTest extends TestCase {
 				final int numberOfSlots, int slotLength,
 				int allowedRequestsPerSlot, float shareOfRetainedOldRequests)
 				throws IllegalArgumentException {
-			super(maxCountersPerSlot, numberOfSlots, slotLength,
+			super("TEST", maxCountersPerSlot, numberOfSlots, slotLength,
 					allowedRequestsPerSlot, shareOfRetainedOldRequests);
 		}
 
@@ -167,7 +164,7 @@ public class AntiDoSMonitorTest extends TestCase {
 	}
 
 	public void testMaxRequests() {
-		AntiDoSMonitor mon = new AntiDoSMonitor(10, 5, 30, 3, (float) 0.5);
+		AntiDoSMonitor mon = new AntiDoSMonitor("TEST MAX REQ", 10, 5, 30, 3, (float) 0.5);
 
 		assertTrue(mon.registerAndCheckRequest("123.456.789.000"));
 		assertTrue(mon.registerAndCheckRequest("123.456.789.000"));
@@ -176,7 +173,7 @@ public class AntiDoSMonitorTest extends TestCase {
 	}
 
 	public void testSlotOverflow() {
-		AntiDoSMonitor mon = new AntiDoSMonitor(1, 5, 30, 2, (float) 0.5);
+		AntiDoSMonitor mon = new AntiDoSMonitor("TEST SLOT OVER", 1, 5, 30, 2, (float) 0.5);
 
 		assertTrue(mon.registerAndCheckRequest("123.456.789.000"));
 		assertTrue(mon.registerAndCheckRequest("123.456.789.000"));

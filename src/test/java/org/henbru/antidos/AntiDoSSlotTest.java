@@ -1,8 +1,5 @@
 package org.henbru.antidos;
 
-import org.henbru.antidos.AntiDoSCounter;
-import org.henbru.antidos.AntiDoSSlot;
-
 import junit.framework.TestCase;
 
 /**
@@ -11,7 +8,7 @@ import junit.framework.TestCase;
 public class AntiDoSSlotTest extends TestCase {
 
 	public void testContents() {
-		AntiDoSSlot slot = new AntiDoSSlot("xx", 10);
+		AntiDoSSlot slot = new AntiDoSSlot(null, "xx", 10);
 
 		assertNull(slot.getCounterIfExists("123.456.789.000"));
 		assertNotNull(slot.getCounter("123.456.789.000"));
@@ -78,7 +75,7 @@ public class AntiDoSSlotTest extends TestCase {
 	 * names
 	 */
 	private static AntiDoSSlot provideSlotTestdata1() {
-		AntiDoSSlot slot = new AntiDoSSlot("xx", 3);
+		AntiDoSSlot slot = new AntiDoSSlot("TD1", "xx", 3);
 
 		AntiDoSCounter rec1 = slot.getCounter("123.456.789.001");
 		rec1.getCount().set(11);
@@ -98,7 +95,7 @@ public class AntiDoSSlotTest extends TestCase {
 	 * names. The first counter name is used two times (1. und 3. call)
 	 */
 	private static AntiDoSSlot provideSlotTestdata2() {
-		AntiDoSSlot slot = new AntiDoSSlot("xx", 3);
+		AntiDoSSlot slot = new AntiDoSSlot("TD2", "xx", 3);
 
 		AntiDoSCounter rec1 = slot.getCounter("123.456.789.001");
 		rec1.getCount().set(11);
