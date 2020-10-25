@@ -212,4 +212,4 @@ In some occasions it might be useful to use different configurations for differe
                 shareOfRetainedFormerRequests="0"
         />
 
-The second valve will only monitors request to */valvetest2* and then imposes a stricter limitation. Give it a try, in die logs you will see the different log messages from the two valves. 
+The second valve will only monitors requests to */valvetest2* and then imposes a stricter limitation. Give it a try, in the logs you will see the different log messages from the two valves. 
