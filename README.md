@@ -221,7 +221,7 @@ Possible applications for multi-instance configurations:
 
 *Trying out a new configuration:* 
 
-In this case you add the new configuration in simulationMode and see how it behaves. To keep your server protected you leave the current configuration active until you switch to the new configuration
+In this case you add the new configuration in simulation mode to see how it behaves. To keep your server protected you leave the current configuration active until you switch to the new configuration.
 
 *Allowing higher access rates for 'friendly' servers:* 
 
