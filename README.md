@@ -87,12 +87,12 @@ In order to find the appropriate configuration you should make evaluations of th
 * In which range are the normal access numbers per day / hour / minute / second? 
 * What are the maximum values that can be attributed to individual IP addresses?
 * Which IP addresses cause a lot of traffic? Which of these are internal services and which of search engines?
-* Depending on the type of Tomcat application (s), it may make sense to make these evaluations differentiated for different parts of the applications. Access to static content such as images or stylesheets is usually less relevant than dynamic content
-* How many requests does a users webbrowser generate when he visits your pages for the first time und of what kind are these requests? 
+* Depending on the type of Tomcat application(s), it may make sense to make these evaluations differentiated for different parts of the applications. Access to static content such as images or stylesheets is usually less relevant than dynamic content
+* How many requests does a users webbrowser generate when he visits your pages for the first time and of what kind are these requests? 
 
 There are a number of logfile analysis tools that you can use for this purpose, but the usual unix tools like `grep`, `awk`, `sort`, `uniq` and `wc` will bring you very far. It is not neccessary to get a completely accurate picture (this varies probably anyway by the day), but to develop a basic sense of what is happening on your own server. If you have not generated any logfiles so far, it is now time to activate them.
 
-In addition to the question of which usage pattern is displayed on the server in normal operation, an important point is the estimate of the access speed an attacker needs to cause overloads. The smaller the distance between regular server load and server overload, the more accurate the configuration of the Anti-DoS Valve must be.
+In addition to the question which usage pattern is displayed on the server in normal operation, an important point is the estimate of the access speed an attacker needs to cause overloads. The smaller the distance between regular server load and server overload, the more accurate the configuration of the Anti-DoS Valve must be.
 
 Once the values have been determined you can develop the valve configuration, which is controlled by these parameters:
 
