@@ -100,7 +100,7 @@ public class AntiDoSValve extends ValveBase {
 	private volatile String name4logging = provideName4logging(DEFAULT_MONITOR_NAME);
 
 	private static final String provideName4logging(String monitorName) {
-		return "AntiDoSValveAntiDoSValve [" + monitorName + "]";
+		return "AntiDoSValve [" + monitorName + "]";
 	}
 
 	/**
