@@ -12,7 +12,7 @@ Also a simulation option in the form of Google Drive Sheets is provided. The sta
 
 # Which version of Tomcat
 
-The valve is build against Tomcat 9.0 libraries. It has been tested in Tomcat 9.0.
+The valve is build against Tomcat 9.0 libraries. It has been tested in Tomcat 9.0 und 8.0.
 
 # Implementation of dynamic access rate limiting
 
