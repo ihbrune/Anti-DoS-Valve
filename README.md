@@ -50,7 +50,9 @@ The maximum number of allowed requests per slot per IP address is compared with 
 
 # Experiences so far
 
-In its first version the valve was developed for the protection of a Tomcat server farm, which processes more than 1,000,000 requests per day. Here the valve had been in use for several months before the code was published on Github. During this time, it has demonstrated its stability, and has successfully limited the impact of DoS attacks by single or small groups of attacking computers.
+In its first version (2016) the valve was developed for the protection of a Tomcat server farm, which processes more than 1,000,000 requests per day. Here the valve had been in use for several months before the code was published on Github. During this time, it has demonstrated its stability, and has successfully limited the impact of DoS attacks by single or small groups of attacking servers.
+
+In the following years the valve helped to protect the same servers in situations with more then 50% of all requests had to be blocked and malicious peak loads of thousands of requests per second had to be dealt with. The valves implementation proved to be lightweight and fast enough to keep the servers floating and serving normal requests without interruption.
 
 # Commissioning
 
@@ -171,13 +173,36 @@ This parameter defines the extent to which earlier requests from an IP address a
 **simulationMode**
 
 This option allows you to simulate the valves actions without actually blocking any request. It is *false* by default. When set to *true* it still prints logging information and is thus allowing you to get a feeling for the impact of your settings.
-# Sample Configuration
+
+# Sample Configurations
 
 The configuration shown above can be used as the starting point for the productive valve configuration.
 
 You can run configuration values in this [**Google Drive Sheet**](https://docs.google.com/spreadsheets/d/1eztKVnzjW9xVVia1hDAeLaiiKRAGfNKRFx5lvKkbLBs/edit?usp=sharing). To do this, you must copy the sheet into your own Google Account and then edit the fields marked with **'set me!'**. Here, the impact of different configuration values on the access patterns of attackers (or regular users) can easily be watched.
 
-Finally, the value for *relevantPaths* must be developed. Here, if possible, only those parts of the applications that are accessible to attackers and which cause significant server loads should be covered.
+Finally, the value for *relevantPaths* must be developed. Here, if possible, only those parts of the applications that are accessible to attackers and which cause significant server loads should be covered. As a real world example is provided here:
+
+        <Valve className="org.henbru.antidos.AntiDoSValve"
+                monitorName="MY VALVE"
+                alwaysAllowedIPs="10\.68\.\d+\.\d+|10\.77\.\d+\.\d+"
+                alwaysForbiddenIPs=""
+                relevantPaths=".*(jsp|/download/|/pdf/).*"
+                maxIPCacheSize="250"
+                numberOfSlots="20"
+                slotLength="15"
+                allowedRequestsPerSlot="50"
+                shareOfRetainedFormerRequests="5"
+        />
+        
+This configuration is similar to the configuration used in the server farm that used the valve first. The individual servers face normale loads between one and two million requests per day on dynamic (aka servlet generated) content. Here are some explanations for the settings:
+
+*alwaysAllowedIPs*: Allows all requests from internal IP ranges to prevent blockings of employees on corporate devices
+
+*alwaysForbiddenIPs*: The real configuration contains several IP ranges that caused problems in the past
+
+*relevantPaths*: Matches only the dynamic parts of the web applications. Try to exclude CSS, JS, images and other static content, unless requests to this kind of content place a heavy burden on your server
+
+*maxIPCacheSize* to *shareOfRetainedFormerRequests*: This settings proved to work quite well for several years
 
 # Monitoring
 
