@@ -9,6 +9,29 @@ import junit.framework.TestCase;
  */
 public class AntiDoSValveTest extends TestCase {
 
+	public void testMonitorMode() {
+		AntiDoSValve valve = new AntiDoSValve();
+
+		assertTrue(valve.isMonitorModeValid());
+		assertTrue(valve.isMonitorModeDefault());
+		assertFalse(valve.isMonitorModeMarking());
+
+		valve.setMonitorMode("xyz");
+		assertFalse(valve.isMonitorModeValid());
+		assertFalse(valve.isMonitorModeDefault());
+		assertFalse(valve.isMonitorModeMarking());
+		
+		valve.setMonitorMode(AntiDoSValve.DEFAULT_MONITOR_MODE);
+		assertTrue(valve.isMonitorModeValid());
+		assertTrue(valve.isMonitorModeDefault());
+		assertFalse(valve.isMonitorModeMarking());
+		
+		valve.setMonitorMode(AntiDoSValve.MARKING_MONITOR_MODE);
+		assertTrue(valve.isMonitorModeValid());
+		assertFalse(valve.isMonitorModeDefault());
+		assertTrue(valve.isMonitorModeMarking());		
+	}
+
 	public void testAlwaysAllowedIPs() {
 		AntiDoSValve valve = new AntiDoSValve();
 
@@ -163,7 +186,6 @@ public class AntiDoSValveTest extends TestCase {
 
 		setValidAntiDoSMonitorconfiguration(valve, "RELOAD TEST");
 		assertNull(valve.reloadMonitor());
-
 	}
 
 	public void testMultiAntiDoSMonitors() throws LifecycleException {
@@ -176,11 +198,9 @@ public class AntiDoSValveTest extends TestCase {
 		setValidAntiDoSMonitorconfiguration(valve1, "MULTI TEST - Instanz1");
 		assertNull(valve1.reloadMonitor());
 		assertNotNull(valve2.reloadMonitor());
-
 	}
 
-
-	public void testBlockingMulit() throws LifecycleException {
+	public void testBlockingMulti() throws LifecycleException {
 		AntiDoSValve valve1 = new AntiDoSValve();
 		setValidAntiDoSMonitorconfiguration(valve1, "BLOCK TEST1");
 		valve1.setAllowedRequestsPerSlot(3);
@@ -217,7 +237,7 @@ public class AntiDoSValveTest extends TestCase {
 		assertTrue(valve2.isRequestAllowed("127.0.0.1", "/xyz2"));
 		assertTrue(valve2.isRequestAllowed("127.0.0.1", "/xyz2"));
 		assertFalse(valve2.isRequestAllowed("127.0.0.1", "/xyz2"));
-	
+
 	}
 
 	private static void setValidAntiDoSMonitorconfiguration(AntiDoSValve valve, String monitorName) {

@@ -8,7 +8,7 @@ The valve can be extensively configured and additionally offers the option to bl
 
 An important goal in the development is the extensive coverage of the code by unittests, which is to guarantee the correct function of this code at a central point in the Tomcat server.
 
-Also a simulation option in the form of Google Drive Sheets is provided. The status of the valve can be monitored and the configuration can be changed via JMX.
+Also a simulation option in the form of Google Drive Sheet is provided. The status of the valve can be monitored and the configuration can be changed via JMX.
 
 # Which version of Tomcat
 
@@ -170,9 +170,15 @@ This parameter defines the extent to which earlier requests from an IP address a
 
 * `<NumberOfSlots>`: If the factor is set to the number of slots, then it would sufficient if an IP address had once too many accesses in the past to block it immediately in a new slot. Also a number of slots, in which the IP address has always been below the threshold, can eventually lead to a blockade. All values greater than 1 have this potential.
 
+**monitorMode**
+
+Since version 1.2.0 the valve offers a second operation mode: *marking mode*. A detailed explanation of this mode is given below. If the parameter is omitted then the mode is *blocking*, which is the default behavior described until now. If you want to set the blocking mode explicitly you can use the parameter value *"BLOCKING"*. 
+
+To use the marking mode set the parameter to *"MARKING"*. The value is case insensitive.
+
 **simulationMode**
 
-This option allows you to simulate the valves actions without actually blocking any request. It is *false* by default. When set to *true* it still prints logging information and is thus allowing you to get a feeling for the impact of your settings.
+Since version 1.1.0 this option allows you to simulate the valves actions without actually blocking (or marking) any request. It is *false* by default. When set to *true* it still prints logging information and is thus allowing you to get a feeling for the impact of your settings.
 
 # Sample Configurations
 
@@ -212,9 +218,72 @@ The corresponding entries are found in the Tomcat log files, entries of blocks c
 
 An alternative is monitoring with JMX, for example via `JConsole`. The internal states of the valve are visible via JMX and the settings of the valve can also be changed without restarting the server.
 
+# Marking mode
+
+Available since 1.2.0 this mode enables usages in which the valve operates in conjunction with the webapps in the Tomcat server. Here the valves power and flexibility in recognizing probably malicious behavior can be used to generate hints for the application and thus allowing for softer responses then blocking requests completely. In this mode the valve **never actually blocks** any requests, it only adds information in the request object the application can use.
+
+One example might be the prevention of email address harvesting from public websites. Your application might use the hints from the valve to hide email addresses if too many requests are counted and display an informative text message that regular users can understand. This allows for tighter valve configurations because the risk of disturbing regular users is much lower. 
+
+This is an example configuration:
+
+        <Valve className="org.henbru.antidos.AntiDoSValve"
+				   monitorMode="marking"
+                monitorName="MARKING VALVE"
+                alwaysAllowedIPs=""
+                alwaysForbiddenIPs=""
+                relevantPaths=".*/swa"
+                maxIPCacheSize="50"
+                numberOfSlots="10"
+                slotLength="30"
+                allowedRequestsPerSlot="5"
+                shareOfRetainedFormerRequests="0"
+        />
+
+This servlet demonstrates how to use the information provided by the valve:
+
+		package org.henbru.antidos;
+		
+		import java.io.IOException;
+		import java.io.PrintWriter;
+		
+		import javax.servlet.ServletException;
+		import javax.servlet.annotation.WebServlet;
+		import javax.servlet.http.HttpServlet;
+		import javax.servlet.http.HttpServletRequest;
+		import javax.servlet.http.HttpServletResponse;
+		
+		/**
+		 * This servlet demonstrates the marking mode of the valve
+		 * 
+		 * @author henni
+		 *
+		 */
+		@WebServlet(urlPatterns = "/swa")
+		public class ServiceWAntiDoSValve extends HttpServlet {
+		
+			private static final long serialVersionUID = -7841500356151595460L;
+		
+			@Override
+			protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+				
+				PrintWriter answer = resp.getWriter();
+				String antiDoSStatus = (String) req.getAttribute("org.henbru.antidos.AntiDoS");
+				
+				if (antiDoSStatus == null) {
+					answer.print("AntiDoSStatus: OK");
+				} else {
+					answer.print("AntiDoSStatus: Suspicious! ");
+					answer.print("Details: " + antiDoSStatus);
+				}
+				answer.close();
+			}
+		}
+
+In marking mode the valve sets the request attribute *"org.henbru.antidos.AntiDoS"* with a string containing the *monitorName*. Requests from IP adresses covered by *alwaysForbiddenIPs* will always be marked, but not blocked.
+
 # Multi-instance configurations
 
-In some occasions it might be useful to use different configurations for different parts of your application or some IP address ranges. This can not be accomplished today with a single valve / monitor instance. From version 1.1 on it is possible to use more then one instance of the valve / monitor. The parameter *monitorName* is necessary to separate the configurations. Here we expand the previous example and add a second valve instance:
+In some occasions it might be useful to use different configurations for different parts of your application or some IP address ranges. This can not be accomplished today with a single valve / monitor instance. From version 1.1 on it is possible to use more then one instance of the valve / monitor. The parameter *monitorName* is necessary to separate the configurations. It is possible to use blocking and marking valves in conjuction. Here we expand the previous example and add a second valve instance:
 
         <Valve className="org.henbru.antidos.AntiDoSValve"
                 monitorName="TEST VALVE"

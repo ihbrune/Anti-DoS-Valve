@@ -42,6 +42,7 @@ import org.apache.juli.logging.LogFactory;
  * methods:
  * 
  * <ul>
+ * <li>{@link #setMonitorName(String)}
  * <li>{@link #setAlwaysAllowedIPs(String)}
  * <li>{@link #setAlwaysForbiddenIPs(String)}
  * <li>{@link #setRelevantPaths(String)}
@@ -67,13 +68,34 @@ public class AntiDoSValve extends ValveBase {
 
 	/**
 	 * The HTTP response status code that is set during a rejection due to too many
-	 * accesses
+	 * accesses in {@link #DEFAULT_MONITOR_MODE}
 	 */
 	public static final int BLOCKING_HTTP_STATUS = HttpServletResponse.SC_FORBIDDEN;
+
+	/**
+	 * This name of the request attribute that is set by the valve to mark requests
+	 * due to too many accesses in {@link #MARKING_MONITOR_MODE}
+	 */
+	public static final String MARKING_ATTRIBUTE_NAME = "org.henbru.antidos.AntiDoS";
 
 	public AntiDoSValve() {
 		super(true);
 	}
+
+	/**
+	 * Monitor mode constant: This is the default value and sets to mode to
+	 * 'blocking'. In this mode requests which exceed the limits of the valve are
+	 * answered with {@link #BLOCKING_HTTP_STATUS}
+	 */
+	public static final String DEFAULT_MONITOR_MODE = "BLOCKING";
+
+	/**
+	 * Monitor mode constant: This is the value for setting the mode to 'marking'.
+	 * In this mode requests which exceed the limits of the valve are still passed
+	 * to the application, but the request object contains an information about this
+	 * situation in die attribute named {@link #MARKING_ATTRIBUTE_NAME}
+	 */
+	public static final String MARKING_MONITOR_MODE = "MARKING";
 
 	private static final String DEFAULT_MONITOR_NAME = "DEFAULT";
 
@@ -88,6 +110,11 @@ public class AntiDoSValve extends ValveBase {
 	private int allowedRequestsPerSlot = -1;
 	private float shareOfRetainedFormerRequests = -1;
 	private boolean simulationMode = false;
+
+	/**
+	 * Monitor operation mode. If not set the default mode is used
+	 */
+	private volatile String monitorMode = DEFAULT_MONITOR_MODE;
 
 	/**
 	 * Internal monitor name. If not set a default name is used
@@ -179,6 +206,58 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
+	 * Monitor mode used by this valve instance
+	 */
+	public String getMonitorMode() {
+		return monitorMode;
+	}
+
+	/**
+	 *
+	 * @param monitorMode The operation mode of the monitor object used by this
+	 *                    valve instance. Might be empty and is then set to default,
+	 *                    which is blocking mode. Use {@link #isMonitorModeValid()}
+	 *                    to check if the parameter is valid
+	 * @see #DEFAULT_MONITOR_MODE
+	 * @see #MARKING_MONITOR_MODE
+	 */
+	public void setMonitorMode(String monitorMode) {
+		if (monitorMode == null || monitorMode.length() == 0) {
+			this.monitorMode = DEFAULT_MONITOR_MODE;
+		} else {
+			this.monitorMode = monitorMode.trim().toUpperCase();
+		}
+	}
+
+	/**
+	 * 
+	 * @return returns <code>true</code> if monitorMode equals
+	 *         {@link #DEFAULT_MONITOR_MODE}
+	 * @see #setMonitorMode(String)
+	 */
+	public boolean isMonitorModeDefault() {
+		return DEFAULT_MONITOR_MODE.equals(monitorMode);
+	}
+
+	/**
+	 * 
+	 * @return returns <code>true</code> if monitorMode equals
+	 *         {@link #MARKING_MONITOR_MODE}
+	 * @see #setMonitorMode(String)
+	 */
+	public boolean isMonitorModeMarking() {
+		return MARKING_MONITOR_MODE.equals(monitorMode);
+	}
+
+	/**
+	 * @return <code>true</code> is either {@link #isMonitorModeDefault()} or
+	 *         {@link #isMonitorModeMarking()} is <code>true</code>
+	 */
+	public boolean isMonitorModeValid() {
+		return isMonitorModeDefault() || isMonitorModeMarking();
+	}
+
+	/**
 	 * Monitor name used by this valve instance
 	 */
 	public String getMonitorName() {
@@ -186,10 +265,6 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
-	 * Setting of the regular expression with IP addresses that are always blocked.
-	 * Example for blocking all requests from <code>localhost</code>:
-	 * <p>
-	 * <code>"127\.\d+\.\d+\.\d+|::1|0:0:0:0:0:0:0:1"</code>
 	 *
 	 * @param monitorName The name of the monitor object used by this valve
 	 *                    instance. Might be empty and is then set to a default.
@@ -204,7 +279,7 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
-	 * @see {@link #setMonitorNameValid(String)}
+	 * @see {@link #setMonitorName(String)}
 	 * @return always <code>true</code>
 	 */
 	public boolean isMonitorNameValid() {
@@ -428,7 +503,13 @@ public class AntiDoSValve extends ValveBase {
 	/**
 	 * This method is called on every request. It uses
 	 * {@link #isRequestAllowed(String, String)} for its checks. If a request is
-	 * blocked the value of {@link #BLOCKING_HTTP_STATUS} is set as error code
+	 * blocked the reaction of the valve depends on its mode:
+	 * <ul>
+	 * <lli>{@link #DEFAULT_MONITOR_MODE}: the value of
+	 * {@link #BLOCKING_HTTP_STATUS} is set as error code
+	 * <li>{@link #MARKING_MONITOR_MODE}: an information is added to the request
+	 * </ul>
+	 * When simulationMode is on only logging information is generated
 	 */
 	public void invoke(Request request, Response response) throws IOException, ServletException {
 
@@ -436,8 +517,8 @@ public class AntiDoSValve extends ValveBase {
 		String path = request.getRequestURI();
 
 		if (log.isDebugEnabled()) {
-			log.debug(name4logging + ", IP: " + ip);
-			log.debug(name4logging + ", Pfad: " + path);
+			log.debug(name4logging + ", ip: " + ip);
+			log.debug(name4logging + ", path: " + path);
 		}
 
 		boolean allowed = isRequestAllowed(ip, path);
@@ -446,9 +527,14 @@ public class AntiDoSValve extends ValveBase {
 			return;
 		}
 
-		// Block request:
-		response.sendError(BLOCKING_HTTP_STATUS);
-
+		if (isMonitorModeDefault()) {
+			// block request:
+			response.sendError(BLOCKING_HTTP_STATUS);
+		} else {
+			// mark request:
+			response.getRequest().setAttribute(MARKING_ATTRIBUTE_NAME, name4logging);
+			getNext().invoke(request, response);
+		}
 	}
 
 	@Override
@@ -476,6 +562,8 @@ public class AntiDoSValve extends ValveBase {
 			throw new LifecycleException(name4logging + ".alwaysAllowedIPs is invalid");
 		if (!relevantPathsValid)
 			throw new LifecycleException(name4logging + ".relevantPaths is invalid");
+		if (!isMonitorModeValid())
+			throw new LifecycleException(name4logging + ".monitorMode is invalid");
 
 		if (provideMonitor() == null) {
 			String monitorMsg = reloadMonitor();
@@ -507,9 +595,15 @@ public class AntiDoSValve extends ValveBase {
 
 			monitors.put(monitorName, monitor);
 
-			if (simulationMode && log.isInfoEnabled())
-				log.info(name4logging + " is in SIMULATION MODE");
+			if (log.isInfoEnabled()) {
+				if (isMonitorModeDefault())
+					log.info(name4logging + " is in blocking mode");
+				else if (isMonitorModeMarking())
+					log.info(name4logging + " is in marking mode");
 
+				if (simulationMode)
+					log.info(name4logging + " is in SIMULATION MODE");
+			}
 			return null;
 		} catch (IllegalArgumentException ex) {
 			return ex.getMessage();
