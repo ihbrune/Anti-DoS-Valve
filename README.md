@@ -10,9 +10,11 @@ An important goal in the development is the extensive coverage of the code by un
 
 Also a simulation option in the form of Google Drive Sheet is provided. The status of the valve can be monitored and the configuration can be changed via JMX.
 
+Then there is a Dockerfile for running the valve with minimal setup.
+
 # Which version of Tomcat
 
-The valve is build against Tomcat 9.0 libraries. It has been tested in Tomcat 9.0, 8.0 and 7.0.
+Since version 1.3 the valve is build against Tomcat 10.0 libraries. This means it makes use of the <strong>jakarta.servlet.\*</strong> packages. Previous versions of the valve have been tested in Tomcat 9.0, 8.0 and 7.0 and used the <strong>javax.servlet.\*</strong> packages.
 
 # Implementation of dynamic access rate limiting
 
@@ -80,6 +82,10 @@ A test of the function can be carried out on a non-existent URL, to avoid any in
         />
         
 The test address is here `/valvetest` and from the 6th call access should be denied and a corresponding message should appear in the server log.
+
+## Docker version 
+
+The *docker*-directory contains a Dockerfile and a list of commmands to run a Tomcat server with a valve configuration as container image. You can use this as a boiler plate for your own projects and as an environment to test your own developments without much effort. 
 
 # Valve Configuration
 
