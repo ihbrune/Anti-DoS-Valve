@@ -14,7 +14,7 @@ Then there is a Dockerfile for running the valve with minimal setup.
 
 # Which version of Tomcat
 
-Since version 1.4 the valve is build against Tomcat 10.1 libraries. This means it makes use of the <strong>jakarta.servlet.\*</strong> packages. Previous versions of the valve have been tested in Tomcat 9.0, 8.0 and 7.0 and used the <strong>javax.servlet.\*</strong> packages.
+Since version 1.4 the valve is build against Tomcat 10.1 libraries. This means it makes use of the <strong>jakarta.servlet.\*</strong> packages. Versions prior to 1.3.0 of the valve have been tested in Tomcat 9.0, 8.0 and 7.0 and used the <strong>javax.servlet.\*</strong> packages.
 
 # Implementation of dynamic access rate limiting
 
