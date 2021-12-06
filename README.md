@@ -74,6 +74,7 @@ A test of the function can be carried out on a non-existent URL, to avoid any in
                 alwaysAllowedIPs=""
                 alwaysForbiddenIPs=""
                 relevantPaths="/valvetest"
+                nonRelevantPaths=""
                 maxIPCacheSize="50"
                 numberOfSlots="10"
                 slotLength="30"
