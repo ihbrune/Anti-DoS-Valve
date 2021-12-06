@@ -145,6 +145,75 @@ public class AntiDoSValveTest extends TestCase {
 
 	}
 
+	public void testNonRelevantPaths() {
+		AntiDoSValve valve = new AntiDoSValve();
+
+		assertTrue(valve.isNonRelevantPathsValid());
+
+		valve.setNonRelevantPaths("[a-z....");
+		assertFalse(valve.isNonRelevantPathsValid());
+
+		valve.setNonRelevantPaths(null);
+		assertTrue(valve.isNonRelevantPathsValid());
+
+		assertFalse(valve.isRequestURIInNonRelevantPaths("/path1/p.html"));
+
+		valve.setNonRelevantPaths("/path1");
+		assertTrue(valve.isNonRelevantPathsValid());
+
+		assertTrue(valve.isRequestURIInNonRelevantPaths("/path1"));
+		assertFalse(valve.isRequestURIInNonRelevantPaths("/path1/p.html"));
+		assertFalse(valve.isRequestURIInNonRelevantPaths("/sub/path1/p.html"));
+
+		valve.setNonRelevantPaths("/path1.*");
+		assertTrue(valve.isNonRelevantPathsValid());
+
+		assertTrue(valve.isRequestURIInNonRelevantPaths("/path1"));
+		assertTrue(valve.isRequestURIInNonRelevantPaths("/path1/p.html"));
+		assertFalse(valve.isRequestURIInNonRelevantPaths("/sub/path1/p.html"));
+
+		valve.setNonRelevantPaths("/path1.*|/sub/.*");
+		assertTrue(valve.isNonRelevantPathsValid());
+
+		assertTrue(valve.isRequestURIInNonRelevantPaths("/path1"));
+		assertTrue(valve.isRequestURIInNonRelevantPaths("/path1/p.html"));
+		assertTrue(valve.isRequestURIInNonRelevantPaths("/sub/path1/p.html"));
+
+	}
+
+	public void testRelevantAndNonRelevantPaths() {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "REL NON REL TEST");
+		valve.setAllowedRequestsPerSlot(3);
+		valve.reloadMonitor();
+
+		valve.setRelevantPaths("/path1.*");
+		assertTrue(valve.isRequestURIInRelevantPaths("/path1"));
+		assertTrue(valve.isRequestURIInRelevantPaths("/path1/m"));
+		assertTrue(valve.isRequestURIInRelevantPaths("/path1/n"));
+		assertTrue(valve.isRequestURIInRelevantPaths("/path1/o"));
+
+		assertTrue(valve.isRequestAllowed("127.0.0.1", "/path1"));
+		assertTrue(valve.isRequestAllowed("127.0.0.1", "/path1"));
+		assertTrue(valve.isRequestAllowed("127.0.0.1", "/path1"));
+		assertFalse(valve.isRequestAllowed("127.0.0.1", "/path1"));
+		assertFalse(valve.isRequestAllowed("127.0.0.1", "/path1/m"));
+		assertFalse(valve.isRequestAllowed("127.0.0.1", "/path1/n"));
+		assertFalse(valve.isRequestAllowed("127.0.0.1", "/path1/o"));
+
+		valve.setNonRelevantPaths("/path1/n");
+		assertFalse(valve.isRequestURIInNonRelevantPaths("/path1"));
+		assertFalse(valve.isRequestURIInNonRelevantPaths("/path1/m"));
+		assertTrue(valve.isRequestURIInNonRelevantPaths("/path1/n"));
+		assertFalse(valve.isRequestURIInNonRelevantPaths("/path1/o"));
+
+		assertFalse(valve.isRequestAllowed("127.0.0.1", "/path1"));
+		assertFalse(valve.isRequestAllowed("127.0.0.1", "/path1/m"));
+		assertTrue(valve.isRequestAllowed("127.0.0.1", "/path1/n"));
+		assertFalse(valve.isRequestAllowed("127.0.0.1", "/path1/o"));
+
+	}
+
 	public void testIPAddressStatus() throws LifecycleException {
 		AntiDoSValve valve = new AntiDoSValve();
 		setValidAntiDoSMonitorconfiguration(valve, "IP STATUS TEST");

@@ -46,6 +46,7 @@ import org.apache.juli.logging.LogFactory;
  * <li>{@link #setAlwaysAllowedIPs(String)}
  * <li>{@link #setAlwaysForbiddenIPs(String)}
  * <li>{@link #setRelevantPaths(String)}
+ * <li>{@link #setNonRelevantPaths(String)}
  * <li>{@link #setMaxIPCacheSize(int)}
  * <li>{@link #setNumberOfSlots(int)}
  * <li>{@link #setSlotLength(int)}
@@ -183,6 +184,24 @@ public class AntiDoSValve extends ValveBase {
 	 * invalid value
 	 */
 	private volatile boolean relevantPathsValid = true;
+
+	/**
+	 * Regular expression with the paths for which the valve never becomes active
+	 */
+	private volatile Pattern nonRelevantPaths	= null;
+
+	/**
+	 * Configuration value for the regular expression with the paths for which the
+	 * valve never becomes active. Probably not a valid {@link Pattern}.
+	 */
+	private volatile String nonRelevantPathsConfigValue = null;
+
+	/**
+	 * Variable for testing for configuration errors. <code>true</code> by default,
+	 * is set to <code>false</code> if {@link #setNonRelevantPaths(String)} receives an
+	 * invalid value
+	 */
+	private volatile boolean nonRelevantPathsValid = true;
 
 	/**
 	 * The monitor object for the monitorName in this instance. Calls
@@ -412,6 +431,48 @@ public class AntiDoSValve extends ValveBase {
 	public boolean isRelevantPathsValid() {
 		return relevantPathsValid;
 	}
+	/**
+	 * 
+	 * @return Regular expression with the paths for which the valve never becomes active
+	 */
+	public String getNonRelevantPathsConfigValue() {
+		return nonRelevantPathsConfigValue;
+	}
+
+	/**
+	 * Setting of the regular expression with the paths for which the valve never becomes
+	 * active. Example for activating the valve on all requests:
+	 * <p>
+	 * <code>".*"</code>
+	 * 
+	 * @param nonRelevantPaths The regular expression. Might be empty. Whether the
+	 *                      parameter was valid can be checked via the result of the
+	 *                      method {@link #isNonRelevantPathsValid()}
+	 */
+	public void setNonRelevantPaths(String nonRelevantPaths) {
+		if (nonRelevantPaths == null || nonRelevantPaths.length() == 0) {
+			this.nonRelevantPaths = null;
+			nonRelevantPathsConfigValue = null;
+			nonRelevantPathsValid = true;
+		} else {
+			boolean valid = false;
+			try {
+				nonRelevantPathsConfigValue = nonRelevantPaths;
+				this.nonRelevantPaths = Pattern.compile(nonRelevantPaths);
+				valid = true;
+			} catch (Exception ex) {
+			} finally {
+				nonRelevantPathsValid = valid;
+			}
+		}
+	}
+
+	/**
+	 * @see #setNonRelevantPaths(String)
+	 */
+	public boolean isNonRelevantPathsValid() {
+		return nonRelevantPathsValid;
+	}
 
 	/**
 	 * 
@@ -617,10 +678,14 @@ public class AntiDoSValve extends ValveBase {
 	 * <ul>
 	 * <li>Is the IP address always blocked? Calls
 	 * {@link #isIPAddressInAlwaysForbidden(String)}. If <code>true</code> the
-	 * checks is finished and <code>false</code> returned as result, but the IP
+	 * check is finished and <code>false</code> returned as result, but the IP
 	 * address is not counted in the {@link AntiDoSMonitor} instance
 	 * <li>Is the IP address always allowed? Calls
-	 * {@link #isIPAddressInAlwaysAllowed(String)}. If <code>true</code> the checks
+	 * {@link #isIPAddressInAlwaysAllowed(String)}. If <code>true</code> the check
+	 * is finished and <code>true</code> returned as result, but the IP address is
+	 * not counted
+	 * <li>Is the request URI in the non relevant paths? Calls
+	 * {@link #isRequestURIInNonRelevantPaths(String)}. If <code>true</code> the check
 	 * is finished and <code>true</code> returned as result, but the IP address is
 	 * not counted
 	 * <li>Is the request URI in the relevant paths? Calls
@@ -648,6 +713,13 @@ public class AntiDoSValve extends ValveBase {
 		if (isIPAddressInAlwaysAllowed(ip)) {
 			if (log.isDebugEnabled())
 				log.debug(name4logging + " Is in alwaysAllowedIPs: " + ip);
+
+			return true;
+		}
+
+		if (isRequestURIInNonRelevantPaths(requestURI)) {
+			if (log.isDebugEnabled())
+				log.debug(name4logging + " Is in nonRelevantPaths: " + requestURI);
 
 			return true;
 		}
@@ -743,7 +815,7 @@ public class AntiDoSValve extends ValveBase {
 
 	/**
 	 * This method checks if a URL is matched by the pattern in
-	 * {@link #getRelevantePfade()}. The method is public and can be called by JMX
+	 * {@link #getRelevantPathsConfigValue()}. The method is public and can be called by JMX
 	 *
 	 * @param requestURI The path. Should be the result of
 	 *                   {@link HttpServletRequest#getRequestURI()}
@@ -753,6 +825,23 @@ public class AntiDoSValve extends ValveBase {
 		Pattern relevant = this.relevantPaths;
 
 		if (relevant != null && relevant.matcher(requestURI).matches())
+			return true;
+
+		return false;
+	}
+
+	/**
+	 * This method checks if a URL is matched by the pattern in
+	 * {@link #getNonRelevantPathsConfigValue()}. The method is public and can be called by JMX
+	 *
+	 * @param requestURI The path. Should be the result of
+	 *                   {@link HttpServletRequest#getRequestURI()}
+	 */
+	public boolean isRequestURIInNonRelevantPaths(String requestURI) {
+		// Local copy for thread safety
+		Pattern nonrelevant = this.nonRelevantPaths;
+
+		if (nonrelevant != null && nonrelevant.matcher(requestURI).matches())
 			return true;
 
 		return false;

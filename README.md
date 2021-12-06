@@ -14,7 +14,7 @@ Then there is a Dockerfile for running the valve with minimal setup.
 
 # Which version of Tomcat
 
-Since version 1.3 the valve is build against Tomcat 10.0 libraries. This means it makes use of the <strong>jakarta.servlet.\*</strong> packages. Previous versions of the valve have been tested in Tomcat 9.0, 8.0 and 7.0 and used the <strong>javax.servlet.\*</strong> packages.
+Since version 1.4 the valve is build against Tomcat 10.1 libraries. This means it makes use of the <strong>jakarta.servlet.\*</strong> packages. Previous versions of the valve have been tested in Tomcat 9.0, 8.0 and 7.0 and used the <strong>javax.servlet.\*</strong> packages.
 
 # Implementation of dynamic access rate limiting
 
@@ -137,6 +137,16 @@ Examples of parameter values:
 
 * `".*"` With this pattern all requests will be handled by Anti-DoS Monitoring
 * `"/manager.*"` With this pattern all requests to the Tomcat Manager App will be handled by the Anti-DoS Monitoring, but all other requests will be ignored
+
+**nonRelevantPaths**
+
+This option has been available since version 1.4.0 and is evaluated before _relevantPaths_: It allows certain paths to be excluded from the monitor, so these are never limited.
+
+This option is intended to make it easier to deal with cases in which an entire address range should generally be protected, but individual addresses contained in it should not. Example:
+
+* `"/myexampleapi/.*"` All API endpoints should be protected so _relevantPaths_ is so to this value
+* `"/myexampleapi/status"` Only the API status endpoint should always be acessible. It is difficult to solve this task just with _relevantPaths_. You might add the other endpoints one by one to _relevantPaths_, but when the development deploys new endpoints you always have to remember protecting them by adding them to the configuration. It is much easier to keep _relevantPaths_ as it is and add the _status_-endpoint to _nonRelevantPaths_. This will exclude only this endpoint from protection while future new endpoints will automatically fall under it. 
+
 
 The following settings affect the dynamic access rate restriction in the Anti-DoS Monitor. The effects of these parameters partly influence each other:
 

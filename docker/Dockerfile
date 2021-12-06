@@ -1,3 +1,1 @@
-FROM tomcat:10-jdk16-corretto
-
-
+FROM tomcat:10-jdk17-corretto
