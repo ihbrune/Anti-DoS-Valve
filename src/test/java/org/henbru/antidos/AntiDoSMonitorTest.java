@@ -183,14 +183,21 @@ class AntiDoSMonitorTest {
 
 	@Test
 	void testSlotOverflow() {
-		AntiDoSMonitor mon = new AntiDoSMonitor("TEST SLOT OVER", 1, 5, 30, 2, (float) 0.5);
+		AntiDoSMonitor mon = new AntiDoSMonitor("TEST SLOT OVER", 1, 1, 5, 30, 2, (float) 0.5);
 
 		assertTrue(mon.registerAndCheckRequest("123.456.789.000"));
 		assertTrue(mon.registerAndCheckRequest("123.456.789.000"));
 		assertFalse(mon.registerAndCheckRequest("123.456.789.000"));
 
+		// A new active IP occupies activeCounters, but does NOT evict .000 from blockedCounters:
 		assertTrue(mon.registerAndCheckRequest("123.456.789.001"));
+		assertFalse(mon.registerAndCheckRequest("123.456.789.000"));
 
+		// When .001 also becomes blocked, it enters blockedCounters (capacity 1) and evicts the older blocked IP:
+		assertTrue(mon.registerAndCheckRequest("123.456.789.001"));
+		assertFalse(mon.registerAndCheckRequest("123.456.789.001"));
+
+		// .000 was evicted from blockedCounters after blocked overflow, so its counter is reset:
 		assertTrue(mon.registerAndCheckRequest("123.456.789.000"));
 	}
 

@@ -119,6 +119,7 @@ public class AntiDoSValve extends ValveBase {
 	private static final Map<String, AntiDoSMonitor> monitors = new ConcurrentHashMap<>();
 
 	private volatile int maxIPCacheSize = -1;
+	private volatile int maxBlockedIPCacheSize = -1;
 	private volatile int numberOfSlots = -1;
 	private volatile int slotLength = -1;
 	private volatile int allowedRequestsPerSlot = -1;
@@ -489,8 +490,32 @@ public class AntiDoSValve extends ValveBase {
 	 *                       <code>maxCountersPerSlot</code> in
 	 *                       {@link AntiDoSMonitor#AntiDoSMonitor(int, int, int, int, float)}
 	 */
+	public int getMaxIPCacheSize() {
+		return maxIPCacheSize;
+	}
+
 	public void setMaxIPCacheSize(int maxIPCacheSize) {
 		this.maxIPCacheSize = maxIPCacheSize;
+	}
+
+	/**
+	 * @return The number of blocked IP addresses that can be monitored within a
+	 *         time slot, or -1 if not set (falls back to {@link #getMaxIPCacheSize()})
+	 */
+	public int getMaxBlockedIPCacheSize() {
+		return maxBlockedIPCacheSize;
+	}
+
+	/**
+	 * Sets the number of blocked IP addresses that can be monitored within a time
+	 * slot. If not set or non-positive, defaults to the value of
+	 * {@link #setMaxIPCacheSize(int)}.
+	 * 
+	 * @param maxBlockedIPCacheSize The number of blocked IP addresses that can be
+	 *                              monitored within a time slot
+	 */
+	public void setMaxBlockedIPCacheSize(int maxBlockedIPCacheSize) {
+		this.maxBlockedIPCacheSize = maxBlockedIPCacheSize;
 	}
 
 	/**
@@ -680,8 +705,9 @@ public class AntiDoSValve extends ValveBase {
 	 */
 	public String reloadMonitor() {
 		try {
-			AntiDoSMonitor monitor = new AntiDoSMonitor(monitorName, maxIPCacheSize, numberOfSlots, slotLength,
-					allowedRequestsPerSlot, shareOfRetainedFormerRequests);
+			int effectiveMaxBlockedIPCacheSize = maxBlockedIPCacheSize > 0 ? maxBlockedIPCacheSize : maxIPCacheSize;
+			AntiDoSMonitor monitor = new AntiDoSMonitor(monitorName, maxIPCacheSize, effectiveMaxBlockedIPCacheSize,
+					numberOfSlots, slotLength, allowedRequestsPerSlot, shareOfRetainedFormerRequests);
 
 			if (monitorName == null)
 				monitorName = DEFAULT_MONITOR_NAME;

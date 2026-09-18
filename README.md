@@ -153,9 +153,15 @@ The following settings affect the dynamic access rate restriction in the Anti-Do
 
 **maxIPCacheSize**
 
-Defines the maximum number of IP addresses considered in a slot. This number should be limited so that the memory requirements of the Anti-DoS monitor can not grow indefinitely. If this limit is exceeded, the addresses with the oldest requests are dropped first.
+Defines the maximum number of active (unblocked) IP addresses tracked in a slot. This number should be limited so that the memory requirements of the Anti-DoS monitor cannot grow indefinitely. If this limit is exceeded, the active addresses with the oldest requests are dropped first.
 
-In this way, addresses which are actually relevant to the DoS defense are retained even in the case of small cache sizes, since they repeatedly move forward in the list due to their numerous accesses. Therefore, a comparatively small value can be set here.
+When an IP address exceeds the allowed request limit and gets blocked, it is moved from the active cache to a separate blocked IP cache so that it no longer consumes space in the active cache. This ensures that incoming floods of requests from numerous different unblocked IP addresses (e.g. distributed botnets or scanners) cannot flush blocked attackers out of the cache.
+
+**maxBlockedIPCacheSize** (optional)
+
+Defines the maximum number of blocked IP addresses tracked in a slot. Used to prevent memory from growing indefinitely if the server is attacked by a large number of distinct IP addresses that get blocked. If omitted or not set, it defaults to the value of **maxIPCacheSize**.
+
+If this limit is exceeded, the blocked addresses with the oldest requests are dropped first using LRU eviction. Blocked IP addresses continue to count subsequent requests even after being blocked, and these counts are included in the retained request calculations of subsequent time slots to prevent attackers from becoming immediately unblocked when a new slot begins.
 
 **slotLength**
 

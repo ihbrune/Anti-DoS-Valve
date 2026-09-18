@@ -370,6 +370,28 @@ class AntiDoSValveTest {
 		assertTrue(thrown.getMessage().contains("httpStatusCode is invalid"));
 	}
 
+	@Test
+	void testMaxBlockedIPCacheSizeConfiguration() {
+		AntiDoSValve valve = new AntiDoSValve();
+		assertEquals(-1, valve.getMaxBlockedIPCacheSize());
+
+		valve.setMaxBlockedIPCacheSize(500);
+		assertEquals(500, valve.getMaxBlockedIPCacheSize());
+
+		setValidAntiDoSMonitorconfiguration(valve, "BLOCKED_CACHE_CONFIG_TEST");
+		assertNull(valve.reloadMonitor());
+		String status = valve.getMonitorStatus();
+		assertNotNull(status);
+		assertTrue(status.contains("maxBlockedCountersPerSlot: 500"));
+
+		// When not set (or -1), defaults to maxIPCacheSize (100)
+		valve.setMaxBlockedIPCacheSize(-1);
+		assertNull(valve.reloadMonitor());
+		status = valve.getMonitorStatus();
+		assertNotNull(status);
+		assertTrue(status.contains("maxBlockedCountersPerSlot: 100"));
+	}
+
 	private static void setValidAntiDoSMonitorconfiguration(AntiDoSValve valve, String monitorName) {
 		valve.setMonitorName(monitorName);
 		valve.setNumberOfSlots(10);

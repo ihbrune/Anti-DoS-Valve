@@ -41,6 +41,7 @@ public class AntiDoSMonitor {
 	private String monitorName;
 	private String name4logging;
 	private int maxCountersPerSlot;
+	private int maxBlockedCountersPerSlot;
 	private int numberOfSlots;
 	private final ConcurrentNavigableMap<Long, AntiDoSSlot> slots;
 	private int slotLength;
@@ -54,43 +55,25 @@ public class AntiDoSMonitor {
 	 * monitoring:
 	 * 
 	 * @param monitorName                   The monitors name. Used for logging
-	 * @param maxCountersPerSlot            The number of counters that can be
-	 *                                      monitored within a time slot. Used to
-	 *                                      prevent the memory requirement from
-	 *                                      growing indefinitely
-	 * @param numberOfSlots                 The number of slots to be held. More
-	 *                                      slots allow a further look into the
-	 *                                      past, but increase the memory
-	 *                                      requirements and slow down the execution
-	 *                                      to a certain degree
-	 * @param slotLength                    The length of the individual slots in
-	 *                                      seconds
-	 * @param allowedRequestsPerSlot        The number of requests allowed within a
-	 *                                      slot until the corresponding counter
-	 *                                      starts to block further requests
-	 * @param shareOfRetainedFormerRequests This parameter defines which portion of
-	 *                                      the requests on a counter from previous
-	 *                                      slots is retained in a new slot. The
-	 *                                      higher this share, the longer it takes
-	 *                                      for a counter to recover from a
-	 *                                      blocking. The value 1 would mean that
-	 *                                      the average number of requests for a
-	 *                                      counter in the past slots is retained
-	 *                                      completely. A value of 0.5 would retain
-	 *                                      half, the value of 0 would completely
-	 *                                      ignore the past (is this case the
-	 *                                      retention of older slots would make no
-	 *                                      sense). A value greater than 1 would
-	 *                                      eventually lead to a block in the case
-	 *                                      of a counter which remains below the
-	 *                                      <code>allowedRequestsPerSlot</code> per
-	 *                                      slot on average.
+	 * @param maxCountersPerSlot            The number of active counters that can be
+	 *                                      monitored within a time slot
+	 * @param maxBlockedCountersPerSlot     The number of blocked counters that can be
+	 *                                      monitored within a time slot
+	 * @param numberOfSlots                 The number of slots to be held
+	 * @param slotLength                    The length of the individual slots in seconds
+	 * @param allowedRequestsPerSlot        The number of requests allowed within a slot
+	 * @param shareOfRetainedFormerRequests Proportion of requests retained from previous slots
 	 */
-	public AntiDoSMonitor(String monitorName, int maxCountersPerSlot, final int numberOfSlots, int slotLength,
-			int allowedRequestsPerSlot, float shareOfRetainedFormerRequests) throws IllegalArgumentException {
+	public AntiDoSMonitor(String monitorName, int maxCountersPerSlot, int maxBlockedCountersPerSlot,
+			final int numberOfSlots, int slotLength, int allowedRequestsPerSlot,
+			float shareOfRetainedFormerRequests) throws IllegalArgumentException {
 
 		if (maxCountersPerSlot < 1)
 			throw new IllegalArgumentException("Parameter maxCountersPerSlot is invalid: " + maxCountersPerSlot);
+
+		if (maxBlockedCountersPerSlot < 1)
+			throw new IllegalArgumentException(
+					"Parameter maxBlockedCountersPerSlot is invalid: " + maxBlockedCountersPerSlot);
 
 		if (numberOfSlots < 1)
 			throw new IllegalArgumentException("Parameter numberOfSlots is invalid: " + numberOfSlots);
@@ -109,6 +92,7 @@ public class AntiDoSMonitor {
 		this.name4logging = "AntiDoSMonitor [" + this.monitorName + "]";
 
 		this.maxCountersPerSlot = maxCountersPerSlot;
+		this.maxBlockedCountersPerSlot = maxBlockedCountersPerSlot;
 		this.numberOfSlots = numberOfSlots;
 		this.slots = new ConcurrentSkipListMap<>();
 
@@ -119,10 +103,21 @@ public class AntiDoSMonitor {
 
 		if (log.isInfoEnabled()) {
 			log.info(new StringBuilder().append(name4logging).append(" created. maxCountersPerSlot=")
-					.append(maxCountersPerSlot).append(", numberOfSlots=").append(numberOfSlots).append(", slotLength=")
+					.append(maxCountersPerSlot).append(", maxBlockedCountersPerSlot=").append(maxBlockedCountersPerSlot)
+					.append(", numberOfSlots=").append(numberOfSlots).append(", slotLength=")
 					.append(slotLength).append(", allowedRequestsPerSlot=").append(allowedRequestsPerSlot)
 					.append(", shareOfRetainedFormerRequests=").append(shareOfRetainedFormerRequests).toString());
 		}
+	}
+
+	/**
+	 * Legacy constructor defaulting <code>maxBlockedCountersPerSlot</code> to
+	 * <code>maxCountersPerSlot</code>.
+	 */
+	public AntiDoSMonitor(String monitorName, int maxCountersPerSlot, final int numberOfSlots, int slotLength,
+			int allowedRequestsPerSlot, float shareOfRetainedFormerRequests) throws IllegalArgumentException {
+		this(monitorName, maxCountersPerSlot, maxCountersPerSlot, numberOfSlots, slotLength, allowedRequestsPerSlot,
+				shareOfRetainedFormerRequests);
 	}
 
 	/**
@@ -157,13 +152,16 @@ public class AntiDoSMonitor {
 			counter.getRetainedCounts().compareAndSet(-1, retained);
 		}
 
-		// Schritt 4: Counter already locked?
-		if (counter.isLocked())
+		// Step 4: Counter already locked?
+		if (counter.isLocked()) {
+			slot.blockCounter(counterName, counter);
 			return false;
+		}
 
 		// Do we have to lock the counter now?
 		if (counter.getCountCombined() > allowedRequestsPerSlot) {
 			counter.lock();
+			slot.blockCounter(counterName, counter);
 
 			if (log.isInfoEnabled())
 				log.info(name4logging + " - Counter for '" + counterName + "': " + counter.toString());
@@ -197,7 +195,8 @@ public class AntiDoSMonitor {
 		// millisecond within the slot length:
 		long slotKey = getTimeInMillis() / slotLength;
 
-		AntiDoSSlot slot = slots.computeIfAbsent(slotKey, k -> new AntiDoSSlot(monitorName, String.valueOf(k), maxCountersPerSlot));
+		AntiDoSSlot slot = slots.computeIfAbsent(slotKey,
+				k -> new AntiDoSSlot(monitorName, String.valueOf(k), maxCountersPerSlot, maxBlockedCountersPerSlot));
 		pruneOldSlots();
 		return slot;
 	}
@@ -281,7 +280,8 @@ public class AntiDoSMonitor {
 
 		sb.append("#Slots: ").append(slots.size()).append("; slotLenght: ").append(slotLength)
 				.append("; allowedRequestsPerSlot: ").append(allowedRequestsPerSlot).append("; maxCountersPerSlot: ")
-				.append(maxCountersPerSlot).append("; shareOfRetainedFormerRequests: ")
+				.append(maxCountersPerSlot).append("; maxBlockedCountersPerSlot: ")
+				.append(maxBlockedCountersPerSlot).append("; shareOfRetainedFormerRequests: ")
 				.append(shareOfRetainedFormerRequests).append("\n");
 		sb.append("#total requests: ").append(getTotalrequests()).append("\n");
 
