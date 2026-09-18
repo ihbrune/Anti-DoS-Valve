@@ -1,6 +1,9 @@
 package org.henbru.antidos;
 
 import java.io.IOException;
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
@@ -48,6 +51,9 @@ import jakarta.servlet.http.HttpServletResponse;
  * <li>{@link #setRelevantPaths(String)}
  * <li>{@link #setNonRelevantPaths(String)}
  * <li>{@link #setMaxIPCacheSize(int)}
+ * <li>{@link #setMaxBlockedIPCacheSize(int)}
+ * <li>{@link #setIpv4SubnetMask(int)}
+ * <li>{@link #setIpv6SubnetMask(int)}
  * <li>{@link #setNumberOfSlots(int)}
  * <li>{@link #setSlotLength(int)}
  * <li>{@link #setShareOfRetainedFormerRequests(String)}
@@ -120,6 +126,8 @@ public class AntiDoSValve extends ValveBase {
 
 	private volatile int maxIPCacheSize = -1;
 	private volatile int maxBlockedIPCacheSize = -1;
+	private volatile int ipv4SubnetMask = 32;
+	private volatile int ipv6SubnetMask = 128;
 	private volatile int numberOfSlots = -1;
 	private volatile int slotLength = -1;
 	private volatile int allowedRequestsPerSlot = -1;
@@ -519,6 +527,72 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
+	 * @return The IPv4 subnet mask prefix length (e.g. 24 for /24, 32 for no aggregation)
+	 */
+	public int getIpv4SubnetMask() {
+		return ipv4SubnetMask;
+	}
+
+	/**
+	 * Sets the IPv4 subnet prefix length (1 to 32). A value of 32 or -1 disables
+	 * aggregation (default: 32).
+	 * 
+	 * @param ipv4SubnetMask The prefix length
+	 */
+	public void setIpv4SubnetMask(int ipv4SubnetMask) {
+		this.ipv4SubnetMask = ipv4SubnetMask;
+	}
+
+	/**
+	 * Sets the IPv4 subnet mask from a string (e.g. "24", "/24", or "255.255.255.0").
+	 * 
+	 * @param mask The subnet mask string
+	 */
+	public void setIpv4SubnetMask(String mask) {
+		this.ipv4SubnetMask = parseSubnetMask(mask, 32);
+	}
+
+	/**
+	 * @return <code>true</code> if the IPv4 subnet mask is valid (between 1 and 32, or -1)
+	 */
+	public boolean isIpv4SubnetMaskValid() {
+		return ipv4SubnetMask == -1 || (ipv4SubnetMask >= 1 && ipv4SubnetMask <= 32);
+	}
+
+	/**
+	 * @return The IPv6 subnet mask prefix length (e.g. 64 for /64, 128 for no aggregation)
+	 */
+	public int getIpv6SubnetMask() {
+		return ipv6SubnetMask;
+	}
+
+	/**
+	 * Sets the IPv6 subnet prefix length (1 to 128). A value of 128 or -1 disables
+	 * aggregation (default: 128).
+	 * 
+	 * @param ipv6SubnetMask The prefix length
+	 */
+	public void setIpv6SubnetMask(int ipv6SubnetMask) {
+		this.ipv6SubnetMask = ipv6SubnetMask;
+	}
+
+	/**
+	 * Sets the IPv6 subnet mask from a string (e.g. "64" or "/64").
+	 * 
+	 * @param mask The subnet mask string
+	 */
+	public void setIpv6SubnetMask(String mask) {
+		this.ipv6SubnetMask = parseSubnetMask(mask, 128);
+	}
+
+	/**
+	 * @return <code>true</code> if the IPv6 subnet mask is valid (between 1 and 128, or -1)
+	 */
+	public boolean isIpv6SubnetMaskValid() {
+		return ipv6SubnetMask == -1 || (ipv6SubnetMask >= 1 && ipv6SubnetMask <= 128);
+	}
+
+	/**
 	 * 
 	 * @param numberOfSlots The number of slots to be held. More slots allow a
 	 *                      further look into the past, but increase the memory
@@ -685,6 +759,10 @@ public class AntiDoSValve extends ValveBase {
 			throw new LifecycleException(name4logging + ".monitorMode is invalid");
 		if (!isHttpStatusCodeValid())
 			throw new LifecycleException(name4logging + ".httpStatusCode is invalid: " + httpStatusCode);
+		if (!isIpv4SubnetMaskValid())
+			throw new LifecycleException(name4logging + ".ipv4SubnetMask is invalid: " + ipv4SubnetMask);
+		if (!isIpv6SubnetMaskValid())
+			throw new LifecycleException(name4logging + ".ipv6SubnetMask is invalid: " + ipv6SubnetMask);
 
 		if (provideMonitor() == null) {
 			String monitorMsg = reloadMonitor();
@@ -803,19 +881,25 @@ public class AntiDoSValve extends ValveBase {
 	 *                                  empty
 	 */
 	public boolean isIPAddressBlocked(String ip) throws IllegalArgumentException {
+		if (ip == null || ip.isEmpty()) {
+			throw new IllegalArgumentException("IP address must not be null or empty");
+		}
+		String counterName = resolveCounterName(ip);
 		AntiDoSMonitor monitor = provideMonitor();
-		if (monitor == null || monitor.registerAndCheckRequest(ip)) {
+		if (monitor == null || monitor.registerAndCheckRequest(counterName)) {
 			if (log.isDebugEnabled())
 				if (monitor == null)
 					log.debug(name4logging + " not available");
 				else
-					log.debug(name4logging + " Not blocked in AntiDoSMonitor: " + ip);
+					log.debug(name4logging + " Not blocked in AntiDoSMonitor: " + ip
+							+ (counterName.equals(ip) ? "" : " (counter: " + counterName + ")"));
 
 			return false;
 		}
 
 		if (log.isDebugEnabled())
-			log.debug(name4logging + " blocks: " + ip);
+			log.debug(name4logging + " blocks: " + ip
+					+ (counterName.equals(ip) ? "" : " (counter: " + counterName + ")"));
 
 		return true;
 	}
@@ -830,11 +914,157 @@ public class AntiDoSValve extends ValveBase {
 	 * @throws IllegalArgumentException Thrown if parameter is empty
 	 */
 	public String getIPAddressStatus(String ip) throws IllegalArgumentException {
+		if (ip == null || ip.isEmpty()) {
+			throw new IllegalArgumentException("IP address must not be null or empty");
+		}
+		String counterName = resolveCounterName(ip);
 		AntiDoSMonitor monitor = provideMonitor();
 
-		AntiDoSCounter ipCounter = monitor != null ? monitor.provideCurrentCounter(ip) : null;
+		AntiDoSCounter ipCounter = monitor != null ? monitor.provideCurrentCounter(counterName) : null;
 
 		return ipCounter != null ? ipCounter.toString() : "-";
+	}
+
+	/**
+	 * Resolves the internal counter name for a given client IP address.
+	 * If subnet aggregation is active (e.g. {@link #getIpv4SubnetMask()} &lt; 32
+	 * or {@link #getIpv6SubnetMask()} &lt; 128), addresses belonging to the same
+	 * subnet map to a common counter key (e.g. "192.168.1.0/24" or "2001:db8::/64").
+	 * 
+	 * @param ip The IP address string
+	 * @return The counter key to use for rate limiting
+	 */
+	public String resolveCounterName(String ip) {
+		if (ip == null || ip.isEmpty()) {
+			return ip;
+		}
+
+		int v4Mask = this.ipv4SubnetMask;
+		int v6Mask = this.ipv6SubnetMask;
+		boolean v4Active = v4Mask > 0 && v4Mask < 32;
+		boolean v6Active = v6Mask > 0 && v6Mask < 128;
+
+		if (!v4Active && !v6Active) {
+			return ip;
+		}
+
+		return aggregateSubnet(ip, v4Active, v4Mask, v6Active, v6Mask);
+	}
+
+	private String aggregateSubnet(String ip, boolean v4Active, int v4Mask, boolean v6Active, int v6Mask) {
+		if (v4Active) {
+			byte[] ipv4Bytes = parseIPv4Literal(ip);
+			if (ipv4Bytes != null) {
+				maskBytes(ipv4Bytes, v4Mask);
+				try {
+					return InetAddress.getByAddress(ipv4Bytes).getHostAddress() + "/" + v4Mask;
+				} catch (UnknownHostException e) {
+					return ip;
+				}
+			}
+		}
+
+		if (v6Active && ip.indexOf(':') >= 0) {
+			try {
+				InetAddress addr = InetAddress.getByName(ip);
+				if (addr instanceof Inet6Address) {
+					byte[] bytes = addr.getAddress();
+					maskBytes(bytes, v6Mask);
+					return InetAddress.getByAddress(bytes).getHostAddress() + "/" + v6Mask;
+				}
+			} catch (UnknownHostException e) {
+				return ip;
+			}
+		}
+
+		return ip;
+	}
+
+	private static byte[] parseIPv4Literal(String ip) {
+		int len = ip.length();
+		if (len < 7 || len > 15) {
+			return null;
+		}
+		int octetCount = 0;
+		byte[] bytes = new byte[4];
+		int curOctet = 0;
+		int digits = 0;
+		for (int i = 0; i < len; i++) {
+			char c = ip.charAt(i);
+			if (c >= '0' && c <= '9') {
+				curOctet = curOctet * 10 + (c - '0');
+				digits++;
+				if (digits > 3 || curOctet > 255) {
+					return null;
+				}
+			} else if (c == '.') {
+				if (digits == 0 || octetCount >= 3) {
+					return null;
+				}
+				bytes[octetCount++] = (byte) curOctet;
+				curOctet = 0;
+				digits = 0;
+			} else {
+				return null;
+			}
+		}
+		if (digits == 0 || octetCount != 3) {
+			return null;
+		}
+		bytes[3] = (byte) curOctet;
+		return bytes;
+	}
+
+	private static void maskBytes(byte[] bytes, int prefixBits) {
+		int fullBytes = prefixBits / 8;
+		int remBits = prefixBits % 8;
+		if (fullBytes < bytes.length) {
+			if (remBits > 0) {
+				bytes[fullBytes] = (byte) (bytes[fullBytes] & (0xFF << (8 - remBits)));
+				fullBytes++;
+			}
+			for (int i = fullBytes; i < bytes.length; i++) {
+				bytes[i] = 0;
+			}
+		}
+	}
+
+	static int parseSubnetMask(String mask, int maxBits) {
+		if (mask == null || mask.trim().isEmpty()) {
+			return maxBits;
+		}
+		String s = mask.trim();
+		if (s.startsWith("/")) {
+			s = s.substring(1).trim();
+		}
+		if (maxBits == 32 && s.contains(".")) {
+			byte[] b = parseIPv4Literal(s);
+			if (b == null) {
+				throw new IllegalArgumentException("Invalid dotted-decimal netmask: " + mask);
+			}
+			long val = ((long) (b[0] & 0xFF) << 24) | ((long) (b[1] & 0xFF) << 16) | ((long) (b[2] & 0xFF) << 8)
+					| ((long) (b[3] & 0xFF));
+			int prefix = Long.bitCount(val);
+			long expected = prefix == 0 ? 0L : (0xFFFFFFFF00000000L >>> prefix) & 0xFFFFFFFFL;
+			if (val != expected) {
+				throw new IllegalArgumentException(
+						"Invalid dotted-decimal netmask (non-contiguous mask bits): " + mask);
+			}
+			return prefix;
+		}
+		int prefix;
+		try {
+			prefix = Integer.parseInt(s);
+		} catch (NumberFormatException e) {
+			throw new IllegalArgumentException("Invalid subnet mask: " + mask, e);
+		}
+		if (prefix == -1) {
+			return maxBits;
+		}
+		if (prefix < 1 || prefix > maxBits) {
+			throw new IllegalArgumentException("Subnet mask prefix must be between 1 and " + maxBits + ": " + mask);
+		}
+		return prefix;
 	}
 
 	/**

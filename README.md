@@ -1,10 +1,10 @@
 # What is the Anti-DoS Valve
 
-This project implements a Tomcat Valve, which can enforce dynamic access rate limitations on requests from individual IP addresses. This can, to a certain extent, prevent overloads of Tomcat servers, e.g. by DoS attacks, or at least limit their effects.
+This project implements a Tomcat Valve, which can enforce dynamic access rate limitations on requests from individual IP addresses or subnets. This can, to a certain extent, prevent overloads of Tomcat servers, e.g. by DoS attacks or aggressive web crawlers, or at least limit their effects.
 
-The valve can not, of course, provide complete protection against any kind of maliciously caused overload. The goal is rather to get a simple usable DoS protection, which can be put into operation at short notice and with little effort, causing only a small overhead in the Tomcat server and can be used in particular to slow down aggressive web crawlers.
+The valve can not, of course, provide complete protection against any kind of maliciously caused overload. The goal is rather to get a simple usable overload protection, which can be put into operation at short notice and with little effort, causing only a small overhead in the Tomcat server and can be used in particular to slow down aggressive web crawlers.
 
-The valve can be extensively configured and additionally offers the option to block individual IP addresses or groups of addresses in general or to completely exclude IP adresses from a blockade.
+The valve can be extensively configured and additionally offers the option to block individual IP addresses or subnets in general or to completely exclude IP adresses or subnets from a blockade.
 
 An important goal in the development is the extensive coverage of the code by unittests, which is to guarantee the correct function of this code at a central point in the Tomcat server.
 
@@ -20,7 +20,7 @@ Since version 1.4 the valve is build against Tomcat 10.1 libraries. This means i
 
 The goal of the implementation was to get a flexible solution, which at the same time would only have a small degree of complexity and little overhead in the servers.
 
-In order to check whether a specific IP address currently exceeds the allowed access rate, the model of the slots was used: The internal, so-called Anti-DoS Monitor subdivides the monitoring period into successive, non-overlapping slots of a fixed length. If this slot length is 1 minute, the slots might cover these periods:
+In order to check whether a specific IP address or subnet currently exceeds the allowed access rate, the model of the slots was used: The internal, so-called Anti-DoS Monitor subdivides the monitoring period into successive, non-overlapping slots of a fixed length. If this slot length is 1 minute, the slots might cover these periods:
 
 * 12:00:00 to 12:00:59
 * 12:01:00 to 12:01:59
@@ -28,7 +28,7 @@ In order to check whether a specific IP address currently exceeds the allowed ac
 * 12:03:00 to 12:03:59
 * …
 
-The evaluation of whether an IP address makes too many accesses refers firstly to the accesses that have taken place within the current slot. A simple counter is used for this purpose. Compared to a sliding evaluation that does not use slots this avoids the storing of the individual request events. 
+The evaluation of whether an IP address or subnet makes too many accesses refers firstly to the accesses that have taken place within the current slot. A simple counter is used for this purpose. Compared to a sliding evaluation that does not use slots this avoids the storing of the individual request events. 
 
 For this the reason even in a DoS situation, in which thousands of requsts are made in a short time, the effort for the monitoring is not significantly higher than during normal operation. The disadvantage of the use of slots is the elimination of the past as soon as a new slot begins. Therefore the monitor contains an option to transfer counts from the previous slots.
 
@@ -48,7 +48,7 @@ The Anti-DoS Monitor has a structure that looks like this:
   * ...
 * …
 
-The maximum number of allowed requests per slot per IP address is compared with the number of current requests plus the number of requests taken from previous slots. If this sum is above the limit, the access for the remaining duration of this slot is blocked. If an IP address is blocked, all its accesses are answered with the HTTP status code 429 (Too Many Requests) by default (or the status code configured via `httpStatusCode`, e.g. 403 Forbidden for legacy behavior).
+The maximum number of allowed requests per slot per IP address or subnet is compared with the number of current requests plus the number of requests taken from previous slots. If this sum is above the limit, the access for the remaining duration of this slot is blocked. If an IP address or subnet is blocked, all its accesses are answered with the HTTP status code 429 (Too Many Requests) by default (or the status code configured via `httpStatusCode`, e.g. 403 Forbidden for legacy behavior).
 
 # Experiences so far
 
@@ -162,6 +162,31 @@ When an IP address exceeds the allowed request limit and gets blocked, it is mov
 Defines the maximum number of blocked IP addresses tracked in a slot. Used to prevent memory from growing indefinitely if the server is attacked by a large number of distinct IP addresses that get blocked. If omitted or not set, it defaults to the value of **maxIPCacheSize**.
 
 If this limit is exceeded, the blocked addresses with the oldest requests are dropped first using LRU eviction. Blocked IP addresses continue to count subsequent requests even after being blocked, and these counts are included in the retained request calculations of subsequent time slots to prevent attackers from becoming immediately unblocked when a new slot begins.
+
+**ipv4SubnetMask** (optional)
+
+Configures subnet aggregation for IPv4 addresses to protect against distributed botnets, proxy networks, and cache-flushing scans where attackers distribute requests across multiple IP addresses in the same subnet.
+
+When set to a prefix length smaller than 32 (e.g. `24` for `/24`), all requests originating from that subnet (such as `192.168.1.10` and `192.168.1.20`) are aggregated under a shared counter key (e.g. `192.168.1.0/24`). This prevents botnets from consuming multiple cache entries or evading rate limits by switching IP addresses within the same subnet.
+
+Accepts:
+* CIDR prefix integer (1 to 32), e.g. `24`
+* CIDR notation string, e.g. `"/24"`
+* Dotted-decimal netmask string, e.g. `"255.255.255.0"`
+* `32` or `-1`: Disables IPv4 aggregation (default behavior, each IP address is tracked individually).
+
+*Note*: Whitelisted IP addresses configured in *alwaysAllowedIPs* (e.g. `127.0.0.1` or specific internal machines) are evaluated prior to rate limiting and subnet aggregation, so individual whitelisted IPs remain accessible even if their subnet would otherwise be blocked.
+
+**ipv6SubnetMask** (optional)
+
+Configures subnet aggregation for IPv6 addresses. In IPv6 networks, attackers often have access to vast address pools (e.g. entire `/64` subnets) and can generate virtually unlimited unique IP addresses to easily bypass per-IP rate limits and flush cache entries.
+
+When set to a prefix length smaller than 128 (e.g. `64` for `/64`), all IPv6 addresses within that prefix share the same rate-limiting counter (e.g. `2001:db8:abcd:12::/64`).
+
+Accepts:
+* Prefix length integer (1 to 128), e.g. `64` or `48`
+* CIDR notation string, e.g. `"/64"`
+* `128` or `-1`: Disables IPv6 aggregation (default behavior).
 
 **slotLength**
 

@@ -392,6 +392,144 @@ class AntiDoSValveTest {
 		assertTrue(status.contains("maxBlockedCountersPerSlot: 100"));
 	}
 
+	@Test
+	void testIpv4SubnetMaskConfiguration() {
+		AntiDoSValve valve = new AntiDoSValve();
+		assertEquals(32, valve.getIpv4SubnetMask());
+		assertTrue(valve.isIpv4SubnetMaskValid());
+
+		valve.setIpv4SubnetMask(24);
+		assertEquals(24, valve.getIpv4SubnetMask());
+		assertTrue(valve.isIpv4SubnetMaskValid());
+
+		valve.setIpv4SubnetMask("/16");
+		assertEquals(16, valve.getIpv4SubnetMask());
+
+		valve.setIpv4SubnetMask("255.255.255.0");
+		assertEquals(24, valve.getIpv4SubnetMask());
+
+		valve.setIpv4SubnetMask("32");
+		assertEquals(32, valve.getIpv4SubnetMask());
+
+		valve.setIpv4SubnetMask("-1");
+		assertEquals(32, valve.getIpv4SubnetMask());
+
+		valve.setIpv4SubnetMask(0);
+		assertFalse(valve.isIpv4SubnetMaskValid());
+
+		valve.setIpv4SubnetMask(33);
+		assertFalse(valve.isIpv4SubnetMaskValid());
+
+		assertThrows(IllegalArgumentException.class, () -> valve.setIpv4SubnetMask("invalid"));
+		assertThrows(IllegalArgumentException.class, () -> valve.setIpv4SubnetMask("255.255.0.255"));
+	}
+
+	@Test
+	void testIpv6SubnetMaskConfiguration() {
+		AntiDoSValve valve = new AntiDoSValve();
+		assertEquals(128, valve.getIpv6SubnetMask());
+		assertTrue(valve.isIpv6SubnetMaskValid());
+
+		valve.setIpv6SubnetMask(64);
+		assertEquals(64, valve.getIpv6SubnetMask());
+		assertTrue(valve.isIpv6SubnetMaskValid());
+
+		valve.setIpv6SubnetMask("/48");
+		assertEquals(48, valve.getIpv6SubnetMask());
+
+		valve.setIpv6SubnetMask(0);
+		assertFalse(valve.isIpv6SubnetMaskValid());
+
+		valve.setIpv6SubnetMask(129);
+		assertFalse(valve.isIpv6SubnetMaskValid());
+
+		assertThrows(IllegalArgumentException.class, () -> valve.setIpv6SubnetMask("invalid"));
+	}
+
+	@Test
+	void testSubnetMaskLifecycleValidation() {
+		AntiDoSValve valve = new AntiDoSValve();
+		valve.setContainer(new StandardEngine());
+		setValidAntiDoSMonitorconfiguration(valve, "SUBNET_LIFECYCLE_TEST");
+
+		valve.setIpv4SubnetMask(35);
+		LifecycleException thrown4 = assertThrows(LifecycleException.class, () -> valve.start());
+		assertTrue(thrown4.getMessage().contains("ipv4SubnetMask is invalid"));
+
+		valve.setIpv4SubnetMask(24);
+		valve.setIpv6SubnetMask(200);
+		LifecycleException thrown6 = assertThrows(LifecycleException.class, () -> valve.start());
+		assertTrue(thrown6.getMessage().contains("ipv6SubnetMask is invalid"));
+	}
+
+	@Test
+	void testIpv4SubnetAggregationBlocking() {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "IPV4_SUBNET_TEST");
+		valve.setAllowedRequestsPerSlot(2);
+		valve.setIpv4SubnetMask(24);
+		valve.setRelevantPaths(".*");
+		assertNull(valve.reloadMonitor());
+
+		assertEquals("192.168.1.0/24", valve.resolveCounterName("192.168.1.10"));
+		assertEquals("192.168.1.0/24", valve.resolveCounterName("192.168.1.250"));
+
+		// 1st request from 192.168.1.10 -> allowed (counter: 1)
+		assertTrue(valve.isRequestAllowed("192.168.1.10", "/api"));
+		assertFalse(valve.isIPAddressBlocked("192.168.1.10")); // 2nd request from subnet -> allowed (counter: 2)
+
+		// 3rd request from another IP in same /24 -> blocked! (exceeds allowedRequestsPerSlot=2)
+		assertFalse(valve.isRequestAllowed("192.168.1.50", "/api"));
+		assertTrue(valve.isIPAddressBlocked("192.168.1.99"));
+
+		// Another subnet (192.168.2.x) should not be blocked
+		assertTrue(valve.isRequestAllowed("192.168.2.10", "/api"));
+	}
+
+	@Test
+	void testIpv6SubnetAggregationBlocking() {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "IPV6_SUBNET_TEST");
+		valve.setAllowedRequestsPerSlot(2);
+		valve.setIpv6SubnetMask(64);
+		valve.setRelevantPaths(".*");
+		assertNull(valve.reloadMonitor());
+
+		// IPs in same /64
+		String ip1 = "2001:db8:abcd:0012:0000:0000:0000:0001";
+		String ip2 = "2001:db8:abcd:12::2";
+		assertEquals(valve.resolveCounterName(ip1), valve.resolveCounterName(ip2));
+
+		assertTrue(valve.isRequestAllowed(ip1, "/api")); // count 1
+		assertFalse(valve.isIPAddressBlocked(ip2)); // count 2
+		// 3rd request in same /64 -> blocked!
+		assertFalse(valve.isRequestAllowed("2001:db8:abcd:12::99", "/api"));
+
+		// Different /64 -> allowed
+		assertTrue(valve.isRequestAllowed("2001:db8:abcd:13::1", "/api"));
+	}
+
+	@Test
+	void testWhitelistPrecedenceWithSubnetAggregation() {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "WHITELIST_SUBNET_TEST");
+		valve.setAllowedRequestsPerSlot(1);
+		valve.setIpv4SubnetMask(24);
+		valve.setAlwaysAllowedIPs("192\\.168\\.1\\.99");
+		valve.setRelevantPaths(".*");
+		assertNull(valve.reloadMonitor());
+
+		// Trigger block on 192.168.1.0/24 subnet
+		valve.isIPAddressBlocked("192.168.1.1");
+		valve.isIPAddressBlocked("192.168.1.2"); // blocked now
+
+		// Normal IP in subnet is blocked
+		assertFalse(valve.isRequestAllowed("192.168.1.3", "/api"));
+
+		// Whitelisted IP in same subnet is still allowed
+		assertTrue(valve.isRequestAllowed("192.168.1.99", "/api"));
+	}
+
 	private static void setValidAntiDoSMonitorconfiguration(AntiDoSValve valve, String monitorName) {
 		valve.setMonitorName(monitorName);
 		valve.setNumberOfSlots(10);
