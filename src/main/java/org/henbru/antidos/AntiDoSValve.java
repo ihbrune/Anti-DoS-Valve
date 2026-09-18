@@ -52,6 +52,7 @@ import jakarta.servlet.http.HttpServletResponse;
  * <li>{@link #setSlotLength(int)}
  * <li>{@link #setShareOfRetainedFormerRequests(String)}
  * <li>{@link #setSimulationMode(boolean)}
+ * <li>{@link #setHttpStatusCode(int)}
  * </ul>
  * 
  * @author Henning
@@ -68,10 +69,22 @@ public class AntiDoSValve extends ValveBase {
 	public static final String ANTIDOS_LOGGER_NAME = "org.henbru.antidos.AntiDoS";
 
 	/**
-	 * The HTTP response status code that is set during a rejection due to too many
-	 * accesses in {@link #DEFAULT_MONITOR_MODE}
+	 * Default HTTP response status code that is set during a rejection due to too many
+	 * accesses (RFC 6585 - Too Many Requests).
 	 */
-	public static final int BLOCKING_HTTP_STATUS = HttpServletResponse.SC_FORBIDDEN;
+	public static final int DEFAULT_HTTP_STATUS_CODE = 429;
+
+	/**
+	 * Legacy HTTP response status code used in versions prior to 1.4.1 (403 Forbidden).
+	 */
+	public static final int LEGACY_HTTP_STATUS_CODE = HttpServletResponse.SC_FORBIDDEN;
+
+	/**
+	 * The HTTP response status code that is set during a rejection due to too many
+	 * accesses in {@link #DEFAULT_MONITOR_MODE}.
+	 * Kept for backward compatibility.
+	 */
+	public static final int BLOCKING_HTTP_STATUS = DEFAULT_HTTP_STATUS_CODE;
 
 	/**
 	 * This name of the request attribute that is set by the valve to mark requests
@@ -111,6 +124,7 @@ public class AntiDoSValve extends ValveBase {
 	private volatile int allowedRequestsPerSlot = -1;
 	private volatile float shareOfRetainedFormerRequests = -1;
 	private volatile boolean simulationMode = false;
+	private volatile int httpStatusCode = DEFAULT_HTTP_STATUS_CODE;
 
 	/**
 	 * Monitor operation mode. If not set the default mode is used
@@ -555,17 +569,42 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
+	 * @return The HTTP response status code used when blocking requests
+	 */
+	public int getHttpStatusCode() {
+		return httpStatusCode;
+	}
+
+	/**
+	 * Sets the HTTP response status code used when blocking requests in
+	 * {@link #DEFAULT_MONITOR_MODE}. Defaults to {@link #DEFAULT_HTTP_STATUS_CODE} (429).
+	 * To restore the legacy behavior of previous versions, set this to
+	 * {@link #LEGACY_HTTP_STATUS_CODE} (403).
+	 *
+	 * @param httpStatusCode The HTTP status code (must be between 100 and 599)
+	 */
+	public void setHttpStatusCode(int httpStatusCode) {
+		this.httpStatusCode = httpStatusCode;
+	}
+
+	/**
+	 * @return <code>true</code> if {@link #getHttpStatusCode()} is a valid HTTP status code
+	 */
+	public boolean isHttpStatusCodeValid() {
+		return httpStatusCode >= 100 && httpStatusCode <= 599;
+	}
+
+	/**
 	 * This method is called on every request. It uses
 	 * {@link #isRequestAllowed(String, String)} for its checks. If a request is
 	 * blocked the reaction of the valve depends on its mode:
 	 * <ul>
-	 * <lli>{@link #DEFAULT_MONITOR_MODE}: the value of
-	 * {@link #BLOCKING_HTTP_STATUS} is set as error code
+	 * <li>{@link #DEFAULT_MONITOR_MODE}: the value of {@link #getHttpStatusCode()} is set as error code
 	 * <li>{@link #MARKING_MONITOR_MODE}: an information is added to the request
 	 * </ul>
 	 * When simulationMode is on only logging information is generated
 	 */
-        @Override
+	@Override
 	public void invoke(Request request, Response response) throws IOException, ServletException {
 
 		String ip = request.getRemoteAddr();
@@ -584,7 +623,7 @@ public class AntiDoSValve extends ValveBase {
 
 		if (isMonitorModeDefault()) {
 			// block request:
-			response.sendError(BLOCKING_HTTP_STATUS);
+			response.sendError(httpStatusCode);
 		} else {
 			// mark request:
 			response.getRequest().setAttribute(MARKING_ATTRIBUTE_NAME, name4logging);
@@ -619,6 +658,8 @@ public class AntiDoSValve extends ValveBase {
 			throw new LifecycleException(name4logging + ".relevantPaths is invalid");
 		if (!isMonitorModeValid())
 			throw new LifecycleException(name4logging + ".monitorMode is invalid");
+		if (!isHttpStatusCodeValid())
+			throw new LifecycleException(name4logging + ".httpStatusCode is invalid: " + httpStatusCode);
 
 		if (provideMonitor() == null) {
 			String monitorMsg = reloadMonitor();

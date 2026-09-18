@@ -48,7 +48,7 @@ The Anti-DoS Monitor has a structure that looks like this:
   * ...
 * …
 
-The maximum number of allowed requests per slot per IP address is compared with the number of current requests plus the number of requests taken from previous slots. If this sum is above the limit, the access for the remaining duration of this slot is blocked. If an IP address is blocked, all its accesses are answered with the HTTP status code 403 (Forbidden).
+The maximum number of allowed requests per slot per IP address is compared with the number of current requests plus the number of requests taken from previous slots. If this sum is above the limit, the access for the remaining duration of this slot is blocked. If an IP address is blocked, all its accesses are answered with the HTTP status code 429 (Too Many Requests) by default (or the status code configured via `httpStatusCode`, e.g. 403 Forbidden for legacy behavior).
 
 # Experiences so far
 
@@ -196,6 +196,10 @@ To use the marking mode set the parameter to *"MARKING"*. The value is case inse
 **simulationMode**
 
 Since version 1.1.0 this option allows you to simulate the valves actions without actually blocking (or marking) any request. It is *false* by default. When set to *true* it still prints logging information and is thus allowing you to get a feeling for the impact of your settings.
+
+**httpStatusCode**
+
+Since version 1.4.1 this optional parameter defines the HTTP status code returned when a request is blocked in *blocking* mode. The default value is `429` (*Too Many Requests*, per RFC 6585). If you want to retain the legacy behavior from earlier versions, you can configure `httpStatusCode="403"` (*Forbidden*). Any valid HTTP status code between 100 and 599 can be specified.
 
 # Sample Configurations
 

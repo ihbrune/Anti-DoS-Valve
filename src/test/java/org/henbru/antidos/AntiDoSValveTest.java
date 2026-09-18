@@ -4,9 +4,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.apache.catalina.LifecycleException;
+import org.apache.catalina.core.StandardEngine;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -324,6 +326,48 @@ class AntiDoSValveTest {
 		assertTrue(valve2.isRequestAllowed("127.0.0.1", "/xyz2"));
 		assertFalse(valve2.isRequestAllowed("127.0.0.1", "/xyz2"));
 
+	}
+
+	@Test
+	void testHttpStatusCode() {
+		AntiDoSValve valve = new AntiDoSValve();
+
+		// Default should be 429 (Too Many Requests)
+		assertEquals(429, valve.getHttpStatusCode());
+		assertEquals(AntiDoSValve.DEFAULT_HTTP_STATUS_CODE, valve.getHttpStatusCode());
+		assertTrue(valve.isHttpStatusCodeValid());
+
+		// Legacy behavior: 403 (Forbidden)
+		valve.setHttpStatusCode(AntiDoSValve.LEGACY_HTTP_STATUS_CODE);
+		assertEquals(403, valve.getHttpStatusCode());
+		assertTrue(valve.isHttpStatusCodeValid());
+
+		// Custom status code
+		valve.setHttpStatusCode(503);
+		assertEquals(503, valve.getHttpStatusCode());
+		assertTrue(valve.isHttpStatusCodeValid());
+
+		// Invalid status codes
+		valve.setHttpStatusCode(99);
+		assertFalse(valve.isHttpStatusCodeValid());
+
+		valve.setHttpStatusCode(600);
+		assertFalse(valve.isHttpStatusCodeValid());
+
+		valve.setHttpStatusCode(-1);
+		assertFalse(valve.isHttpStatusCodeValid());
+	}
+
+	@Test
+	void testHttpStatusCodeLifecycleValidation() {
+		AntiDoSValve valve = new AntiDoSValve();
+		valve.setContainer(new StandardEngine());
+		setValidAntiDoSMonitorconfiguration(valve, "STATUS_CODE_VALIDATION_TEST");
+		valve.setHttpStatusCode(999);
+		assertFalse(valve.isHttpStatusCodeValid());
+
+		LifecycleException thrown = assertThrows(LifecycleException.class, () -> valve.start());
+		assertTrue(thrown.getMessage().contains("httpStatusCode is invalid"));
 	}
 
 	private static void setValidAntiDoSMonitorconfiguration(AntiDoSValve valve, String monitorName) {
