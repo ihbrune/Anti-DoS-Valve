@@ -1,15 +1,21 @@
 package org.henbru.antidos;
 
-import org.apache.catalina.LifecycleException;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import junit.framework.TestCase;
+import org.apache.catalina.LifecycleException;
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit test for the valve implementation
  */
-public class AntiDoSValveTest extends TestCase {
+class AntiDoSValveTest {
 
-	public void testMonitorMode() {
+	@Test
+	void testMonitorMode() {
 		AntiDoSValve valve = new AntiDoSValve();
 
 		assertTrue(valve.isMonitorModeValid());
@@ -32,7 +38,8 @@ public class AntiDoSValveTest extends TestCase {
 		assertTrue(valve.isMonitorModeMarking());		
 	}
 
-	public void testAlwaysAllowedIPs() {
+	@Test
+	void testAlwaysAllowedIPs() {
 		AntiDoSValve valve = new AntiDoSValve();
 
 		assertTrue(valve.isAlwaysAllowedIPsValid());
@@ -62,7 +69,8 @@ public class AntiDoSValveTest extends TestCase {
 		assertTrue(valve.isIPAddressInAlwaysAllowed("129.70.12.1"));
 	}
 
-	public void testAlwaysForbiddenIPs() {
+	@Test
+	void testAlwaysForbiddenIPs() {
 		AntiDoSValve valve = new AntiDoSValve();
 
 		assertTrue(valve.isAlwaysForbiddenIPsValid());
@@ -92,7 +100,8 @@ public class AntiDoSValveTest extends TestCase {
 		assertTrue(valve.isIPAddressInAlwaysForbidden("129.70.12.1"));
 	}
 
-	public void testAlwaysAllowedIPsArePrefered() {
+	@Test
+	void testAlwaysAllowedIPsArePrefered() {
 		AntiDoSValve valve = new AntiDoSValve();
 
 		assertTrue(valve.isRequestAllowed("127.0.0.1", "/xyz"));
@@ -109,7 +118,8 @@ public class AntiDoSValveTest extends TestCase {
 
 	}
 
-	public void testRelevantPaths() {
+	@Test
+	void testRelevantPaths() {
 		AntiDoSValve valve = new AntiDoSValve();
 
 		assertTrue(valve.isRelevantPathsValid());
@@ -145,7 +155,8 @@ public class AntiDoSValveTest extends TestCase {
 
 	}
 
-	public void testNonRelevantPaths() {
+	@Test
+	void testNonRelevantPaths() {
 		AntiDoSValve valve = new AntiDoSValve();
 
 		assertTrue(valve.isNonRelevantPathsValid());
@@ -181,7 +192,8 @@ public class AntiDoSValveTest extends TestCase {
 
 	}
 
-	public void testRelevantAndNonRelevantPaths() {
+	@Test
+	void testRelevantAndNonRelevantPaths() {
 		AntiDoSValve valve = new AntiDoSValve();
 		setValidAntiDoSMonitorconfiguration(valve, "REL NON REL TEST");
 		valve.setAllowedRequestsPerSlot(3);
@@ -214,7 +226,8 @@ public class AntiDoSValveTest extends TestCase {
 
 	}
 
-	public void testIPAddressStatus() throws LifecycleException {
+	@Test
+	void testIPAddressStatus() throws LifecycleException {
 		AntiDoSValve valve = new AntiDoSValve();
 		setValidAntiDoSMonitorconfiguration(valve, "IP STATUS TEST");
 		valve.reloadMonitor();
@@ -230,7 +243,8 @@ public class AntiDoSValveTest extends TestCase {
 		assertFalse(ipUnbekannt.equals(ipStatus));
 	}
 
-	public void testBlocking() throws LifecycleException {
+	@Test
+	void testBlocking() throws LifecycleException {
 		AntiDoSValve valve = new AntiDoSValve();
 		setValidAntiDoSMonitorconfiguration(valve, "BLOCK TEST");
 		valve.setAllowedRequestsPerSlot(3);
@@ -249,7 +263,8 @@ public class AntiDoSValveTest extends TestCase {
 		assertFalse(valve.isRequestAllowed("127.0.0.2", "/xyz"));
 	}
 
-	public void testReloadAntiDoSMonitor() throws LifecycleException {
+	@Test
+	void testReloadAntiDoSMonitor() throws LifecycleException {
 		AntiDoSValve valve = new AntiDoSValve();
 		assertNotNull(valve.reloadMonitor());
 
@@ -257,7 +272,8 @@ public class AntiDoSValveTest extends TestCase {
 		assertNull(valve.reloadMonitor());
 	}
 
-	public void testMultiAntiDoSMonitors() throws LifecycleException {
+	@Test
+	void testMultiAntiDoSMonitors() throws LifecycleException {
 		AntiDoSValve valve1 = new AntiDoSValve();
 		assertNotNull(valve1.reloadMonitor());
 
@@ -269,7 +285,8 @@ public class AntiDoSValveTest extends TestCase {
 		assertNotNull(valve2.reloadMonitor());
 	}
 
-	public void testBlockingMulti() throws LifecycleException {
+	@Test
+	void testBlockingMulti() throws LifecycleException {
 		AntiDoSValve valve1 = new AntiDoSValve();
 		setValidAntiDoSMonitorconfiguration(valve1, "BLOCK TEST1");
 		valve1.setAllowedRequestsPerSlot(3);

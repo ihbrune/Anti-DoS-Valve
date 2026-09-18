@@ -1,13 +1,18 @@
 package org.henbru.antidos;
 
-import junit.framework.TestCase;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit test for the slot implementation
  */
-public class AntiDoSSlotTest extends TestCase {
+class AntiDoSSlotTest {
 
-	public void testContents() {
+	@Test
+	void testContents() {
 		AntiDoSSlot slot = new AntiDoSSlot(null, "xx", 10);
 
 		assertNull(slot.getCounterIfExists("123.456.789.000"));
@@ -25,7 +30,8 @@ public class AntiDoSSlotTest extends TestCase {
 
 	}
 
-	public void testCounterCacheOverflow() {
+	@Test
+	void testCounterCacheOverflow() {
 
 		AntiDoSSlot slot = provideSlotTestdata1();
 		AntiDoSCounter checkRec = slot.getCounterIfExists("123.456.789.004");

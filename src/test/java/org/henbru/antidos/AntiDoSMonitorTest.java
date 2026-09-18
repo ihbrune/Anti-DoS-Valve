@@ -1,13 +1,19 @@
 package org.henbru.antidos;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.util.Calendar;
 
-import junit.framework.TestCase;
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit test for die Anti-DoS monitor implementation
  */
-public class AntiDoSMonitorTest extends TestCase {
+class AntiDoSMonitorTest {
 
 	private static class AntiDoSMonitor4Test extends AntiDoSMonitor {
 		private AntiDoSMonitor4Test(int maxCountersPerSlot,
@@ -31,7 +37,8 @@ public class AntiDoSMonitorTest extends TestCase {
 
 	}
 
-	public void testRetainedCountCalculation() {
+	@Test
+	void testRetainedCountCalculation() {
 		int slotLength = 30;
 		float anteil = (float) 0.5;
 		AntiDoSMonitor4Test mon = new AntiDoSMonitor4Test(10, 3, slotLength, 3,
@@ -121,7 +128,8 @@ public class AntiDoSMonitorTest extends TestCase {
 		assertEquals(alte2, ip2.getRetainedCounts().get());
 	}
 
-	public void testSlotgeneration() {
+	@Test
+	void testSlotgeneration() {
 		int slotLength = 30;
 		AntiDoSMonitor4Test mon = new AntiDoSMonitor4Test(10, 3, slotLength, 3,
 				(float) 0.5);
@@ -163,7 +171,8 @@ public class AntiDoSMonitorTest extends TestCase {
 		assertEquals(3, mon.getNumberOfActiveSlots());
 	}
 
-	public void testMaxRequests() {
+	@Test
+	void testMaxRequests() {
 		AntiDoSMonitor mon = new AntiDoSMonitor("TEST MAX REQ", 10, 5, 30, 3, (float) 0.5);
 
 		assertTrue(mon.registerAndCheckRequest("123.456.789.000"));
@@ -172,7 +181,8 @@ public class AntiDoSMonitorTest extends TestCase {
 		assertFalse(mon.registerAndCheckRequest("123.456.789.000"));
 	}
 
-	public void testSlotOverflow() {
+	@Test
+	void testSlotOverflow() {
 		AntiDoSMonitor mon = new AntiDoSMonitor("TEST SLOT OVER", 1, 5, 30, 2, (float) 0.5);
 
 		assertTrue(mon.registerAndCheckRequest("123.456.789.000"));

@@ -1,13 +1,16 @@
 package org.henbru.antidos;
 
-import junit.framework.TestCase;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit test for the counter implementation
  */
-public class AntiDoSCounterTest extends TestCase {
+class AntiDoSCounterTest {
 
-	public void testCount() {
+	@Test
+	void testCount() {
 		AntiDoSCounter rec = new AntiDoSCounter();
 		assertEquals(0, rec.getCount().get());
 		rec.getCount().addAndGet(1);		
@@ -20,7 +23,8 @@ public class AntiDoSCounterTest extends TestCase {
 		assertEquals(100, rec.getCount().get());		
 	}
 	
-	public void testRetainedCounts() {
+	@Test
+	void testRetainedCounts() {
 		AntiDoSCounter rec = new AntiDoSCounter();
 		assertEquals(-1, rec.getRetainedCounts().get());
 		rec.getRetainedCounts().addAndGet(1);		
@@ -33,7 +37,9 @@ public class AntiDoSCounterTest extends TestCase {
 		assertEquals(1, rec.getRetainedCounts().get());
 		
 	}
-	public void testCountCombined() {
+
+	@Test
+	void testCountCombined() {
 		AntiDoSCounter rec = new AntiDoSCounter();
 		assertEquals(0, rec.getCountCombined());
 		
