@@ -1,9 +1,8 @@
 package org.henbru.antidos;
 
 import java.util.Calendar;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.concurrent.ConcurrentNavigableMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.juli.logging.Log;
@@ -42,12 +41,13 @@ public class AntiDoSMonitor {
 	private String monitorName;
 	private String name4logging;
 	private int maxCountersPerSlot;
-	private final Map<String, AntiDoSSlot> slots;
+	private int numberOfSlots;
+	private final ConcurrentNavigableMap<Long, AntiDoSSlot> slots;
 	private int slotLength;
 	private int allowedRequestsPerSlot;
 	private float shareOfRetainedFormerRequests;
 
-	private AtomicInteger totalrequests = new AtomicInteger(0);
+	private final AtomicInteger totalrequests = new AtomicInteger(0);
 
 	/**
 	 * The constructor gets all parameters that define the function of the Anti-DoS
@@ -109,15 +109,8 @@ public class AntiDoSMonitor {
 		this.name4logging = "AntiDoSMonitor [" + this.monitorName + "]";
 
 		this.maxCountersPerSlot = maxCountersPerSlot;
-
-		slots = Collections.synchronizedMap(new LinkedHashMap<String, AntiDoSSlot>(numberOfSlots + 1, 0.75f, false) {
-			private static final long serialVersionUID = 1L;
-
-			@Override
-			protected boolean removeEldestEntry(Map.Entry<String, AntiDoSSlot> eldest) {
-				return size() > numberOfSlots;
-			}
-		});
+		this.numberOfSlots = numberOfSlots;
+		this.slots = new ConcurrentSkipListMap<>();
 
 		// Convert slot length in milliseconds:
 		this.slotLength = slotLength * 1000;
@@ -202,10 +195,17 @@ public class AntiDoSMonitor {
 	private AntiDoSSlot provideCurrentSlot() {
 		// Integer division, which provides the same result for every
 		// millisecond within the slot length:
-		long _slotKey = getTimeInMillis() / slotLength;
-		String slotKey = "" + _slotKey;
+		long slotKey = getTimeInMillis() / slotLength;
 
-		return slots.computeIfAbsent(slotKey, k -> new AntiDoSSlot(monitorName, k, maxCountersPerSlot));
+		AntiDoSSlot slot = slots.computeIfAbsent(slotKey, k -> new AntiDoSSlot(monitorName, String.valueOf(k), maxCountersPerSlot));
+		pruneOldSlots();
+		return slot;
+	}
+
+	private void pruneOldSlots() {
+		while (slots.size() > numberOfSlots) {
+			slots.pollFirstEntry();
+		}
 	}
 
 	/**
@@ -238,22 +238,21 @@ public class AntiDoSMonitor {
 			return 0;
 
 		int sumOfCounts = 0;
-		int numberOfSlots = 0;
-		synchronized (slots) {
-			for (AntiDoSSlot slot : slots.values()) {
-				// Ignore count from excluded slot:
-				if (slot.getKey().equals(keyForSlotToExclude))
-					continue;
+		int otherSlotsCount = 0;
 
-				numberOfSlots++;
+		for (AntiDoSSlot slot : slots.values()) {
+			// Ignore count from excluded slot:
+			if (slot.getKey().equals(keyForSlotToExclude))
+				continue;
 
-				AntiDoSCounter counter = slot.getCounterIfExists(counterName);
-				if (counter != null)
-					sumOfCounts += counter.getCount().get();
-			}
+			otherSlotsCount++;
+
+			AntiDoSCounter counter = slot.getCounterIfExists(counterName);
+			if (counter != null)
+				sumOfCounts += counter.getCount().get();
 		}
 
-		return sumOfCounts > 0 ? Math.round(sumOfCounts * shareOfRetainedFormerRequests / numberOfSlots) : 0;
+		return otherSlotsCount > 0 && sumOfCounts > 0 ? Math.round(sumOfCounts * shareOfRetainedFormerRequests / otherSlotsCount) : 0;
 	}
 
 	/**
@@ -285,10 +284,9 @@ public class AntiDoSMonitor {
 				.append(maxCountersPerSlot).append("; shareOfRetainedFormerRequests: ")
 				.append(shareOfRetainedFormerRequests).append("\n");
 		sb.append("#total requests: ").append(getTotalrequests()).append("\n");
-		synchronized (slots) {
-			for (AntiDoSSlot slot : slots.values()) {
-				sb.append("Slot '").append(slot.getKey()).append("' ").append(slot.toString()).append("\n");
-			}
+
+		for (AntiDoSSlot slot : slots.values()) {
+			sb.append("Slot '").append(slot.getKey()).append("' ").append(slot.toString()).append("\n");
 		}
 
 		return sb.toString();

@@ -1,8 +1,10 @@
 package org.henbru.antidos;
 
-import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
@@ -38,9 +40,12 @@ public class AntiDoSSlot {
 	private String key;
 	private String name4logging;
 
-	private final Map<String, AntiDoSCounter> counters;
+	private final ConcurrentHashMap<String, AntiDoSCounter> counters;
 
 	private int maxCountersPerSlot;
+	private final AtomicLong accessSequence = new AtomicLong(0);
+	private final AtomicBoolean cacheFullLogged = new AtomicBoolean(false);
+	private final ReentrantLock evictionLock = new ReentrantLock();
 
 	/**
 	 * @param monitorName        The monitors name. Used for logging
@@ -58,18 +63,8 @@ public class AntiDoSSlot {
 			throw new IllegalArgumentException();
 
 		this.name4logging = "AntiDoSSlot [" + monitorName + "]";
-
 		this.key = key;
-
-		counters = Collections
-				.synchronizedMap(new LinkedHashMap<String, AntiDoSCounter>(maxCountersPerSlot, 0.75f, true) {
-					private static final long serialVersionUID = 1L;
-
-					@Override
-					protected boolean removeEldestEntry(Map.Entry<String, AntiDoSCounter> eldest) {
-						return size() > maxCountersPerSlot;
-					}
-				});
+		this.counters = new ConcurrentHashMap<>(maxCountersPerSlot);
 		this.maxCountersPerSlot = maxCountersPerSlot;
 	}
 
@@ -83,17 +78,58 @@ public class AntiDoSSlot {
 		if (counterName == null || counterName.length() == 0)
 			throw new IllegalArgumentException();
 
-		synchronized (counters) {
-			boolean slotNotFullYet = counters.size() < maxCountersPerSlot;
-			AntiDoSCounter counter = counters.get(counterName);
-			if (counter == null) {
-				counter = new AntiDoSCounter();
-				counters.put(counterName, counter);
+		// Fast path for existing counters (lock-free)
+		AntiDoSCounter existing = counters.get(counterName);
+		if (existing != null) {
+			existing.touch(accessSequence.incrementAndGet());
+			return existing;
+		}
 
-				if (log.isInfoEnabled() && slotNotFullYet && counters.size() >= maxCountersPerSlot)
-					log.info(name4logging + " Counter Cache is full");
+		// New counter insertion
+		AntiDoSCounter newCounter = new AntiDoSCounter();
+		newCounter.touch(accessSequence.incrementAndGet());
+		AntiDoSCounter previous = counters.putIfAbsent(counterName, newCounter);
+		if (previous != null) {
+			previous.touch(accessSequence.incrementAndGet());
+			return previous;
+		}
+
+		// Check if capacity was reached/exceeded
+		if (counters.size() >= maxCountersPerSlot) {
+			if (cacheFullLogged.compareAndSet(false, true) && log.isInfoEnabled()) {
+				log.info(name4logging + " Counter Cache is full");
 			}
-			return counter;
+			if (counters.size() > maxCountersPerSlot) {
+				evictEldestEntry();
+			}
+		}
+
+		return newCounter;
+	}
+
+	private void evictEldestEntry() {
+		evictionLock.lock();
+		try {
+			while (counters.size() > maxCountersPerSlot) {
+				String oldestKey = null;
+				long oldestOrder = Long.MAX_VALUE;
+
+				for (Map.Entry<String, AntiDoSCounter> entry : counters.entrySet()) {
+					long order = entry.getValue().getAccessOrder();
+					if (order < oldestOrder) {
+						oldestOrder = order;
+						oldestKey = entry.getKey();
+					}
+				}
+
+				if (oldestKey != null) {
+					counters.remove(oldestKey);
+				} else {
+					break;
+				}
+			}
+		} finally {
+			evictionLock.unlock();
 		}
 	}
 
@@ -118,22 +154,20 @@ public class AntiDoSSlot {
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
 
-		synchronized (counters) {
-			sb.append("#Counters: ").append(counters.size()).append(" Locked: ");
+		sb.append("#Counters: ").append(counters.size()).append(" Locked: ");
 
-			boolean hasLockedCounters = false;
-			for (Map.Entry<String, AntiDoSCounter> entry : counters.entrySet()) {
-				AntiDoSCounter ip = entry.getValue();
-				if (ip.isLocked()) {
-					sb.append(entry.getKey()).append(" (").append(ip.getCount()).append("|").append(ip.getRetainedCounts())
-							.append(")");
-					hasLockedCounters = true;
-				}
+		boolean hasLockedCounters = false;
+		for (Map.Entry<String, AntiDoSCounter> entry : counters.entrySet()) {
+			AntiDoSCounter ip = entry.getValue();
+			if (ip.isLocked()) {
+				sb.append(entry.getKey()).append(" (").append(ip.getCount()).append("|").append(ip.getRetainedCounts())
+						.append(")");
+				hasLockedCounters = true;
 			}
-
-			if (!hasLockedCounters)
-				sb.append("-");
 		}
+
+		if (!hasLockedCounters)
+			sb.append("-");
 
 		return sb.toString();
 	}

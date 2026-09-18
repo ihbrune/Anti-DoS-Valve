@@ -1,6 +1,7 @@
 package org.henbru.antidos;
 
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Copyright 2017 Henning Brune
@@ -31,7 +32,25 @@ public class AntiDoSCounter {
 
 	private final AtomicInteger retainedCounts = new AtomicInteger(-1);
 
+	private final AtomicLong accessOrder = new AtomicLong(0);
+
 	private volatile boolean locked = false;
+
+	/**
+	 * Updates the access order sequence for LRU recency tracking.
+	 * 
+	 * @param order A monotonic sequence number
+	 */
+	public void touch(long order) {
+		this.accessOrder.set(order);
+	}
+
+	/**
+	 * @return The sequence number when this counter was last accessed
+	 */
+	public long getAccessOrder() {
+		return accessOrder.get();
+	}
 
 	/**
 	 * 
