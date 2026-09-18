@@ -5,16 +5,16 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.connector.Request;
 import org.apache.catalina.connector.Response;
 import org.apache.catalina.valves.ValveBase;
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
+
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Copyright 2017 Henning Brune
@@ -103,14 +103,14 @@ public class AntiDoSValve extends ValveBase {
 	/**
 	 * Map of monitor objects for different valve instances
 	 */
-	private static volatile Map<String, AntiDoSMonitor> monitors = null;
+	private static final Map<String, AntiDoSMonitor> monitors = new ConcurrentHashMap<>();
 
-	private int maxIPCacheSize = -1;
-	private int numberOfSlots = -1;
-	private int slotLength = -1;
-	private int allowedRequestsPerSlot = -1;
-	private float shareOfRetainedFormerRequests = -1;
-	private boolean simulationMode = false;
+	private volatile int maxIPCacheSize = -1;
+	private volatile int numberOfSlots = -1;
+	private volatile int slotLength = -1;
+	private volatile int allowedRequestsPerSlot = -1;
+	private volatile float shareOfRetainedFormerRequests = -1;
+	private volatile boolean simulationMode = false;
 
 	/**
 	 * Monitor operation mode. If not set the default mode is used
@@ -127,7 +127,7 @@ public class AntiDoSValve extends ValveBase {
 	 */
 	private volatile String name4logging = provideName4logging(DEFAULT_MONITOR_NAME);
 
-	private static final String provideName4logging(String monitorName) {
+	private static String provideName4logging(String monitorName) {
 		return "AntiDoSValve [" + monitorName + "]";
 	}
 
@@ -210,19 +210,12 @@ public class AntiDoSValve extends ValveBase {
 	 * @return might be <code>null</code> if configuration is incomplete
 	 */
 	private AntiDoSMonitor provideMonitor() {
-		if (monitors == null || !monitors.containsKey(monitorName))
+		if (!monitors.containsKey(monitorName))
 			reloadMonitor();
 
 		return monitors.get(monitorName);
 	}
 
-	/**
-	 * Creates the map for the monitors. Should be called only once in the lifetime
-	 * of the Tomcat container
-	 */
-	private static void initializeMonitors() {
-		monitors = new ConcurrentHashMap<String, AntiDoSMonitor>(1);
-	}
 
 	/**
 	 * Monitor mode used by this valve instance
@@ -538,7 +531,7 @@ public class AntiDoSValve extends ValveBase {
 		this.shareOfRetainedFormerRequests = -1;
 		try {
 			this.shareOfRetainedFormerRequests = Float.parseFloat(shareOfRetainedFormerRequests);
-		} catch (Exception ex) {
+		} catch (NumberFormatException | NullPointerException ex) {
 		}
 	}
 
@@ -572,6 +565,7 @@ public class AntiDoSValve extends ValveBase {
 	 * </ul>
 	 * When simulationMode is on only logging information is generated
 	 */
+        @Override
 	public void invoke(Request request, Response response) throws IOException, ServletException {
 
 		String ip = request.getRemoteAddr();
@@ -645,9 +639,6 @@ public class AntiDoSValve extends ValveBase {
 	 */
 	public String reloadMonitor() {
 		try {
-			if (monitors == null)
-				initializeMonitors();
-
 			AntiDoSMonitor monitor = new AntiDoSMonitor(monitorName, maxIPCacheSize, numberOfSlots, slotLength,
 					allowedRequestsPerSlot, shareOfRetainedFormerRequests);
 
@@ -790,10 +781,7 @@ public class AntiDoSValve extends ValveBase {
 		// Local copy for thread safety
 		Pattern alwaysForbidden = this.alwaysForbiddenIPs;
 
-		if (alwaysForbidden != null && alwaysForbidden.matcher(ip).matches())
-			return true;
-
-		return false;
+		return alwaysForbidden != null && alwaysForbidden.matcher(ip).matches();
 	}
 
 	/**
@@ -807,10 +795,7 @@ public class AntiDoSValve extends ValveBase {
 		// Local copy for thread safety
 		Pattern alwaysAllowed = this.alwaysAllowedIPs;
 
-		if (alwaysAllowed != null && alwaysAllowed.matcher(ip).matches())
-			return true;
-
-		return false;
+		return alwaysAllowed != null && alwaysAllowed.matcher(ip).matches();
 	}
 
 	/**
@@ -824,10 +809,7 @@ public class AntiDoSValve extends ValveBase {
 		// Local copy for thread safety
 		Pattern relevant = this.relevantPaths;
 
-		if (relevant != null && relevant.matcher(requestURI).matches())
-			return true;
-
-		return false;
+		return relevant != null && relevant.matcher(requestURI).matches();
 	}
 
 	/**
@@ -841,10 +823,7 @@ public class AntiDoSValve extends ValveBase {
 		// Local copy for thread safety
 		Pattern nonrelevant = this.nonRelevantPaths;
 
-		if (nonrelevant != null && nonrelevant.matcher(requestURI).matches())
-			return true;
-
-		return false;
+		return nonrelevant != null && nonrelevant.matcher(requestURI).matches();
 	}
 
 	/**

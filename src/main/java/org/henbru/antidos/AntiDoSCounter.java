@@ -31,7 +31,7 @@ public class AntiDoSCounter {
 
 	private final AtomicInteger retainedCounts = new AtomicInteger(-1);
 
-	private boolean locked = false;
+	private volatile boolean locked = false;
 
 	/**
 	 * 

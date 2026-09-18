@@ -38,7 +38,7 @@ public class AntiDoSSlot {
 	private String key;
 	private String name4logging;
 
-	private Map<String, AntiDoSCounter> counters = null;
+	private final Map<String, AntiDoSCounter> counters;
 
 	private int maxCountersPerSlot;
 
@@ -83,15 +83,18 @@ public class AntiDoSSlot {
 		if (counterName == null || counterName.length() == 0)
 			throw new IllegalArgumentException();
 
-		boolean slotNotFullYet = counters.size() < maxCountersPerSlot;
+		synchronized (counters) {
+			boolean slotNotFullYet = counters.size() < maxCountersPerSlot;
+			AntiDoSCounter counter = counters.get(counterName);
+			if (counter == null) {
+				counter = new AntiDoSCounter();
+				counters.put(counterName, counter);
 
-		if (!counters.containsKey(counterName)) {
-			counters.putIfAbsent(counterName, new AntiDoSCounter());
-
-			if (log.isInfoEnabled() && slotNotFullYet && counters.size() >= maxCountersPerSlot)
-				log.info(name4logging + " Counter Cache is full");
+				if (log.isInfoEnabled() && slotNotFullYet && counters.size() >= maxCountersPerSlot)
+					log.info(name4logging + " Counter Cache is full");
+			}
+			return counter;
 		}
-		return counters.get(counterName);
 	}
 
 	/**
@@ -115,20 +118,22 @@ public class AntiDoSSlot {
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
 
-		sb.append("#Counters: ").append(counters.size()).append(" Locked: ");
+		synchronized (counters) {
+			sb.append("#Counters: ").append(counters.size()).append(" Locked: ");
 
-		boolean hasLockedCounters = false;
-		for (String _ip : counters.keySet()) {
-			AntiDoSCounter ip = counters.get(_ip);
-			if (ip.isLocked()) {
-				sb.append(_ip).append(" (").append(ip.getCount()).append("|").append(ip.getRetainedCounts())
-						.append(")");
-				hasLockedCounters = true;
+			boolean hasLockedCounters = false;
+			for (Map.Entry<String, AntiDoSCounter> entry : counters.entrySet()) {
+				AntiDoSCounter ip = entry.getValue();
+				if (ip.isLocked()) {
+					sb.append(entry.getKey()).append(" (").append(ip.getCount()).append("|").append(ip.getRetainedCounts())
+							.append(")");
+					hasLockedCounters = true;
+				}
 			}
-		}
 
-		if (!hasLockedCounters)
-			sb.append("-");
+			if (!hasLockedCounters)
+				sb.append("-");
+		}
 
 		return sb.toString();
 	}

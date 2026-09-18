@@ -1,13 +1,12 @@
 package org.henbru.antidos;
 
+import java.util.Calendar;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.util.Calendar;
-
 import org.junit.jupiter.api.Test;
 
 /**
@@ -131,7 +130,8 @@ class AntiDoSMonitorTest {
 	@Test
 	void testSlotgeneration() {
 		int slotLength = 30;
-		AntiDoSMonitor4Test mon = new AntiDoSMonitor4Test(10, 3, slotLength, 3,
+		int numberOfSlots = 3;
+		AntiDoSMonitor4Test mon = new AntiDoSMonitor4Test(10, numberOfSlots, slotLength, 5,
 				(float) 0.5);
 
 		assertEquals(0, mon.getNumberOfActiveSlots());
@@ -159,16 +159,16 @@ class AntiDoSMonitorTest {
 		mon.registerAndCheckRequest("123.456.789.002");
 		assertEquals(3, mon.getNumberOfActiveSlots());
 		mon.registerAndCheckRequest("123.456.789.003");
-		assertEquals(3, mon.getNumberOfActiveSlots());
+		assertEquals(numberOfSlots, mon.getNumberOfActiveSlots());
 
 		// Now: slot overflow
 		mon.referencetime += slotLength * 1000 + 1;
 		mon.registerAndCheckRequest("123.456.789.012");
-		assertEquals(3, mon.getNumberOfActiveSlots());
+		assertEquals(numberOfSlots, mon.getNumberOfActiveSlots());
 
 		mon.referencetime += slotLength * 1000 + 1;
 		mon.registerAndCheckRequest("123.456.789.022");
-		assertEquals(3, mon.getNumberOfActiveSlots());
+		assertEquals(numberOfSlots, mon.getNumberOfActiveSlots());
 	}
 
 	@Test

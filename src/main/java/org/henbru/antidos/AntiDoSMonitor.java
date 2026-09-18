@@ -42,7 +42,7 @@ public class AntiDoSMonitor {
 	private String monitorName;
 	private String name4logging;
 	private int maxCountersPerSlot;
-	private Map<String, AntiDoSSlot> slots = null;
+	private final Map<String, AntiDoSSlot> slots;
 	private int slotLength;
 	private int allowedRequestsPerSlot;
 	private float shareOfRetainedFormerRequests;
@@ -110,7 +110,7 @@ public class AntiDoSMonitor {
 
 		this.maxCountersPerSlot = maxCountersPerSlot;
 
-		slots = Collections.synchronizedMap(new LinkedHashMap<String, AntiDoSSlot>(maxCountersPerSlot, 0.75f, false) {
+		slots = Collections.synchronizedMap(new LinkedHashMap<String, AntiDoSSlot>(numberOfSlots + 1, 0.75f, false) {
 			private static final long serialVersionUID = 1L;
 
 			@Override
@@ -159,8 +159,10 @@ public class AntiDoSMonitor {
 		counter.getCount().addAndGet(1);
 
 		// Step 3: Do we have to retain counter values from previous slots?
-		if (counter.getRetainedCounts().get() == -1)
-			counter.getRetainedCounts().set(provideRetainedCountForCounter(counterName, slot.getKey()));
+		if (counter.getRetainedCounts().get() == -1) {
+			int retained = provideRetainedCountForCounter(counterName, slot.getKey());
+			counter.getRetainedCounts().compareAndSet(-1, retained);
+		}
 
 		// Schritt 4: Counter already locked?
 		if (counter.isLocked())
@@ -203,10 +205,7 @@ public class AntiDoSMonitor {
 		long _slotKey = getTimeInMillis() / slotLength;
 		String slotKey = "" + _slotKey;
 
-		if (!slots.containsKey(slotKey))
-			slots.putIfAbsent(slotKey, new AntiDoSSlot(monitorName, slotKey, maxCountersPerSlot));
-
-		return slots.get(slotKey);
+		return slots.computeIfAbsent(slotKey, k -> new AntiDoSSlot(monitorName, k, maxCountersPerSlot));
 	}
 
 	/**
@@ -240,16 +239,18 @@ public class AntiDoSMonitor {
 
 		int sumOfCounts = 0;
 		int numberOfSlots = 0;
-		for (AntiDoSSlot slot : slots.values()) {
-			// Ignore count from excluded slot:
-			if (slot.getKey().equals(keyForSlotToExclude))
-				continue;
+		synchronized (slots) {
+			for (AntiDoSSlot slot : slots.values()) {
+				// Ignore count from excluded slot:
+				if (slot.getKey().equals(keyForSlotToExclude))
+					continue;
 
-			numberOfSlots++;
+				numberOfSlots++;
 
-			AntiDoSCounter counter = slot.getCounterIfExists(counterName);
-			if (counter != null)
-				sumOfCounts += counter.getCount().get();
+				AntiDoSCounter counter = slot.getCounterIfExists(counterName);
+				if (counter != null)
+					sumOfCounts += counter.getCount().get();
+			}
 		}
 
 		return sumOfCounts > 0 ? Math.round(sumOfCounts * shareOfRetainedFormerRequests / numberOfSlots) : 0;
@@ -275,6 +276,7 @@ public class AntiDoSMonitor {
 	/**
 	 * Prints the configuration and the current state of all slots
 	 */
+    @Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
 
@@ -283,8 +285,10 @@ public class AntiDoSMonitor {
 				.append(maxCountersPerSlot).append("; shareOfRetainedFormerRequests: ")
 				.append(shareOfRetainedFormerRequests).append("\n");
 		sb.append("#total requests: ").append(getTotalrequests()).append("\n");
-		for (AntiDoSSlot slot : slots.values()) {
-			sb.append("Slot '").append(slot.getKey()).append("' ").append(slot.toString()).append("\n");
+		synchronized (slots) {
+			for (AntiDoSSlot slot : slots.values()) {
+				sb.append("Slot '").append(slot.getKey()).append("' ").append(slot.toString()).append("\n");
+			}
 		}
 
 		return sb.toString();
