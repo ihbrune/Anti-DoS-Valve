@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 
@@ -206,5 +207,68 @@ class AntiDoSAsyncEvictionTest {
 		AntiDoSCounter retrieved = slot.getCounter("new-attacker");
 		assertSame(activeVictim, retrieved);
 		assertTrue(retrieved.isLocked(), "Counter must still be flagged as locked");
+	}
+
+	@Test
+	void testSafeEvictionDoesNotEvictTouchedCounter() throws Exception {
+		// Slot capacity 10, low-watermark is 9.
+		// Triggering at 10 will evict 1 entry (10 - 9 = 1).
+		AntiDoSSlot slot = new AntiDoSSlot("SAFE_EVICT_TEST", "s1", 10);
+		slot.setAsyncEviction(true);
+
+		// Populate 10 entries. ip-1 is the oldest.
+		for (int i = 1; i <= 10; i++) {
+			slot.getCounter("ip-" + i);
+		}
+		assertEquals(10, slot.getActiveCounterCount());
+
+		// Hook up a single-thread executor with latch
+		CountDownLatch readyLatch = new CountDownLatch(1);
+		CountDownLatch proceedLatch = new CountDownLatch(1);
+		Executor controlledExecutor = r -> {
+			Thread t = new Thread(() -> {
+				readyLatch.countDown();
+				try {
+					proceedLatch.await();
+				} catch (InterruptedException ignored) {
+				}
+				r.run();
+			});
+			t.start();
+		};
+		slot.setEvictionExecutor(controlledExecutor);
+
+		// Insert 11th entry -> triggers eviction dispatch
+		slot.getCounter("ip-11");
+		readyLatch.await(2, TimeUnit.SECONDS);
+
+		// While eviction worker is waiting to run, simulate that ip-1 receives new traffic (gets touched)
+		AntiDoSCounter c1 = slot.getCounter("ip-1");
+		assertNotNull(c1);
+
+		// Allow eviction task to run
+		proceedLatch.countDown();
+		Thread.sleep(100);
+
+		// Because ip-1 was touched again, its accessOrder changed and it MUST NOT have been evicted!
+		assertNotNull(slot.getCounterIfExists("ip-1"), "ip-1 was touched during eviction and must not be evicted");
+	}
+
+	@Test
+	void testTransientCounterUnderHardCapHasZeroRetained() {
+		int maxCounters = 10;
+		AntiDoSSlot slot = new AntiDoSSlot("TRANSIENT_RETAINED_TEST", "s1", maxCounters);
+		slot.setAsyncEviction(true);
+
+		// Fill to hard-cap (12)
+		for (int i = 1; i <= 12; i++) {
+			slot.getCounter("client-" + i);
+		}
+
+		// 13th IP hits hard cap
+		AntiDoSCounter transientCounter = slot.getCounter("client-overflow");
+		assertNotNull(transientCounter);
+		assertEquals(0, transientCounter.getRetainedCounts().get(),
+				"Transient counter under hard-cap must have retainedCounts initialized to 0 to skip multi-slot scans");
 	}
 }

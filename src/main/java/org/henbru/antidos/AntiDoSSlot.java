@@ -65,13 +65,11 @@ public class AntiDoSSlot {
 	private final AtomicBoolean hardCapActiveLogged = new AtomicBoolean(false);
 	private final AtomicBoolean hardCapBlockedLogged = new AtomicBoolean(false);
 
-	private static class CandidateEntry {
-		final String key;
-		final long order;
-
-		CandidateEntry(String key, long order) {
-			this.key = key;
-			this.order = order;
+	private record CandidateEntry(String key, AntiDoSCounter counter, long order)
+			implements Comparable<CandidateEntry> {
+		@Override
+		public int compareTo(CandidateEntry other) {
+			return Long.compare(other.order, this.order);
 		}
 	}
 
@@ -185,6 +183,7 @@ public class AntiDoSSlot {
 			triggerAsyncActiveEviction();
 			AntiDoSCounter transientCounter = new AntiDoSCounter();
 			transientCounter.touch(accessSequence.incrementAndGet());
+			transientCounter.getRetainedCounts().set(0);
 			return transientCounter;
 		}
 
@@ -291,21 +290,24 @@ public class AntiDoSSlot {
 				return;
 			}
 
-			PriorityQueue<CandidateEntry> maxHeap = new PriorityQueue<>(
-					toEvict + 1, (a, b) -> Long.compare(b.order, a.order));
+			PriorityQueue<CandidateEntry> maxHeap = new PriorityQueue<>(toEvict + 1);
 
 			for (Map.Entry<String, AntiDoSCounter> entry : activeCounters.entrySet()) {
-				long order = entry.getValue().getAccessOrder();
+				AntiDoSCounter c = entry.getValue();
+				long order = c.getAccessOrder();
 				if (maxHeap.size() < toEvict) {
-					maxHeap.offer(new CandidateEntry(entry.getKey(), order));
-				} else if (order < maxHeap.peek().order) {
+					maxHeap.offer(new CandidateEntry(entry.getKey(), c, order));
+				} else if (order < maxHeap.peek().order()) {
 					maxHeap.poll();
-					maxHeap.offer(new CandidateEntry(entry.getKey(), order));
+					maxHeap.offer(new CandidateEntry(entry.getKey(), c, order));
 				}
 			}
 
 			while (!maxHeap.isEmpty()) {
-				activeCounters.remove(maxHeap.poll().key);
+				CandidateEntry cand = maxHeap.poll();
+				if (cand.counter().getAccessOrder() == cand.order()) {
+					activeCounters.remove(cand.key(), cand.counter());
+				}
 			}
 		} finally {
 			activeEvictionInProgress.set(false);
@@ -325,21 +327,24 @@ public class AntiDoSSlot {
 				return;
 			}
 
-			PriorityQueue<CandidateEntry> maxHeap = new PriorityQueue<>(
-					toEvict + 1, (a, b) -> Long.compare(b.order, a.order));
+			PriorityQueue<CandidateEntry> maxHeap = new PriorityQueue<>(toEvict + 1);
 
 			for (Map.Entry<String, AntiDoSCounter> entry : blockedCounters.entrySet()) {
-				long order = entry.getValue().getAccessOrder();
+				AntiDoSCounter c = entry.getValue();
+				long order = c.getAccessOrder();
 				if (maxHeap.size() < toEvict) {
-					maxHeap.offer(new CandidateEntry(entry.getKey(), order));
-				} else if (order < maxHeap.peek().order) {
+					maxHeap.offer(new CandidateEntry(entry.getKey(), c, order));
+				} else if (order < maxHeap.peek().order()) {
 					maxHeap.poll();
-					maxHeap.offer(new CandidateEntry(entry.getKey(), order));
+					maxHeap.offer(new CandidateEntry(entry.getKey(), c, order));
 				}
 			}
 
 			while (!maxHeap.isEmpty()) {
-				blockedCounters.remove(maxHeap.poll().key);
+				CandidateEntry cand = maxHeap.poll();
+				if (cand.counter().getAccessOrder() == cand.order()) {
+					blockedCounters.remove(cand.key(), cand.counter());
+				}
 			}
 		} finally {
 			blockedEvictionInProgress.set(false);
@@ -352,6 +357,7 @@ public class AntiDoSSlot {
 		try {
 			while (activeCounters.size() > maxCountersPerSlot) {
 				String oldestKey = null;
+				AntiDoSCounter oldestCounter = null;
 				long oldestOrder = Long.MAX_VALUE;
 
 				for (Map.Entry<String, AntiDoSCounter> entry : activeCounters.entrySet()) {
@@ -359,11 +365,12 @@ public class AntiDoSSlot {
 					if (order < oldestOrder) {
 						oldestOrder = order;
 						oldestKey = entry.getKey();
+						oldestCounter = entry.getValue();
 					}
 				}
 
-				if (oldestKey != null) {
-					activeCounters.remove(oldestKey);
+				if (oldestKey != null && oldestCounter != null) {
+					activeCounters.remove(oldestKey, oldestCounter);
 				} else {
 					break;
 				}
@@ -378,6 +385,7 @@ public class AntiDoSSlot {
 		try {
 			while (blockedCounters.size() > maxBlockedCountersPerSlot) {
 				String oldestKey = null;
+				AntiDoSCounter oldestCounter = null;
 				long oldestOrder = Long.MAX_VALUE;
 
 				for (Map.Entry<String, AntiDoSCounter> entry : blockedCounters.entrySet()) {
@@ -385,11 +393,12 @@ public class AntiDoSSlot {
 					if (order < oldestOrder) {
 						oldestOrder = order;
 						oldestKey = entry.getKey();
+						oldestCounter = entry.getValue();
 					}
 				}
 
-				if (oldestKey != null) {
-					blockedCounters.remove(oldestKey);
+				if (oldestKey != null && oldestCounter != null) {
+					blockedCounters.remove(oldestKey, oldestCounter);
 				} else {
 					break;
 				}

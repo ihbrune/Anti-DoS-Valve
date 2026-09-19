@@ -4,7 +4,7 @@ import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.LongAdder;
 
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
@@ -49,7 +49,7 @@ public class AntiDoSMonitor {
 	private int allowedRequestsPerSlot;
 	private float shareOfRetainedFormerRequests;
 
-	private final AtomicInteger totalrequests = new AtomicInteger(0);
+	private final LongAdder totalrequests = new LongAdder();
 	private final ExecutorService evictionExecutor;
 	private volatile Boolean asyncEviction = null;
 
@@ -146,7 +146,7 @@ public class AntiDoSMonitor {
 		if (counterName == null || counterName.length() == 0)
 			throw new IllegalArgumentException();
 
-		totalrequests.addAndGet(1);
+		totalrequests.increment();
 
 		// Step 1: Provide current slot, create it if necessary:
 		AntiDoSSlot slot = provideCurrentSlot();
@@ -157,8 +157,15 @@ public class AntiDoSMonitor {
 
 		// Step 3: Do we have to retain counter values from previous slots?
 		if (counter.getRetainedCounts().get() == -1) {
-			int retained = provideRetainedCountForCounter(counterName, slot.getKey());
-			counter.getRetainedCounts().compareAndSet(-1, retained);
+			if (counter.getRetainedCounts().compareAndSet(-1, -2)) {
+				try {
+					int retained = provideRetainedCountForCounter(counterName, slot.getKey());
+					counter.getRetainedCounts().set(retained);
+				} catch (Exception e) {
+					counter.getRetainedCounts().set(0);
+					throw e;
+				}
+			}
 		}
 
 		// Step 4: Counter already locked?
@@ -204,7 +211,12 @@ public class AntiDoSMonitor {
 		// millisecond within the slot length:
 		long slotKey = getTimeInMillis() / slotLength;
 
-		AntiDoSSlot slot = slots.computeIfAbsent(slotKey, k -> {
+		AntiDoSSlot slot = slots.get(slotKey);
+		if (slot != null) {
+			return slot;
+		}
+
+		slot = slots.computeIfAbsent(slotKey, k -> {
 			AntiDoSSlot s = new AntiDoSSlot(monitorName, String.valueOf(k), maxCountersPerSlot,
 					maxBlockedCountersPerSlot);
 			s.setEvictionExecutor(this.evictionExecutor);
@@ -273,8 +285,8 @@ public class AntiDoSMonitor {
 	 * @return The total number of calls to {@link #registerAndCheckRequest(String)}
 	 *         in the lifetime of this monitor instance
 	 */
-	public int getTotalrequests() {
-		return totalrequests.get();
+	public long getTotalrequests() {
+		return totalrequests.sum();
 	}
 
 	/**

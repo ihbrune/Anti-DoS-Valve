@@ -988,11 +988,7 @@ public class AntiDoSValve extends ValveBase {
 			byte[] ipv4Bytes = parseIPv4Literal(ip);
 			if (ipv4Bytes != null) {
 				maskBytes(ipv4Bytes, v4Mask);
-				try {
-					return InetAddress.getByAddress(ipv4Bytes).getHostAddress() + "/" + v4Mask;
-				} catch (UnknownHostException e) {
-					return ip;
-				}
+				return formatIPv4Subnet(ipv4Bytes, v4Mask);
 			}
 		}
 
@@ -1059,6 +1055,10 @@ public class AntiDoSValve extends ValveBase {
 				bytes[i] = 0;
 			}
 		}
+	}
+
+	private static String formatIPv4Subnet(byte[] b, int prefixBits) {
+		return (b[0] & 0xFF) + "." + (b[1] & 0xFF) + "." + (b[2] & 0xFF) + "." + (b[3] & 0xFF) + "/" + prefixBits;
 	}
 
 	static int parseSubnetMask(String mask, int maxBits) {
