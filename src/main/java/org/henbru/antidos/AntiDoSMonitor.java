@@ -1,6 +1,5 @@
 package org.henbru.antidos;
 
-import java.util.Calendar;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -213,7 +212,7 @@ public class AntiDoSMonitor {
 	 * the system time. Can be overridden for testcases.
 	 */
 	protected long getTimeInMillis() {
-		return Calendar.getInstance().getTimeInMillis();
+		return System.currentTimeMillis();
 	}
 
 	/**

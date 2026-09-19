@@ -1,7 +1,5 @@
 package org.henbru.antidos;
 
-import java.util.Calendar;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -23,7 +21,7 @@ class AntiDoSMonitorTest {
 					allowedRequestsPerSlot, shareOfRetainedOldRequests);
 		}
 
-		private long referencetime = Calendar.getInstance().getTimeInMillis();
+		private long referencetime = System.currentTimeMillis();
 
 		/**
 		 * This method provides a fixed value so that the same slot is always

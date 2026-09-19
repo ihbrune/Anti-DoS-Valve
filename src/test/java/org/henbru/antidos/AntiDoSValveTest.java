@@ -420,8 +420,13 @@ class AntiDoSValveTest {
 		valve.setIpv4SubnetMask(33);
 		assertFalse(valve.isIpv4SubnetMaskValid());
 
-		assertThrows(IllegalArgumentException.class, () -> valve.setIpv4SubnetMask("invalid"));
-		assertThrows(IllegalArgumentException.class, () -> valve.setIpv4SubnetMask("255.255.0.255"));
+		IllegalArgumentException exInvalid = assertThrows(IllegalArgumentException.class,
+				() -> valve.setIpv4SubnetMask("invalid"));
+		assertTrue(exInvalid.getMessage().contains("Invalid subnet mask"));
+
+		IllegalArgumentException exNonContig = assertThrows(IllegalArgumentException.class,
+				() -> valve.setIpv4SubnetMask("255.255.0.255"));
+		assertTrue(exNonContig.getMessage().contains("non-contiguous"));
 	}
 
 	@Test
@@ -443,7 +448,9 @@ class AntiDoSValveTest {
 		valve.setIpv6SubnetMask(129);
 		assertFalse(valve.isIpv6SubnetMaskValid());
 
-		assertThrows(IllegalArgumentException.class, () -> valve.setIpv6SubnetMask("invalid"));
+		IllegalArgumentException exInvalid6 = assertThrows(IllegalArgumentException.class,
+				() -> valve.setIpv6SubnetMask("invalid"));
+		assertTrue(exInvalid6.getMessage().contains("Invalid subnet mask"));
 	}
 
 	@Test
