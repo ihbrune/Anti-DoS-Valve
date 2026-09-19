@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anti-DoS Valve config helper</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --border: #e2e8f0;
+      --border-focus: #3b82f6;
+      --text: #1e293b;
+      --text-muted: #64748b;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --required-badge: #ef4444;
+      --optional-badge: #64748b;
+      --code-bg: #0f172a;
+      --code-text: #e2e8f0;
+      --radius: 8px;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 24px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 24px;
+    }
+
+    @media (min-width: 900px) {
+      .layout {
+        grid-template-columns: 1.15fr 0.85fr;
+        align-items: start;
+      }
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Presets Section */
+    .presets-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+    }
+
+    .preset-btn {
+      background: #f1f5f9;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 14px;
+      text-align: left;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      color: var(--text);
+    }
+
+    .preset-btn:hover {
+      background: #e2e8f0;
+      border-color: #cbd5e1;
+    }
+
+    .preset-btn.active {
+      background: #eff6ff;
+      border-color: var(--primary);
+      color: var(--primary);
+      box-shadow: 0 0 0 1px var(--primary);
+    }
+
+    .preset-btn small {
+      display: block;
+      font-weight: 400;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* Form Fields */
+    .field-group {
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+
+    .field-group:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .field-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 6px;
+    }
+
+    .field-label {
+      font-weight: 600;
+      font-size: 0.9rem;
+      font-family: var(--font-mono);
+      color: #0f172a;
+    }
+
+    .badge {
+      font-size: 0.7rem;
+      font-family: system-ui, sans-serif;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-required {
+      background: #fee2e2;
+      color: var(--required-badge);
+    }
+
+    .badge-optional {
+      background: #f1f5f9;
+      color: var(--optional-badge);
+    }
+
+    .field-desc {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-family: var(--font-mono);
+      color: var(--text);
+      background: #fff;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    select:focus {
+      outline: none;
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .checkbox-label input {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--primary);
+    }
+
+    /* Output Section */
+    .sticky-panel {
+      position: sticky;
+      top: 24px;
+    }
+
+    .output-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+
+    .output-options {
+      margin-bottom: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .code-container {
+      position: relative;
+      margin-top: 10px;
+    }
+
+    pre {
+      background: var(--code-bg);
+      color: var(--code-text);
+      padding: 16px;
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      line-height: 1.45;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .btn-copy {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 100%;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 16px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 12px;
+      transition: background 0.15s ease;
+    }
+
+    .btn-copy:hover {
+      background: var(--primary-hover);
+    }
+
+    .btn-copy.copied {
+      background: #16a34a;
+    }
+
+    .info-note {
+      margin-top: 16px;
+      padding: 12px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      color: #1e40af;
+      line-height: 1.4;
+    }
+
+    .info-note strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <header>
+      <h1>Anti-DoS Valve config helper</h1>
+      <p class="subtitle">
+        Create and customize your valve configuration for Apache Tomcat (<code>server.xml</code> or
+        <code>context.xml</code>). Further explanations are available in the <a target="_blank"
+          href="https://github.com/ihbrune/Anti-DoS-Valve/">README</a>.
+      </p>
+    </header>
+
+    <div class="layout">
+      <!-- FORM COLUMN -->
+      <div class="form-column">
+        <!-- PRESETS -->
+        <div class="card">
+          <div class="card-title">
+            <span>Configuration Presets</span>
+          </div>
+          <div class="presets-grid" id="presetsContainer">
+            <!-- Dynamically populated via PRESETS -->
+          </div>
+        </div>
+
+        <!-- FORM FIELDS (in order of README.md) -->
+        <div class="card">
+          <div class="card-title">
+            <span>Valve Parameters</span>
+          </div>
+
+          <form id="valveForm" autocomplete="off">
+            <!-- 1. monitorName -->
+            <div class="field-group">
+              <div class="field-header">
+                <label for="monitorName" class="field-label">monitorName</label>
+                <span class="badge badge-optional">Optional</span>
+              </div>
+              <div class="field-desc">An optional parameter for naming the monitor instance. Separates configurations
+                for multi-instance setups and identifies the valve in log messages. Default: <code>DEFAULT</code></div>
+              <input type="text" id="monitorName" name="monitorName" placeholder="e.g. PROD VALVE">
+            </div>
+
+            <!-- 2. alwaysForbiddenIPs -->
+            <div class="field-group">
+              <div class="field-header">
+                <label for="alwaysForbiddenIPs" class="field-label">alwaysForbiddenIPs</label>
+                <span class="badge badge-optional">Optional</span>
+              </div>
+              <div class="field-desc">An optional regular expression defining IP addresses that are always blocked.
+                Evaluated before all other checks.</div>
+              <input type="text" id="alwaysForbiddenIPs" name="alwaysForbiddenIPs"
+                placeholder="e.g. 192\.168\.1\.10|10\.0\.0\..*">
+            </div>
+
+            <!-- 3. alwaysAllowedIPs -->
+            <div class="field-group">
+              <div class="field-header">
+                <label for="alwaysAllowedIPs" class="field-label">alwaysAllowedIPs</label>
+                <span class="badge badge-optional">Optional</span>
+              </div>
+              <div class="field-desc">An optional regular expression defining IP addresses that are always allowed
+                access (e.g. corporate intranet or healthcheck IPs). Evaluated after <code>alwaysForbiddenIPs</code>.
+              </div>
+              <input type="text" id="alwaysAllowedIPs" name="alwaysAllowedIPs" placeholder="e.g. 127\.0\.0\.1|10\..*">
+            </div>
+
+            <!-- 4. relevantPaths -->
+            <div class="field-group">
+              <div class="field-header">
+                <label for="relevantPaths" class="field-label">relevantPaths</label>
+                <span class="badge badge-optional">Optional</span>
+              </div>
+              <div class="field-desc">A regular expression defining URLs on which the Anti-DoS Monitor and rate limiting
+                take effect (e.g. servlet calls or CPU-intensive endpoints).</div>
+              <input type="text" id="relevantPaths" name="relevantPaths" placeholder="e.g. .*(jsp|/api/|/app/).*">
+            </div>
+
+            <!-- 5. nonRelevantPaths -->
+            <div class="field-group">
+              <div class="field-header">
+                <label for="nonRelevantPaths" class="field-label">nonRelevantPaths</label>
+                <span class="badge badge-optional">Optional</span>
+              </div>
+              <div class="field-desc">Evaluated before <code>relevantPaths</code>. Explicitly excludes matching URLs
+                from rate limiting (e.g. static CSS/JS/images or public status endpoints).</div>
+              <input type="text" id="nonRelevantPaths" name="nonRelevantPaths"
+                placeholder="e.g. .*\.(css|js|png|jpg|ico)$ or /api/status">
+            </div>
+
+            <!-- 6. maxIPCacheSize -->
+            <div class="field-group">
+              <div class="field-header">
+                <label for="maxIPCacheSize" class="field-label">maxIPCacheSize</label>
+                <span class="badge badge-required">Required</span>
+              </div>
+              <div class="field-desc">Maximum number of active (unblocked) IP addresses tracked per slot (&ge; 1). Drops
+                least recently used entries when exceeded.</div>
+              <input type="number" id="maxIPCacheSize" name="maxIPCacheSize" min="1" step="1" required>
+            </div>
+
+            <!-- 7. maxBlockedIPCacheSize -->
+            <div class="field-group">
+              <div class="field-header">
+                <label for="maxBlockedIPCacheSize" class="field-label">maxBlockedIPCacheSize</label>
+                <span class="badge badge-optional">Optional</span>
+              </div>
+              <div class="field-desc">Maximum number of blocked IP addresses tracked in a separate cache (&ge; 1).
+                Defaults to <code>maxIPCacheSize</code> if omitted.</div>
+              <input type="number" id="maxBlockedIPCacheSize" name="maxBlockedIPCacheSize" min="1" step="1"
+                placeholder="Defaults to maxIPCacheSize">
+            </div>
+
+            <!-- 8. ipv4SubnetMask -->
+            <div class="field-group">
+              <div class="field-header">
+                <label for="ipv4SubnetMask" class="field-label">ipv4SubnetMask</label>
+                <span class="badge badge-optional">Optional</span>
+              </div>
+              <div class="field-desc">Subnet prefix length for aggregating IPv4 addresses (1 to 32, e.g.
+                <code>24</code>, <code>/24</code>, or <code>255.255.255.0</code>). <code>32</code> or empty disables
+                aggregation.
+              </div>
+              <input type="text" id="ipv4SubnetMask" name="ipv4SubnetMask"
+                placeholder="e.g. 24, /24, or 255.255.255.0 (Default: 32)">
+            </div>
+
+            <!-- 9. ipv6SubnetMask -->
+            <div class="field-group">
+              <div class="field-header">
+                <label for="ipv6SubnetMask" class="field-label">ipv6SubnetMask</label>
+                <span class="badge badge-optional">Optional</span>
+              </div>
+              <div class="field-desc">Subnet prefix length for aggregating IPv6 addresses (1 to 128, e.g.
+                <code>64</code> or <code>/64</code>). <code>128</code> or empty disables aggregation.
+              </div>
+              <input type="text" id="ipv6SubnetMask" name="ipv6SubnetMask" placeholder="e.g. 64 or /64 (Default: 128)">
+            </div>
+
+            <!-- 10. slotLength -->
+            <div class="field-group">
+              <div class="field-header">
+                <label for="slotLength" class="field-label">slotLength</label>
+                <span class="badge badge-required">Required</span>
+              </div>
+              <div class="field-desc">Length of a time slot in seconds (&ge; 1). Requests are counted within consecutive
+                non-overlapping slots.</div>
+              <input type="number" id="slotLength" name="slotLength" min="1" step="1" required>
+            </div>
+
+            <!-- 11. allowedRequestsPerSlot -->
+            <div class="field-group">
+              <div class="field-header">
+                <label for="allowedRequestsPerSlot" class="field-label">allowedRequestsPerSlot</label>
+                <span class="badge badge-required">Required</span>
+              </div>
+              <div class="field-desc">Maximum permitted requests within a slot before an IP address or subnet is blocked
+                (&ge; 1).</div>
+              <input type="number" id="allowedRequestsPerSlot" name="allowedRequestsPerSlot" min="1" step="1" required>
+            </div>
+
+            <!-- 12. numberOfSlots -->
+            <div class="field-group">
+              <div class="field-header">
+                <label for="numberOfSlots" class="field-label">numberOfSlots</label>
+                <span class="badge badge-required">Required</span>
+              </div>
+              <div class="field-desc">Number of historical slots the monitor retains (&ge; 1). At 1, the monitor has no
+                memory beyond the current slot.</div>
+              <input type="number" id="numberOfSlots" name="numberOfSlots" min="1" step="1" required>
+            </div>
+
+            <!-- 13. shareOfRetainedFormerRequests -->
+            <div class="field-group">
+              <div class="field-header">
+                <label for="shareOfRetainedFormerRequests" class="field-label">shareOfRetainedFormerRequests</label>
+                <span class="badge badge-required">Required</span>
+              </div>
+              <div class="field-desc">Multiplier for transferring the average request count from previous slots into the
+                new slot (&ge; 0.0). 0 disables retention; &gt; 1 penalizes longer.</div>
+              <input type="number" id="shareOfRetainedFormerRequests" name="shareOfRetainedFormerRequests" min="0"
+                step="any" required>
+            </div>
+
+            <!-- 14. monitorMode -->
+            <div class="field-group">
+              <div class="field-header">
+                <label for="monitorMode" class="field-label">monitorMode</label>
+                <span class="badge badge-optional">Optional</span>
+              </div>
+              <div class="field-desc">Operation mode: <code>BLOCKING</code> (returns HTTP error code) or
+                <code>MARKING</code> (sets request attribute <code>org.henbru.antidos.AntiDoS</code>).
+              </div>
+              <select id="monitorMode" name="monitorMode">
+                <option value="BLOCKING" selected>BLOCKING (Default - rejects requests exceeding limits)</option>
+                <option value="MARKING">MARKING (Marks requests via request attribute without blocking)</option>
+              </select>
+            </div>
+
+            <!-- 15. simulationMode -->
+            <div class="field-group">
+              <div class="field-header">
+                <label for="simulationMode" class="field-label">simulationMode</label>
+                <span class="badge badge-optional">Optional</span>
+              </div>
+              <div class="field-desc">Simulation mode: logs actions without actually blocking or marking any requests.
+                Useful for testing configurations in production.</div>
+              <label class="checkbox-label">
+                <input type="checkbox" id="simulationMode" name="simulationMode">
+                <span>Enable simulation mode (<code>simulationMode="true"</code>)</span>
+              </label>
+            </div>
+
+            <!-- 16. httpStatusCode -->
+            <div class="field-group">
+              <div class="field-header">
+                <label for="httpStatusCode" class="field-label">httpStatusCode</label>
+                <span class="badge badge-optional">Optional</span>
+              </div>
+              <div class="field-desc">HTTP status code returned when a request is blocked in blocking mode (100–599).
+                Default: <code>429</code> (Too Many Requests). Legacy: <code>403</code>.</div>
+              <input type="number" id="httpStatusCode" name="httpStatusCode" min="100" max="599" step="1"
+                placeholder="429">
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- XML OUTPUT COLUMN (Sticky) -->
+      <div class="output-column">
+        <div class="sticky-panel">
+          <div class="output-card">
+            <div class="card-title">
+              <span>Generated Valve Configuration</span>
+            </div>
+
+            <div class="output-options">
+              <label class="checkbox-label">
+                <input type="checkbox" id="optOnlyChanged">
+                <span>Omit optional default values (compact output)</span>
+              </label>
+            </div>
+
+            <div class="code-container">
+              <pre><code id="xmlOutput"></code></pre>
+            </div>
+
+            <button type="button" class="btn-copy" id="copyBtn">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <span>Copy to Clipboard</span>
+            </button>
+
+            <div class="info-note">
+              <strong>Tomcat Integration:</strong>
+              Paste this <code>&lt;Valve&gt;</code> element into your <code>server.xml</code> inside the desired
+              <code>&lt;Host&gt;</code> element (or into <code>context.xml</code> inside <code>&lt;Context&gt;</code>).
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * Presets Configuration
+     * Easy to maintain and extend!
+     */
+    const PRESETS = [
+      {
+        id: 'test',
+        name: 'Test Configuration',
+        description: 'From README (/valvetest), 5 requests / 30s',
+        values: {
+          monitorName: 'TEST VALVE',
+          alwaysForbiddenIPs: '',
+          alwaysAllowedIPs: '',
+          relevantPaths: '/valvetest',
+          nonRelevantPaths: '',
+          maxIPCacheSize: 50,
+          maxBlockedIPCacheSize: '',
+          ipv4SubnetMask: '',
+          ipv6SubnetMask: '',
+          slotLength: 30,
+          allowedRequestsPerSlot: 5,
+          numberOfSlots: 10,
+          shareOfRetainedFormerRequests: 0,
+          monitorMode: 'BLOCKING',
+          simulationMode: false,
+          httpStatusCode: 429
+        }
+      },
+      {
+        id: 'production',
+        name: 'Production Standard',
+        description: 'Recommended baseline for dynamic web traffic',
+        values: {
+          monitorName: 'PROD VALVE',
+          alwaysForbiddenIPs: '',
+          alwaysAllowedIPs: '127\\.0\\.0\\.1',
+          relevantPaths: '.*(jsp|/api/|/app/).*',
+          nonRelevantPaths: '.*\\.(css|js|png|jpg|gif|svg|ico|woff2?)$',
+          maxIPCacheSize: 500,
+          maxBlockedIPCacheSize: 500,
+          ipv4SubnetMask: '',
+          ipv6SubnetMask: '',
+          slotLength: 60,
+          allowedRequestsPerSlot: 60,
+          numberOfSlots: 10,
+          shareOfRetainedFormerRequests: 0.5,
+          monitorMode: 'BLOCKING',
+          simulationMode: false,
+          httpStatusCode: 429
+        }
+      },
+      {
+        id: 'bot_defense',
+        name: 'Aggressive Bot Defense',
+        description: 'With IPv4 (/24) and IPv6 (/64) subnet aggregation',
+        values: {
+          monitorName: 'BOT DEFENSE',
+          alwaysForbiddenIPs: '',
+          alwaysAllowedIPs: '127\\.0\\.0\\.1',
+          relevantPaths: '.*',
+          nonRelevantPaths: '.*\\.(css|js|png|jpg|ico)$',
+          maxIPCacheSize: 1000,
+          maxBlockedIPCacheSize: 1000,
+          ipv4SubnetMask: '24',
+          ipv6SubnetMask: '64',
+          slotLength: 15,
+          allowedRequestsPerSlot: 20,
+          numberOfSlots: 20,
+          shareOfRetainedFormerRequests: 1.0,
+          monitorMode: 'BLOCKING',
+          simulationMode: false,
+          httpStatusCode: 429
+        }
+      },
+      {
+        id: 'marking_mode',
+        name: 'Marking Mode Template',
+        description: 'No blocking; sets request attribute for servlets',
+        values: {
+          monitorName: 'MARKING VALVE',
+          alwaysForbiddenIPs: '',
+          alwaysAllowedIPs: '',
+          relevantPaths: '.*/swa.*',
+          nonRelevantPaths: '',
+          maxIPCacheSize: 100,
+          maxBlockedIPCacheSize: '',
+          ipv4SubnetMask: '',
+          ipv6SubnetMask: '',
+          slotLength: 30,
+          allowedRequestsPerSlot: 10,
+          numberOfSlots: 10,
+          shareOfRetainedFormerRequests: 0.2,
+          monitorMode: 'MARKING',
+          simulationMode: false,
+          httpStatusCode: 429
+        }
+      }
+    ];
+
+    /**
+     * Parameter definitions in the exact order as in README.md
+     */
+    const PARAMETERS = [
+      { key: 'monitorName', isRequired: false, defaultVal: '' },
+      { key: 'alwaysForbiddenIPs', isRequired: false, defaultVal: '' },
+      { key: 'alwaysAllowedIPs', isRequired: false, defaultVal: '' },
+      { key: 'relevantPaths', isRequired: false, defaultVal: '' },
+      { key: 'nonRelevantPaths', isRequired: false, defaultVal: '' },
+      { key: 'maxIPCacheSize', isRequired: true, defaultVal: 50 },
+      { key: 'maxBlockedIPCacheSize', isRequired: false, defaultVal: '' },
+      { key: 'ipv4SubnetMask', isRequired: false, defaultVal: '' },
+      { key: 'ipv6SubnetMask', isRequired: false, defaultVal: '' },
+      { key: 'slotLength', isRequired: true, defaultVal: 30 },
+      { key: 'allowedRequestsPerSlot', isRequired: true, defaultVal: 5 },
+      { key: 'numberOfSlots', isRequired: true, defaultVal: 10 },
+      { key: 'shareOfRetainedFormerRequests', isRequired: true, defaultVal: 0 },
+      { key: 'monitorMode', isRequired: false, defaultVal: 'BLOCKING' },
+      { key: 'simulationMode', isRequired: false, defaultVal: false, isBoolean: true },
+      { key: 'httpStatusCode', isRequired: false, defaultVal: 429 }
+    ];
+
+    const form = document.getElementById('valveForm');
+    const xmlOutput = document.getElementById('xmlOutput');
+    const copyBtn = document.getElementById('copyBtn');
+    const optOnlyChanged = document.getElementById('optOnlyChanged');
+    const presetsContainer = document.getElementById('presetsContainer');
+
+    let currentPresetId = null;
+
+    // Render presets in UI
+    function renderPresets() {
+      presetsContainer.innerHTML = '';
+      PRESETS.forEach(preset => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `preset-btn ${currentPresetId === preset.id ? 'active' : ''}`;
+        btn.innerHTML = `${escapeHtml(preset.name)}<small>${escapeHtml(preset.description)}</small>`;
+        btn.onclick = () => applyPreset(preset.id);
+        presetsContainer.appendChild(btn);
+      });
+    }
+
+    // Apply preset
+    function applyPreset(presetId) {
+      const preset = PRESETS.find(p => p.id === presetId);
+      if (!preset) return;
+      currentPresetId = presetId;
+
+      PARAMETERS.forEach(param => {
+        const el = document.getElementById(param.key);
+        if (!el) return;
+
+        const val = preset.values[param.key];
+        if (param.isBoolean) {
+          el.checked = Boolean(val);
+        } else {
+          el.value = (val !== undefined && val !== null) ? val : '';
+        }
+      });
+
+      renderPresets();
+      updateXml();
+    }
+
+    // Generate XML code
+    function updateXml() {
+      const onlyChanged = optOnlyChanged.checked;
+      const lines = [];
+      lines.push('<Valve className="org.henbru.antidos.AntiDoSValve"');
+
+      PARAMETERS.forEach(param => {
+        const el = document.getElementById(param.key);
+        if (!el) return;
+
+        let val;
+        if (param.isBoolean) {
+          val = el.checked;
+        } else {
+          val = el.value.trim();
+        }
+
+        // Filtering logic for compact output
+        if (onlyChanged) {
+          if (param.isBoolean) {
+            if (!val) return; // Default false omitted
+          } else if (!param.isRequired) {
+            if (val === '') return;
+            if (param.key === 'monitorMode' && val === 'BLOCKING') return;
+            if (param.key === 'httpStatusCode' && (val === '429' || val === 429)) return;
+            if (param.key === 'ipv4SubnetMask' && (val === '32' || val === '-1')) return;
+            if (param.key === 'ipv6SubnetMask' && (val === '128' || val === '-1')) return;
+          }
+        }
+
+        // Add attribute if required, or if non-empty, or if full output mode
+        if (param.isRequired || val !== '' || !onlyChanged) {
+          if (param.isBoolean) {
+            if (val || !onlyChanged) {
+              lines.push(`       ${param.key}="${val}"`);
+            }
+          } else {
+            if (onlyChanged && !param.isRequired && val === '') {
+              return;
+            }
+            lines.push(`       ${param.key}="${escapeXml(val.toString())}"`);
+          }
+        }
+      });
+
+      lines.push('/>');
+      xmlOutput.textContent = lines.join('\n');
+    }
+
+    function escapeXml(unsafe) {
+      return unsafe.replace(/[<>&"]/g, function (c) {
+        switch (c) {
+          case '<': return '&lt;';
+          case '>': return '&gt;';
+          case '&': return '&amp;';
+          case '"': return '&quot;';
+        }
+      });
+    }
+
+    function escapeHtml(unsafe) {
+      return unsafe.replace(/[&<>"']/g, function (m) {
+        switch (m) {
+          case '&': return '&amp;';
+          case '<': return '&lt;';
+          case '>': return '&gt;';
+          case '"': return '&quot;';
+          case "'": return '&#039;';
+        }
+      });
+    }
+
+    // Form change event listeners
+    form.addEventListener('input', () => {
+      currentPresetId = null;
+      renderPresets();
+      updateXml();
+    });
+
+    form.addEventListener('change', () => {
+      updateXml();
+    });
+
+    optOnlyChanged.addEventListener('change', () => {
+      updateXml();
+    });
+
+    // Copy to Clipboard
+    copyBtn.addEventListener('click', async () => {
+      const code = xmlOutput.textContent;
+      try {
+        await navigator.clipboard.writeText(code);
+        const originalText = copyBtn.innerHTML;
+        copyBtn.classList.add('copied');
+        copyBtn.innerHTML = `
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span>Copied!</span>
+        `;
+        setTimeout(() => {
+          copyBtn.classList.remove('copied');
+          copyBtn.innerHTML = originalText;
+        }, 2000);
+      } catch (err) {
+        // Fallback
+        const textarea = document.createElement('textarea');
+        textarea.value = code;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        alert('Code copied to clipboard!');
+      }
+    });
+
+    // Initialize with first preset (Test Configuration)
+    applyPreset('test');
+  </script>
+</body>
+
+</html>
