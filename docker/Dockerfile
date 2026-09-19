@@ -1,1 +1,1 @@
-FROM tomcat:10-jdk21-corretto
+FROM tomcat:10.1.60-jre25-temurin-noble
