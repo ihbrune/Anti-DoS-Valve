@@ -63,7 +63,7 @@ In 2026, new traffic patterns from AI crawlers—partly routed through residenti
 Here are the steps to set up and activate the valve:
 
 1. Clone the project from GitHub and build the JAR with Maven: `mvn package` (or `mvn install`)
-2. Make the JAR available in Tomcat. For example, copy it into `<CATALINA_HOME>/lib/` (alongside your JDBC drivers).
+2. Make the JAR available in Tomcat. For example, copy it into `<CATALINA_HOME>/lib/` (probably alongside your JDBC drivers).
 3. In `server.xml`, configure the valve inside the appropriate `<Host>` element (see example below).
 4. Ensure logging is enabled so that blocked requests are logged (this is already enabled in the default configuration).
 
@@ -233,7 +233,7 @@ Since version 1.4.1, this optional parameter defines the HTTP status code return
 
 The configuration shown above can serve as a starting point for your production setup.
 
-You can experiment with configuration values using this [**Google Sheet**](https://docs.google.com/spreadsheets/d/1eztKVnzjW9xVVia1hDAeLaiiKRAGfNKRFx5lvKkbLBs/edit?usp=sharing). Make a copy of the sheet in your Google account and adjust the fields marked **'set me!'** to see how different parameters affect request thresholds for attackers and regular users.
+You can test the effects of configuration values in the 'Traffic & Attack Simulator' section of [**anti-dos-valve-config-helper.html**](https://github.com/ihbrune/Anti-DoS-Valve/blob/master/anti-dos-valve-config-helper.html), or copy this entire [**Google Sheet**](https://docs.google.com/spreadsheets/d/1eztKVnzjW9xVVia1hDAeLaiiKRAGfNKRFx5lvKkbLBs/edit?usp=sharing) to your own Google account and adjust the fields marked **'set me!'** to see how different parameters affect request thresholds for attackers and regular users.
 
 Finally, define your *relevantPaths* pattern. Ideally, this should cover only endpoints that are publicly accessible and consume noticeable server resources. Here is a real-world example:
 
