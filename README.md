@@ -56,6 +56,8 @@ In its first version (2016) the valve was developed for the protection of a Tomc
 
 In the following years the valve helped to protect the same servers in situations with more then 50% of all requests had to be blocked and malicious peak loads of thousands of requests per second had to be dealt with. The valves implementation proved to be lightweight and fast enough to keep the servers floating and serving normal requests without interruption.
 
+In 2026 new kinds of loads from AI-crawlers, stemming in part from residential proxy networks, overwhelmed the valve because of the sheer amount of unique IP addresses the crawlers could use. The valve had to be re-engineered to include features for subnet aggregation to deal with these new threats.
+
 # Commissioning
 
 These are the steps to activate the valve:
@@ -104,7 +106,7 @@ There are a number of logfile analysis tools that you can use for this purpose, 
 
 In addition to the question which usage pattern is displayed on the server in normal operation, an important point is the estimate of the access speed an attacker needs to cause overloads. The smaller the distance between regular server load and server overload, the more accurate the configuration of the Anti-DoS Valve must be.
 
-Once the values have been determined you can develop the valve configuration, which is controlled by these parameters:
+Once the values have been determined you can develop the valve configuration, which is controlled by the following parameters. To help with the configuration there is a helper script available, which can be run in a browser (e.g. directly from this repository): [**anti-dos-valve-config-helper.html**](https://github.com/ihbrune/Anti-DoS-Valve/blob/master/anti-dos-valve-config-helper.html).
 
 **monitorName**
 
