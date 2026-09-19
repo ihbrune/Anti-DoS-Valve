@@ -188,6 +188,41 @@
       color: var(--optional-badge);
     }
 
+    .badge-sync {
+      background: #f1f5f9;
+      color: #64748b;
+      border: 1px solid #cbd5e1;
+    }
+
+    .badge-async {
+      background: #ecfdf5;
+      color: #047857;
+      border: 1px solid #a7f3d0;
+    }
+
+    .cache-mode-hint {
+      font-size: 0.75rem;
+      margin-top: 6px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      line-height: 1.4;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+
+    .cache-mode-hint.sync {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      color: #475569;
+    }
+
+    .cache-mode-hint.async {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      color: #166534;
+    }
+
     .field-desc {
       font-size: 0.8rem;
       color: var(--text-muted);
@@ -772,23 +807,31 @@
             <div class="field-group">
               <div class="field-header">
                 <label for="maxIPCacheSize" class="field-label">maxIPCacheSize</label>
-                <span class="badge badge-required">Required</span>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <span id="badgeMaxIPCacheSize" class="badge badge-sync">Sync LRU (&le; 500)</span>
+                  <span class="badge badge-required">Required</span>
+                </div>
               </div>
               <div class="field-desc">Maximum number of active (unblocked) IP addresses tracked per slot (&ge; 1). Drops
                 least recently used entries when exceeded.</div>
               <input type="number" id="maxIPCacheSize" name="maxIPCacheSize" min="1" step="1" required>
+              <div id="hintMaxIPCacheSize" class="cache-mode-hint sync"></div>
             </div>
 
             <!-- 7. maxBlockedIPCacheSize -->
             <div class="field-group">
               <div class="field-header">
                 <label for="maxBlockedIPCacheSize" class="field-label">maxBlockedIPCacheSize</label>
-                <span class="badge badge-optional">Optional</span>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <span id="badgeMaxBlockedIPCacheSize" class="badge badge-sync">Sync LRU (&le; 500)</span>
+                  <span class="badge badge-optional">Optional</span>
+                </div>
               </div>
               <div class="field-desc">Maximum number of blocked IP addresses tracked in a separate cache (&ge; 1).
                 Defaults to <code>maxIPCacheSize</code> if omitted.</div>
               <input type="number" id="maxBlockedIPCacheSize" name="maxBlockedIPCacheSize" min="1" step="1"
                 placeholder="Defaults to maxIPCacheSize">
+              <div id="hintMaxBlockedIPCacheSize" class="cache-mode-hint sync"></div>
             </div>
 
             <!-- 8. ipv4SubnetMask -->
@@ -1259,6 +1302,7 @@
 
       renderPresets();
       updateXml();
+      updateEvictionIndicators();
       runSimulation();
     }
 
@@ -1332,6 +1376,62 @@
           case "'": return '&#039;';
         }
       });
+    }
+
+    // Update visual indicator badges and explanations for cache eviction behavior
+    function updateEvictionIndicators() {
+      const maxIPEl = document.getElementById('maxIPCacheSize');
+      const maxBlockedEl = document.getElementById('maxBlockedIPCacheSize');
+      const badgeMaxIP = document.getElementById('badgeMaxIPCacheSize');
+      const hintMaxIP = document.getElementById('hintMaxIPCacheSize');
+      const badgeMaxBlocked = document.getElementById('badgeMaxBlockedIPCacheSize');
+      const hintMaxBlocked = document.getElementById('hintMaxBlockedIPCacheSize');
+
+      if (!maxIPEl || !badgeMaxIP || !hintMaxIP) return;
+
+      const maxIPVal = parseInt(maxIPEl.value, 10);
+      const isAsyncMaxIP = !isNaN(maxIPVal) && maxIPVal > 500;
+
+      if (isAsyncMaxIP) {
+        badgeMaxIP.className = 'badge badge-async';
+        badgeMaxIP.innerHTML = '&#9889; Async Batch (&gt; 500)';
+        const lowWatermark = Math.round(maxIPVal * 0.9);
+        const hardCap = Math.round(maxIPVal * 1.2);
+        hintMaxIP.className = 'cache-mode-hint async';
+        hintMaxIP.innerHTML = `<span>&#9889;</span><div><strong>Asynchronous Batch Eviction Active:</strong> When capacity reaches <strong>${maxIPVal.toLocaleString()}</strong>, eviction drains down to the 90% low-watermark (<strong>${lowWatermark.toLocaleString()}</strong>) in a background thread. Circuit breaker hard-cap engages at 120% (<strong>${hardCap.toLocaleString()}</strong>).</div>`;
+      } else {
+        badgeMaxIP.className = 'badge badge-sync';
+        badgeMaxIP.innerHTML = 'Sync LRU (&le; 500)';
+        hintMaxIP.className = 'cache-mode-hint sync';
+        const displayVal = !isNaN(maxIPVal) && maxIPVal > 0 ? maxIPVal.toLocaleString() : 50;
+        hintMaxIP.innerHTML = `<span>&#9432;</span><div><strong>Synchronous LRU Eviction:</strong> Strict in-memory cap of <strong>${displayVal}</strong> entries. Drops the single least recently used IP inline upon insertion.</div>`;
+      }
+
+      if (!maxBlockedEl || !badgeMaxBlocked || !hintMaxBlocked) return;
+
+      const rawBlockedVal = maxBlockedEl.value.trim();
+      const isInherited = (rawBlockedVal === '');
+      const effectiveBlockedVal = isInherited ? maxIPVal : parseInt(rawBlockedVal, 10);
+      const isAsyncBlocked = !isNaN(effectiveBlockedVal) && effectiveBlockedVal > 500;
+
+      const inheritedNote = isInherited
+        ? ` <em style="opacity:0.85;">(Inherited from maxIPCacheSize${!isNaN(maxIPVal) ? ': ' + maxIPVal.toLocaleString() : ''})</em>`
+        : '';
+
+      if (isAsyncBlocked) {
+        badgeMaxBlocked.className = 'badge badge-async';
+        badgeMaxBlocked.innerHTML = '&#9889; Async Batch (&gt; 500)';
+        const lowWatermark = Math.round(effectiveBlockedVal * 0.9);
+        const hardCap = Math.round(effectiveBlockedVal * 1.2);
+        hintMaxBlocked.className = 'cache-mode-hint async';
+        hintMaxBlocked.innerHTML = `<span>&#9889;</span><div><strong>Asynchronous Batch Eviction Active${inheritedNote}:</strong> Background eviction runs to 90% low-watermark (<strong>${lowWatermark.toLocaleString()}</strong>) once <strong>${effectiveBlockedVal.toLocaleString()}</strong> is reached. Circuit breaker hard-cap at 120% (<strong>${hardCap.toLocaleString()}</strong>).</div>`;
+      } else {
+        badgeMaxBlocked.className = 'badge badge-sync';
+        badgeMaxBlocked.innerHTML = 'Sync LRU (&le; 500)';
+        hintMaxBlocked.className = 'cache-mode-hint sync';
+        const displayVal = !isNaN(effectiveBlockedVal) && effectiveBlockedVal > 0 ? effectiveBlockedVal.toLocaleString() : (!isNaN(maxIPVal) ? maxIPVal.toLocaleString() : 50);
+        hintMaxBlocked.innerHTML = `<span>&#9432;</span><div><strong>Synchronous LRU Eviction${inheritedNote}:</strong> Strict cap of <strong>${displayVal}</strong> entries. Drops oldest blocked IP inline when capacity is reached.</div>`;
+      }
     }
 
     // ==========================================
@@ -1624,11 +1724,13 @@
       currentPresetId = null;
       renderPresets();
       updateXml();
+      updateEvictionIndicators();
       runSimulation();
     });
 
     form.addEventListener('change', () => {
       updateXml();
+      updateEvictionIndicators();
       runSimulation();
     });
 

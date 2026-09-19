@@ -1,7 +1,10 @@
 package org.henbru.antidos;
 
 import java.util.Map;
+import java.util.PriorityQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
@@ -37,6 +40,10 @@ import org.apache.juli.logging.LogFactory;
 public class AntiDoSSlot {
 	private static final Log log = LogFactory.getLog(AntiDoSValve.ANTIDOS_LOGGER_NAME);
 
+	public static final int ASYNC_EVICTION_THRESHOLD = 500;
+	public static final double HARD_CAP_RATIO = 1.2;
+	public static final double LOW_WATERMARK_RATIO = 0.9;
+
 	private String key;
 	private String name4logging;
 
@@ -50,6 +57,23 @@ public class AntiDoSSlot {
 	private final AtomicBoolean blockedCacheFullLogged = new AtomicBoolean(false);
 	private final ReentrantLock activeEvictionLock = new ReentrantLock();
 	private final ReentrantLock blockedEvictionLock = new ReentrantLock();
+
+	private volatile Boolean asyncEviction = null;
+	private volatile Executor evictionExecutor = null;
+	private final AtomicBoolean activeEvictionInProgress = new AtomicBoolean(false);
+	private final AtomicBoolean blockedEvictionInProgress = new AtomicBoolean(false);
+	private final AtomicBoolean hardCapActiveLogged = new AtomicBoolean(false);
+	private final AtomicBoolean hardCapBlockedLogged = new AtomicBoolean(false);
+
+	private static class CandidateEntry {
+		final String key;
+		final long order;
+
+		CandidateEntry(String key, long order) {
+			this.key = key;
+			this.order = order;
+		}
+	}
 
 	/**
 	 * @param monitorName               The monitors name. Used for logging
@@ -84,6 +108,41 @@ public class AntiDoSSlot {
 	}
 
 	/**
+	 * Returns true if asynchronous batch eviction is used for this slot.
+	 * If not explicitly configured, defaults to true when maxCountersPerSlot &gt; {@link #ASYNC_EVICTION_THRESHOLD}.
+	 */
+	public boolean isAsyncEvictionActive() {
+		if (asyncEviction != null) {
+			return asyncEviction;
+		}
+		return maxCountersPerSlot > ASYNC_EVICTION_THRESHOLD;
+	}
+
+	public void setAsyncEviction(Boolean asyncEviction) {
+		this.asyncEviction = asyncEviction;
+	}
+
+	public Boolean getAsyncEviction() {
+		return this.asyncEviction;
+	}
+
+	public void setEvictionExecutor(Executor evictionExecutor) {
+		this.evictionExecutor = evictionExecutor;
+	}
+
+	public Executor getEvictionExecutor() {
+		return this.evictionExecutor;
+	}
+
+	public boolean isActiveEvictionInProgress() {
+		return activeEvictionInProgress.get();
+	}
+
+	public boolean isBlockedEvictionInProgress() {
+		return blockedEvictionInProgress.get();
+	}
+
+	/**
 	 * @param counterName The name of the counter (e. g. an IP address)
 	 * @return Provides the counter object for a specified name and creates it, if
 	 *         it does not yet exist
@@ -114,7 +173,22 @@ public class AntiDoSSlot {
 			return blocked;
 		}
 
-		// 4. New counter insertion into activeCounters
+		// 4. Circuit Breaker / Hard-Cap check: under massive DoS floods, do not blow up memory
+		int currentActiveSize = activeCounters.size();
+		int hardCap = (int) Math.ceil(maxCountersPerSlot * HARD_CAP_RATIO);
+		if (isAsyncEvictionActive() && currentActiveSize >= hardCap) {
+			if (hardCapActiveLogged.compareAndSet(false, true) && log.isWarnEnabled()) {
+				log.warn(name4logging + " Active Counter Cache hard-cap reached (" + currentActiveSize
+						+ " >= " + hardCap + "). Skipping cache insertion for new counter '" + counterName
+						+ "' to prevent thread exhaustion.");
+			}
+			triggerAsyncActiveEviction();
+			AntiDoSCounter transientCounter = new AntiDoSCounter();
+			transientCounter.touch(accessSequence.incrementAndGet());
+			return transientCounter;
+		}
+
+		// 5. New counter insertion into activeCounters
 		AntiDoSCounter newCounter = new AntiDoSCounter();
 		newCounter.touch(accessSequence.incrementAndGet());
 		AntiDoSCounter previous = activeCounters.putIfAbsent(counterName, newCounter);
@@ -128,7 +202,9 @@ public class AntiDoSSlot {
 			if (activeCacheFullLogged.compareAndSet(false, true) && log.isInfoEnabled()) {
 				log.info(name4logging + " Counter Cache is full");
 			}
-			if (activeCounters.size() > maxCountersPerSlot) {
+			if (isAsyncEvictionActive()) {
+				triggerAsyncActiveEviction();
+			} else if (activeCounters.size() > maxCountersPerSlot) {
 				evictEldestActiveEntry();
 			}
 		}
@@ -146,6 +222,17 @@ public class AntiDoSSlot {
 		if (counterName == null || counter == null)
 			return;
 
+		int currentBlockedSize = blockedCounters.size();
+		int hardCap = (int) Math.ceil(maxBlockedCountersPerSlot * HARD_CAP_RATIO);
+		if (isAsyncEvictionActive() && currentBlockedSize >= hardCap) {
+			if (hardCapBlockedLogged.compareAndSet(false, true) && log.isWarnEnabled()) {
+				log.warn(name4logging + " Blocked Counter Cache hard-cap reached (" + currentBlockedSize
+						+ " >= " + hardCap + "). Keeping locked counter '" + counterName + "' in active cache.");
+			}
+			triggerAsyncBlockedEviction();
+			return;
+		}
+
 		// Put into blocked list first, then remove from active list
 		blockedCounters.put(counterName, counter);
 		activeCounters.remove(counterName, counter);
@@ -154,9 +241,109 @@ public class AntiDoSSlot {
 			if (blockedCacheFullLogged.compareAndSet(false, true) && log.isInfoEnabled()) {
 				log.info(name4logging + " Blocked Counter Cache is full");
 			}
-			if (blockedCounters.size() > maxBlockedCountersPerSlot) {
+			if (isAsyncEvictionActive()) {
+				triggerAsyncBlockedEviction();
+			} else if (blockedCounters.size() > maxBlockedCountersPerSlot) {
 				evictEldestBlockedEntry();
 			}
+		}
+	}
+
+	/**
+	 * Triggers an asynchronous batch eviction of active counters if not already in progress.
+	 */
+	private void triggerAsyncActiveEviction() {
+		if (activeEvictionInProgress.compareAndSet(false, true)) {
+			Executor exec = this.evictionExecutor != null ? this.evictionExecutor : ForkJoinPool.commonPool();
+			try {
+				exec.execute(this::evictActiveBatch);
+			} catch (Exception e) {
+				activeEvictionInProgress.set(false);
+				log.warn(name4logging + " Failed to dispatch async active eviction task", e);
+			}
+		}
+	}
+
+	/**
+	 * Triggers an asynchronous batch eviction of blocked counters if not already in progress.
+	 */
+	private void triggerAsyncBlockedEviction() {
+		if (blockedEvictionInProgress.compareAndSet(false, true)) {
+			Executor exec = this.evictionExecutor != null ? this.evictionExecutor : ForkJoinPool.commonPool();
+			try {
+				exec.execute(this::evictBlockedBatch);
+			} catch (Exception e) {
+				blockedEvictionInProgress.set(false);
+				log.warn(name4logging + " Failed to dispatch async blocked eviction task", e);
+			}
+		}
+	}
+
+	/**
+	 * Removes the least-recently-used counters from the active cache until the cache size is 
+	 * at {@link #LOW_WATERMARK_RATIO}.
+	 */
+	private void evictActiveBatch() {
+		try {
+			int targetSize = (int) (maxCountersPerSlot * LOW_WATERMARK_RATIO);
+			int toEvict = activeCounters.size() - targetSize;
+			if (toEvict <= 0) {
+				return;
+			}
+
+			PriorityQueue<CandidateEntry> maxHeap = new PriorityQueue<>(
+					toEvict + 1, (a, b) -> Long.compare(b.order, a.order));
+
+			for (Map.Entry<String, AntiDoSCounter> entry : activeCounters.entrySet()) {
+				long order = entry.getValue().getAccessOrder();
+				if (maxHeap.size() < toEvict) {
+					maxHeap.offer(new CandidateEntry(entry.getKey(), order));
+				} else if (order < maxHeap.peek().order) {
+					maxHeap.poll();
+					maxHeap.offer(new CandidateEntry(entry.getKey(), order));
+				}
+			}
+
+			while (!maxHeap.isEmpty()) {
+				activeCounters.remove(maxHeap.poll().key);
+			}
+		} finally {
+			activeEvictionInProgress.set(false);
+			hardCapActiveLogged.set(false);
+		}
+	}
+
+	/**
+	 * Removes the least-recently-used counters from the blocked cache until the cache size is 
+	 * at {@link #LOW_WATERMARK_RATIO}.
+	 */
+	private void evictBlockedBatch() {
+		try {
+			int targetSize = (int) (maxBlockedCountersPerSlot * LOW_WATERMARK_RATIO);
+			int toEvict = blockedCounters.size() - targetSize;
+			if (toEvict <= 0) {
+				return;
+			}
+
+			PriorityQueue<CandidateEntry> maxHeap = new PriorityQueue<>(
+					toEvict + 1, (a, b) -> Long.compare(b.order, a.order));
+
+			for (Map.Entry<String, AntiDoSCounter> entry : blockedCounters.entrySet()) {
+				long order = entry.getValue().getAccessOrder();
+				if (maxHeap.size() < toEvict) {
+					maxHeap.offer(new CandidateEntry(entry.getKey(), order));
+				} else if (order < maxHeap.peek().order) {
+					maxHeap.poll();
+					maxHeap.offer(new CandidateEntry(entry.getKey(), order));
+				}
+			}
+
+			while (!maxHeap.isEmpty()) {
+				blockedCounters.remove(maxHeap.poll().key);
+			}
+		} finally {
+			blockedEvictionInProgress.set(false);
+			hardCapBlockedLogged.set(false);
 		}
 	}
 

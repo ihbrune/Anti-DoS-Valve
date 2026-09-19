@@ -2,6 +2,8 @@ package org.henbru.antidos;
 
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.juli.logging.Log;
@@ -48,6 +50,8 @@ public class AntiDoSMonitor {
 	private float shareOfRetainedFormerRequests;
 
 	private final AtomicInteger totalrequests = new AtomicInteger(0);
+	private final ExecutorService evictionExecutor;
+	private volatile Boolean asyncEviction = null;
 
 	/**
 	 * The constructor gets all parameters that define the function of the Anti-DoS
@@ -99,6 +103,12 @@ public class AntiDoSMonitor {
 		this.slotLength = slotLength * 1000;
 		this.allowedRequestsPerSlot = allowedRequestsPerSlot;
 		this.shareOfRetainedFormerRequests = shareOfRetainedFormerRequests;
+
+		this.evictionExecutor = Executors.newSingleThreadExecutor(r -> {
+			Thread t = new Thread(r, "AntiDoSMonitor-" + this.monitorName + "-Evictor");
+			t.setDaemon(true);
+			return t;
+		});
 
 		if (log.isInfoEnabled()) {
 			log.info(new StringBuilder().append(name4logging).append(" created. maxCountersPerSlot=")
@@ -194,8 +204,13 @@ public class AntiDoSMonitor {
 		// millisecond within the slot length:
 		long slotKey = getTimeInMillis() / slotLength;
 
-		AntiDoSSlot slot = slots.computeIfAbsent(slotKey,
-				k -> new AntiDoSSlot(monitorName, String.valueOf(k), maxCountersPerSlot, maxBlockedCountersPerSlot));
+		AntiDoSSlot slot = slots.computeIfAbsent(slotKey, k -> {
+			AntiDoSSlot s = new AntiDoSSlot(monitorName, String.valueOf(k), maxCountersPerSlot,
+					maxBlockedCountersPerSlot);
+			s.setEvictionExecutor(this.evictionExecutor);
+			s.setAsyncEviction(this.asyncEviction);
+			return s;
+		});
 		pruneOldSlots();
 		return slot;
 	}
@@ -268,6 +283,35 @@ public class AntiDoSMonitor {
 	 */
 	public int getNumberOfActiveSlots() {
 		return slots.size();
+	}
+
+	/**
+	 * Sets the asynchronous eviction strategy for all current and future slots.
+	 * 
+	 * @param asyncEviction <code>true</code> to force async, <code>false</code> to force sync,
+	 *                      or <code>null</code> for automatic threshold based decision.
+	 */
+	public void setAsyncEviction(Boolean asyncEviction) {
+		this.asyncEviction = asyncEviction;
+		for (AntiDoSSlot slot : slots.values()) {
+			slot.setAsyncEviction(asyncEviction);
+		}
+	}
+
+	/**
+	 * @return Current asyncEviction setting, or <code>null</code> if automatic threshold is active.
+	 */
+	public Boolean getAsyncEviction() {
+		return this.asyncEviction;
+	}
+
+	/**
+	 * Shuts down background executor services used by this monitor.
+	 */
+	public void shutdown() {
+		if (evictionExecutor != null && !evictionExecutor.isShutdown()) {
+			evictionExecutor.shutdownNow();
+		}
 	}
 
 	/**

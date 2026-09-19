@@ -134,6 +134,7 @@ public class AntiDoSValve extends ValveBase {
 	private volatile float shareOfRetainedFormerRequests = -1;
 	private volatile boolean simulationMode = false;
 	private volatile int httpStatusCode = DEFAULT_HTTP_STATUS_CODE;
+	private volatile Boolean asyncEviction = null;
 
 	/**
 	 * Monitor operation mode. If not set the default mode is used
@@ -232,7 +233,7 @@ public class AntiDoSValve extends ValveBase {
 	 * 
 	 * @return might be <code>null</code> if configuration is incomplete
 	 */
-	private AntiDoSMonitor provideMonitor() {
+	AntiDoSMonitor provideMonitor() {
 		if (!monitors.containsKey(monitorName))
 			reloadMonitor();
 
@@ -742,6 +743,15 @@ public class AntiDoSValve extends ValveBase {
 		super.startInternal();
 	}
 
+	@Override
+	protected synchronized void stopInternal() throws LifecycleException {
+		super.stopInternal();
+		AntiDoSMonitor monitor = provideMonitor();
+		if (monitor != null) {
+			monitor.shutdown();
+		}
+	}
+
 	/**
 	 * Checks the valve configuration. Creates the internal {@link AntiDoSMonitor}
 	 * instance if it does not yet exit
@@ -790,6 +800,10 @@ public class AntiDoSValve extends ValveBase {
 			if (monitorName == null)
 				monitorName = DEFAULT_MONITOR_NAME;
 
+			if (asyncEviction != null) {
+				monitor.setAsyncEviction(asyncEviction);
+			}
+
 			monitors.put(monitorName, monitor);
 
 			if (log.isInfoEnabled()) {
@@ -805,6 +819,24 @@ public class AntiDoSValve extends ValveBase {
 		} catch (IllegalArgumentException ex) {
 			return ex.getMessage();
 		}
+	}
+
+	/**
+	 * Programmatically controls whether asynchronous batch eviction is used.
+	 * 
+	 * @param asyncEviction <code>true</code> to force async, <code>false</code> to force sync,
+	 *                      or <code>null</code> for automatic decision based on maxIPCacheSize &gt; 500.
+	 */
+	public void setAsyncEviction(Boolean asyncEviction) {
+		this.asyncEviction = asyncEviction;
+		AntiDoSMonitor monitor = provideMonitor();
+		if (monitor != null) {
+			monitor.setAsyncEviction(asyncEviction);
+		}
+	}
+
+	public Boolean getAsyncEviction() {
+		return this.asyncEviction;
 	}
 
 	/**

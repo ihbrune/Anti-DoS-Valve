@@ -153,15 +153,30 @@ The following settings control dynamic rate limiting in the Anti-DoS Monitor. Ke
 
 ## maxIPCacheSize
 
-Defines the maximum number of active (unblocked) IP addresses tracked in a slot. This limit prevents the memory usage of the Anti-DoS Monitor from growing unbounded. If this limit is reached, active addresses with the least recent activity are evicted first (LRU).
+Defines the maximum number of active (unblocked) IP addresses tracked in a slot. This limit prevents the memory usage of the Anti-DoS Monitor from growing unbounded.
 
 When an IP address exceeds the allowed request limit and is blocked, it is moved from the active cache to a separate blocked IP cache so it no longer consumes space in the active cache. This ensures that a flood of requests from many distinct unblocked IPs (e.g. distributed botnets or scanners) cannot flush blocked attackers out of the cache.
+
+### Eviction Behavior & Asynchronous High-Throughput Mode
+
+How cache eviction is handled depends automatically on the configured cache size:
+
+* **Small Caches (`maxIPCacheSize <= 500`):**  
+  Uses synchronous Least-Recently-Used (LRU) eviction. When capacity is exceeded, the least recently active entries are immediately removed. For small cache sizes (such as in local tests or lightweight setups), this is exact and deterministic with negligible CPU overhead.
+* **Large Caches (`maxIPCacheSize > 500`) — Asynchronous Batch Eviction & Circuit Breaker:**  
+  When scaling to tens or hundreds of thousands of concurrent IPs (e.g. against residential proxy attacks or large subnets), the valve automatically activates a non-blocking asynchronous eviction mechanism:
+  * **Asynchronous Hysteresis (Batch Eviction):**  
+    When the active cache reaches capacity (100%), Tomcat request worker threads are **never** blocked waiting for eviction scans. Instead, an asynchronous daemon task is triggered in the background to clean up the oldest entries down to the low-watermark (90% of capacity). Subsequent HTTP requests continue with sub-microsecond latency and zero lock contention.
+  * **Circuit Breaker (120% Hard-Cap Protection):**  
+    If an extreme attack floods new unique IP addresses faster than the background worker can clean up, the cache reaches a hard cap of 120% capacity (`HARD_CAP_RATIO = 1.2`). In this scenario, completely new IP addresses are evaluated on-the-fly without being permanently inserted into the map (pass-through mode). This protects the JVM heap and Tomcat thread pool from exhaustion, while previously known or blocked IPs remain strictly tracked and enforced.
 
 ## maxBlockedIPCacheSize (optional)
 
 Defines the maximum number of blocked IP addresses tracked in a slot. This prevents unbounded memory growth during distributed attacks involving large numbers of attacking IPs. If omitted, it defaults to the value of **maxIPCacheSize**.
 
-If this limit is reached, blocked addresses with the oldest activity are evicted first using LRU eviction. Blocked IP addresses continue to count subsequent requests even after being blocked, and these counts are factored into the retained request calculations of subsequent time slots to prevent attackers from immediately unblocking when a new slot begins.
+Blocked IP addresses continue to count subsequent requests even after being blocked, and these counts are factored into the retained request calculations of subsequent time slots to prevent attackers from immediately unblocking when a new slot begins.
+
+Like *maxIPCacheSize*, if *maxBlockedIPCacheSize* exceeds 500, it utilizes asynchronous batch eviction with a 90% low-watermark and a 120% hard-cap. If the blocked cache reaches its hard-cap during an aggressive distributed attack, newly locked counters are safely retained in the active cache rather than dropped, guaranteeing that attackers cannot evade rate limits by attempting to flood or poison the blocked cache.
 
 ## ipv4SubnetMask (optional)
 
