@@ -1,26 +1,26 @@
-# What is the Anti-DoS Valve
+# What is the Anti-DoS Valve?
 
-This project implements a Tomcat Valve, which can enforce dynamic access rate limitations on requests from individual IP addresses or subnets. This can, to a certain extent, prevent overloads of Tomcat servers, e.g. by DoS attacks or aggressive web crawlers, or at least limit their effects.
+This project implements a Tomcat valve that enforces dynamic access rate limits on requests from individual IP addresses or subnets. This helps prevent Tomcat servers from becoming overloaded by DoS attacks or aggressive web crawlers, or at least mitigates their impact.
 
-The valve can not, of course, provide complete protection against any kind of maliciously caused overload. The goal is rather to get a simple usable overload protection, which can be put into operation at short notice and with little effort, causing only a small overhead in the Tomcat server and can be used in particular to slow down aggressive web crawlers.
+The valve cannot, of course, provide complete protection against every kind of malicious overload. The goal is rather to provide a simple, easy-to-use overload protection mechanism that can be deployed quickly and with minimal effort, introduces very little overhead in Tomcat, and is particularly effective at slowing down aggressive web crawlers.
 
-The valve can be extensively configured and additionally offers the option to block individual IP addresses or subnets in general or to completely exclude IP adresses or subnets from a blockade.
+The valve is highly configurable and also provides options to permanently block specific IP addresses or subnets, or to exclude trusted IP addresses and subnets from blocking altogether.
 
-An important goal in the development is the extensive coverage of the code by unittests, which is to guarantee the correct function of this code at a central point in the Tomcat server.
+A key goal during development was comprehensive unit test coverage to ensure the correct functioning of this code at a central point in the Tomcat server.
 
-Also a simulation option in the form of Google Drive Sheet is provided. The status of the valve can be monitored and the configuration can be changed via JMX.
+A simulation tool is also provided as a Google Sheet. Additionally, the valve's status can be monitored and its configuration adjusted at runtime via JMX.
 
-Then there is a Dockerfile for running the valve with minimal setup.
+A Dockerfile is included to run Tomcat with the valve using minimal setup.
 
-# Which version of Tomcat
+# Supported Tomcat Versions
 
-Since version 1.4 the valve is build against Tomcat 10.1 libraries. This means it makes use of the <strong>jakarta.servlet.\*</strong> packages. Versions prior to 1.3.0 of the valve have been tested in Tomcat 9.0, 8.0 and 7.0 and used the <strong>javax.servlet.\*</strong> packages.
+Since version 1.4, the valve is built against Tomcat 10.1 libraries. This means it makes use of the <strong>jakarta.servlet.\*</strong> packages. Versions prior to 1.3.0 of the valve were tested on Tomcat 7.0, 8.0, and 9.0, using the legacy <strong>javax.servlet.\*</strong> packages.
 
-# Implementation of dynamic access rate limiting
+# Implementation of Dynamic Access Rate Limiting
 
-The goal of the implementation was to get a flexible solution, which at the same time would only have a small degree of complexity and little overhead in the servers.
+The goal of the implementation was to create a flexible solution that maintains low complexity and minimal overhead on the server.
 
-In order to check whether a specific IP address or subnet currently exceeds the allowed access rate, the model of the slots was used: The internal, so-called Anti-DoS Monitor subdivides the monitoring period into successive, non-overlapping slots of a fixed length. If this slot length is 1 minute, the slots might cover these periods:
+To determine whether a specific IP address or subnet currently exceeds the allowed request rate, a time-slot model is used: the internal Anti-DoS Monitor divides the monitoring period into successive, non-overlapping slots of a fixed length. For example, with a 1-minute slot length, the slots cover periods such as:
 
 * 12:00:00 to 12:00:59
 * 12:01:00 to 12:01:59
@@ -28,13 +28,13 @@ In order to check whether a specific IP address or subnet currently exceeds the 
 * 12:03:00 to 12:03:59
 * …
 
-The evaluation of whether an IP address or subnet makes too many accesses refers firstly to the accesses that have taken place within the current slot. A simple counter is used for this purpose. Compared to a sliding evaluation that does not use slots this avoids the storing of the individual request events. 
+To determine whether an IP address or subnet has made too many requests, the monitor first checks the requests that occurred within the current slot using a simple counter. Compared to a sliding-window approach without slots, this avoids the overhead of storing individual request timestamps.
 
-For this the reason even in a DoS situation, in which thousands of requsts are made in a short time, the effort for the monitoring is not significantly higher than during normal operation. The disadvantage of the use of slots is the elimination of the past as soon as a new slot begins. Therefore the monitor contains an option to transfer counts from the previous slots.
+For this reason, even during a DoS attack with thousands of requests in a short time, the monitoring overhead is not significantly higher than during normal operation. The drawback of fixed slots is that historical context is lost as soon as a new slot begins. To address this, the monitor provides an option to carry over counts from previous slots.
 
-This transfer function first calculates the mean value of the accesses counted in the previous slots. From this mean value, an adjustable portion is transferred to the new slot. Depending on the setting, a very fast or a very slow 'forgetting' of earlier load peaks in the Anti-DoS Monitor is achievable.
+This transfer mechanism calculates the average number of requests counted in recent slots. A configurable fraction of this average is then carried over into the new slot. Depending on the setting, the Anti-DoS Monitor can 'forget' earlier traffic spikes very quickly or retain them over a longer period.
 
-The Anti-DoS Monitor has a structure that looks like this:
+The Anti-DoS Monitor structure looks like this:
 
 * Current slot: 12:03:00 to 12:03:59
   * Last registered IP address: 123.0.0.1
@@ -43,33 +43,33 @@ The Anti-DoS Monitor has a structure that looks like this:
   * Previously registered IP address: 123.0.0.2
     * Number of requests in this slot so far: 1
     * Number of retained requests from previous slots: 3
-   * …
+  * …
 * Previous slot: 12:02:00 to 12:02:59
   * ...
 * …
 
-The maximum number of allowed requests per slot per IP address or subnet is compared with the number of current requests plus the number of requests taken from previous slots. If this sum is above the limit, the access for the remaining duration of this slot is blocked. If an IP address or subnet is blocked, all its accesses are answered with the HTTP status code 429 (Too Many Requests) by default (or the status code configured via `httpStatusCode`, e.g. 403 Forbidden for legacy behavior).
+The maximum number of allowed requests per slot for an IP address or subnet is compared against the sum of current requests plus the retained requests from previous slots. If this sum exceeds the limit, access is blocked for the remainder of the current slot. When an IP address or subnet is blocked, all of its requests are answered with HTTP status code 429 (Too Many Requests) by default (or the status code configured via `httpStatusCode`, e.g. 403 Forbidden for legacy behavior).
 
-# Experiences so far
+# Production Experience
 
-In its first version (2016) the valve was developed for the protection of a Tomcat server farm, which processes more than 1,000,000 requests per day. Here the valve had been in use for several months before the code was published on Github. During this time, it has demonstrated its stability, and has successfully limited the impact of DoS attacks by single or small groups of attacking servers.
+In its first version (2016), the valve was developed to protect a Tomcat server farm processing more than 1,000,000 requests per day. The valve was in production use there for several months before the code was published on GitHub. During this time, it demonstrated its stability and successfully mitigated DoS attacks from individual servers and small botnets.
 
-In the following years the valve helped to protect the same servers in situations with more then 50% of all requests had to be blocked and malicious peak loads of thousands of requests per second had to be dealt with. The valves implementation proved to be lightweight and fast enough to keep the servers floating and serving normal requests without interruption.
+In subsequent years, the valve helped protect the same servers in situations where more than 50% of all incoming requests had to be blocked and malicious peak loads reached thousands of requests per second. The valve's implementation proved lightweight and fast enough to keep the servers afloat and serving legitimate traffic without interruption.
 
-In 2026 new kinds of loads from AI-crawlers, stemming in part from residential proxy networks, overwhelmed the valve because of the sheer amount of unique IP addresses the crawlers could use. The valve had to be re-engineered to include features for subnet aggregation to deal with these new threats.
+In 2026, new traffic patterns from AI crawlers—partly routed through residential proxy networks—overwhelmed the valve due to the sheer volume of unique IP addresses used. The valve was subsequently re-engineered to include subnet aggregation to counter these threats effectively.
 
-# Commissioning
+# Installation and Setup
 
-These are the steps to activate the valve:
+Here are the steps to set up and activate the valve:
 
-1. Clone the project from Github and build the JAR with Maven `mvn install`
-2. Make the JAR available in Tomcat. Copy it for example into the same directory where your JDBC drivers are, which is probably `<CATALINA_HOME>/lib/`
-3. In the `server.xml`, the valve must be configured inside the corresponding HOST element (see the example below)
-4. Logging should be enabled so that at least messages about blocked accesses are logged (this is already the case in the standard configuration)
+1. Clone the project from GitHub and build the JAR with Maven: `mvn package` (or `mvn install`)
+2. Make the JAR available in Tomcat. For example, copy it into `<CATALINA_HOME>/lib/` (alongside your JDBC drivers).
+3. In `server.xml`, configure the valve inside the appropriate `<Host>` element (see example below).
+4. Ensure logging is enabled so that blocked requests are logged (this is already enabled in the default configuration).
 
-The valve is active now!
+The valve is now active!
 
-A test of the function can be carried out on a non-existent URL, to avoid any influence on the real applications. For the test, you set very low thresholds, and then performs quick reloads on the test address directly in the web browser until the valve blocks your requests. This sample configuration can be used for such a test:
+You can test its functionality using a non-existent URL to avoid impacting real applications. For testing, configure very low thresholds and trigger rapid reloads in your browser until the valve blocks your requests. The following sample configuration can be used for such a test:
 
         <Valve className="org.henbru.antidos.AntiDoSValve"
                 monitorName="TEST VALVE"
@@ -84,102 +84,100 @@ A test of the function can be carried out on a non-existent URL, to avoid any in
                 shareOfRetainedFormerRequests="0"
         />
         
-The test address is here `/valvetest` and from the 6th call access should be denied and a corresponding message should appear in the server log.
+In this example, the test path is `/valvetest`. Starting from the 6th request, access will be blocked and a corresponding message will appear in the server log.
 
-## Docker version 
+## Docker Setup
 
-The *docker*-directory contains a Dockerfile and a list of commmands to run a Tomcat server with a valve configuration as container image. You can use this as a boiler plate for your own projects and as an environment to test your own developments without much effort. 
+The `docker/` directory contains a Dockerfile and sample commands to run a Tomcat server with the valve pre-configured in a container image. You can use this as a boilerplate for your own projects and as an environment to test your changes with minimal effort.
 
 # Valve Configuration
 
-The real challenge when commissioning the valve is to find the best settings for your server. The right balance must be found between too tight settings that would lock out your regular users, too loose settings that leave attackers untouched, and settings that hold too much data and thus unnecessarily load / slow down the Tomcat server.
+The main challenge when configuring the valve is finding the right settings for your specific server. You need to strike the right balance: settings that are too strict might lock out legitimate users, settings that are too lenient leave attackers unchecked, and settings that retain too much data consume excessive memory and slow down the Tomcat server.
 
-In order to find the appropriate configuration you should make evaluations of the current server logs with the HTTP(S) requests, in particular to answer these questions:
+To find the right configuration, analyze your current server access logs (HTTP/HTTPS), paying particular attention to:
 
-* In which range are the normal access numbers per day / hour / minute / second? 
-* What are the maximum values that can be attributed to individual IP addresses?
-* Which IP addresses cause a lot of traffic? Which of these are internal services and which of search engines?
-* Depending on the type of Tomcat application(s), it may make sense to make these evaluations differentiated for different parts of the applications. Access to static content such as images or stylesheets is usually less relevant than dynamic content
-* How many requests does a users webbrowser generate when he visits your pages for the first time and of what kind are these requests? 
+* What is the normal request rate per day / hour / minute / second?
+* What are the highest request volumes generated by individual IP addresses?
+* Which IP addresses generate heavy traffic? Which of these belong to internal services, and which belong to search engines?
+* Depending on your Tomcat application, it may make sense to analyze different application paths separately. Requests for static assets like images or stylesheets are generally less critical than requests for dynamic resources.
+* How many requests does a user's browser generate on a first visit, and what types of requests are they?
 
-There are a number of logfile analysis tools that you can use for this purpose, but the usual unix tools like `grep`, `awk`, `sort`, `uniq` and `wc` will bring you very far. It is not neccessary to get a completely accurate picture (this varies probably anyway by the day), but to develop a basic sense of what is happening on your own server. If you have not generated any logfiles so far, it is now time to activate them.
+Standard Unix command-line tools like `grep`, `awk`, `sort`, `uniq`, and `wc` will get you very far when analyzing log files. You don't need a 100% exact figure (traffic varies day to day anyway), but rather a solid baseline understanding of the traffic on your server. If you don't have access logging enabled yet, now is the time to turn it on.
 
-In addition to the question which usage pattern is displayed on the server in normal operation, an important point is the estimate of the access speed an attacker needs to cause overloads. The smaller the distance between regular server load and server overload, the more accurate the configuration of the Anti-DoS Valve must be.
+Besides knowing your normal traffic profile, it is also important to estimate the request rate an attacker would need to cause an overload. The smaller the gap between regular traffic and server capacity, the more precisely the Anti-DoS Valve needs to be tuned.
 
-Once the values have been determined you can develop the valve configuration, which is controlled by the following parameters. To help with the configuration there is a helper script available, which can be run in a browser (e.g. directly from this repository): [**anti-dos-valve-config-helper.html**](https://github.com/ihbrune/Anti-DoS-Valve/blob/master/anti-dos-valve-config-helper.html).
+Once you have identified these values, you can craft your valve configuration using the parameters described below. To assist with calculations, a browser-based configuration helper is available in the repository: [**anti-dos-valve-config-helper.html**](https://github.com/ihbrune/Anti-DoS-Valve/blob/master/anti-dos-valve-config-helper.html).
 
-**monitorName**
+## monitorName
 
-An optional parameter for naming the monitor instance. Available since version 1.1. If you are using more then one instance of the valve / monitor it is necessary to use this parameter to separate the configurations for the different instances. Also used in log messages. See the paragraph about multi-instance configurations.
+An optional parameter to name the monitor instance (available since version 1.1). If you run more than one instance of the valve/monitor, this parameter is required to distinguish their configurations. It is also included in log messages. See the section on multi-instance configurations below.
 
-**alwaysForbiddenIPs**
+## alwaysForbiddenIPs
 
-An optional regular expression used to define IP addresses that are always blocked. This option and the following are _not part of the dynamic access rate limitation_ because they can completely block or always allow IP addresses.
+An optional regular expression defining IP addresses that are always blocked. This option (and `alwaysAllowedIPs`) operates independently of the dynamic rate limiter: matched IPs are unconditionally blocked or allowed.
 
-Hint: You can use [this page (german)](http://www.regexplanet.com/advanced/java/index.html) to develop and test Java RegExps.
+*Tip:* You can use [RegexPlanet](http://www.regexplanet.com/advanced/java/index.html) to test Java regular expressions.
 
-Hint 2: If you only want to use this option of the valve, you can use the [RemoteAddress Valve](https://tomcat.apache.org/tomcat-8.0-doc/config/valve.html#Remote_Address_Filter), which is already included in the Tomcat distribution.
+*Tip 2:* If you only need this static blocking feature, you can use Tomcat's built-in [Remote Address Valve](https://tomcat.apache.org/tomcat-10.0-doc/config/valve.html#Remote_Address_Valve).
 
-**alwaysAllowedIPs**
+## alwaysAllowedIPs
 
-An optional regular expression used to define IP addresses that are always allowed to access. This setting is only evaluated after _alwaysForbiddenIPs_.
+An optional regular expression defining IP addresses that are always allowed access. This setting is evaluated after *alwaysForbiddenIPs*.
 
-This setting can, for example, be used to exclude accesses from your own intranet from a blockade so that no risk is created for internal users. If individual internal addresses are to be blocked later, this can be done via _alwaysForbiddenIPs_.
+This parameter can be used, for example, to whitelist your corporate intranet or VPN so internal users are never blocked. If a specific internal IP needs to be blocked later, that can still be done via *alwaysForbiddenIPs*.
 
-Both _alwaysForbiddenIPs_ and _alwaysAllowedIPs_ affect all requests that the Tomcat server processes. Accesses that are blocked or allowed in this way are not included in the access counts of the Anti-DoS Monitor.
+Both *alwaysForbiddenIPs* and *alwaysAllowedIPs* apply to all requests processed by the Tomcat host. Requests handled by these rules are not counted in the dynamic Anti-DoS Monitor slots.
 
-**relevantPaths**
+## relevantPaths
 
-A regular expression used to define the URLs on which the Anti-DoS Monitor and thus the dynamic access rate limitation should take effect. The parameter is optional, but it will always be set if not only _alwaysForbiddenIPs_ is used by the function of the valve. Multiple important effects can be achieved with this option:
+A regular expression defining which request paths should be monitored by the dynamic rate limiter. While technically optional, it is almost always configured unless you are only using *alwaysForbiddenIPs*. This setting provides several key benefits:
 
-The access rate limitation can be restricted to applications or application parts which are actually used for concrete attacks. In servers that carry both public and non-public applications, monitoring can be restricted to the URLs that attackers can reach at all. In this way the Anti-DoS monitoring can be relieved and at the same time set more restrictive.
+* Rate limiting can be restricted to the endpoints that are actually vulnerable to attack. On servers hosting both public and internal applications, monitoring can be limited to public-facing URLs, reducing monitoring overhead while allowing tighter limits.
+* Monitoring can focus on resource-intensive endpoints (such as servlets and APIs) while excluding static assets (CSS, JS, images). Excluding static files significantly reduces the risk of false positives for legitimate users.
 
-The access rate limitation can be restricted to application parts that actually cause a load, such as servlet calls. On the other hand, requests for static content, such as images and scripts, could be excluded. The exclusion of CSS, JavaScript and image files from Anti-DoS Monitoring can significantly reduce the risk of incorrect blocking of regular users.
+Example values:
 
-Examples of parameter values:
+* `".*"`: All requests are processed by the Anti-DoS Monitor.
+* `"/manager.*"`: Only requests to the Tomcat Manager application are monitored; all other requests bypass the valve.
 
-* `".*"` With this pattern all requests will be handled by Anti-DoS Monitoring
-* `"/manager.*"` With this pattern all requests to the Tomcat Manager App will be handled by the Anti-DoS Monitoring, but all other requests will be ignored
+## nonRelevantPaths
 
-**nonRelevantPaths**
+Available since version 1.4.0 and evaluated before *relevantPaths*: allows specific URL paths to be excluded from monitoring so they are never rate-limited.
 
-This option has been available since version 1.4.0 and is evaluated before _relevantPaths_: It allows certain paths to be excluded from the monitor, so these are never limited.
+This is especially helpful when an entire path hierarchy should be protected, except for a few specific endpoints. For example:
 
-This option is intended to make it easier to deal with cases in which an entire address range should generally be protected, but individual addresses contained in it should not. Example:
+* `relevantPaths="/myexampleapi/.*"` protects all API endpoints.
+* `nonRelevantPaths="/myexampleapi/status"` keeps only the health/status endpoint accessible without rate limiting. Without `nonRelevantPaths`, you would have to enumerate every other endpoint individually in `relevantPaths`, and remember to update it whenever a new endpoint is deployed. With `nonRelevantPaths`, newly added endpoints are protected automatically.
 
-* `"/myexampleapi/.*"` All API endpoints should be protected so _relevantPaths_ is so to this value
-* `"/myexampleapi/status"` Only the API status endpoint should always be acessible. It is difficult to solve this task just with _relevantPaths_. You might add the other endpoints one by one to _relevantPaths_, but when the development deploys new endpoints you always have to remember protecting them by adding them to the configuration. It is much easier to keep _relevantPaths_ as it is and add the _status_-endpoint to _nonRelevantPaths_. This will exclude only this endpoint from protection while future new endpoints will automatically fall under it. 
+The following settings control dynamic rate limiting in the Anti-DoS Monitor. Keep in mind that some of these parameters interact with each other:
 
+## maxIPCacheSize
 
-The following settings affect the dynamic access rate restriction in the Anti-DoS Monitor. The effects of these parameters partly influence each other:
+Defines the maximum number of active (unblocked) IP addresses tracked in a slot. This limit prevents the memory usage of the Anti-DoS Monitor from growing unbounded. If this limit is reached, active addresses with the least recent activity are evicted first (LRU).
 
-**maxIPCacheSize**
+When an IP address exceeds the allowed request limit and is blocked, it is moved from the active cache to a separate blocked IP cache so it no longer consumes space in the active cache. This ensures that a flood of requests from many distinct unblocked IPs (e.g. distributed botnets or scanners) cannot flush blocked attackers out of the cache.
 
-Defines the maximum number of active (unblocked) IP addresses tracked in a slot. This number should be limited so that the memory requirements of the Anti-DoS monitor cannot grow indefinitely. If this limit is exceeded, the active addresses with the oldest requests are dropped first.
+## maxBlockedIPCacheSize (optional)
 
-When an IP address exceeds the allowed request limit and gets blocked, it is moved from the active cache to a separate blocked IP cache so that it no longer consumes space in the active cache. This ensures that incoming floods of requests from numerous different unblocked IP addresses (e.g. distributed botnets or scanners) cannot flush blocked attackers out of the cache.
+Defines the maximum number of blocked IP addresses tracked in a slot. This prevents unbounded memory growth during distributed attacks involving large numbers of attacking IPs. If omitted, it defaults to the value of **maxIPCacheSize**.
 
-**maxBlockedIPCacheSize** (optional)
+If this limit is reached, blocked addresses with the oldest activity are evicted first using LRU eviction. Blocked IP addresses continue to count subsequent requests even after being blocked, and these counts are factored into the retained request calculations of subsequent time slots to prevent attackers from immediately unblocking when a new slot begins.
 
-Defines the maximum number of blocked IP addresses tracked in a slot. Used to prevent memory from growing indefinitely if the server is attacked by a large number of distinct IP addresses that get blocked. If omitted or not set, it defaults to the value of **maxIPCacheSize**.
+## ipv4SubnetMask (optional)
 
-If this limit is exceeded, the blocked addresses with the oldest requests are dropped first using LRU eviction. Blocked IP addresses continue to count subsequent requests even after being blocked, and these counts are included in the retained request calculations of subsequent time slots to prevent attackers from becoming immediately unblocked when a new slot begins.
+Configures subnet aggregation for IPv4 addresses to protect against distributed botnets, proxy networks, and cache-flushing scans where attackers distribute requests across multiple IP addresses within the same subnet.
 
-**ipv4SubnetMask** (optional)
-
-Configures subnet aggregation for IPv4 addresses to protect against distributed botnets, proxy networks, and cache-flushing scans where attackers distribute requests across multiple IP addresses in the same subnet.
-
-When set to a prefix length smaller than 32 (e.g. `24` for `/24`), all requests originating from that subnet (such as `192.168.1.10` and `192.168.1.20`) are aggregated under a shared counter key (e.g. `192.168.1.0/24`). This prevents botnets from consuming multiple cache entries or evading rate limits by switching IP addresses within the same subnet.
+When set to a prefix length smaller than 32 (e.g. `24` for `/24`), all requests originating from that subnet (such as `192.168.1.10` and `192.168.1.20`) are aggregated under a shared counter key (e.g. `192.168.1.0/24`). This prevents botnets from consuming multiple cache entries or evading rate limits by rotating IP addresses within the same subnet.
 
 Accepts:
 * CIDR prefix integer (1 to 32), e.g. `24`
 * CIDR notation string, e.g. `"/24"`
 * Dotted-decimal netmask string, e.g. `"255.255.255.0"`
-* `32` or `-1`: Disables IPv4 aggregation (default behavior, each IP address is tracked individually).
+* `32` or `-1`: Disables IPv4 aggregation (default behavior; each IP address is tracked individually).
 
-*Note*: Whitelisted IP addresses configured in *alwaysAllowedIPs* (e.g. `127.0.0.1` or specific internal machines) are evaluated prior to rate limiting and subnet aggregation, so individual whitelisted IPs remain accessible even if their subnet would otherwise be blocked.
+*Note:* Whitelisted IP addresses configured in *alwaysAllowedIPs* (e.g. `127.0.0.1` or specific internal machines) are evaluated prior to rate limiting and subnet aggregation, so individual whitelisted IPs remain accessible even if their subnet would otherwise be blocked.
 
-**ipv6SubnetMask** (optional)
+## ipv6SubnetMask (optional)
 
 Configures subnet aggregation for IPv6 addresses. In IPv6 networks, attackers often have access to vast address pools (e.g. entire `/64` subnets) and can generate virtually unlimited unique IP addresses to easily bypass per-IP rate limits and flush cache entries.
 
@@ -190,57 +188,54 @@ Accepts:
 * CIDR notation string, e.g. `"/64"`
 * `128` or `-1`: Disables IPv6 aggregation (default behavior).
 
-**slotLength**
+## slotLength
 
-The length of a slot in seconds. An integer value greater than 0 must be set here. The duration of a slot and the _allowedRequestsPerSlot_ parameters are closely related:
+The duration of a slot in seconds (must be an integer greater than 0). The slot length and *allowedRequestsPerSlot* are closely related:
 
-**allowedRequestsPerSlot**
+## allowedRequestsPerSlot
 
-How many requests are permitted within a slot before an IP address is blocked. An integer value greater than 0 must be set here. As described above, the sum of the accesses counted in the slot and the accesses taken from previous slots are used for the check.
+The maximum number of requests permitted within a slot before an IP address or subnet is blocked (must be an integer greater than 0). As described above, the check evaluates the sum of requests in the current slot plus requests carried over from previous slots.
 
-An increase in the duration of a slot (see _slotLength_) must be accompanied by an increase in the value entered here in order to minimize the risk of blocking regular users. However, a higher value increases the inertia of the monitor or the number of accesses that an attacker can perform before he is blocked.
+Increasing *slotLength* should typically be paired with an increase in *allowedRequestsPerSlot* to avoid blocking legitimate users. However, higher limits also give attackers more leeway before a block triggers.
 
-A very small value of _slotLength_, on the other hand, reduces the advantages of using slots as the number of data to be stored is increased.
+Conversely, setting *slotLength* too low diminishes the advantages of slot-based tracking, as more slots must be maintained and evaluated.
 
-**numberOfSlots**
+## numberOfSlots
 
-The number of slots the monitor should hold. Here, an integer value greater than 0 must be set. At a value of 1, the monitor would have no memory that goes beyond its current slot. Bigger values result in a larger 'memory' of the monitor.
+The number of slots the monitor maintains in memory (must be an integer greater than 0). With a value of 1, the monitor retains no memory beyond the active slot. Larger values give the monitor a longer historical 'memory'.
 
-This look back at the past is relevant when requests counted in previous slots are to be included in the evaluation of an IP address in the current slot. See the parameter _shareOfRetainedFormerRequests_. 
+This history is used when requests from earlier slots are factored into evaluating an IP address in the current slot (see *shareOfRetainedFormerRequests*).
 
-**shareOfRetainedFormerRequests**
+## shareOfRetainedFormerRequests
 
-This parameter defines the extent to which earlier requests from an IP address are used in their evaluation in the current slot. Here, a floating-point value greater than or equal to 0 must be set. To do this, the average value for an IP address observed in previous slots is calculated and this value is multiplied by the factor defined here. A higher value 'punishes' an IP address longer for previous offenses, a small value would allow an attacking IP address in each new slot to perform requests again. Examples of values:
+Defines the degree to which past requests from an IP address or subnet influence its evaluation in the current slot (must be a floating-point value greater than or equal to 0). The monitor calculates the average request count across previous slots and multiplies it by this factor. A higher value penalizes an IP address longer for past traffic spikes, whereas a low value allows a previously blocked IP to make requests again soon after a new slot begins. Example values:
 
-* `0`: This value will not be used to transfer information from the past. In this case, the _numberOfSlots_ should be set to 1 to prevent unnecessary memory consumption.
+* `0`: No historical request counts are carried over. In this case, *numberOfSlots* should be set to 1 to minimize memory usage.
+* `0.5`: 50% of the average request count from past slots is carried over. A value below 1 gives attackers (as well as inadvertently blocked regular users) a fresh request allowance at the start of each new slot.
+* `1`: The average past request count is carried over in full. During an ongoing attack, an IP address that consistently exceeded limits in previous slots will be blocked right from the start of the new slot.
+* `<numberOfSlots>`: If this factor equals the number of slots, a single past slot with excessive requests is enough to immediately block the IP address in a new slot. Furthermore, several slots where traffic stayed just below the threshold can accumulate and trigger a block. Any value greater than 1 has this effect.
 
-* `0.5`: Here the half, average request number of the past would be taken over. A value less than 1 means that an attacker (but also an inadvertently blocked regular user) in a new slot initially has some accesses free again
+## monitorMode
 
-* `1`: Here the average request number would be taken over completely. In the case of an ongoing DoS attack, an IP address, which has already made too many requests in all previous slots, would be blocked directly from the start of the new slot.
+Since version 1.2.0, the valve offers an alternative operating mode: *marking mode* (detailed below). If omitted, the valve defaults to *blocking* mode (`"BLOCKING"`).
 
-* `<NumberOfSlots>`: If the factor is set to the number of slots, then it would sufficient if an IP address had once too many accesses in the past to block it immediately in a new slot. Also a number of slots, in which the IP address has always been below the threshold, can eventually lead to a blockade. All values greater than 1 have this potential.
+To enable marking mode, set this parameter to `"MARKING"` (case-insensitive).
 
-**monitorMode**
+## simulationMode
 
-Since version 1.2.0 the valve offers a second operation mode: *marking mode*. A detailed explanation of this mode is given below. If the parameter is omitted then the mode is *blocking*, which is the default behavior described until now. If you want to set the blocking mode explicitly you can use the parameter value *"BLOCKING"*. 
+Available since version 1.1.0, this option simulates the valve's behavior without actually blocking or marking requests (`false` by default). When set to `true`, it still logs actions, allowing you to gauge the impact of your configuration safely.
 
-To use the marking mode set the parameter to *"MARKING"*. The value is case insensitive.
+## httpStatusCode
 
-**simulationMode**
-
-Since version 1.1.0 this option allows you to simulate the valves actions without actually blocking (or marking) any request. It is *false* by default. When set to *true* it still prints logging information and is thus allowing you to get a feeling for the impact of your settings.
-
-**httpStatusCode**
-
-Since version 1.4.1 this optional parameter defines the HTTP status code returned when a request is blocked in *blocking* mode. The default value is `429` (*Too Many Requests*, per RFC 6585). If you want to retain the legacy behavior from earlier versions, you can configure `httpStatusCode="403"` (*Forbidden*). Any valid HTTP status code between 100 and 599 can be specified.
+Since version 1.4.1, this optional parameter defines the HTTP status code returned when a request is blocked in *blocking* mode. The default is `429` (*Too Many Requests*, per RFC 6585). To retain the legacy behavior of earlier versions, set `httpStatusCode="403"` (*Forbidden*). Any valid HTTP status code between 100 and 599 can be specified.
 
 # Sample Configurations
 
-The configuration shown above can be used as the starting point for the productive valve configuration.
+The configuration shown above can serve as a starting point for your production setup.
 
-You can run configuration values in this [**Google Drive Sheet**](https://docs.google.com/spreadsheets/d/1eztKVnzjW9xVVia1hDAeLaiiKRAGfNKRFx5lvKkbLBs/edit?usp=sharing). To do this, you must copy the sheet into your own Google Account and then edit the fields marked with **'set me!'**. Here, the impact of different configuration values on the access patterns of attackers (or regular users) can easily be watched.
+You can experiment with configuration values using this [**Google Sheet**](https://docs.google.com/spreadsheets/d/1eztKVnzjW9xVVia1hDAeLaiiKRAGfNKRFx5lvKkbLBs/edit?usp=sharing). Make a copy of the sheet in your Google account and adjust the fields marked **'set me!'** to see how different parameters affect request thresholds for attackers and regular users.
 
-Finally, the value for *relevantPaths* must be developed. Here, if possible, only those parts of the applications that are accessible to attackers and which cause significant server loads should be covered. As a real world example is provided here:
+Finally, define your *relevantPaths* pattern. Ideally, this should cover only endpoints that are publicly accessible and consume noticeable server resources. Here is a real-world example:
 
         <Valve className="org.henbru.antidos.AntiDoSValve"
                 monitorName="MY VALVE"
@@ -254,34 +249,31 @@ Finally, the value for *relevantPaths* must be developed. Here, if possible, onl
                 shareOfRetainedFormerRequests="5"
         />
         
-This configuration is similar to the configuration used in the server farm that used the valve first. The individual servers face normale loads between one and two million requests per day on dynamic (aka servlet generated) content. Here are some explanations for the settings:
+This configuration is similar to the one used in the server farm where the valve was originally deployed. Those servers handled normal traffic of one to two million requests per day on dynamic (servlet-generated) content. Key aspects of this configuration:
 
-*alwaysAllowedIPs*: Allows all requests from internal IP ranges to prevent blockings of employees on corporate devices
-
-*alwaysForbiddenIPs*: The real configuration contains several IP ranges that caused problems in the past
-
-*relevantPaths*: Matches only the dynamic parts of the web applications. Try to exclude CSS, JS, images and other static content, unless requests to this kind of content place a heavy burden on your server
-
-*maxIPCacheSize* to *shareOfRetainedFormerRequests*: This settings proved to work quite well for several years
+* *alwaysAllowedIPs*: Whitelists internal IP ranges so employees on corporate devices are never blocked.
+* *alwaysForbiddenIPs*: In production, this contained several IP ranges that had caused repeated issues in the past.
+* *relevantPaths*: Matches only dynamic application endpoints. Static assets like CSS, JS, and images are excluded unless they place a heavy burden on the servers.
+* *maxIPCacheSize* to *shareOfRetainedFormerRequests*: These settings proved reliable and effective over several years of operation.
 
 # Monitoring
 
-After the first commissioning, the valve should be closely monitored so that disturbances of regular users can be recognized and stopped early.
+After initial deployment, the valve should be monitored closely to detect and resolve any unintended disruption to legitimate users early on.
 
-The corresponding entries are found in the Tomcat log files, entries of blocks can be found here via the keyword `AntiDoSMonitor`.
+Blocked requests are recorded in the Tomcat log files and can be filtered using the keyword `AntiDoSMonitor`.
 
-An alternative is monitoring with JMX, for example via `JConsole`. The internal states of the valve are visible via JMX and the settings of the valve can also be changed without restarting the server.
+Alternatively, the valve can be monitored via JMX (e.g. using `JConsole` or VisualVM). Internal monitor metrics are exposed via JMX, and configuration parameters can even be adjusted at runtime without restarting the server.
 
-# Marking mode
+# Marking Mode
 
-Available since 1.2.0 this mode enables usages in which the valve operates in conjunction with the webapps in the Tomcat server. Here the valves power and flexibility in recognizing probably malicious behavior can be used to generate hints for the application and thus allowing for softer responses then blocking requests completely. In this mode the valve **never actually blocks** any requests, it only adds information in the request object the application can use.
+Available since version 1.2.0, this mode enables use cases where the valve works cooperatively with web applications running on Tomcat. Instead of blocking requests outright, the valve's ability to detect suspicious traffic can provide hints to the application, allowing for gentler handling. In marking mode, the valve **never blocks** requests; it only attaches metadata to the `HttpServletRequest` for the application to inspect.
 
-One example might be the prevention of email address harvesting from public websites. Your application might use the hints from the valve to hide email addresses if too many requests are counted and display an informative text message that regular users can understand. This allows for tighter valve configurations because the risk of disturbing regular users is much lower. 
+One example is preventing email address harvesting on public web pages: the application can check for the valve's flag and hide email addresses (or present a captcha / explanatory message) once request rates look suspicious, without outright blocking regular visitors. This also allows for tighter rate-limiting thresholds because the risk of disrupting normal users is much lower.
 
-This is an example configuration:
+Example configuration:
 
         <Valve className="org.henbru.antidos.AntiDoSValve"
-				   monitorMode="marking"
+                monitorMode="marking"
                 monitorName="MARKING VALVE"
                 alwaysAllowedIPs=""
                 alwaysForbiddenIPs=""
@@ -293,18 +285,18 @@ This is an example configuration:
                 shareOfRetainedFormerRequests="0"
         />
 
-This servlet demonstrates how to use the information provided by the valve:
+The following servlet demonstrates how to read the information provided by the valve:
 
 		package org.henbru.antidos;
 		
 		import java.io.IOException;
 		import java.io.PrintWriter;
 		
-		import javax.servlet.ServletException;
-		import javax.servlet.annotation.WebServlet;
-		import javax.servlet.http.HttpServlet;
-		import javax.servlet.http.HttpServletRequest;
-		import javax.servlet.http.HttpServletResponse;
+		import jakarta.servlet.ServletException;
+		import jakarta.servlet.annotation.WebServlet;
+		import jakarta.servlet.http.HttpServlet;
+		import jakarta.servlet.http.HttpServletRequest;
+		import jakarta.servlet.http.HttpServletResponse;
 		
 		/**
 		 * This servlet demonstrates the marking mode of the valve
@@ -333,11 +325,13 @@ This servlet demonstrates how to use the information provided by the valve:
 			}
 		}
 
-In marking mode the valve sets the request attribute *"org.henbru.antidos.AntiDoS"* with a string containing the *monitorName*. Requests from IP adresses covered by *alwaysForbiddenIPs* will always be marked, but not blocked.
+In marking mode, the valve sets the request attribute `"org.henbru.antidos.AntiDoS"` with a string containing the *monitorName*. Requests from IP addresses matching *alwaysForbiddenIPs* are always marked, but not blocked.
 
-# Multi-instance configurations
+# Multi-Instance Configurations
 
-In some occasions it might be useful to use different configurations for different parts of your application or some IP address ranges. This can not be accomplished today with a single valve / monitor instance. From version 1.1 on it is possible to use more then one instance of the valve / monitor. The parameter *monitorName* is necessary to separate the configurations. It is possible to use blocking and marking valves in conjuction. Here we expand the previous example and add a second valve instance:
+In some scenarios, it can be useful to apply different rules to different parts of your application or different client IP ranges. While a single valve/monitor instance cannot do this alone, version 1.1 introduced support for running multiple valve instances concurrently.
+
+The *monitorName* parameter is required to keep the configurations distinct. Blocking and marking valves can also be combined. Here is an example with two valve instances:
 
         <Valve className="org.henbru.antidos.AntiDoSValve"
                 monitorName="TEST VALVE"
@@ -363,16 +357,16 @@ In some occasions it might be useful to use different configurations for differe
                 shareOfRetainedFormerRequests="0"
         />
 
-The second valve only monitors requests to */valvetest2* and imposes a stricter limitation. Give it a try, in the logs you will see the different log messages from the two valves. 
+The second valve only monitors requests to `/valvetest2` and applies a stricter limit. In the server logs, you will see separate messages from each valve instance.
 
-Possible applications for multi-instance configurations:
+Use cases for multi-instance configurations:
 
-*Trying out a new configuration:* 
+*Testing a new configuration:*
 
-In this case you add the new configuration in simulation mode to see how it behaves. To keep your server protected you leave the current configuration active until you switch to the new configuration.
+You can run a new configuration alongside the active one in simulation mode to evaluate how it behaves under real traffic. This keeps your server protected while you fine-tune the new rules before switching over.
 
-*Allowing higher access rates for 'friendly' servers:* 
+*Allowing higher rate limits for trusted partner servers:*
 
-If you have known servers accessing your service with a higher rate than you would like to allow everyone else you might use two valves: Your first valve defines the (lower) limits you let everyone use. In *alwaysAllowedIPs* we place the addresses of the known servers, this makes the first valve ignore requests from this servers.
-
-In the second value we define the more generous limits we impose on the known servers. We will also impose these limits on everyone else, but the other servers are already limited by the first valve, so this does not matter.
+If known partners need to access your service at higher rates than public users, you can use two valves:
+1. The first valve enforces the standard (stricter) limit for general traffic. In *alwaysAllowedIPs*, you whitelist the trusted partner IPs so this valve ignores them.
+2. The second valve defines the higher limit intended for those partners. While this limit technically applies to all traffic, public clients will have already been constrained by the first valve.
