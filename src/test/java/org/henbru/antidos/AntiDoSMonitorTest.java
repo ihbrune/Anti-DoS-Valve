@@ -199,4 +199,28 @@ class AntiDoSMonitorTest {
 		assertTrue(mon.registerAndCheckRequest("123.456.789.000"));
 	}
 
+	@Test
+	void testIsCounterBlocked() {
+		AntiDoSMonitor mon = new AntiDoSMonitor("TEST IS BLOCKED", 10, 5, 30, 2, (float) 0.5);
+
+		// Not registered yet
+		assertFalse(mon.isCounterBlocked("10.0.0.1"));
+
+		// 1 request (allowed)
+		assertTrue(mon.registerAndCheckRequest("10.0.0.1"));
+		assertFalse(mon.isCounterBlocked("10.0.0.1"));
+
+		// 2 requests (limit reached, but allowed)
+		assertTrue(mon.registerAndCheckRequest("10.0.0.1"));
+		assertFalse(mon.isCounterBlocked("10.0.0.1"));
+
+		// 3 requests (exceeded limit: blocked)
+		assertFalse(mon.registerAndCheckRequest("10.0.0.1"));
+		assertTrue(mon.isCounterBlocked("10.0.0.1"));
+
+		// Other IP remains unblocked
+		assertFalse(mon.isCounterBlocked("10.0.0.2"));
+	}
+
 }
+

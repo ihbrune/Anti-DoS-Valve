@@ -203,6 +203,24 @@ public class AntiDoSMonitor {
 	}
 
 	/**
+	 * Checks whether a counter is currently blocked/locked in the current slot
+	 * without modifying any counts or creating new counters.
+	 * 
+	 * @param counterName The counter name (e.g. IP address or subnet)
+	 * @return <code>true</code> if the counter is currently locked in the current slot
+	 * @throws IllegalArgumentException If parameter is null or empty
+	 */
+	public boolean isCounterBlocked(String counterName) throws IllegalArgumentException {
+		if (counterName == null || counterName.isEmpty()) {
+			throw new IllegalArgumentException("Counter name must not be null or empty");
+		}
+
+		AntiDoSSlot currentSlot = provideCurrentSlot();
+		AntiDoSCounter counter = currentSlot.getCounterIfExists(counterName);
+		return counter != null && counter.isLocked();
+	}
+
+	/**
 	 * 
 	 * @return Provides the current slot and creates it, if it does not yet exist
 	 */

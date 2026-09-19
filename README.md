@@ -108,6 +108,33 @@ Besides knowing your normal traffic profile, it is also important to estimate th
 
 Once you have identified these values, you can craft your valve configuration using the parameters described below. To assist with calculations, a browser-based configuration helper is available in the repository: [**anti-dos-valve-config-helper.html**](https://github.com/ihbrune/Anti-DoS-Valve/blob/master/anti-dos-valve-config-helper.html).
 
+## Request Evaluation Pipeline
+
+When an incoming HTTP request reaches the valve, it is evaluated sequentially through the following decision pipeline:
+
+1. **Static Blacklist (`alwaysForbiddenIPs`)**: Does the client IP address match the regular expression pattern? &rarr; **Block (HTTP error code)**.  
+   *(Evaluated directly on the individual client IP address string; request is not counted in the dynamic rate monitor).*
+2. **Static Whitelist (`alwaysAllowedIPs`)**: Does the client IP address match the regular expression pattern? &rarr; **Allow**.  
+   *(Evaluated directly on the individual client IP address string; request is not counted in the dynamic rate monitor).*
+3. **Path Whitelist (`nonRelevantPaths`)**: Does the request URI match `nonRelevantPaths`? &rarr; **Allow**.  
+   *(Request is not counted; bypasses rate limiting for health-checks, status endpoints, or static error pages even if the client IP or its subnet is currently blocked).*
+4. **Detector Match (`relevantPaths`)**: Does the request URI match `relevantPaths`?
+   * **Yes**: The client IP is resolved to a counter key — either the **individual IP address** or the **aggregated CIDR subnet** (if `ipv4SubnetMask` or `ipv6SubnetMask` is configured). The request is registered and counted in the rate limiting monitor. If the threshold for this counter key is exceeded (or already locked) &rarr; **Block**; otherwise &rarr; **Allow**.
+5. **Server-Wide Enforcement (`serverWideBlocking`)**: If the URI does *not* match `relevantPaths`, but `serverWideBlocking="true"` is enabled:
+   * Is the client IP address (or its aggregated subnet) currently blocked by the monitor? &rarr; **Block** (read-only check; the request is not counted and creates no cache entries).
+6. **Default / Unmonitored**: If the URI does *not* match `relevantPaths` and the client IP address (or its subnet) is not blocked &rarr; **Allow** (neither counted nor blocked).
+
+### Scope: Individual IP Address vs. Subnet Aggregation
+
+Understanding how the valve identifies clients is important when subnet aggregation is active:
+
+* **Static IP Rules (`alwaysForbiddenIPs`, `alwaysAllowedIPs`)**:  
+  Operate strictly on the **individual client IP address** string, before and independently of any subnet mask settings. This makes it possible, for example, to whitelist a specific administrator workstation (`192.168.1.99`) so it is never locked out, even if its entire parent subnet (`192.168.1.0/24`) is currently blocked by dynamic rate limiting.
+* **Dynamic Rate Limiting (`AntiDoSMonitor`) & `serverWideBlocking`**:  
+  Operate on the resolved counter key:
+  * **Individual IP address (default)** when no subnet mask is defined (`ipv4SubnetMask=32`, `ipv6SubnetMask=128`).
+  * **Aggregated subnet** when a subnet mask is defined (e.g. `ipv4SubnetMask="24"` or `ipv6SubnetMask="64"`). In this case, all client IPs within that subnet share a common request quota, and when the limit is exceeded, the entire subnet is blocked together.
+
 ## monitorName
 
 An optional parameter to name the monitor instance (available since version 1.1). If you run more than one instance of the valve/monitor, this parameter is required to distinguish their configurations. It is also included in log messages. See the section on multi-instance configurations below.
@@ -148,6 +175,18 @@ This is especially helpful when an entire path hierarchy should be protected, ex
 
 * `relevantPaths="/myexampleapi/.*"` protects all API endpoints.
 * `nonRelevantPaths="/myexampleapi/status"` keeps only the health/status endpoint accessible without rate limiting. Without `nonRelevantPaths`, you would have to enumerate every other endpoint individually in `relevantPaths`, and remember to update it whenever a new endpoint is deployed. With `nonRelevantPaths`, newly added endpoints are protected automatically.
+
+## serverWideBlocking (optional)
+
+Available since version 1.5.0 (default: `false`): Decouples the **detection scope** (where requests are counted) from the **enforcement scope** (where the block takes effect).
+
+By default (`serverWideBlocking="false"`), only requests matching `relevantPaths` are monitored, and only requests matching `relevantPaths` can be blocked. In this default mode, if an attacker exceeds the limit on a protected endpoint (e.g. `/login`), they are blocked on `/login`, but could still access other unmonitored URLs.
+
+When `serverWideBlocking="true"` is enabled:
+* The rate limit counters still only count requests on `relevantPaths` (avoiding false positives from uncritical endpoints or static assets).
+* However, once an IP address (or its aggregated subnet) exceeds the threshold on `relevantPaths` and is blocked, that block is enforced **server-wide across all paths**.
+* Requests to unmonitored paths from non-blocked clients are passed through without increasing rate limit counters or consuming cache space.
+* Whitelisted paths in `nonRelevantPaths` (such as `/status`, `/health`, or error assets) and `alwaysAllowedIPs` still remain accessible.
 
 The following settings control dynamic rate limiting in the Anti-DoS Monitor. Keep in mind that some of these parameters interact with each other:
 

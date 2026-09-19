@@ -803,6 +803,23 @@
                 placeholder="e.g. .*\.(css|js|png|jpg|ico)$ or /api/status">
             </div>
 
+            <!-- 5b. serverWideBlocking -->
+            <div class="field-group">
+              <div class="field-header">
+                <label for="serverWideBlocking" class="field-label">serverWideBlocking</label>
+                <span class="badge badge-optional">Optional</span>
+              </div>
+              <div class="field-desc">When enabled (<code>serverWideBlocking="true"</code>), an IP address (or
+                aggregated subnet) blocked on <code>relevantPaths</code> is blocked across all server paths. Requests to
+                unmonitored paths are not counted, but blocked clients are rejected. Whitelisted paths in
+                <code>nonRelevantPaths</code> remain accessible.
+              </div>
+              <label class="checkbox-label">
+                <input type="checkbox" id="serverWideBlocking" name="serverWideBlocking">
+                <span>Enable server-wide blocking (<code>serverWideBlocking="true"</code>)</span>
+              </label>
+            </div>
+
             <!-- 6. maxIPCacheSize -->
             <div class="field-group">
               <div class="field-header">
@@ -1149,6 +1166,7 @@
           allowedRequestsPerSlot: 5,
           numberOfSlots: 10,
           shareOfRetainedFormerRequests: 0,
+          serverWideBlocking: false,
           monitorMode: 'BLOCKING',
           simulationMode: false,
           httpStatusCode: 429
@@ -1164,6 +1182,7 @@
           alwaysAllowedIPs: '127\\.0\\.0\\.1',
           relevantPaths: '.*(jsp|/api/|/app/).*',
           nonRelevantPaths: '.*\\.(css|js|png|jpg|gif|svg|ico|woff2?)$',
+          serverWideBlocking: false,
           maxIPCacheSize: 500,
           maxBlockedIPCacheSize: 500,
           ipv4SubnetMask: '',
@@ -1187,6 +1206,7 @@
           alwaysAllowedIPs: '127\\.0\\.0\\.1',
           relevantPaths: '.*',
           nonRelevantPaths: '.*\\.(css|js|png|jpg|ico)$',
+          serverWideBlocking: false,
           maxIPCacheSize: 1000,
           maxBlockedIPCacheSize: 1000,
           ipv4SubnetMask: '24',
@@ -1210,6 +1230,7 @@
           alwaysAllowedIPs: '',
           relevantPaths: '.*/swa.*',
           nonRelevantPaths: '',
+          serverWideBlocking: false,
           maxIPCacheSize: 100,
           maxBlockedIPCacheSize: '',
           ipv4SubnetMask: '',
@@ -1234,6 +1255,7 @@
       { key: 'alwaysAllowedIPs', isRequired: false, defaultVal: '' },
       { key: 'relevantPaths', isRequired: false, defaultVal: '' },
       { key: 'nonRelevantPaths', isRequired: false, defaultVal: '' },
+      { key: 'serverWideBlocking', isRequired: false, defaultVal: false, isBoolean: true },
       { key: 'maxIPCacheSize', isRequired: true, defaultVal: 50 },
       { key: 'maxBlockedIPCacheSize', isRequired: false, defaultVal: '' },
       { key: 'ipv4SubnetMask', isRequired: false, defaultVal: '' },

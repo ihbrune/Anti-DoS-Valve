@@ -120,6 +120,7 @@ class AntiDoSAsyncEvictionTest {
 		// Hard cap is ceil(10 * 1.2) = 12
 		AntiDoSSlot slot = new AntiDoSSlot("TEST_HARD_CAP", "s1", maxCounters);
 		slot.setAsyncEviction(true);
+		slot.setEvictionExecutor(r -> {}); // Prevent background eviction race while populating test entries
 
 		// Manually populate up to hard cap (12 entries)
 		for (int i = 1; i <= 12; i++) {
@@ -182,6 +183,7 @@ class AntiDoSAsyncEvictionTest {
 		// Active capacity 50, Blocked capacity 10 -> Hard cap for blocked is ceil(10 * 1.2) = 12
 		AntiDoSSlot slot = new AntiDoSSlot("BLOCKED_HARD_CAP", "s1", 50, 10);
 		slot.setAsyncEviction(true);
+		slot.setEvictionExecutor(r -> {}); // Prevent background eviction race while populating test entries
 
 		// Fill blockedCounters up to hard-cap (12 entries)
 		for (int i = 1; i <= 12; i++) {

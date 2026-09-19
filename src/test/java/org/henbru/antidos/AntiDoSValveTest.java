@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -535,6 +536,141 @@ class AntiDoSValveTest {
 
 		// Whitelisted IP in same subnet is still allowed
 		assertTrue(valve.isRequestAllowed("192.168.1.99", "/api"));
+	}
+
+	@Test
+	void testServerWideBlockingDisabledByDefault() {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "SERVER_WIDE_DEFAULT_TEST");
+		valve.setAllowedRequestsPerSlot(2);
+		valve.setRelevantPaths("/login.*");
+		assertNull(valve.reloadMonitor());
+		assertFalse(valve.isServerWideBlocking());
+
+		// 2 requests allowed on /login
+		assertTrue(valve.isRequestAllowed("192.168.1.5", "/login"));
+		assertTrue(valve.isRequestAllowed("192.168.1.5", "/login"));
+		// 3rd request blocked on /login
+		assertFalse(valve.isRequestAllowed("192.168.1.5", "/login"));
+
+		// By default (serverWideBlocking=false), other unmonitored paths remain accessible
+		assertTrue(valve.isRequestAllowed("192.168.1.5", "/public/index.html"));
+	}
+
+	@Test
+	void testServerWideBlockingBlocksUnmonitoredPathsWhenLocked() {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "SERVER_WIDE_BLOCK_TEST");
+		valve.setAllowedRequestsPerSlot(2);
+		valve.setRelevantPaths("/login.*");
+		valve.setServerWideBlocking(true);
+		assertNull(valve.reloadMonitor());
+		assertTrue(valve.isServerWideBlocking());
+
+		// Block IP on /login
+		assertTrue(valve.isRequestAllowed("192.168.1.10", "/login"));
+		assertTrue(valve.isRequestAllowed("192.168.1.10", "/login"));
+		assertFalse(valve.isRequestAllowed("192.168.1.10", "/login")); // locked
+
+		// Server-wide blocking is active: unmonitored paths are blocked too!
+		assertFalse(valve.isRequestAllowed("192.168.1.10", "/public/index.html"));
+		assertFalse(valve.isRequestAllowed("192.168.1.10", "/api/data"));
+
+		// Other innocent IP is NOT blocked on any path
+		assertTrue(valve.isRequestAllowed("192.168.1.20", "/public/index.html"));
+		assertTrue(valve.isRequestAllowed("192.168.1.20", "/login"));
+	}
+
+	@Test
+	void testServerWideBlockingRespectsNonRelevantPaths() {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "SERVER_WIDE_NON_REL_TEST");
+		valve.setAllowedRequestsPerSlot(1);
+		valve.setRelevantPaths("/login.*");
+		valve.setNonRelevantPaths("/status|/error.*");
+		valve.setServerWideBlocking(true);
+		assertNull(valve.reloadMonitor());
+
+		// Block IP
+		assertTrue(valve.isRequestAllowed("192.168.1.30", "/login"));
+		assertFalse(valve.isRequestAllowed("192.168.1.30", "/login")); // locked
+
+		// Regular unmonitored path is blocked:
+		assertFalse(valve.isRequestAllowed("192.168.1.30", "/other"));
+
+		// Whitelisted nonRelevantPaths remain accessible even when blocked server-wide:
+		assertTrue(valve.isRequestAllowed("192.168.1.30", "/status"));
+		assertTrue(valve.isRequestAllowed("192.168.1.30", "/error/429.html"));
+	}
+
+	@Test
+	void testServerWideBlockingDoesNotIncrementCountersOnUnmonitoredPaths() {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "SERVER_WIDE_NO_COUNT_TEST");
+		valve.setAllowedRequestsPerSlot(5);
+		valve.setRelevantPaths("/login.*");
+		valve.setServerWideBlocking(true);
+		assertNull(valve.reloadMonitor());
+
+		AntiDoSMonitor monitor = valve.provideMonitor();
+		assertNotNull(monitor);
+
+		long initialRequests = monitor.getTotalrequests();
+
+		// Requests to unmonitored path by innocent IP
+		for (int i = 0; i < 10; i++) {
+			assertTrue(valve.isRequestAllowed("192.168.1.40", "/public/asset" + i));
+		}
+
+		// Total requests in monitor MUST not have increased
+		assertEquals(initialRequests, monitor.getTotalrequests());
+		assertEquals("-", valve.getIPAddressStatus("192.168.1.40"));
+		assertFalse(valve.isIPAddressCurrentlyBlocked("192.168.1.40"));
+	}
+
+	@Test
+	void testIsIPAddressCurrentlyBlockedValidation() {
+		AntiDoSValve valve = new AntiDoSValve();
+		IllegalArgumentException exNull = assertThrows(IllegalArgumentException.class,
+				() -> valve.isIPAddressCurrentlyBlocked(null));
+		assertNotNull(exNull.getMessage());
+		IllegalArgumentException exEmpty = assertThrows(IllegalArgumentException.class,
+				() -> valve.isIPAddressCurrentlyBlocked(""));
+		assertNotNull(exEmpty.getMessage());
+	}
+
+	@Test
+	void testConcurrentProvideMonitorReturnsConsistentInstance() throws Exception {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "CONCURRENT_PROVIDE_MONITOR_TEST");
+
+		int threadCount = 20;
+		java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(threadCount);
+		java.util.concurrent.CountDownLatch startLatch = new java.util.concurrent.CountDownLatch(1);
+		java.util.concurrent.CountDownLatch doneLatch = new java.util.concurrent.CountDownLatch(threadCount);
+		AntiDoSMonitor[] instances = new AntiDoSMonitor[threadCount];
+
+		for (int i = 0; i < threadCount; i++) {
+			final int index = i;
+			executor.submit(() -> {
+				try {
+					startLatch.await();
+					instances[index] = valve.provideMonitor();
+				} catch (InterruptedException ignored) {
+				} finally {
+					doneLatch.countDown();
+				}
+			});
+		}
+
+		startLatch.countDown();
+		assertTrue(doneLatch.await(3, java.util.concurrent.TimeUnit.SECONDS));
+		executor.shutdownNow();
+
+		assertNotNull(instances[0]);
+		for (int i = 1; i < threadCount; i++) {
+			assertSame(instances[0], instances[i], "All threads must receive the exact same monitor instance");
+		}
 	}
 
 	private static void setValidAntiDoSMonitorconfiguration(AntiDoSValve valve, String monitorName) {

@@ -50,6 +50,7 @@ import jakarta.servlet.http.HttpServletResponse;
  * <li>{@link #setAlwaysForbiddenIPs(String)}
  * <li>{@link #setRelevantPaths(String)}
  * <li>{@link #setNonRelevantPaths(String)}
+ * <li>{@link #setServerWideBlocking(boolean)}
  * <li>{@link #setMaxIPCacheSize(int)}
  * <li>{@link #setMaxBlockedIPCacheSize(int)}
  * <li>{@link #setIpv4SubnetMask(int)}
@@ -133,6 +134,7 @@ public class AntiDoSValve extends ValveBase {
 	private volatile int allowedRequestsPerSlot = -1;
 	private volatile float shareOfRetainedFormerRequests = -1;
 	private volatile boolean simulationMode = false;
+	private volatile boolean serverWideBlocking = false;
 	private volatile int httpStatusCode = DEFAULT_HTTP_STATUS_CODE;
 	private volatile Boolean asyncEviction = null;
 
@@ -234,10 +236,19 @@ public class AntiDoSValve extends ValveBase {
 	 * @return might be <code>null</code> if configuration is incomplete
 	 */
 	AntiDoSMonitor provideMonitor() {
-		if (!monitors.containsKey(monitorName))
-			reloadMonitor();
+		AntiDoSMonitor monitor = monitors.get(monitorName);
+		if (monitor != null) {
+			return monitor;
+		}
 
-		return monitors.get(monitorName);
+		synchronized (monitors) {
+			monitor = monitors.get(monitorName);
+			if (monitor == null) {
+				reloadMonitor();
+				monitor = monitors.get(monitorName);
+			}
+			return monitor;
+		}
 	}
 
 
@@ -669,6 +680,23 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
+	 * @return <code>true</code> if server-wide blocking is active
+	 */
+	public boolean isServerWideBlocking() {
+		return serverWideBlocking;
+	}
+
+	/**
+	 * Controls whether an IP blocked on {@link #getRelevantPathsConfigValue()} is
+	 * blocked across all server paths.
+	 * 
+	 * @param serverWideBlocking <code>true</code> to block all server paths when limit is exceeded
+	 */
+	public void setServerWideBlocking(boolean serverWideBlocking) {
+		this.serverWideBlocking = serverWideBlocking;
+	}
+
+	/**
 	 * @return The HTTP response status code used when blocking requests
 	 */
 	public int getHttpStatusCode() {
@@ -746,7 +774,7 @@ public class AntiDoSValve extends ValveBase {
 	@Override
 	protected synchronized void stopInternal() throws LifecycleException {
 		super.stopInternal();
-		AntiDoSMonitor monitor = provideMonitor();
+		AntiDoSMonitor monitor = monitors.get(monitorName);
 		if (monitor != null) {
 			monitor.shutdown();
 		}
@@ -792,32 +820,40 @@ public class AntiDoSValve extends ValveBase {
 	 *         corresponding message is provided
 	 */
 	public String reloadMonitor() {
-		try {
-			int effectiveMaxBlockedIPCacheSize = maxBlockedIPCacheSize > 0 ? maxBlockedIPCacheSize : maxIPCacheSize;
-			AntiDoSMonitor monitor = new AntiDoSMonitor(monitorName, maxIPCacheSize, effectiveMaxBlockedIPCacheSize,
-					numberOfSlots, slotLength, allowedRequestsPerSlot, shareOfRetainedFormerRequests);
+		synchronized (monitors) {
+			try {
+				int effectiveMaxBlockedIPCacheSize = maxBlockedIPCacheSize > 0 ? maxBlockedIPCacheSize : maxIPCacheSize;
+				AntiDoSMonitor monitor = new AntiDoSMonitor(monitorName, maxIPCacheSize, effectiveMaxBlockedIPCacheSize,
+						numberOfSlots, slotLength, allowedRequestsPerSlot, shareOfRetainedFormerRequests);
 
-			if (monitorName == null)
-				monitorName = DEFAULT_MONITOR_NAME;
+				if (monitorName == null)
+					monitorName = DEFAULT_MONITOR_NAME;
 
-			if (asyncEviction != null) {
-				monitor.setAsyncEviction(asyncEviction);
+				if (asyncEviction != null) {
+					monitor.setAsyncEviction(asyncEviction);
+				}
+
+				AntiDoSMonitor old = monitors.put(monitorName, monitor);
+				if (old != null && old != monitor) {
+					old.shutdown();
+				}
+
+				if (log.isInfoEnabled()) {
+					if (isMonitorModeDefault())
+						log.info(name4logging + " is in blocking mode");
+					else if (isMonitorModeMarking())
+						log.info(name4logging + " is in marking mode");
+
+					if (simulationMode)
+						log.info(name4logging + " is in SIMULATION MODE");
+
+					if (serverWideBlocking)
+						log.info(name4logging + " is in SERVER-WIDE BLOCKING mode");
+				}
+				return null;
+			} catch (IllegalArgumentException ex) {
+				return ex.getMessage();
 			}
-
-			monitors.put(monitorName, monitor);
-
-			if (log.isInfoEnabled()) {
-				if (isMonitorModeDefault())
-					log.info(name4logging + " is in blocking mode");
-				else if (isMonitorModeMarking())
-					log.info(name4logging + " is in marking mode");
-
-				if (simulationMode)
-					log.info(name4logging + " is in SIMULATION MODE");
-			}
-			return null;
-		} catch (IllegalArgumentException ex) {
-			return ex.getMessage();
 		}
 	}
 
@@ -857,10 +893,11 @@ public class AntiDoSValve extends ValveBase {
 	 * is finished and <code>true</code> returned as result, but the IP address is
 	 * not counted
 	 * <li>Is the request URI in the relevant paths? Calls
-	 * {@link #isRequestURIInRelevantPaths(String)}. If not returns
-	 * <code>true</code>, but the IP address is not counted
-	 * <li>Is the IP address blocked by the monitoring, which implementents the
-	 * actual rate limitation? Calls {@link #isIPAddressBlocked(String)}
+	 * {@link #isRequestURIInRelevantPaths(String)}. If <code>true</code>, the
+	 * actual rate limitation is tested via {@link #isIPAddressBlocked(String)}.
+	 * <li>If the request URI is not in the relevant paths: If {@link #isServerWideBlocking()}
+	 * is enabled and the IP is currently blocked (via {@link #isIPAddressCurrentlyBlocked(String)}),
+	 * returns <code>false</code>. Otherwise returns <code>true</code>.
 	 * </ul>
 	 *
 	 * @param ip         The IP address
@@ -892,14 +929,21 @@ public class AntiDoSValve extends ValveBase {
 			return true;
 		}
 
-		if (!isRequestURIInRelevantPaths(requestURI)) {
-			if (log.isDebugEnabled())
-				log.debug(name4logging + " Not in relevantPaths: " + requestURI);
-
-			return true;
+		if (isRequestURIInRelevantPaths(requestURI)) {
+			return !isIPAddressBlocked(ip);
 		}
 
-		return !isIPAddressBlocked(ip);
+		if (serverWideBlocking && isIPAddressCurrentlyBlocked(ip)) {
+			if (log.isDebugEnabled())
+				log.debug(name4logging + " Server-wide blocked: " + ip);
+
+			return false;
+		}
+
+		if (log.isDebugEnabled())
+			log.debug(name4logging + " Not in relevantPaths: " + requestURI);
+
+		return true;
 	}
 
 	/**
@@ -934,6 +978,27 @@ public class AntiDoSValve extends ValveBase {
 					+ (counterName.equals(ip) ? "" : " (counter: " + counterName + ")"));
 
 		return true;
+	}
+
+	/**
+	 * This method checks if an IP address is currently blocked in the internal
+	 * {@link AntiDoSMonitor} instance, without incrementing any counters or
+	 * registering a request. The method is public and can be called by JMX.
+	 * 
+	 * @param ip The IP address
+	 * @return <code>true</code> if the IP address is currently blocked, <code>false</code> otherwise
+	 * @throws IllegalArgumentException If parameter is null or empty
+	 */
+	public boolean isIPAddressCurrentlyBlocked(String ip) throws IllegalArgumentException {
+		if (ip == null || ip.isEmpty()) {
+			throw new IllegalArgumentException("IP address must not be null or empty");
+		}
+		String counterName = resolveCounterName(ip);
+		AntiDoSMonitor monitor = provideMonitor();
+		if (monitor == null) {
+			return false;
+		}
+		return monitor.isCounterBlocked(counterName);
 	}
 
 	/**
