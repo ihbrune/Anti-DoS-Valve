@@ -21,6 +21,9 @@
       --code-text: #e2e8f0;
       --radius: 8px;
       --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --success: #16a34a;
+      --danger: #dc2626;
+      --warning: #d97706;
     }
 
     * {
@@ -58,10 +61,20 @@
       font-size: 0.95rem;
     }
 
+    .subtitle a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+
+    .subtitle a:hover {
+      text-decoration: underline;
+    }
+
     .layout {
       display: grid;
       grid-template-columns: 1fr;
       gap: 24px;
+      margin-bottom: 24px;
     }
 
     @media (min-width: 900px) {
@@ -297,6 +310,370 @@
       display: block;
       margin-bottom: 4px;
     }
+
+    /* =========================================
+       TRAFFIC & ATTACK SIMULATOR SECTION
+       ========================================= */
+    .simulator-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-top: 10px;
+    }
+
+    .sim-header-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .sim-header-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .sim-controls-panel {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 18px 0 20px 0;
+    }
+
+    .sim-scenario-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .scenario-label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-right: 4px;
+    }
+
+    .scenario-btn {
+      background: #fff;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--text);
+      transition: all 0.15s ease;
+    }
+
+    .scenario-btn:hover {
+      background: #f1f5f9;
+      border-color: #94a3b8;
+    }
+
+    .scenario-btn.active {
+      background: #eff6ff;
+      border-color: var(--primary);
+      color: var(--primary);
+      box-shadow: 0 0 0 1px var(--primary);
+    }
+
+    .sim-inputs-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
+    @media (min-width: 640px) {
+      .sim-inputs-grid {
+        grid-template-columns: 1.2fr 1fr;
+      }
+    }
+
+    .sim-input-group label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #1e293b;
+    }
+
+    .range-and-number {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .range-and-number input[type="range"] {
+      flex: 1;
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+
+    .range-and-number input[type="number"] {
+      width: 90px;
+      text-align: right;
+    }
+
+    .input-hint {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+      font-family: var(--font-mono);
+    }
+
+    /* KPI Grid */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+
+    .kpi-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      position: relative;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    }
+
+    .kpi-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .kpi-value {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #0f172a;
+      font-family: var(--font-mono);
+      margin-bottom: 4px;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    .kpi-desc {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      line-height: 1.35;
+    }
+
+    .kpi-badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-top: 6px;
+    }
+
+    .badge-strict {
+      background: #fef3c7;
+      color: #b45309;
+    }
+
+    .badge-balanced {
+      background: #dbeafe;
+      color: #1d4ed8;
+    }
+
+    .badge-generous {
+      background: #dcfce7;
+      color: #15803d;
+    }
+
+    /* Chart Section */
+    .chart-box {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+
+    .chart-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .chart-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #1e293b;
+    }
+
+    .chart-legend {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .legend-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+    }
+
+    .legend-allowed {
+      background: #22c55e;
+    }
+
+    .legend-blocked {
+      background: #ef4444;
+    }
+
+    .legend-line {
+      width: 16px;
+      height: 2px;
+      background: #0284c7;
+      border-top: 2px dashed #0284c7;
+    }
+
+    .chart-svg-container {
+      width: 100%;
+      overflow-x: auto;
+      position: relative;
+    }
+
+    svg.sim-chart {
+      display: block;
+      width: 100%;
+      height: 240px;
+      background: #fafafa;
+      border-radius: 6px;
+    }
+
+    .chart-tooltip {
+      position: absolute;
+      display: none;
+      background: rgba(15, 23, 42, 0.95);
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-family: var(--font-mono);
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 10;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+      line-height: 1.4;
+    }
+
+    /* Table Section */
+    details.sim-details {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    summary.sim-summary {
+      padding: 12px 16px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      user-select: none;
+      background: #f8fafc;
+      transition: background 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    summary.sim-summary:hover {
+      background: #f1f5f9;
+    }
+
+    .sim-table-wrap {
+      max-height: 380px;
+      overflow-y: auto;
+      overflow-x: auto;
+    }
+
+    table.sim-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+      font-family: var(--font-mono);
+      text-align: right;
+    }
+
+    table.sim-table th {
+      background: #f1f5f9;
+      color: #475569;
+      font-weight: 600;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+
+    table.sim-table td {
+      padding: 6px 10px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+
+    table.sim-table tr:hover {
+      background: #f8fafc;
+    }
+
+    table.sim-table tr.row-blocked {
+      background: rgba(254, 242, 242, 0.45);
+    }
+
+    table.sim-table td.col-center {
+      text-align: center;
+    }
+
+    .status-badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      font-family: system-ui, sans-serif;
+    }
+
+    .status-badge.blocked {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+
+    .status-badge.allowed {
+      background: #dcfce7;
+      color: #15803d;
+    }
   </style>
 </head>
 
@@ -308,6 +685,8 @@
         Create and customize your valve configuration for Apache Tomcat (<code>server.xml</code> or
         <code>context.xml</code>). Further explanations are available in the <a target="_blank"
           href="https://github.com/ihbrune/Anti-DoS-Valve/">README</a>.
+        To test the impact of your settings against different traffic patterns, check out the <a
+          href="#simulatorSection">Traffic &amp; Attack Simulator</a> at the bottom of the page.
       </p>
     </header>
 
@@ -563,6 +942,144 @@
         </div>
       </div>
     </div>
+
+    <!-- =========================================
+         TRAFFIC & ATTACK SIMULATOR SECTION
+         ========================================= -->
+    <div class="simulator-card" id="simulatorSection">
+      <div class="sim-header-row">
+        <div class="sim-header-title">
+          <span>Traffic &amp; Attack Simulator</span>
+          <span class="badge" style="background:#dbeafe;color:#1e40af;">Live Calculation</span>
+        </div>
+        <div style="font-size:0.8rem;color:var(--text-muted);">
+          Replaces the <a
+            href="https://docs.google.com/spreadsheets/d/1eztKVnzjW9xVVia1hDAeLaiiKRAGfNKRFx5lvKkbLBs/edit?usp=sharing"
+            target="_blank" style="color:var(--primary);">Google Sheets model</a>.
+        </div>
+      </div>
+      <p class="field-desc">
+        Simulates how the Anti-DoS Monitor reacts to traffic spikes or sustained DoS attacks over 49 consecutive time
+        slots.
+        Calculations automatically update whenever you tweak valve settings above or select a preset!
+      </p>
+
+      <!-- Scenario Presets & Inputs -->
+      <div class="sim-controls-panel">
+        <div class="sim-scenario-bar">
+          <span class="scenario-label">Traffic Scenarios:</span>
+          <button type="button" class="scenario-btn active" id="scenHeavy"
+            onclick="applyScenario(12, 5000, 'scenHeavy')">
+            Heavy Attack (12 req/s, 5k reqs)
+          </button>
+          <button type="button" class="scenario-btn" id="scenVisitor" onclick="applyScenario(2, 30, 'scenVisitor')">
+            Normal Visitor (2 req/s, 30 reqs)
+          </button>
+          <button type="button" class="scenario-btn" id="scenCrawler" onclick="applyScenario(7, 2000, 'scenCrawler')">
+            Aggressive Crawler (7 req/s, 2k reqs)
+          </button>
+          <button type="button" class="scenario-btn" id="scenFlood" onclick="applyScenario(40, 10000, 'scenFlood')">
+            DoS Flood (40 req/s, 10k reqs)
+          </button>
+        </div>
+
+        <div class="sim-inputs-grid">
+          <div class="sim-input-group">
+            <label for="simRate">Client Request Rate (requests / sec)</label>
+            <div class="range-and-number">
+              <input type="range" id="simRateSlider" min="0.5" max="100" step="0.5" value="12">
+              <input type="number" id="simRate" min="0.1" max="1000" step="any" value="12">
+            </div>
+            <span class="input-hint" id="simReqPerSlotHint">Calculated: 120 reqs / slot</span>
+          </div>
+          <div class="sim-input-group">
+            <label for="simTotal">Total Requests in Traffic Burst</label>
+            <input type="number" id="simTotal" min="1" max="100000" step="1" value="5000">
+            <span class="input-hint">Total volume of requests sent by the test client</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI Dashboard Cards -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Sustainable Request Rate</div>
+          <div class="kpi-value" id="kpiSustainableRate">--</div>
+          <div class="kpi-desc">Max continuous rate an IP can send forever without triggering a block.</div>
+          <div class="kpi-badge" id="kpiSustainableBadge">--</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Complete Lockout Point</div>
+          <div class="kpi-value" id="kpiCompleteBlock">--</div>
+          <div class="kpi-desc">Cumulative requests sent until 0 requests are allowed in a slot.</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Blocked Requests</div>
+          <div class="kpi-value" id="kpiBlockedReqs">--</div>
+          <div class="kpi-desc">Total requests denied across 49 simulated time slots.</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Blocked Slots</div>
+          <div class="kpi-value" id="kpiBlockedSlots">--</div>
+          <div class="kpi-desc">Time slots where the request threshold was exceeded.</div>
+        </div>
+      </div>
+
+      <!-- Timeline Bar Chart -->
+      <div class="chart-box">
+        <div class="chart-header">
+          <div class="chart-title">Traffic Profile &amp; Limiting Timeline (49 Slots)</div>
+          <div class="chart-legend">
+            <div class="legend-item">
+              <span class="legend-color legend-allowed"></span>
+              <span>Allowed Requests</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color legend-blocked"></span>
+              <span>Blocked Requests</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-line"></span>
+              <span>Slot Limit (Threshold)</span>
+            </div>
+          </div>
+        </div>
+        <div class="chart-svg-container">
+          <div class="chart-tooltip" id="chartTooltip"></div>
+          <svg class="sim-chart" id="simChart" viewBox="0 0 980 230" preserveAspectRatio="none"></svg>
+        </div>
+      </div>
+
+      <!-- Detailed Slot Table (Collapsible) -->
+      <details class="sim-details" id="simDetails">
+        <summary class="sim-summary">
+          <span>Show Detailed Slot Calculation Table (49 Slots)</span>
+          <span style="font-size:0.8rem;color:var(--text-muted);font-weight:normal;">Click to expand</span>
+        </summary>
+        <div class="sim-table-wrap">
+          <table class="sim-table">
+            <thead>
+              <tr>
+                <th class="col-center">Slot #</th>
+                <th>Start (s)</th>
+                <th>Attempted</th>
+                <th>Retained</th>
+                <th>Sum Evaluated</th>
+                <th class="col-center">Blocked?</th>
+                <th>Allowed</th>
+                <th>Blocked</th>
+              </tr>
+            </thead>
+            <tbody id="simTableBody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </div>
   </div>
 
   <script>
@@ -693,6 +1210,20 @@
     const optOnlyChanged = document.getElementById('optOnlyChanged');
     const presetsContainer = document.getElementById('presetsContainer');
 
+    // Simulator Elements
+    const simRateSlider = document.getElementById('simRateSlider');
+    const simRate = document.getElementById('simRate');
+    const simTotal = document.getElementById('simTotal');
+    const simReqPerSlotHint = document.getElementById('simReqPerSlotHint');
+    const kpiSustainableRate = document.getElementById('kpiSustainableRate');
+    const kpiSustainableBadge = document.getElementById('kpiSustainableBadge');
+    const kpiCompleteBlock = document.getElementById('kpiCompleteBlock');
+    const kpiBlockedReqs = document.getElementById('kpiBlockedReqs');
+    const kpiBlockedSlots = document.getElementById('kpiBlockedSlots');
+    const simChart = document.getElementById('simChart');
+    const chartTooltip = document.getElementById('chartTooltip');
+    const simTableBody = document.getElementById('simTableBody');
+
     let currentPresetId = null;
 
     // Render presets in UI
@@ -728,6 +1259,7 @@
 
       renderPresets();
       updateXml();
+      runSimulation();
     }
 
     // Generate XML code
@@ -802,15 +1334,302 @@
       });
     }
 
+    // ==========================================
+    // SIMULATION ENGINE (Google Sheet Model)
+    // ==========================================
+    function applyScenario(rate, total, btnId) {
+      simRate.value = rate;
+      simRateSlider.value = rate;
+      simTotal.value = total;
+
+      document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('active'));
+      const activeBtn = document.getElementById(btnId);
+      if (activeBtn) activeBtn.classList.add('active');
+
+      runSimulation();
+    }
+
+    simRateSlider.addEventListener('input', () => {
+      simRate.value = simRateSlider.value;
+      document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('active'));
+      runSimulation();
+    });
+
+    simRate.addEventListener('input', () => {
+      simRateSlider.value = simRate.value;
+      document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('active'));
+      runSimulation();
+    });
+
+    simTotal.addEventListener('input', () => {
+      document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('active'));
+      runSimulation();
+    });
+
+    function runSimulation() {
+      // 1. Inputs from Valve settings (Fallback defaults if empty)
+      const slotLength = Math.max(1, parseInt(document.getElementById('slotLength').value, 10) || 10);
+      const allowedRequestsPerSlot = Math.max(1, parseInt(document.getElementById('allowedRequestsPerSlot').value, 10) || 100);
+      const shareOfRetained = Math.max(0, parseFloat(document.getElementById('shareOfRetainedFormerRequests').value) || 0);
+      const numberOfSlots = Math.max(1, parseInt(document.getElementById('numberOfSlots').value, 10) || 20);
+
+      // 2. Scenario Inputs
+      const rate = Math.max(0, parseFloat(simRate.value) || 0);
+      const totalRequests = Math.max(0, parseInt(simTotal.value, 10) || 0);
+
+      // Requests per slot = rate * slotLength
+      const requestsPerSlot = Math.round(rate * slotLength);
+      simReqPerSlotHint.textContent = `Calculated: ${requestsPerSlot.toLocaleString()} reqs / slot (${rate} req/s × ${slotLength}s)`;
+
+      // 3. Sustainable request rate
+      // Formula from Google Sheet: allowedRequestsPerSlot / (slotLength * (1 + shareOfRetainedFormerRequests))
+      const sustainableRate = allowedRequestsPerSlot / (slotLength * (1 + shareOfRetained));
+      kpiSustainableRate.textContent = `${sustainableRate.toFixed(2)} req/s`;
+
+      if (sustainableRate < 1.0) {
+        kpiSustainableBadge.textContent = 'Very Strict (Watch False Positives)';
+        kpiSustainableBadge.className = 'kpi-badge badge-strict';
+      } else if (sustainableRate <= 10.0) {
+        kpiSustainableBadge.textContent = 'Balanced Protection';
+        kpiSustainableBadge.className = 'kpi-badge badge-balanced';
+      } else {
+        kpiSustainableBadge.textContent = 'Generous Limit';
+        kpiSustainableBadge.className = 'kpi-badge badge-generous';
+      }
+
+      // 4. Simulate 49 consecutive time slots (matching the Google Sheet)
+      const TOTAL_SLOTS = 49;
+      const slotData = [];
+      let cumulativeAccesses = 0;
+      let totalBlockedRequests = 0;
+      let blockedSlotsCount = 0;
+      let completeBlockPoint = null;
+
+      for (let i = 1; i <= TOTAL_SLOTS; i++) {
+        const startTime = (i - 1) * slotLength;
+
+        // New accesses attempted in this slot (bounded by total remaining requests)
+        const remaining = Math.max(0, totalRequests - cumulativeAccesses);
+        const attempted = Math.min(requestsPerSlot, remaining);
+        cumulativeAccesses += attempted;
+
+        // Retained old requests formula from Google Sheet:
+        // =ROUND(SUM(lookback E) * shareOfRetained / numberOfSlots)
+        let retained = 0;
+        if (i > 1 && shareOfRetained > 0 && numberOfSlots > 0) {
+          let sumOfCounts = 0;
+          const lookback = Math.min(i - 1, numberOfSlots);
+          for (let k = 1; k <= lookback; k++) {
+            sumOfCounts += slotData[i - 1 - k].attempted;
+          }
+          retained = Math.round((sumOfCounts * shareOfRetained) / numberOfSlots);
+        }
+
+        // Allowed new requests in slot: max(0, allowedRequestsPerSlot - retained)
+        // (In Google Sheet column J: =IF(allowedRequestsPerSlot >= retained, allowedRequestsPerSlot - retained, 0))
+        const allowedThresholdInSlot = Math.max(0, allowedRequestsPerSlot - retained);
+
+        // Blocked requests in slot: IF(allowedThresholdInSlot >= attempted, 0, attempted - allowedThresholdInSlot)
+        let allowed = 0;
+        let blocked = 0;
+        if (allowedThresholdInSlot >= attempted) {
+          allowed = attempted;
+          blocked = 0;
+        } else {
+          allowed = allowedThresholdInSlot;
+          blocked = attempted - allowedThresholdInSlot;
+        }
+
+        const sumEvaluated = attempted + retained;
+        const isBlocked = sumEvaluated > allowedRequestsPerSlot;
+        if (isBlocked) {
+          blockedSlotsCount++;
+        }
+        totalBlockedRequests += blocked;
+
+        // Complete block point: when allowedThresholdInSlot reaches 0
+        if (completeBlockPoint === null && allowedThresholdInSlot === 0 && attempted > 0) {
+          // Total requests until complete lockout
+          completeBlockPoint = {
+            requests: cumulativeAccesses - attempted,
+            slot: i
+          };
+        }
+
+        slotData.push({
+          slotNumber: i,
+          startTime,
+          attempted,
+          retained,
+          sumEvaluated,
+          isBlocked,
+          allowed,
+          blocked
+        });
+      }
+
+      // 5. Update KPI Cards
+      if (completeBlockPoint) {
+        kpiCompleteBlock.innerHTML = `${completeBlockPoint.requests.toLocaleString()} reqs <small style="font-size:0.85rem;font-weight:400;color:var(--text-muted);">(Slot #${completeBlockPoint.slot})</small>`;
+      } else {
+        kpiCompleteBlock.textContent = 'Never (No total lockout)';
+      }
+
+      const totalAttempted = Math.min(cumulativeAccesses, totalRequests);
+      const blockedPercent = totalAttempted > 0 ? Math.round((totalBlockedRequests / totalAttempted) * 100) : 0;
+      kpiBlockedReqs.innerHTML = `${totalBlockedRequests.toLocaleString()} <small style="font-size:0.9rem;font-weight:400;color:var(--text-muted);">(${blockedPercent}%)</small>`;
+
+      const blockedSlotsPercent = Math.round((blockedSlotsCount / TOTAL_SLOTS) * 100);
+      kpiBlockedSlots.innerHTML = `${blockedSlotsCount} / ${TOTAL_SLOTS} <small style="font-size:0.9rem;font-weight:400;color:var(--text-muted);">(${blockedSlotsPercent}%)</small>`;
+
+      // 6. Render Chart & Table
+      renderChart(slotData, allowedRequestsPerSlot);
+      renderTable(slotData);
+    }
+
+    // SVG Chart Rendering
+    function renderChart(slotData, threshold) {
+      const svg = simChart;
+      const width = 980;
+      const height = 230;
+      const padding = { top: 20, right: 20, bottom: 30, left: 50 };
+
+      const chartW = width - padding.left - padding.right;
+      const chartH = height - padding.top - padding.bottom;
+
+      // Find max Y
+      let maxY = threshold * 1.25;
+      slotData.forEach(d => {
+        if (d.attempted > maxY) maxY = d.attempted;
+      });
+      if (maxY <= 0) maxY = 100;
+      maxY = Math.ceil(maxY * 1.1);
+
+      const n = slotData.length;
+      const barSlotW = chartW / n;
+      const barW = Math.max(3, barSlotW - 3);
+
+      let svgHtml = '';
+
+      // Grid lines & Y-axis labels
+      const yTicks = 4;
+      for (let i = 0; i <= yTicks; i++) {
+        const val = Math.round((maxY / yTicks) * i);
+        const y = padding.top + chartH - (val / maxY) * chartH;
+        svgHtml += `
+          <line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="#e2e8f0" stroke-width="1" />
+          <text x="${padding.left - 8}" y="${y + 4}" font-size="10" fill="#64748b" text-anchor="end" font-family="monospace">${val}</text>
+        `;
+      }
+
+      // Dashed Threshold Line (allowedRequestsPerSlot)
+      const threshY = padding.top + chartH - (threshold / maxY) * chartH;
+      if (threshY >= padding.top && threshY <= padding.top + chartH) {
+        svgHtml += `
+          <line x1="${padding.left}" y1="${threshY}" x2="${width - padding.right}" y2="${threshY}" stroke="#0284c7" stroke-width="2" stroke-dasharray="4,4" />
+          <text x="${width - padding.right - 4}" y="${threshY - 5}" font-size="10" font-weight="bold" fill="#0284c7" text-anchor="end">Threshold (${threshold})</text>
+        `;
+      }
+
+      // Bars
+      slotData.forEach((d, idx) => {
+        const x = padding.left + idx * barSlotW + (barSlotW - barW) / 2;
+
+        const allowedH = (d.allowed / maxY) * chartH;
+        const blockedH = (d.blocked / maxY) * chartH;
+
+        const allowedY = padding.top + chartH - allowedH;
+        const blockedY = allowedY - blockedH;
+
+        // Group for hover tooltip
+        svgHtml += `
+          <g class="chart-bar-group" data-idx="${idx}">
+            ${d.allowed > 0 ? `<rect x="${x}" y="${allowedY}" width="${barW}" height="${allowedH}" fill="#22c55e" rx="1" />` : ''}
+            ${d.blocked > 0 ? `<rect x="${x}" y="${blockedY}" width="${barW}" height="${blockedH}" fill="#ef4444" rx="1" />` : ''}
+            <rect x="${x}" y="${padding.top}" width="${barW}" height="${chartH}" fill="transparent" />
+          </g>
+        `;
+
+        // X-axis label every 5 slots
+        if (d.slotNumber === 1 || d.slotNumber % 5 === 0 || d.slotNumber === 49) {
+          svgHtml += `
+            <text x="${x + barW / 2}" y="${height - 10}" font-size="10" fill="#64748b" text-anchor="middle" font-family="monospace">#${d.slotNumber}</text>
+          `;
+        }
+      });
+
+      svg.innerHTML = svgHtml;
+
+      // Attach Tooltip events
+      const barGroups = svg.querySelectorAll('.chart-bar-group');
+      barGroups.forEach(bg => {
+        bg.addEventListener('mouseenter', (e) => {
+          const idx = parseInt(bg.getAttribute('data-idx'), 10);
+          const d = slotData[idx];
+          chartTooltip.style.display = 'block';
+          chartTooltip.innerHTML = `
+            <strong>Slot #${d.slotNumber} (t = ${d.startTime}s)</strong><br>
+            • Attempted: <b>${d.attempted.toLocaleString()}</b><br>
+            • Retained from past: <b>${d.retained.toLocaleString()}</b><br>
+            • Sum evaluated: <b>${d.sumEvaluated.toLocaleString()}</b><br>
+            • Status: <b style="color:${d.isBlocked ? '#f87171' : '#4ade80'}">${d.isBlocked ? 'BLOCKED' : 'ALLOWED'}</b><br>
+            • Allowed in slot: <b>${d.allowed.toLocaleString()}</b><br>
+            • Blocked in slot: <b>${d.blocked.toLocaleString()}</b>
+          `;
+          updateTooltipPos(e);
+        });
+
+        bg.addEventListener('mousemove', updateTooltipPos);
+        bg.addEventListener('mouseleave', () => {
+          chartTooltip.style.display = 'none';
+        });
+      });
+    }
+
+    function updateTooltipPos(e) {
+      const containerRect = simChart.parentElement.getBoundingClientRect();
+      const x = e.clientX - containerRect.left + 15;
+      const y = e.clientY - containerRect.top - 30;
+      chartTooltip.style.left = `${Math.min(x, containerRect.width - 200)}px`;
+      chartTooltip.style.top = `${Math.max(10, y)}px`;
+    }
+
+    // Render Table
+    function renderTable(slotData) {
+      let rows = '';
+      slotData.forEach(d => {
+        const rowClass = d.isBlocked ? 'row-blocked' : '';
+        const badge = d.isBlocked
+          ? '<span class="status-badge blocked">Blocked</span>'
+          : '<span class="status-badge allowed">Allowed</span>';
+
+        rows += `
+          <tr class="${rowClass}">
+            <td class="col-center">#${d.slotNumber}</td>
+            <td>${d.startTime}s</td>
+            <td>${d.attempted.toLocaleString()}</td>
+            <td>${d.retained.toLocaleString()}</td>
+            <td>${d.sumEvaluated.toLocaleString()}</td>
+            <td class="col-center">${badge}</td>
+            <td style="color:#15803d;font-weight:600;">${d.allowed.toLocaleString()}</td>
+            <td style="color:#b91c1c;font-weight:600;">${d.blocked.toLocaleString()}</td>
+          </tr>
+        `;
+      });
+      simTableBody.innerHTML = rows;
+    }
+
     // Form change event listeners
     form.addEventListener('input', () => {
       currentPresetId = null;
       renderPresets();
       updateXml();
+      runSimulation();
     });
 
     form.addEventListener('change', () => {
       updateXml();
+      runSimulation();
     });
 
     optOnlyChanged.addEventListener('change', () => {
