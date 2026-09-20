@@ -698,6 +698,39 @@ class AntiDoSValveTest {
 		assertEquals(-1, reloaded.getMaxBlockLogsPerSecond());
 	}
 
+	@Test
+	void testProvideRetryAfterSeconds() {
+		AntiDoSValve valve = new AntiDoSValve();
+		valve.setSlotLength(10);
+		assertEquals(10, valve.getSlotLength());
+
+		// At start of slot (t = 0s)
+		assertEquals(10, valve.provideRetryAfterSeconds(0L));
+
+		// 1 second in (t = 1s -> 9s remaining)
+		assertEquals(9, valve.provideRetryAfterSeconds(1000L));
+
+		// Mid-slot with fractional second (t = 5.5s -> 4.5s remaining, ceil to 5s)
+		assertEquals(5, valve.provideRetryAfterSeconds(5500L));
+
+		// 9 seconds in (t = 9s -> 1s remaining)
+		assertEquals(1, valve.provideRetryAfterSeconds(9000L));
+
+		// 9.999 seconds in (t = 9.999s -> 1ms remaining, ceil to 1s minimum)
+		assertEquals(1, valve.provideRetryAfterSeconds(9999L));
+
+		// Slot roll at t = 10s -> fresh 10s slot
+		assertEquals(10, valve.provideRetryAfterSeconds(10000L));
+
+		// 1ms into new slot at t = 10.001s -> ceil to 10s
+		assertEquals(10, valve.provideRetryAfterSeconds(10001L));
+
+		// Unconfigured fallback (default to 30s)
+		AntiDoSValve unconfigured = new AntiDoSValve();
+		assertEquals(30, unconfigured.provideRetryAfterSeconds(0L));
+		assertEquals(20, unconfigured.provideRetryAfterSeconds(10000L));
+	}
+
 	private static void setValidAntiDoSMonitorconfiguration(AntiDoSValve valve, String monitorName) {
 		valve.setMonitorName(monitorName);
 		valve.setNumberOfSlots(10);

@@ -624,6 +624,10 @@ public class AntiDoSValve extends ValveBase {
 		this.slotLength = slotLength;
 	}
 
+	public int getSlotLength() {
+		return slotLength;
+	}
+
 	/**
 	 * 
 	 * @param allowedRequestsPerSlot The number of requests from one IP address
@@ -752,6 +756,10 @@ public class AntiDoSValve extends ValveBase {
 
 		if (isMonitorModeDefault()) {
 			// block request:
+			if (httpStatusCode == DEFAULT_HTTP_STATUS_CODE) {
+				int retryAfter = provideRetryAfterSeconds();
+				response.setHeader("Retry-After", Integer.toString(retryAfter));
+			}
 			response.sendError(httpStatusCode);
 		} else {
 			// mark request:
@@ -894,6 +902,48 @@ public class AntiDoSValve extends ValveBase {
 
 	public int getMaxBlockLogsPerSecond() {
 		return this.maxBlockLogsPerSecond;
+	}
+
+	/**
+	 * Calculates the remaining seconds until the current time slot ends for use in
+	 * the {@code Retry-After} HTTP response header (RFC 6585).
+	 *
+	 * @return Remaining seconds in current slot, at least 1.
+	 */
+	public int provideRetryAfterSeconds() {
+		return provideRetryAfterSeconds(getTimeInMillis());
+	}
+
+	/**
+	 * Calculates the remaining seconds until the current time slot ends relative to
+	 * the provided timestamp.
+	 *
+	 * @param currentTimeMillis The timestamp in milliseconds
+	 * @return Remaining seconds in current slot, at least 1.
+	 */
+	public int provideRetryAfterSeconds(long currentTimeMillis) {
+		int len = this.slotLength;
+		if (len <= 0) {
+			AntiDoSMonitor monitor = provideMonitor();
+			if (monitor != null && monitor.getSlotLength() > 0) {
+				len = monitor.getSlotLength() / 1000;
+			}
+		}
+		if (len <= 0) {
+			len = 30; // fallback if unconfigured
+		}
+		long slotLengthMillis = len * 1000L;
+		long currentSlotStartMillis = (currentTimeMillis / slotLengthMillis) * slotLengthMillis;
+		long remainingMillis = (currentSlotStartMillis + slotLengthMillis) - currentTimeMillis;
+		int remainingSec = (int) Math.ceil(remainingMillis / 1000.0);
+		return Math.max(1, remainingSec);
+	}
+
+	/**
+	 * Provides current time in milliseconds. Can be overridden in tests.
+	 */
+	protected long getTimeInMillis() {
+		return System.currentTimeMillis();
 	}
 
 	/**

@@ -292,6 +292,8 @@ Available since version 1.1.0, this option simulates the valve's behavior withou
 
 Since version 1.4.1, this optional parameter defines the HTTP status code returned when a request is blocked in *blocking* mode. The default is `429` (*Too Many Requests*, per RFC 6585). To retain the legacy behavior of earlier versions, set `httpStatusCode="403"` (*Forbidden*). Any valid HTTP status code between 100 and 599 can be specified.
 
+When responding with status `429`, the valve automatically includes an RFC 6585 / RFC 9110 compliant `Retry-After: <seconds>` HTTP header indicating the exact remaining seconds until the current time slot ends (at least 1 second). This tells well-behaved API clients, mobile apps, and crawlers how long to wait before retrying, preventing futile immediate retries during the blocked window.
+
 # Sample Configurations
 
 The configuration shown above can serve as a starting point for your production setup.

@@ -356,6 +356,13 @@ public class AntiDoSMonitor {
 	}
 
 	/**
+	 * @return The slot length in milliseconds.
+	 */
+	public int getSlotLength() {
+		return this.slotLength;
+	}
+
+	/**
 	 * @return Current maximum block logs emitted per second, or negative if throttling is disabled.
 	 */
 	public int getMaxBlockLogsPerSecond() {
