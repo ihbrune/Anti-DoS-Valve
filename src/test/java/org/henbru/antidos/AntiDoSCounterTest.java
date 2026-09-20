@@ -1,6 +1,8 @@
 package org.henbru.antidos;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
@@ -12,44 +14,47 @@ class AntiDoSCounterTest {
 	@Test
 	void testCount() {
 		AntiDoSCounter rec = new AntiDoSCounter();
-		assertEquals(0, rec.getCount().get());
-		rec.getCount().addAndGet(1);		
-		assertEquals(1, rec.getCount().get());
-		rec.getCount().addAndGet(1);		
-		assertEquals(2, rec.getCount().get());
-		rec.getCount().set(1);		
-		assertEquals(1, rec.getCount().get());
-		rec.getCount().set(100);		
-		assertEquals(100, rec.getCount().get());		
+		assertEquals(0, rec.getCount());
+		rec.incrementCount();
+		assertEquals(1, rec.getCount());
+		rec.addAndGetCount(1);
+		assertEquals(2, rec.getCount());
+		rec.setCount(1);
+		assertEquals(1, rec.getCount());
+		rec.setCount(100);
+		assertEquals(100, rec.getCount());
 	}
-	
+
 	@Test
 	void testRetainedCounts() {
 		AntiDoSCounter rec = new AntiDoSCounter();
-		assertEquals(-1, rec.getRetainedCounts().get());
-		rec.getRetainedCounts().addAndGet(1);		
-		assertEquals(0, rec.getRetainedCounts().get());
-		rec.getRetainedCounts().addAndGet(1);		
-		assertEquals(1, rec.getRetainedCounts().get());
-		rec.getRetainedCounts().addAndGet(1);		
-		assertEquals(2, rec.getRetainedCounts().get());
-		rec.getRetainedCounts().set(1);		
-		assertEquals(1, rec.getRetainedCounts().get());
-		
+		assertEquals(-1, rec.getRetainedCounts());
+		rec.addAndGetRetainedCounts(1);
+		assertEquals(0, rec.getRetainedCounts());
+		rec.addAndGetRetainedCounts(1);
+		assertEquals(1, rec.getRetainedCounts());
+		rec.addAndGetRetainedCounts(1);
+		assertEquals(2, rec.getRetainedCounts());
+		rec.setRetainedCounts(1);
+		assertEquals(1, rec.getRetainedCounts());
+		assertTrue(rec.compareAndSetRetainedCounts(1, 5));
+		assertEquals(5, rec.getRetainedCounts());
+		assertFalse(rec.compareAndSetRetainedCounts(1, 10));
+		assertEquals(5, rec.getRetainedCounts());
 	}
 
 	@Test
 	void testCountCombined() {
 		AntiDoSCounter rec = new AntiDoSCounter();
 		assertEquals(0, rec.getCountCombined());
-		
-		rec.getCount().addAndGet(1);		
+
+		rec.incrementCount();
 		assertEquals(1, rec.getCountCombined());
-		
-		rec.getCount().addAndGet(1);		
+
+		rec.addAndGetCount(1);
 		assertEquals(2, rec.getCountCombined());
-		
-		rec.getRetainedCounts().set(123);		
+
+		rec.setRetainedCounts(123);
 		assertEquals(125, rec.getCountCombined());
-	}	
+	}
 }

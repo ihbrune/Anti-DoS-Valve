@@ -1,7 +1,7 @@
 package org.henbru.antidos;
 
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 
 /**
  * Copyright 2026 Henning Brune
@@ -20,20 +20,35 @@ import java.util.concurrent.atomic.AtomicLong;
  * 
  *************************
  *
- * Instances of this class are used to count occasions of similar events. For
- * example requests coming form the same IP address
+ * Instances of this class are used to count occasions of similar events, for
+ * example requests coming from the same IP address.
+ * 
+ * Uses VarHandle on primitive volatile fields to achieve zero-object-wrapper
+ * atomic operations for minimal memory footprint and zero GC pressure.
  * 
  * @author Henning
  *
  */
 public class AntiDoSCounter {
 
-	private final AtomicInteger count = new AtomicInteger(0);
+	private static final VarHandle COUNT;
+	private static final VarHandle RETAINED_COUNTS;
+	private static final VarHandle ACCESS_ORDER;
 
-	private final AtomicInteger retainedCounts = new AtomicInteger(-1);
+	static {
+		try {
+			MethodHandles.Lookup l = MethodHandles.lookup();
+			COUNT = l.findVarHandle(AntiDoSCounter.class, "count", int.class);
+			RETAINED_COUNTS = l.findVarHandle(AntiDoSCounter.class, "retainedCounts", int.class);
+			ACCESS_ORDER = l.findVarHandle(AntiDoSCounter.class, "accessOrder", long.class);
+		} catch (ReflectiveOperationException e) {
+			throw new ExceptionInInitializerError(e);
+		}
+	}
 
-	private final AtomicLong accessOrder = new AtomicLong(0);
-
+	private volatile int count = 0;
+	private volatile int retainedCounts = -1;
+	private volatile long accessOrder = 0;
 	private volatile boolean locked = false;
 
 	/**
@@ -42,58 +57,107 @@ public class AntiDoSCounter {
 	 * @param order A monotonic sequence number
 	 */
 	public void touch(long order) {
-		this.accessOrder.set(order);
+		ACCESS_ORDER.setVolatile(this, order);
 	}
 
 	/**
 	 * @return The sequence number when this counter was last accessed
 	 */
 	public long getAccessOrder() {
-		return accessOrder.get();
+		return accessOrder;
 	}
 
 	/**
+	 * Atomically increments the request count by 1.
 	 * 
-	 * @return This counter is to be used for counting current accesses
+	 * @return The updated count
 	 */
-	public AtomicInteger getCount() {
+	public int incrementCount() {
+		return (int) COUNT.getAndAdd(this, 1) + 1;
+	}
+
+	/**
+	 * Atomically adds the given delta to the request count.
+	 * 
+	 * @param delta The value to add
+	 * @return The updated count
+	 */
+	public int addAndGetCount(int delta) {
+		return (int) COUNT.getAndAdd(this, delta) + delta;
+	}
+
+	/**
+	 * @return The current access count
+	 */
+	public int getCount() {
 		return count;
 	}
 
 	/**
+	 * Sets the count directly to the specified value.
 	 * 
-	 * @return This counter can be used to store access numbers taken from
-	 *         previous measurement intervals (slots). It's initial value is -1,
-	 *         in this way a distinction can be made if an initialization
-	 *         already took place
+	 * @param value The new count
 	 */
-	public AtomicInteger getRetainedCounts() {
+	public void setCount(int value) {
+		COUNT.setVolatile(this, value);
+	}
+
+	/**
+	 * @return Access numbers taken from previous measurement intervals (slots).
+	 *         Initial value is -1 to distinguish uninitialized state.
+	 */
+	public int getRetainedCounts() {
 		return retainedCounts;
 	}
 
 	/**
+	 * Sets the retained counts to the specified value.
 	 * 
-	 * @return The sum of {@link #getCount()} and {@link #getRetainedCounts()}
+	 * @param value The new retained count
 	 */
-	public int getCountCombined() {
-		int countCurrent = count.get();
-		int countRetained = retainedCounts.get();
-
-		return countRetained < 0 ? countCurrent : countCurrent + countRetained;
+	public void setRetainedCounts(int value) {
+		RETAINED_COUNTS.setVolatile(this, value);
 	}
 
 	/**
+	 * Atomically adds the given delta to the retained counts.
 	 * 
-	 * @return Query of the lock status. If the default is <code>false</code>,
-	 *         you can set it to <code>true</code> using {@link #lock()}
+	 * @param delta The value to add
+	 * @return The updated retained count
+	 */
+	public int addAndGetRetainedCounts(int delta) {
+		return (int) RETAINED_COUNTS.getAndAdd(this, delta) + delta;
+	}
+
+	/**
+	 * Atomically sets the retained count to newValue if current value == expected.
 	 * 
+	 * @param expected The expected current value
+	 * @param newValue The new value to set
+	 * @return true if successful
+	 */
+	public boolean compareAndSetRetainedCounts(int expected, int newValue) {
+		return RETAINED_COUNTS.compareAndSet(this, expected, newValue);
+	}
+
+	/**
+	 * @return The sum of current count and retained counts
+	 */
+	public int getCountCombined() {
+		int current = count;
+		int retained = retainedCounts;
+		return retained < 0 ? current : current + retained;
+	}
+
+	/**
+	 * @return Query of the lock status
 	 */
 	public boolean isLocked() {
 		return locked;
 	}
 
 	/**
-	 * Using this method, the counter can be flagged as locked
+	 * Flags this counter as locked.
 	 */
 	public void lock() {
 		this.locked = true;
@@ -101,13 +165,6 @@ public class AntiDoSCounter {
 
 	@Override
 	public String toString() {
-		StringBuilder sb = new StringBuilder();
-
-		sb.append("Count:").append(getCount()).append(" Retained:")
-				.append(getRetainedCounts()).append(" Locked:")
-				.append(locked ? "yes" : "no");
-
-		return sb.toString();
+		return "Count:" + getCount() + " Retained:" + getRetainedCounts() + " Locked:" + (locked ? "yes" : "no");
 	}
-
 }

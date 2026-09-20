@@ -20,12 +20,12 @@ class AntiDoSSlotTest {
 		assertNotNull(slot.getCounter("123.456.789.000"));
 
 		AntiDoSCounter rec = slot.getCounter("123.456.789.000");
-		rec.getCount().set(11);
+		rec.setCount(11);
 		AntiDoSCounter rec2 = slot.getCounter("123.456.789.000");
 		assertEquals(11, rec.getCountCombined());
 		assertEquals(11, rec2.getCountCombined());
 
-		rec2.getCount().addAndGet(1);
+		rec2.incrementCount();
 		assertEquals(12, rec.getCountCombined());
 		assertEquals(12, rec2.getCountCombined());
 
@@ -85,13 +85,13 @@ class AntiDoSSlotTest {
 		AntiDoSSlot slot = new AntiDoSSlot("TD1", "xx", 3);
 
 		AntiDoSCounter rec1 = slot.getCounter("123.456.789.001");
-		rec1.getCount().set(11);
+		rec1.setCount(11);
 		AntiDoSCounter rec2 = slot.getCounter("123.456.789.002");
-		rec2.getCount().set(12);
+		rec2.setCount(12);
 		AntiDoSCounter rec3 = slot.getCounter("123.456.789.003");
-		rec3.getCount().set(13);
+		rec3.setCount(13);
 		AntiDoSCounter rec4 = slot.getCounter("123.456.789.004");
-		rec4.getCount().set(14);
+		rec4.setCount(14);
 
 		return slot;
 	}
@@ -105,16 +105,16 @@ class AntiDoSSlotTest {
 		AntiDoSSlot slot = new AntiDoSSlot("TD2", "xx", 3);
 
 		AntiDoSCounter rec1 = slot.getCounter("123.456.789.001");
-		rec1.getCount().set(11);
+		rec1.setCount(11);
 		AntiDoSCounter rec2 = slot.getCounter("123.456.789.002");
-		rec2.getCount().set(12);
+		rec2.setCount(12);
 
 		slot.getCounter("123.456.789.001");
 
 		AntiDoSCounter rec3 = slot.getCounter("123.456.789.003");
-		rec3.getCount().set(13);
+		rec3.setCount(13);
 		AntiDoSCounter rec4 = slot.getCounter("123.456.789.004");
-		rec4.getCount().set(14);
+		rec4.setCount(14);
 
 		return slot;
 	}
@@ -168,7 +168,7 @@ class AntiDoSSlotTest {
 	void testBlockedCounterCountIncrement() {
 		AntiDoSSlot slot = new AntiDoSSlot("TEST", "slot1", 2, 2);
 		AntiDoSCounter c1 = slot.getCounter("1.1.1.1");
-		c1.getCount().set(10);
+		c1.setCount(10);
 		c1.lock();
 		slot.blockCounter("1.1.1.1", c1);
 
@@ -176,7 +176,7 @@ class AntiDoSSlotTest {
 		AntiDoSCounter c1Retrieved = slot.getCounter("1.1.1.1");
 		assertSame(c1, c1Retrieved);
 		assertTrue(c1Retrieved.isLocked());
-		c1Retrieved.getCount().addAndGet(1);
-		assertEquals(11, c1Retrieved.getCount().get());
+		c1Retrieved.incrementCount();
+		assertEquals(11, c1Retrieved.getCount());
 	}
 }

@@ -270,7 +270,7 @@ class AntiDoSAsyncEvictionTest {
 		// 13th IP hits hard cap
 		AntiDoSCounter transientCounter = slot.getCounter("client-overflow");
 		assertNotNull(transientCounter);
-		assertEquals(0, transientCounter.getRetainedCounts().get(),
+		assertEquals(0, transientCounter.getRetainedCounts(),
 				"Transient counter under hard-cap must have retainedCounts initialized to 0 to skip multi-slot scans");
 	}
 }

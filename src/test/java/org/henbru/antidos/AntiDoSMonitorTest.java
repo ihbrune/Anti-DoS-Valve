@@ -45,8 +45,8 @@ class AntiDoSMonitorTest {
 		mon.registerAndCheckRequest("123.456.789.000");
 		AntiDoSCounter ip = mon.provideCurrentCounter("123.456.789.000");
 		assertNotNull(ip);
-		assertEquals(1, ip.getCount().get());
-		assertEquals(0, ip.getRetainedCounts().get());
+		assertEquals(1, ip.getCount());
+		assertEquals(0, ip.getRetainedCounts());
 
 		mon.registerAndCheckRequest("123.456.789.001");
 		mon.registerAndCheckRequest("123.456.789.001");
@@ -56,8 +56,8 @@ class AntiDoSMonitorTest {
 		mon.registerAndCheckRequest("123.456.789.001");
 		AntiDoSCounter ip2 = mon.provideCurrentCounter("123.456.789.001");
 		assertNotNull(ip2);
-		assertEquals(6, ip2.getCount().get());
-		assertEquals(0, ip2.getRetainedCounts().get());
+		assertEquals(6, ip2.getCount());
+		assertEquals(0, ip2.getRetainedCounts());
 
 		// New Slot:
 		mon.referencetime += slotLength * 1000 + 1;
@@ -70,17 +70,17 @@ class AntiDoSMonitorTest {
 		mon.registerAndCheckRequest("123.456.789.000");
 		ip = mon.provideCurrentCounter("123.456.789.000");
 		assertNotNull(ip);
-		assertEquals(1, ip.getCount().get());
+		assertEquals(1, ip.getCount());
 		int alte1 = Math.round(1 * anteil / (mon.getNumberOfActiveSlots() - 1));
-		assertEquals(alte1, ip.getRetainedCounts().get());
+		assertEquals(alte1, ip.getRetainedCounts());
 
 		mon.registerAndCheckRequest("123.456.789.001");
 		mon.registerAndCheckRequest("123.456.789.001");
 		ip2 = mon.provideCurrentCounter("123.456.789.001");
 		assertNotNull(ip2);
-		assertEquals(2, ip2.getCount().get());
+		assertEquals(2, ip2.getCount());
 		int alte2 = Math.round(6 * anteil / (mon.getNumberOfActiveSlots() - 1));
-		assertEquals(alte2, ip2.getRetainedCounts().get());
+		assertEquals(alte2, ip2.getRetainedCounts());
 
 		// New slot:
 		mon.referencetime += slotLength * 1000 + 1;
@@ -90,18 +90,18 @@ class AntiDoSMonitorTest {
 		mon.registerAndCheckRequest("123.456.789.000");
 		ip = mon.provideCurrentCounter("123.456.789.000");
 		assertNotNull(ip);
-		assertEquals(1, ip.getCount().get());
+		assertEquals(1, ip.getCount());
 		alte1 = Math.round((1 + 1) * anteil
 				/ (mon.getNumberOfActiveSlots() - 1));
-		assertEquals(alte1, ip.getRetainedCounts().get());
+		assertEquals(alte1, ip.getRetainedCounts());
 
 		mon.registerAndCheckRequest("123.456.789.001");
 		ip2 = mon.provideCurrentCounter("123.456.789.001");
 		assertNotNull(ip2);
-		assertEquals(1, ip2.getCount().get());
+		assertEquals(1, ip2.getCount());
 		alte2 = Math.round((6 + 2) * anteil
 				/ (mon.getNumberOfActiveSlots() - 1));
-		assertEquals(alte2, ip2.getRetainedCounts().get());
+		assertEquals(alte2, ip2.getRetainedCounts());
 
 		// Another new slot (slot overflow):
 		mon.referencetime += slotLength * 1000 + 1;
@@ -111,18 +111,18 @@ class AntiDoSMonitorTest {
 		mon.registerAndCheckRequest("123.456.789.000");
 		ip = mon.provideCurrentCounter("123.456.789.000");
 		assertNotNull(ip);
-		assertEquals(1, ip.getCount().get());
+		assertEquals(1, ip.getCount());
 		alte1 = Math.round((1 + 1) * anteil
 				/ (mon.getNumberOfActiveSlots() - 1));
-		assertEquals(alte1, ip.getRetainedCounts().get());
+		assertEquals(alte1, ip.getRetainedCounts());
 
 		mon.registerAndCheckRequest("123.456.789.001");
 		ip2 = mon.provideCurrentCounter("123.456.789.001");
 		assertNotNull(ip2);
-		assertEquals(1, ip2.getCount().get());
+		assertEquals(1, ip2.getCount());
 		alte2 = Math.round((2 + 1) * anteil
 				/ (mon.getNumberOfActiveSlots() - 1));
-		assertEquals(alte2, ip2.getRetainedCounts().get());
+		assertEquals(alte2, ip2.getRetainedCounts());
 	}
 
 	@Test

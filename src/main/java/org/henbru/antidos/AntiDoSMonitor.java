@@ -153,16 +153,16 @@ public class AntiDoSMonitor {
 
 		// Step 2: Get and increment counter
 		AntiDoSCounter counter = slot.getCounter(counterName);
-		counter.getCount().addAndGet(1);
+		counter.incrementCount();
 
 		// Step 3: Do we have to retain counter values from previous slots?
-		if (counter.getRetainedCounts().get() == -1) {
-			if (counter.getRetainedCounts().compareAndSet(-1, -2)) {
+		if (counter.getRetainedCounts() == -1) {
+			if (counter.compareAndSetRetainedCounts(-1, -2)) {
 				try {
 					int retained = provideRetainedCountForCounter(counterName, slot.getKey());
-					counter.getRetainedCounts().set(retained);
+					counter.setRetainedCounts(retained);
 				} catch (Exception e) {
-					counter.getRetainedCounts().set(0);
+					counter.setRetainedCounts(0);
 					throw e;
 				}
 			}
@@ -292,7 +292,7 @@ public class AntiDoSMonitor {
 
 			AntiDoSCounter counter = slot.getCounterIfExists(counterName);
 			if (counter != null)
-				sumOfCounts += counter.getCount().get();
+				sumOfCounts += counter.getCount();
 		}
 
 		return otherSlotsCount > 0 && sumOfCounts > 0 ? Math.round(sumOfCounts * shareOfRetainedFormerRequests / otherSlotsCount) : 0;

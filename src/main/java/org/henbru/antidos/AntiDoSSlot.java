@@ -183,7 +183,7 @@ public class AntiDoSSlot {
 			triggerAsyncActiveEviction();
 			AntiDoSCounter transientCounter = new AntiDoSCounter();
 			transientCounter.touch(accessSequence.incrementAndGet());
-			transientCounter.getRetainedCounts().set(0);
+			transientCounter.setRetainedCounts(0);
 			return transientCounter;
 		}
 
