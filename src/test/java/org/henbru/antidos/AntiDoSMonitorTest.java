@@ -222,5 +222,43 @@ class AntiDoSMonitorTest {
 		assertFalse(mon.isCounterBlocked("10.0.0.2"));
 	}
 
+	@Test
+	void testRingBufferSlotAgingAndWrapAround() {
+		int slotLength = 10;
+		int numberOfSlots = 3;
+		AntiDoSMonitor4Test mon = new AntiDoSMonitor4Test(10, numberOfSlots, slotLength, 5, 0.5f);
+
+		// Slot 0 (t = 0)
+		mon.registerAndCheckRequest("10.0.0.1");
+		assertEquals(1, mon.getNumberOfActiveSlots());
+
+		// Advance to Slot 1 (t = 10s)
+		mon.referencetime += slotLength * 1000;
+		mon.registerAndCheckRequest("10.0.0.1");
+		assertEquals(2, mon.getNumberOfActiveSlots());
+
+		// Advance to Slot 2 (t = 20s)
+		mon.referencetime += slotLength * 1000;
+		mon.registerAndCheckRequest("10.0.0.1");
+		assertEquals(3, mon.getNumberOfActiveSlots());
+
+		// Advance to Slot 3 (t = 30s) -> wraps around, overwriting slot 0 index
+		mon.referencetime += slotLength * 1000;
+		mon.registerAndCheckRequest("10.0.0.1");
+		assertEquals(3, mon.getNumberOfActiveSlots());
+
+		// Now simulate an idle jump of 5 intervals (t = 80s)
+		mon.referencetime += slotLength * 1000 * 5;
+		// Before any new request, all existing slots in the ring buffer are older than numberOfSlots:
+		assertEquals(0, mon.getNumberOfActiveSlots());
+
+		// A new request creates a fresh slot
+		mon.registerAndCheckRequest("10.0.0.1");
+		assertEquals(1, mon.getNumberOfActiveSlots());
+		AntiDoSCounter c = mon.provideCurrentCounter("10.0.0.1");
+		assertNotNull(c);
+		// Retained count should be 0 because all prior slots expired
+		assertEquals(0, c.getRetainedCounts());
+	}
 }
 

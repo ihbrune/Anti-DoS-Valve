@@ -44,7 +44,7 @@ public class AntiDoSSlot {
 	public static final double HARD_CAP_RATIO = 1.2;
 	public static final double LOW_WATERMARK_RATIO = 0.9;
 
-	private String key;
+	private final long slotKey;
 	private String name4logging;
 
 	private final ConcurrentHashMap<String, AntiDoSCounter> activeCounters;
@@ -75,22 +75,16 @@ public class AntiDoSSlot {
 
 	/**
 	 * @param monitorName               The monitors name. Used for logging
-	 * @param key                       This attribute is used to name a slot. It should be
-	 *                                  unique for every slot used in a
-	 *                                  {@link AntiDoSMonitor} instance
+	 * @param slotKey                   Numeric slot sequence key
 	 * @param maxCountersPerSlot        The number of active counters that can be held in the
 	 *                                  slot. If exceeded, the oldest active counters are removed
 	 * @param maxBlockedCountersPerSlot The number of blocked counters that can be held in the
 	 *                                  slot. If exceeded, the oldest blocked counters are removed
-	 * @throws IllegalArgumentException Thrown if <code>key</code> is empty
 	 */
-	public AntiDoSSlot(String monitorName, String key, final int maxCountersPerSlot, final int maxBlockedCountersPerSlot)
-			throws IllegalArgumentException {
-		if (key == null || key.length() == 0)
-			throw new IllegalArgumentException();
-
+	public AntiDoSSlot(String monitorName, long slotKey, final int maxCountersPerSlot,
+			final int maxBlockedCountersPerSlot) {
 		this.name4logging = "AntiDoSSlot [" + monitorName + "]";
-		this.key = key;
+		this.slotKey = slotKey;
 		this.activeCounters = new ConcurrentHashMap<>(maxCountersPerSlot);
 		this.blockedCounters = new ConcurrentHashMap<>(maxBlockedCountersPerSlot);
 		this.maxCountersPerSlot = maxCountersPerSlot;
@@ -98,11 +92,15 @@ public class AntiDoSSlot {
 	}
 
 	/**
-	 * Legacy constructor defaulting <code>maxBlockedCountersPerSlot</code> to
+	 * Constructor defaulting <code>maxBlockedCountersPerSlot</code> to
 	 * <code>maxCountersPerSlot</code>.
 	 */
-	public AntiDoSSlot(String monitorName, String key, final int maxCountersPerSlot) throws IllegalArgumentException {
-		this(monitorName, key, maxCountersPerSlot, maxCountersPerSlot);
+	public AntiDoSSlot(String monitorName, long slotKey, final int maxCountersPerSlot) {
+		this(monitorName, slotKey, maxCountersPerSlot, maxCountersPerSlot);
+	}
+
+	public long getSlotKey() {
+		return slotKey;
 	}
 
 	/**
@@ -423,10 +421,6 @@ public class AntiDoSSlot {
 			return blocked;
 		}
 		return activeCounters.get(counterName);
-	}
-
-	public String getKey() {
-		return key;
 	}
 
 	public int getActiveCounterCount() {

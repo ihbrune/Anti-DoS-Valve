@@ -24,16 +24,16 @@ class AntiDoSAsyncEvictionTest {
 	@Test
 	void testThresholdAutoDetection() {
 		// Default threshold is 500
-		AntiDoSSlot slotSync = new AntiDoSSlot("TEST_SYNC", "s1", 500);
+		AntiDoSSlot slotSync = new AntiDoSSlot("TEST_SYNC", 1L, 500);
 		assertFalse(slotSync.isAsyncEvictionActive());
 
-		AntiDoSSlot slotAsync = new AntiDoSSlot("TEST_ASYNC", "s2", 501);
+		AntiDoSSlot slotAsync = new AntiDoSSlot("TEST_ASYNC", 2L, 501);
 		assertTrue(slotAsync.isAsyncEvictionActive());
 	}
 
 	@Test
 	void testExplicitAsyncEvictionOverride() {
-		AntiDoSSlot slot = new AntiDoSSlot("TEST_OVERRIDE", "s1", 10);
+		AntiDoSSlot slot = new AntiDoSSlot("TEST_OVERRIDE", 1L, 10);
 		assertFalse(slot.isAsyncEvictionActive());
 
 		slot.setAsyncEviction(true);
@@ -77,7 +77,7 @@ class AntiDoSAsyncEvictionTest {
 	void testAsyncBatchEvictionWithHysteresis() throws Exception {
 		int maxCounters = 20;
 		// 90% low watermark = 18 counters
-		AntiDoSSlot slot = new AntiDoSSlot("TEST_HYSTERESIS", "s1", maxCounters);
+		AntiDoSSlot slot = new AntiDoSSlot("TEST_HYSTERESIS", 1L, maxCounters);
 		slot.setAsyncEviction(true);
 
 		CountDownLatch latch = new CountDownLatch(1);
@@ -118,7 +118,7 @@ class AntiDoSAsyncEvictionTest {
 	void testCircuitBreakerHardCapProtection() {
 		int maxCounters = 10;
 		// Hard cap is ceil(10 * 1.2) = 12
-		AntiDoSSlot slot = new AntiDoSSlot("TEST_HARD_CAP", "s1", maxCounters);
+		AntiDoSSlot slot = new AntiDoSSlot("TEST_HARD_CAP", 1L, maxCounters);
 		slot.setAsyncEviction(true);
 		slot.setEvictionExecutor(r -> {}); // Prevent background eviction race while populating test entries
 
@@ -181,7 +181,7 @@ class AntiDoSAsyncEvictionTest {
 	@Test
 	void testBlockedHardCapRetainsCounterInActiveAndRemainsBlocked() {
 		// Active capacity 50, Blocked capacity 10 -> Hard cap for blocked is ceil(10 * 1.2) = 12
-		AntiDoSSlot slot = new AntiDoSSlot("BLOCKED_HARD_CAP", "s1", 50, 10);
+		AntiDoSSlot slot = new AntiDoSSlot("BLOCKED_HARD_CAP", 1L, 50, 10);
 		slot.setAsyncEviction(true);
 		slot.setEvictionExecutor(r -> {}); // Prevent background eviction race while populating test entries
 
@@ -215,7 +215,7 @@ class AntiDoSAsyncEvictionTest {
 	void testSafeEvictionDoesNotEvictTouchedCounter() throws Exception {
 		// Slot capacity 10, low-watermark is 9.
 		// Triggering at 10 will evict 1 entry (10 - 9 = 1).
-		AntiDoSSlot slot = new AntiDoSSlot("SAFE_EVICT_TEST", "s1", 10);
+		AntiDoSSlot slot = new AntiDoSSlot("SAFE_EVICT_TEST", 1L, 10);
 		slot.setAsyncEviction(true);
 
 		// Populate 10 entries. ip-1 is the oldest.
@@ -259,7 +259,7 @@ class AntiDoSAsyncEvictionTest {
 	@Test
 	void testTransientCounterUnderHardCapHasZeroRetained() {
 		int maxCounters = 10;
-		AntiDoSSlot slot = new AntiDoSSlot("TRANSIENT_RETAINED_TEST", "s1", maxCounters);
+		AntiDoSSlot slot = new AntiDoSSlot("TRANSIENT_RETAINED_TEST", 1L, maxCounters);
 		slot.setAsyncEviction(true);
 
 		// Fill to hard-cap (12)

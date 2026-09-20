@@ -1,9 +1,8 @@
 package org.henbru.antidos;
 
-import java.util.concurrent.ConcurrentNavigableMap;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.concurrent.atomic.LongAdder;
 
 import org.apache.juli.logging.Log;
@@ -43,8 +42,9 @@ public class AntiDoSMonitor {
 	private String name4logging;
 	private int maxCountersPerSlot;
 	private int maxBlockedCountersPerSlot;
-	private int numberOfSlots;
-	private final ConcurrentNavigableMap<Long, AntiDoSSlot> slots;
+	private final int numberOfSlots;
+	private final AtomicReferenceArray<AntiDoSSlot> slots;
+	private final Object slotCreationLock = new Object();
 	private int slotLength;
 	private int allowedRequestsPerSlot;
 	private float shareOfRetainedFormerRequests;
@@ -97,7 +97,7 @@ public class AntiDoSMonitor {
 		this.maxCountersPerSlot = maxCountersPerSlot;
 		this.maxBlockedCountersPerSlot = maxBlockedCountersPerSlot;
 		this.numberOfSlots = numberOfSlots;
-		this.slots = new ConcurrentSkipListMap<>();
+		this.slots = new AtomicReferenceArray<>(numberOfSlots);
 
 		// Convert slot length in milliseconds:
 		this.slotLength = slotLength * 1000;
@@ -159,7 +159,7 @@ public class AntiDoSMonitor {
 		if (counter.getRetainedCounts() == -1) {
 			if (counter.compareAndSetRetainedCounts(-1, -2)) {
 				try {
-					int retained = provideRetainedCountForCounter(counterName, slot.getKey());
+					int retained = provideRetainedCountForCounter(counterName, slot.getSlotKey());
 					counter.setRetainedCounts(retained);
 				} catch (Exception e) {
 					counter.setRetainedCounts(0);
@@ -228,26 +228,29 @@ public class AntiDoSMonitor {
 		// Integer division, which provides the same result for every
 		// millisecond within the slot length:
 		long slotKey = getTimeInMillis() / slotLength;
+		int index = (int) Math.floorMod(slotKey, numberOfSlots);
 
-		AntiDoSSlot slot = slots.get(slotKey);
-		if (slot != null) {
+		AntiDoSSlot slot = slots.get(index);
+		if (slot != null && slot.getSlotKey() == slotKey) {
 			return slot;
 		}
 
-		slot = slots.computeIfAbsent(slotKey, k -> {
-			AntiDoSSlot s = new AntiDoSSlot(monitorName, String.valueOf(k), maxCountersPerSlot,
-					maxBlockedCountersPerSlot);
-			s.setEvictionExecutor(this.evictionExecutor);
-			s.setAsyncEviction(this.asyncEviction);
-			return s;
-		});
-		pruneOldSlots();
-		return slot;
+		return rotateSlot(index, slotKey);
 	}
 
-	private void pruneOldSlots() {
-		while (slots.size() > numberOfSlots) {
-			slots.pollFirstEntry();
+	private AntiDoSSlot rotateSlot(int index, long slotKey) {
+		synchronized (slotCreationLock) {
+			AntiDoSSlot slot = slots.get(index);
+			if (slot != null && slot.getSlotKey() == slotKey) {
+				return slot;
+			}
+
+			AntiDoSSlot newSlot = new AntiDoSSlot(monitorName, slotKey, maxCountersPerSlot,
+					maxBlockedCountersPerSlot);
+			newSlot.setEvictionExecutor(this.evictionExecutor);
+			newSlot.setAsyncEviction(this.asyncEviction);
+			slots.set(index, newSlot);
+			return newSlot;
 		}
 	}
 
@@ -268,31 +271,29 @@ public class AntiDoSMonitor {
 	 * by the number of slots and multiplies everything with the value in
 	 * <code>shareOfRetainedFormerRequests</code>
 	 * 
-	 * @param counterName         The name of the counter (e. g. an IP address)
-	 * @param keyForSlotToExclude The key (@see {@link AntiDoSSlot#getKey()}) of the
-	 *                            slot whos counters are excluded from the
-	 *                            calculation. This will be the key of the current
-	 *                            slot
+	 * @param counterName    The name of the counter (e. g. an IP address)
+	 * @param currentSlotKey The key of the current slot to exclude from calculation
 	 * @throws IllegalArgumentException Thrown if parameter <code>counterName</code>
 	 *                                  is empty
 	 */
-	private int provideRetainedCountForCounter(String counterName, String keyForSlotToExclude) {
+	private int provideRetainedCountForCounter(String counterName, long currentSlotKey) {
 		if (shareOfRetainedFormerRequests == 0)
 			return 0;
 
 		int sumOfCounts = 0;
 		int otherSlotsCount = 0;
 
-		for (AntiDoSSlot slot : slots.values()) {
-			// Ignore count from excluded slot:
-			if (slot.getKey().equals(keyForSlotToExclude))
-				continue;
-
-			otherSlotsCount++;
-
-			AntiDoSCounter counter = slot.getCounterIfExists(counterName);
-			if (counter != null)
-				sumOfCounts += counter.getCount();
+		for (int i = 0; i < numberOfSlots; i++) {
+			AntiDoSSlot slot = slots.get(i);
+			if (slot != null) {
+				long age = currentSlotKey - slot.getSlotKey();
+				if (age > 0 && age < numberOfSlots) {
+					otherSlotsCount++;
+					AntiDoSCounter counter = slot.getCounterIfExists(counterName);
+					if (counter != null)
+						sumOfCounts += counter.getCount();
+				}
+			}
 		}
 
 		return otherSlotsCount > 0 && sumOfCounts > 0 ? Math.round(sumOfCounts * shareOfRetainedFormerRequests / otherSlotsCount) : 0;
@@ -312,7 +313,18 @@ public class AntiDoSMonitor {
 	 * @return The number of currently active slots in the monitor
 	 */
 	public int getNumberOfActiveSlots() {
-		return slots.size();
+		long currentSlotKey = getTimeInMillis() / slotLength;
+		int count = 0;
+		for (int i = 0; i < numberOfSlots; i++) {
+			AntiDoSSlot slot = slots.get(i);
+			if (slot != null) {
+				long age = currentSlotKey - slot.getSlotKey();
+				if (age >= 0 && age < numberOfSlots) {
+					count++;
+				}
+			}
+		}
+		return count;
 	}
 
 	/**
@@ -323,8 +335,11 @@ public class AntiDoSMonitor {
 	 */
 	public void setAsyncEviction(Boolean asyncEviction) {
 		this.asyncEviction = asyncEviction;
-		for (AntiDoSSlot slot : slots.values()) {
-			slot.setAsyncEviction(asyncEviction);
+		for (int i = 0; i < numberOfSlots; i++) {
+			AntiDoSSlot slot = slots.get(i);
+			if (slot != null) {
+				slot.setAsyncEviction(asyncEviction);
+			}
 		}
 	}
 
@@ -351,15 +366,18 @@ public class AntiDoSMonitor {
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
 
-		sb.append("#Slots: ").append(slots.size()).append("; slotLenght: ").append(slotLength)
+		sb.append("#Slots: ").append(getNumberOfActiveSlots()).append("; slotLenght: ").append(slotLength)
 				.append("; allowedRequestsPerSlot: ").append(allowedRequestsPerSlot).append("; maxCountersPerSlot: ")
 				.append(maxCountersPerSlot).append("; maxBlockedCountersPerSlot: ")
 				.append(maxBlockedCountersPerSlot).append("; shareOfRetainedFormerRequests: ")
 				.append(shareOfRetainedFormerRequests).append("\n");
 		sb.append("#total requests: ").append(getTotalrequests()).append("\n");
 
-		for (AntiDoSSlot slot : slots.values()) {
-			sb.append("Slot '").append(slot.getKey()).append("' ").append(slot.toString()).append("\n");
+		for (int i = 0; i < numberOfSlots; i++) {
+			AntiDoSSlot slot = slots.get(i);
+			if (slot != null) {
+				sb.append("Slot '").append(slot.getSlotKey()).append("' ").append(slot.toString()).append("\n");
+			}
 		}
 
 		return sb.toString();

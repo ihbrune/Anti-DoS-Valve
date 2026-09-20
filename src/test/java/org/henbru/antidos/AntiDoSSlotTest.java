@@ -14,7 +14,7 @@ class AntiDoSSlotTest {
 
 	@Test
 	void testContents() {
-		AntiDoSSlot slot = new AntiDoSSlot(null, "xx", 10);
+		AntiDoSSlot slot = new AntiDoSSlot(null, 1L, 10);
 
 		assertNull(slot.getCounterIfExists("123.456.789.000"));
 		assertNotNull(slot.getCounter("123.456.789.000"));
@@ -82,7 +82,7 @@ class AntiDoSSlotTest {
 	 * names
 	 */
 	private static AntiDoSSlot provideSlotTestdata1() {
-		AntiDoSSlot slot = new AntiDoSSlot("TD1", "xx", 3);
+		AntiDoSSlot slot = new AntiDoSSlot("TD1", 1L, 3);
 
 		AntiDoSCounter rec1 = slot.getCounter("123.456.789.001");
 		rec1.setCount(11);
@@ -102,7 +102,7 @@ class AntiDoSSlotTest {
 	 * names. The first counter name is used two times (1. und 3. call)
 	 */
 	private static AntiDoSSlot provideSlotTestdata2() {
-		AntiDoSSlot slot = new AntiDoSSlot("TD2", "xx", 3);
+		AntiDoSSlot slot = new AntiDoSSlot("TD2", 2L, 3);
 
 		AntiDoSCounter rec1 = slot.getCounter("123.456.789.001");
 		rec1.setCount(11);
@@ -122,7 +122,7 @@ class AntiDoSSlotTest {
 	@Test
 	void testTwoTierCacheSeparationAndEviction() {
 		// Active capacity 2, Blocked capacity 2
-		AntiDoSSlot slot = new AntiDoSSlot("TEST", "slot1", 2, 2);
+		AntiDoSSlot slot = new AntiDoSSlot("TEST", 1L, 2, 2);
 
 		// Add 2 active counters
 		AntiDoSCounter c1 = slot.getCounter("1.1.1.1");
@@ -166,7 +166,7 @@ class AntiDoSSlotTest {
 
 	@Test
 	void testBlockedCounterCountIncrement() {
-		AntiDoSSlot slot = new AntiDoSSlot("TEST", "slot1", 2, 2);
+		AntiDoSSlot slot = new AntiDoSSlot("TEST", 1L, 2, 2);
 		AntiDoSCounter c1 = slot.getCounter("1.1.1.1");
 		c1.setCount(10);
 		c1.lock();
