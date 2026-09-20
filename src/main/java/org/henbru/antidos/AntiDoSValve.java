@@ -137,6 +137,7 @@ public class AntiDoSValve extends ValveBase {
 	private volatile boolean serverWideBlocking = false;
 	private volatile int httpStatusCode = DEFAULT_HTTP_STATUS_CODE;
 	private volatile Boolean asyncEviction = null;
+	private volatile int maxBlockLogsPerSecond = AntiDoSLogThrottler.DEFAULT_MAX_LOGS_PER_SECOND;
 
 	/**
 	 * Monitor operation mode. If not set the default mode is used
@@ -832,6 +833,7 @@ public class AntiDoSValve extends ValveBase {
 				if (asyncEviction != null) {
 					monitor.setAsyncEviction(asyncEviction);
 				}
+				monitor.setMaxBlockLogsPerSecond(maxBlockLogsPerSecond);
 
 				AntiDoSMonitor old = monitors.put(monitorName, monitor);
 				if (old != null && old != monitor) {
@@ -873,6 +875,25 @@ public class AntiDoSValve extends ValveBase {
 
 	public Boolean getAsyncEviction() {
 		return this.asyncEviction;
+	}
+
+	/**
+	 * Programmatically controls the maximum number of block log entries allowed per second.
+	 * Negative values (&lt; 0) disable throttling completely.
+	 * 0 suppresses all block log messages.
+	 *
+	 * @param maxBlockLogsPerSecond the maximum logs per second or negative to disable throttling.
+	 */
+	public void setMaxBlockLogsPerSecond(int maxBlockLogsPerSecond) {
+		this.maxBlockLogsPerSecond = maxBlockLogsPerSecond;
+		AntiDoSMonitor monitor = provideMonitor();
+		if (monitor != null) {
+			monitor.setMaxBlockLogsPerSecond(maxBlockLogsPerSecond);
+		}
+	}
+
+	public int getMaxBlockLogsPerSecond() {
+		return this.maxBlockLogsPerSecond;
 	}
 
 	/**

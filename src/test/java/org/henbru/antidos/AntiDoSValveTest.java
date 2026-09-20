@@ -673,6 +673,31 @@ class AntiDoSValveTest {
 		}
 	}
 
+	@Test
+	void testMaxBlockLogsPerSecondConfiguration() {
+		AntiDoSValve valve = new AntiDoSValve();
+		assertEquals(AntiDoSLogThrottler.DEFAULT_MAX_LOGS_PER_SECOND, valve.getMaxBlockLogsPerSecond());
+
+		valve.setMaxBlockLogsPerSecond(5);
+		assertEquals(5, valve.getMaxBlockLogsPerSecond());
+
+		// Provide monitor and verify delegation
+		setValidAntiDoSMonitorconfiguration(valve, "LOG_THROTTLER_VALVE_TEST");
+		AntiDoSMonitor monitor = valve.provideMonitor();
+		assertNotNull(monitor);
+		assertEquals(5, monitor.getMaxBlockLogsPerSecond());
+
+		// Change after monitor exists
+		valve.setMaxBlockLogsPerSecond(-1);
+		assertEquals(-1, valve.getMaxBlockLogsPerSecond());
+		assertEquals(-1, monitor.getMaxBlockLogsPerSecond());
+
+		// Reload monitor preserves configured setting
+		valve.reloadMonitor();
+		AntiDoSMonitor reloaded = valve.provideMonitor();
+		assertEquals(-1, reloaded.getMaxBlockLogsPerSecond());
+	}
+
 	private static void setValidAntiDoSMonitorconfiguration(AntiDoSValve valve, String monitorName) {
 		valve.setMonitorName(monitorName);
 		valve.setNumberOfSlots(10);

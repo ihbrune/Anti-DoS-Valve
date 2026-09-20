@@ -52,6 +52,7 @@ public class AntiDoSMonitor {
 	private final LongAdder totalrequests = new LongAdder();
 	private final ExecutorService evictionExecutor;
 	private volatile Boolean asyncEviction = null;
+	private final AntiDoSLogThrottler blockLogThrottler = new AntiDoSLogThrottler();
 
 	/**
 	 * The constructor gets all parameters that define the function of the Anti-DoS
@@ -179,8 +180,15 @@ public class AntiDoSMonitor {
 			counter.lock();
 			slot.blockCounter(counterName, counter);
 
-			if (log.isInfoEnabled())
-				log.info(name4logging + " - Counter for '" + counterName + "': " + counter.toString());
+			if (log.isInfoEnabled()) {
+				boolean canLog = blockLogThrottler.shouldLog(getTimeInMillis(), suppressed -> {
+					log.info(name4logging + " - [LogThrottler] Suppressed " + suppressed
+							+ " block log events in the previous interval");
+				});
+				if (canLog) {
+					log.info(name4logging + " - Counter for '" + counterName + "': " + counter.toString());
+				}
+			}
 
 			return false;
 		}
@@ -343,11 +351,25 @@ public class AntiDoSMonitor {
 		}
 	}
 
-	/**
-	 * @return Current asyncEviction setting, or <code>null</code> if automatic threshold is active.
-	 */
 	public Boolean getAsyncEviction() {
 		return this.asyncEviction;
+	}
+
+	/**
+	 * @return Current maximum block logs emitted per second, or negative if throttling is disabled.
+	 */
+	public int getMaxBlockLogsPerSecond() {
+		return blockLogThrottler.getMaxLogsPerSecond();
+	}
+
+	/**
+	 * Sets the maximum number of block logs emitted per second.
+	 * Values &lt; 0 disable throttling entirely.
+	 * 
+	 * @param maxBlockLogsPerSecond The limit per second, or negative to disable throttling.
+	 */
+	public void setMaxBlockLogsPerSecond(int maxBlockLogsPerSecond) {
+		this.blockLogThrottler.setMaxLogsPerSecond(maxBlockLogsPerSecond);
 	}
 
 	/**

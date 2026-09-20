@@ -260,5 +260,27 @@ class AntiDoSMonitorTest {
 		// Retained count should be 0 because all prior slots expired
 		assertEquals(0, c.getRetainedCounts());
 	}
+
+	@Test
+	void testBlockLogThrottlingConfiguration() {
+		AntiDoSMonitor4Test mon = new AntiDoSMonitor4Test(10, 3, 30, 2, 0.5f);
+		assertEquals(AntiDoSLogThrottler.DEFAULT_MAX_LOGS_PER_SECOND, mon.getMaxBlockLogsPerSecond());
+
+		mon.setMaxBlockLogsPerSecond(1);
+		assertEquals(1, mon.getMaxBlockLogsPerSecond());
+
+		// Exceed limit so it triggers blocking logic
+		mon.registerAndCheckRequest("10.0.0.1");
+		mon.registerAndCheckRequest("10.0.0.1");
+		// 3rd request blocked -> throttler emits 1st log
+		assertFalse(mon.registerAndCheckRequest("10.0.0.1"));
+		// 4th request blocked in same interval -> throttled
+		assertFalse(mon.registerAndCheckRequest("10.0.0.1"));
+
+		// Set to -1 (disabled)
+		mon.setMaxBlockLogsPerSecond(-1);
+		assertEquals(-1, mon.getMaxBlockLogsPerSecond());
+		assertFalse(mon.registerAndCheckRequest("10.0.0.1"));
+	}
 }
 

@@ -433,3 +433,10 @@ You can run a new configuration alongside the active one in simulation mode to e
 If known partners need to access your service at higher rates than public users, you can use two valves:
 1. The first valve enforces the standard (stricter) limit for general traffic. In *alwaysAllowedIPs*, you whitelist the trusted partner IPs so this valve ignores them.
 2. The second valve defines the higher limit intended for those partners. While this limit technically applies to all traffic, public clients will have already been constrained by the first valve.
+
+# Block Log Throttling
+
+Under massive DDoS attacks with thousands of rejected requests per second, writing a log entry for every blocked request would quickly saturate disk I/O and create thread contention within the logging subsystem. To protect server stability, the valve incorporates an internal, lock-free log rate limiter that caps block messages at **20 logs per second** by default. Any surplus messages within that second are dropped, and an aggregated summary line (`Suppressed X block log events in the previous interval`) is logged at the start of the next second.
+
+*Note:* Log throttling is designed as a built-in safety net and cannot currently be configured through XML attributes in `server.xml`. (Programmatic customization via `setMaxBlockLogsPerSecond(...)` is available in code for testing or custom integrations).
+
