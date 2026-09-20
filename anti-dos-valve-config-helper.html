@@ -346,6 +346,56 @@
       margin-bottom: 4px;
     }
 
+    .memory-estimate-box {
+      margin-top: 14px;
+      padding: 12px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      color: #334155;
+    }
+
+    .memory-estimate-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .memory-estimate-title {
+      font-weight: 700;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .memory-estimate-val {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: #1e40af;
+      background: #dbeafe;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    .memory-estimate-desc {
+      color: #475569;
+      line-height: 1.45;
+      font-size: 0.78rem;
+    }
+
+    .memory-calc-hint {
+      margin-top: 8px;
+      font-size: 0.73rem;
+      color: #64748b;
+      border-top: 1px dashed #cbd5e1;
+      padding-top: 6px;
+    }
+
     /* =========================================
        TRAFFIC & ATTACK SIMULATOR SECTION
        ========================================= */
@@ -1210,6 +1260,23 @@
               <pre><code id="xmlOutput"></code></pre>
             </div>
 
+            <!-- Memory Footprint Estimate Box -->
+            <div class="memory-estimate-box" id="configMemoryEstimateBox">
+              <div class="memory-estimate-header">
+                <div class="memory-estimate-title">
+                  <span>💾</span>
+                  <span>Estimated Max Heap Footprint</span>
+                </div>
+                <span id="cfgMaxHeapFootprint" class="memory-estimate-val">~0 B</span>
+              </div>
+              <div class="memory-estimate-desc" id="cfgMaxHeapDetails">
+                Calculating...
+              </div>
+              <div class="memory-calc-hint" id="cfgBytesPerCounterNote">
+                Calculated at <strong>150 Bytes</strong> per counter on 64-bit JVM (AntiDoSCounter + IP String + Map Node).
+              </div>
+            </div>
+
             <button type="button" class="btn-copy" id="copyBtn">
               <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -1536,6 +1603,12 @@
           <div class="kpi-value" id="kpiMultiBlockedRatio">--</div>
           <div class="kpi-desc" id="kpiMultiBlockedRatioDesc">Total requests blocked vs. allowed across all 49 slots.</div>
         </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Estimated Heap Footprint</div>
+          <div class="kpi-value" id="kpiMultiHeapFootprint">--</div>
+          <div class="kpi-desc" id="kpiMultiHeapDesc">Simulated live heap across slots vs. max configured limit (~150 B / counter).</div>
+        </div>
       </div>
 
       <!-- Timeline Bar Chart -->
@@ -1729,6 +1802,21 @@
     const optOnlyChanged = document.getElementById('optOnlyChanged');
     const presetsContainer = document.getElementById('presetsContainer');
 
+    /**
+     * Estimated memory footprint per managed counter in bytes on a 64-bit JVM with Compressed OOPs:
+     * - AntiDoSCounter instance: 32 Bytes
+     * - java.lang.String IP key: ~48-64 Bytes (IPv4 / IPv6 Compact String byte[])
+     * - ConcurrentHashMap.Node: ~32 Bytes + ~5 Bytes table bucket overhead
+     * Total: ~150 Bytes per counter entry (including reference & load-factor slack).
+     */
+    const BYTES_PER_COUNTER = 150;
+
+    function formatBytes(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+
     // Simulator Elements
     const simRateSlider = document.getElementById('simRateSlider');
     const simRate = document.getElementById('simRate');
@@ -1909,6 +1997,32 @@
         const displayVal = !isNaN(effectiveBlockedVal) && effectiveBlockedVal > 0 ? effectiveBlockedVal.toLocaleString() : (!isNaN(maxIPVal) ? maxIPVal.toLocaleString() : 50);
         hintMaxBlocked.innerHTML = `<span>&#9432;</span><div><strong>Synchronous LRU Eviction${inheritedNote}:</strong> Strict cap of <strong>${displayVal}</strong> entries. Drops oldest blocked IP inline when capacity is reached.</div>`;
       }
+
+      updateMemoryEstimates();
+    }
+
+    // Calculate and display estimated maximum JVM heap memory footprint for current configuration
+    function updateMemoryEstimates() {
+      const numSlotsEl = document.getElementById('numberOfSlots');
+      const maxIPEl = document.getElementById('maxIPCacheSize');
+      const maxBlockedEl = document.getElementById('maxBlockedIPCacheSize');
+
+      if (!numSlotsEl || !maxIPEl || !cfgMaxHeapFootprint) return;
+
+      const numSlots = Math.max(1, parseInt(numSlotsEl.value, 10) || 5);
+      const maxIPVal = Math.max(1, parseInt(maxIPEl.value, 10) || 50);
+      const rawBlockedVal = maxBlockedEl ? maxBlockedEl.value.trim() : '';
+      const effectiveBlockedVal = (rawBlockedVal === '') ? maxIPVal : Math.max(1, parseInt(rawBlockedVal, 10) || maxIPVal);
+
+      const totalNominalCounters = numSlots * (maxIPVal + effectiveBlockedVal);
+      const nominalHeapBytes = totalNominalCounters * BYTES_PER_COUNTER;
+      const hardCapHeapBytes = Math.round(nominalHeapBytes * 1.2);
+
+      cfgMaxHeapFootprint.textContent = `~${formatBytes(nominalHeapBytes)}`;
+      cfgMaxHeapDetails.innerHTML = `${numSlots.toLocaleString()} slots &times; (${maxIPVal.toLocaleString()} active + ${effectiveBlockedVal.toLocaleString()} blocked) = <strong>${totalNominalCounters.toLocaleString()} total counters</strong>.<br>Nominal: <strong>~${formatBytes(nominalHeapBytes)}</strong> &bull; Peak with 120% hard-cap: <strong>~${formatBytes(hardCapHeapBytes)}</strong>.`;
+      if (cfgBytesPerCounterNote) {
+        cfgBytesPerCounterNote.innerHTML = `Calculated at <strong>${BYTES_PER_COUNTER} Bytes</strong> per counter on 64-bit JVM (AntiDoSCounter + IP String + Map Node).`;
+      }
     }
 
     // ==========================================
@@ -2031,6 +2145,11 @@
     const kpiMultiActiveState = document.getElementById('kpiMultiActiveState');
     const kpiMultiBlockedState = document.getElementById('kpiMultiBlockedState');
     const kpiMultiBlockedRatio = document.getElementById('kpiMultiBlockedRatio');
+    const kpiMultiHeapFootprint = document.getElementById('kpiMultiHeapFootprint');
+    const kpiMultiHeapDesc = document.getElementById('kpiMultiHeapDesc');
+    const cfgMaxHeapFootprint = document.getElementById('cfgMaxHeapFootprint');
+    const cfgMaxHeapDetails = document.getElementById('cfgMaxHeapDetails');
+    const cfgBytesPerCounterNote = document.getElementById('cfgBytesPerCounterNote');
 
     function updateMixedModeVisibility() {
       const isMixed = simMultiIsMixed.checked;
@@ -2502,6 +2621,18 @@
       const totalAttempted = totalFleetAllowed + totalFleetBlocked;
       const blockedPercent = totalAttempted > 0 ? Math.round((totalFleetBlocked / totalAttempted) * 100) : 0;
       kpiMultiBlockedRatio.innerHTML = `${blockedPercent}% Blocked <small style="font-size:0.85rem;font-weight:400;color:var(--text-muted);">(${totalFleetBlocked.toLocaleString()} denied)</small>`;
+
+      // Memory Footprint in Multi Fleet mode
+      const simCountersPerSlot = peakActiveIPs + peakBlockedIPs;
+      const simTotalRollingCounters = Math.min(
+        numberOfSlots * (maxIPCacheSize + maxBlockedIPCacheSize),
+        numberOfSlots * simCountersPerSlot
+      );
+      const simHeapBytes = simTotalRollingCounters * BYTES_PER_COUNTER;
+      const maxConfiguredHeapBytes = numberOfSlots * (maxIPCacheSize + maxBlockedIPCacheSize) * BYTES_PER_COUNTER;
+
+      kpiMultiHeapFootprint.innerHTML = `~${formatBytes(simHeapBytes)} <small style="font-size:0.85rem;font-weight:400;color:var(--text-muted);">(Max: ~${formatBytes(maxConfiguredHeapBytes)})</small>`;
+      kpiMultiHeapDesc.innerHTML = `Simulated ~${formatBytes(simHeapBytes)} across ${numberOfSlots} slots vs. ~${formatBytes(maxConfiguredHeapBytes)} max capacity (${BYTES_PER_COUNTER} B / counter).`;
 
       // Render Multi Chart & Table
       renderChart(slotData, 0); // 0 threshold for multi (bars show allowed vs blocked)
