@@ -106,7 +106,16 @@ Standard Unix command-line tools like `grep`, `awk`, `sort`, `uniq`, and `wc` wi
 
 Besides knowing your normal traffic profile, it is also important to estimate the request rate an attacker would need to cause an overload. The smaller the gap between regular traffic and server capacity, the more precisely the Anti-DoS Valve needs to be tuned.
 
-Once you have identified these values, you can craft your valve configuration using the parameters described below. To assist with calculations, a browser-based configuration helper is available in the repository: [**anti-dos-valve-config-helper.html**](https://github.com/ihbrune/Anti-DoS-Valve/blob/master/anti-dos-valve-config-helper.html).
+Once you have identified these values, you can craft your valve configuration using the parameters described below.
+
+## Interactive Configuration Helper & Traffic Simulator
+
+To simplify sizing, tuning, and understanding the valve's behavior, the repository includes a self-contained, browser-based tool: [**anti-dos-valve-config-helper.html**](https://github.com/ihbrune/Anti-DoS-Valve/blob/master/anti-dos-valve-config-helper.html) (open it directly in your web browser without requiring a server or external dependencies).
+
+It provides:
+* **Interactive XML Generator & Presets:** Choose from presets (e.g. Production Standard, Aggressive Bot Defense, or Marking Mode), customize parameters, and generate ready-to-use Tomcat `server.xml` snippets with live validation and cache mode diagnostics (Sync LRU vs. Async Batch).
+* **Single-Client Simulation:** Deep-dive into how the rolling slot window, lookback retention (`shareOfRetainedFormerRequests`), permitted burst capacity before the first block, and sustainable continuous rates affect an individual visitor or attacker over 49 consecutive time slots.
+* **Fleet & DDoS Multi-IP Simulation:** Model high-concurrency traffic from hundreds or thousands of simultaneous clients and botnets. It evaluates memory pressure in real time, visualizes Active and Blocked Cache fill levels against safety thresholds (including the 90% low-watermark eviction trigger and 120% circuit-breaker hard-cap), and highlights security risks such as unblocking leaks when the blocked cache overflows.
 
 ## Request Evaluation Pipeline
 

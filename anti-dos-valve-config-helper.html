@@ -709,6 +709,231 @@
       background: #dcfce7;
       color: #15803d;
     }
+
+    /* =========================================
+       SIMULATOR MODE SWITCH & MULTI-IP STYLES
+       ========================================= */
+    .sim-mode-toggle {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin: 16px 0 20px 0;
+    }
+
+    @media (min-width: 640px) {
+      .sim-mode-toggle {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .sim-mode-btn {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #f8fafc;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px 16px;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.2s ease;
+    }
+
+    .sim-mode-btn:hover {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+    }
+
+    .sim-mode-btn.active {
+      background: #eff6ff;
+      border-color: var(--primary);
+      box-shadow: 0 2px 6px rgba(37, 99, 235, 0.12);
+    }
+
+    .sim-mode-btn .mode-icon {
+      font-size: 1.6rem;
+      flex-shrink: 0;
+    }
+
+    .sim-mode-btn .mode-text strong {
+      display: block;
+      font-size: 0.95rem;
+      color: #0f172a;
+    }
+
+    .sim-mode-btn .mode-text small {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .sim-mode-btn.active .mode-text strong {
+      color: var(--primary);
+    }
+
+    /* Cache Capacity & Health Gauges */
+    .cache-gauges-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      margin: 18px 0 20px 0;
+    }
+
+    @media (min-width: 768px) {
+      .cache-gauges-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .cache-gauge-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+    }
+
+    .cache-gauge-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 8px;
+    }
+
+    .cache-gauge-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #1e293b;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .cache-gauge-nums {
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #334155;
+    }
+
+    .gauge-track-container {
+      position: relative;
+      margin: 12px 0 26px 0;
+    }
+
+    .gauge-track {
+      position: relative;
+      height: 14px;
+      background: #f1f5f9;
+      border-radius: 7px;
+      overflow: hidden;
+      border: 1px solid #e2e8f0;
+    }
+
+    .gauge-fill {
+      height: 100%;
+      border-radius: 6px;
+      transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease;
+      background: #22c55e;
+      max-width: 100%;
+    }
+
+    .gauge-fill.warning {
+      background: #f59e0b;
+    }
+
+    .gauge-fill.danger {
+      background: #ef4444;
+    }
+
+    .gauge-marker {
+      position: absolute;
+      top: -3px;
+      width: 2px;
+      height: 20px;
+      background: #64748b;
+      z-index: 2;
+    }
+
+    .gauge-marker-label {
+      position: absolute;
+      top: 20px;
+      transform: translateX(-50%);
+      font-size: 0.65rem;
+      font-weight: 600;
+      color: #64748b;
+      font-family: var(--font-mono);
+      white-space: nowrap;
+    }
+
+    .cache-gauge-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      border-top: 1px solid #f1f5f9;
+      padding-top: 8px;
+    }
+
+    .unblocking-alert {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-left: 4px solid #ef4444;
+      border-radius: 6px;
+      padding: 12px 16px;
+      font-size: 0.82rem;
+      color: #991b1b;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      line-height: 1.45;
+    }
+
+    .unblocking-alert-icon {
+      font-size: 1.25rem;
+      flex-shrink: 0;
+    }
+
+    .mixed-traffic-panel {
+      background: #fff;
+      border: 1px dashed #cbd5e1;
+      border-radius: 6px;
+      padding: 14px;
+      margin-top: 14px;
+    }
+
+    .mixed-traffic-header {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #334155;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .mixed-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    @media (min-width: 600px) {
+      .mixed-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .legend-leaked {
+      background: #f97316;
+    }
+
+    table.sim-table tr.row-leak {
+      background: rgba(254, 215, 170, 0.35);
+    }
   </style>
 </head>
 
@@ -1019,13 +1244,30 @@
         </div>
       </div>
       <p class="field-desc">
-        Simulates how the Anti-DoS Monitor reacts to traffic spikes or sustained DoS attacks over 49 consecutive time
-        slots.
+        Simulates how the Anti-DoS Monitor reacts to traffic spikes, sustained single-IP DoS attacks, or distributed Multi-IP botnets over 49 consecutive time slots.
         Calculations automatically update whenever you tweak valve settings above or select a preset!
       </p>
 
-      <!-- Scenario Presets & Inputs -->
-      <div class="sim-controls-panel">
+      <!-- Simulator Mode Selector -->
+      <div class="sim-mode-toggle">
+        <button type="button" class="sim-mode-btn active" id="modeBtnSingle" onclick="switchSimMode('single')">
+          <span class="mode-icon">👤</span>
+          <div class="mode-text">
+            <strong>Single Client (Single IP)</strong>
+            <small>Deep dive into rate limits &amp; lockout progression for 1 client</small>
+          </div>
+        </button>
+        <button type="button" class="sim-mode-btn" id="modeBtnMulti" onclick="switchSimMode('multi')">
+          <span class="mode-icon">🌐</span>
+          <div class="mode-text">
+            <strong>Fleet &amp; DDoS (Multi-IP)</strong>
+            <small>Simulate thousands of IPs, cache overflows &amp; eviction leaks</small>
+          </div>
+        </button>
+      </div>
+
+      <!-- Single-IP Controls Panel -->
+      <div class="sim-controls-panel" id="simSingleControls">
         <div class="sim-scenario-bar">
           <span class="scenario-label">Traffic Scenarios:</span>
           <button type="button" class="scenario-btn active" id="scenHeavy"
@@ -1060,13 +1302,194 @@
         </div>
       </div>
 
-      <!-- KPI Dashboard Cards -->
-      <div class="kpi-grid">
+      <!-- Multi-IP Controls Panel (Hidden by default) -->
+      <div class="sim-controls-panel" id="simMultiControls" style="display:none;">
+        <div class="sim-scenario-bar">
+          <span class="scenario-label">Multi-IP Scenarios:</span>
+          <button type="button" class="scenario-btn active" id="scenMultiBotnet"
+            onclick="applyMultiScenario(1500, 12, 'scenMultiBotnet')">
+            DDoS Botnet (1.5k Bots, 12 req/s)
+          </button>
+          <button type="button" class="scenario-btn" id="scenMultiPeak"
+            onclick="applyMultiScenario(800, 1, 'scenMultiPeak')">
+            Visitor Peak (800 Visitors, 1 req/s)
+          </button>
+          <button type="button" class="scenario-btn" id="scenMultiChurn"
+            onclick="applyMultiScenario(8000, 2, 'scenMultiChurn')">
+            Cache Churn Flood (8k IPs, 2 req/s)
+          </button>
+          <button type="button" class="scenario-btn" id="scenMultiMixed"
+            onclick="applyMultiScenario(1500, 10, 'scenMultiMixed', true)">
+            Mixed Traffic (500 Good, 1k Bots)
+          </button>
+        </div>
+
+        <div style="margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85rem; font-weight:600; color:#334155;">
+            <input type="checkbox" id="simMultiIsMixed">
+            <span>Split into Legitimate Visitors &amp; Attacking Bots</span>
+          </label>
+          <span style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono);">Continuous traffic across all 49 slots</span>
+        </div>
+
+        <!-- Uniform Fleet Inputs Grid (Hidden when split into mixed traffic) -->
+        <div class="sim-inputs-grid" id="simUniformInputsGrid">
+          <div class="sim-input-group">
+            <label for="simMultiClients">Total Unique Clients (IP Addresses)</label>
+            <div class="range-and-number">
+              <input type="range" id="simMultiClientsSlider" min="10" max="25000" step="10" value="1500">
+              <input type="number" id="simMultiClients" min="1" max="100000" step="1" value="1500">
+            </div>
+            <span class="input-hint" id="simMultiClientsHint">Simulating 1,500 concurrent IP counters</span>
+          </div>
+
+          <div class="sim-input-group">
+            <label for="simMultiRate">Average Request Rate per Client (req/s)</label>
+            <div class="range-and-number">
+              <input type="range" id="simMultiRateSlider" min="0.1" max="50" step="0.1" value="12">
+              <input type="number" id="simMultiRate" min="0.1" max="1000" step="any" value="12">
+            </div>
+            <span class="input-hint" id="simMultiFleetIngressHint">Total Ingress: 18,000 req/s across fleet</span>
+          </div>
+        </div>
+
+        <!-- Mixed Traffic Panel (Replaces uniform inputs when checked) -->
+        <div class="mixed-traffic-panel" id="simMixedPanel" style="display:none;">
+          <div class="mixed-traffic-header">
+            <span>⚖️ Traffic Composition Details (Split Fleet)</span>
+          </div>
+          <div class="mixed-grid">
+            <div class="sim-input-group">
+              <label for="simMixedGoodClients" style="color:#15803d; font-weight:700;">🟢 Legitimate Visitors</label>
+              <div style="display:flex; flex-direction:column; gap:8px;">
+                <div>
+                  <span style="font-size:0.75rem; color:var(--text-muted);">Visitor IPs count:</span>
+                  <div class="range-and-number">
+                    <input type="range" id="simMixedGoodClientsSlider" min="10" max="10000" step="10" value="500">
+                    <input type="number" id="simMixedGoodClients" min="0" max="50000" value="500">
+                  </div>
+                </div>
+                <div>
+                  <span style="font-size:0.75rem; color:var(--text-muted);">Request rate per visitor (req/s):</span>
+                  <div class="range-and-number">
+                    <input type="range" id="simMixedGoodRateSlider" min="0.1" max="20" step="0.1" value="1">
+                    <input type="number" id="simMixedGoodRate" min="0.1" max="50" step="0.1" value="1">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="sim-input-group">
+              <label for="simMixedBadClients" style="color:#b91c1c; font-weight:700;">🔴 Attacking Bots</label>
+              <div style="display:flex; flex-direction:column; gap:8px;">
+                <div>
+                  <span style="font-size:0.75rem; color:var(--text-muted);">Bot IPs count:</span>
+                  <div class="range-and-number">
+                    <input type="range" id="simMixedBadClientsSlider" min="10" max="25000" step="10" value="1000">
+                    <input type="number" id="simMixedBadClients" min="0" max="50000" value="1000">
+                  </div>
+                </div>
+                <div>
+                  <span style="font-size:0.75rem; color:var(--text-muted);">Request rate per bot (req/s):</span>
+                  <div class="range-and-number">
+                    <input type="range" id="simMixedBadRateSlider" min="0.5" max="50" step="0.5" value="15">
+                    <input type="number" id="simMixedBadRate" min="0.1" max="100" step="0.5" value="15">
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="margin-top:10px; font-size:0.78rem; font-family:var(--font-mono); color:#475569; background:#f8fafc; padding:6px 10px; border-radius:4px; border:1px solid #e2e8f0;" id="simMixedSummaryHint">
+            Combined Fleet: 1,500 clients (500 visitors + 1,000 bots) • Combined Ingress: 15,500 req/s
+          </div>
+        </div>
+      </div>
+
+      <!-- Cache Capacity & Health Gauges (Multi-IP Mode) -->
+      <div id="multiCacheGauges" style="display:none;">
+        <div class="cache-gauges-grid">
+          <!-- Active IP Cache Card -->
+          <div class="cache-gauge-card">
+            <div class="cache-gauge-header">
+              <div class="cache-gauge-title">
+                <span>Active IP Cache</span>
+                <span class="badge" id="activeGaugeModeBadge">Sync LRU</span>
+              </div>
+              <div class="cache-gauge-nums" id="activeGaugeVals">0 / 0</div>
+            </div>
+            <div class="gauge-track-container">
+              <div class="gauge-track">
+                <div class="gauge-fill" id="activeGaugeFill" style="width: 0%;"></div>
+              </div>
+              <div class="gauge-marker" style="left: 75%;" title="90% Low-Watermark Eviction Trigger">
+                <span class="gauge-marker-label">90% Evict</span>
+              </div>
+              <div class="gauge-marker" style="left: 83.33%; background: #ef4444;" title="100% Capacity">
+                <span class="gauge-marker-label" style="color:#b91c1c;">100%</span>
+              </div>
+              <div class="gauge-marker" style="left: 100%; background: #7f1d1d;" title="120% Circuit-Breaker Hard-Cap">
+                <span class="gauge-marker-label" style="color:#7f1d1d; right:0; transform:none;">120% Cap</span>
+              </div>
+            </div>
+            <div class="cache-gauge-meta">
+              <span id="activeGaugeStatus">Normal Load</span>
+              <span id="activeGaugeEvictions">0 Evictions</span>
+            </div>
+          </div>
+
+          <!-- Blocked IP Cache Card -->
+          <div class="cache-gauge-card">
+            <div class="cache-gauge-header">
+              <div class="cache-gauge-title">
+                <span>Blocked IP Cache</span>
+                <span class="badge" id="blockedGaugeModeBadge">Sync LRU</span>
+              </div>
+              <div class="cache-gauge-nums" id="blockedGaugeVals">0 / 0</div>
+            </div>
+            <div class="gauge-track-container">
+              <div class="gauge-track">
+                <div class="gauge-fill" id="blockedGaugeFill" style="width: 0%;"></div>
+              </div>
+              <div class="gauge-marker" style="left: 75%;" title="90% Low-Watermark Eviction Trigger">
+                <span class="gauge-marker-label">90% Evict</span>
+              </div>
+              <div class="gauge-marker" style="left: 83.33%; background: #ef4444;" title="100% Capacity (Overflow Leak Threshold)">
+                <span class="gauge-marker-label" style="color:#b91c1c;">100%</span>
+              </div>
+              <div class="gauge-marker" style="left: 100%; background: #7f1d1d;" title="120% Circuit-Breaker Hard-Cap">
+                <span class="gauge-marker-label" style="color:#7f1d1d; right:0; transform:none;">120% Cap</span>
+              </div>
+            </div>
+            <div class="cache-gauge-meta">
+              <span id="blockedGaugeStatus">Normal Load</span>
+              <span id="blockedGaugeLeaks">0 Leaks</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Unblocking Alert (Dynamically toggled) -->
+        <div class="unblocking-alert" id="unblockingAlertBox" style="display:none;">
+          <span class="unblocking-alert-icon">⚠️</span>
+          <div>
+            <strong>Security Alert: Blocked Cache Overflow (Unblocking Leak)!</strong><br>
+            <span id="unblockingAlertMsg">More unique IPs were blocked than fit into <code>maxBlockedIPCacheSize</code>. Older blocked attackers are evicted from the block cache and will be treated as brand-new unblocked clients! Increase <code>maxBlockedIPCacheSize</code> to prevent this.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Single-IP KPI Dashboard Cards -->
+      <div class="kpi-grid" id="singleKpiGrid">
         <div class="kpi-card">
           <div class="kpi-label">Sustainable Request Rate</div>
           <div class="kpi-value" id="kpiSustainableRate">--</div>
           <div class="kpi-desc">Max continuous rate an IP can send forever without triggering a block.</div>
           <div class="kpi-badge" id="kpiSustainableBadge">--</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">First Block Point</div>
+          <div class="kpi-value" id="kpiFirstBlockPoint">--</div>
+          <div class="kpi-desc">Requests allowed before the first request is denied (safe visitor burst capacity).</div>
         </div>
 
         <div class="kpi-card">
@@ -1088,10 +1511,37 @@
         </div>
       </div>
 
+      <!-- Multi-IP KPI Dashboard Cards (Hidden in single mode) -->
+      <div class="kpi-grid" id="multiKpiGrid" style="display:none;">
+        <div class="kpi-card">
+          <div class="kpi-label">Total Ingress Rate</div>
+          <div class="kpi-value" id="kpiMultiIngressRate">--</div>
+          <div class="kpi-desc">Combined request rate hitting the server from all simulated clients.</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Active Cache State</div>
+          <div class="kpi-value" id="kpiMultiActiveState">--</div>
+          <div class="kpi-desc" id="kpiMultiActiveDesc">Peak active unique IP counters held simultaneously.</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Blocked Cache State</div>
+          <div class="kpi-value" id="kpiMultiBlockedState">--</div>
+          <div class="kpi-desc" id="kpiMultiBlockedDesc">Peak blocked unique IPs tracked in memory.</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Fleet Protection Ratio</div>
+          <div class="kpi-value" id="kpiMultiBlockedRatio">--</div>
+          <div class="kpi-desc" id="kpiMultiBlockedRatioDesc">Total requests blocked vs. allowed across all 49 slots.</div>
+        </div>
+      </div>
+
       <!-- Timeline Bar Chart -->
       <div class="chart-box">
         <div class="chart-header">
-          <div class="chart-title">Traffic Profile &amp; Limiting Timeline (49 Slots)</div>
+          <div class="chart-title" id="simChartTitle">Traffic Profile &amp; Limiting Timeline (49 Slots)</div>
           <div class="chart-legend">
             <div class="legend-item">
               <span class="legend-color legend-allowed"></span>
@@ -1101,9 +1551,13 @@
               <span class="legend-color legend-blocked"></span>
               <span>Blocked Requests</span>
             </div>
-            <div class="legend-item">
+            <div class="legend-item" id="legendLeakedItem" style="display:none;">
+              <span class="legend-color legend-leaked"></span>
+              <span>Unblocked Leaks (Evicted)</span>
+            </div>
+            <div class="legend-item" id="legendLimitItem">
               <span class="legend-line"></span>
-              <span>Slot Limit (Threshold)</span>
+              <span id="legendLimitText">Slot Limit (Threshold)</span>
             </div>
           </div>
         </div>
@@ -1116,12 +1570,12 @@
       <!-- Detailed Slot Table (Collapsible) -->
       <details class="sim-details" id="simDetails">
         <summary class="sim-summary">
-          <span>Show Detailed Slot Calculation Table (49 Slots)</span>
+          <span id="simSummaryTitle">Show Detailed Slot Calculation Table (49 Slots)</span>
           <span style="font-size:0.8rem;color:var(--text-muted);font-weight:normal;">Click to expand</span>
         </summary>
         <div class="sim-table-wrap">
           <table class="sim-table">
-            <thead>
+            <thead id="simTableHead">
               <tr>
                 <th class="col-center">Slot #</th>
                 <th>Start (s)</th>
@@ -1282,6 +1736,7 @@
     const simReqPerSlotHint = document.getElementById('simReqPerSlotHint');
     const kpiSustainableRate = document.getElementById('kpiSustainableRate');
     const kpiSustainableBadge = document.getElementById('kpiSustainableBadge');
+    const kpiFirstBlockPoint = document.getElementById('kpiFirstBlockPoint');
     const kpiCompleteBlock = document.getElementById('kpiCompleteBlock');
     const kpiBlockedReqs = document.getElementById('kpiBlockedReqs');
     const kpiBlockedSlots = document.getElementById('kpiBlockedSlots');
@@ -1457,14 +1912,63 @@
     }
 
     // ==========================================
-    // SIMULATION ENGINE (Google Sheet Model)
+    // SIMULATION ENGINE (Single-IP & Multi-IP Fleet)
     // ==========================================
+    let currentSimMode = 'single'; // 'single' | 'multi'
+
+    // Mode Switcher
+    function switchSimMode(mode) {
+      if (currentSimMode === mode) return;
+      currentSimMode = mode;
+
+      const btnSingle = document.getElementById('modeBtnSingle');
+      const btnMulti = document.getElementById('modeBtnMulti');
+      const singleControls = document.getElementById('simSingleControls');
+      const multiControls = document.getElementById('simMultiControls');
+      const multiCacheGauges = document.getElementById('multiCacheGauges');
+      const singleKpiGrid = document.getElementById('singleKpiGrid');
+      const multiKpiGrid = document.getElementById('multiKpiGrid');
+      const legendLeakedItem = document.getElementById('legendLeakedItem');
+      const simChartTitle = document.getElementById('simChartTitle');
+      const simSummaryTitle = document.getElementById('simSummaryTitle');
+      const legendLimitItem = document.getElementById('legendLimitItem');
+
+      if (mode === 'multi') {
+        btnSingle.classList.remove('active');
+        btnMulti.classList.add('active');
+        singleControls.style.display = 'none';
+        multiControls.style.display = 'block';
+        multiCacheGauges.style.display = 'block';
+        singleKpiGrid.style.display = 'none';
+        multiKpiGrid.style.display = 'grid';
+        legendLeakedItem.style.display = 'flex';
+        legendLimitItem.style.display = 'none';
+        simChartTitle.textContent = 'Fleet Ingress & Protection Timeline (49 Slots - All Clients)';
+        simSummaryTitle.textContent = 'Show Detailed Fleet Calculation Table (49 Slots)';
+      } else {
+        btnSingle.classList.add('active');
+        btnMulti.classList.remove('active');
+        singleControls.style.display = 'block';
+        multiControls.style.display = 'none';
+        multiCacheGauges.style.display = 'none';
+        singleKpiGrid.style.display = 'grid';
+        multiKpiGrid.style.display = 'none';
+        legendLeakedItem.style.display = 'none';
+        legendLimitItem.style.display = 'flex';
+        simChartTitle.textContent = 'Traffic Profile & Limiting Timeline (49 Slots)';
+        simSummaryTitle.textContent = 'Show Detailed Slot Calculation Table (49 Slots)';
+      }
+
+      runSimulation();
+    }
+
+    // --- Single-IP Scenario & Controls ---
     function applyScenario(rate, total, btnId) {
       simRate.value = rate;
       simRateSlider.value = rate;
       simTotal.value = total;
 
-      document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('#simSingleControls .scenario-btn').forEach(b => b.classList.remove('active'));
       const activeBtn = document.getElementById(btnId);
       if (activeBtn) activeBtn.classList.add('active');
 
@@ -1473,38 +1977,152 @@
 
     simRateSlider.addEventListener('input', () => {
       simRate.value = simRateSlider.value;
-      document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('#simSingleControls .scenario-btn').forEach(b => b.classList.remove('active'));
       runSimulation();
     });
 
     simRate.addEventListener('input', () => {
       simRateSlider.value = simRate.value;
-      document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('#simSingleControls .scenario-btn').forEach(b => b.classList.remove('active'));
       runSimulation();
     });
 
     simTotal.addEventListener('input', () => {
-      document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('#simSingleControls .scenario-btn').forEach(b => b.classList.remove('active'));
+      runSimulation();
+    });
+
+    // --- Multi-IP Scenario & Controls ---
+    const simMultiClientsSlider = document.getElementById('simMultiClientsSlider');
+    const simMultiClients = document.getElementById('simMultiClients');
+    const simMultiRateSlider = document.getElementById('simMultiRateSlider');
+    const simMultiRate = document.getElementById('simMultiRate');
+    const simMultiIsMixed = document.getElementById('simMultiIsMixed');
+    const simUniformInputsGrid = document.getElementById('simUniformInputsGrid');
+    const simMixedPanel = document.getElementById('simMixedPanel');
+    const simMixedGoodClientsSlider = document.getElementById('simMixedGoodClientsSlider');
+    const simMixedGoodClients = document.getElementById('simMixedGoodClients');
+    const simMixedGoodRateSlider = document.getElementById('simMixedGoodRateSlider');
+    const simMixedGoodRate = document.getElementById('simMixedGoodRate');
+    const simMixedBadClientsSlider = document.getElementById('simMixedBadClientsSlider');
+    const simMixedBadClients = document.getElementById('simMixedBadClients');
+    const simMixedBadRateSlider = document.getElementById('simMixedBadRateSlider');
+    const simMixedBadRate = document.getElementById('simMixedBadRate');
+    const simMixedSummaryHint = document.getElementById('simMixedSummaryHint');
+    const simMultiClientsHint = document.getElementById('simMultiClientsHint');
+    const simMultiFleetIngressHint = document.getElementById('simMultiFleetIngressHint');
+
+    // Gauges & Multi KPI elements
+    const activeGaugeFill = document.getElementById('activeGaugeFill');
+    const activeGaugeVals = document.getElementById('activeGaugeVals');
+    const activeGaugeModeBadge = document.getElementById('activeGaugeModeBadge');
+    const activeGaugeStatus = document.getElementById('activeGaugeStatus');
+    const activeGaugeEvictions = document.getElementById('activeGaugeEvictions');
+
+    const blockedGaugeFill = document.getElementById('blockedGaugeFill');
+    const blockedGaugeVals = document.getElementById('blockedGaugeVals');
+    const blockedGaugeModeBadge = document.getElementById('blockedGaugeModeBadge');
+    const blockedGaugeStatus = document.getElementById('blockedGaugeStatus');
+    const blockedGaugeLeaks = document.getElementById('blockedGaugeLeaks');
+    const unblockingAlertBox = document.getElementById('unblockingAlertBox');
+    const unblockingAlertMsg = document.getElementById('unblockingAlertMsg');
+
+    const kpiMultiIngressRate = document.getElementById('kpiMultiIngressRate');
+    const kpiMultiActiveState = document.getElementById('kpiMultiActiveState');
+    const kpiMultiBlockedState = document.getElementById('kpiMultiBlockedState');
+    const kpiMultiBlockedRatio = document.getElementById('kpiMultiBlockedRatio');
+
+    function updateMixedModeVisibility() {
+      const isMixed = simMultiIsMixed.checked;
+      if (isMixed) {
+        simUniformInputsGrid.style.display = 'none';
+        simMixedPanel.style.display = 'block';
+      } else {
+        simUniformInputsGrid.style.display = 'grid';
+        simMixedPanel.style.display = 'none';
+      }
+    }
+
+    function applyMultiScenario(clients, rate, btnId, isMixed = false) {
+      simMultiClients.value = clients;
+      simMultiClientsSlider.value = clients;
+      simMultiRate.value = rate;
+      simMultiRateSlider.value = rate;
+      simMultiIsMixed.checked = Boolean(isMixed);
+
+      if (isMixed) {
+        simMixedGoodClients.value = 500;
+        simMixedGoodClientsSlider.value = 500;
+        simMixedGoodRate.value = 1;
+        simMixedGoodRateSlider.value = 1;
+        simMixedBadClients.value = Math.max(0, clients - 500);
+        simMixedBadClientsSlider.value = Math.max(0, clients - 500);
+        simMixedBadRate.value = 15;
+        simMixedBadRateSlider.value = 15;
+      }
+
+      updateMixedModeVisibility();
+
+      document.querySelectorAll('#simMultiControls .scenario-btn').forEach(b => b.classList.remove('active'));
+      const activeBtn = document.getElementById(btnId);
+      if (activeBtn) activeBtn.classList.add('active');
+
+      runSimulation();
+    }
+
+    function wireSync(slider, numberInput) {
+      if (!slider || !numberInput) return;
+      slider.addEventListener('input', () => {
+        numberInput.value = slider.value;
+        document.querySelectorAll('#simMultiControls .scenario-btn').forEach(b => b.classList.remove('active'));
+        runSimulation();
+      });
+      numberInput.addEventListener('input', () => {
+        slider.value = numberInput.value;
+        document.querySelectorAll('#simMultiControls .scenario-btn').forEach(b => b.classList.remove('active'));
+        runSimulation();
+      });
+    }
+
+    wireSync(simMultiClientsSlider, simMultiClients);
+    wireSync(simMultiRateSlider, simMultiRate);
+    wireSync(simMixedGoodClientsSlider, simMixedGoodClients);
+    wireSync(simMixedGoodRateSlider, simMixedGoodRate);
+    wireSync(simMixedBadClientsSlider, simMixedBadClients);
+    wireSync(simMixedBadRateSlider, simMixedBadRate);
+
+    simMultiIsMixed.addEventListener('change', () => {
+      updateMixedModeVisibility();
+      document.querySelectorAll('#simMultiControls .scenario-btn').forEach(b => b.classList.remove('active'));
       runSimulation();
     });
 
     function runSimulation() {
-      // 1. Inputs from Valve settings (Fallback defaults if empty)
+      // 1. Shared Valve Settings
       const slotLength = Math.max(1, parseInt(document.getElementById('slotLength').value, 10) || 10);
       const allowedRequestsPerSlot = Math.max(1, parseInt(document.getElementById('allowedRequestsPerSlot').value, 10) || 100);
       const shareOfRetained = Math.max(0, parseFloat(document.getElementById('shareOfRetainedFormerRequests').value) || 0);
       const numberOfSlots = Math.max(1, parseInt(document.getElementById('numberOfSlots').value, 10) || 20);
 
-      // 2. Scenario Inputs
+      const maxIPVal = parseInt(document.getElementById('maxIPCacheSize').value, 10) || 50;
+      const rawBlockedVal = document.getElementById('maxBlockedIPCacheSize').value.trim();
+      const maxBlockedVal = rawBlockedVal === '' ? maxIPVal : (parseInt(rawBlockedVal, 10) || maxIPVal);
+
+      if (currentSimMode === 'single') {
+        runSingleSimulation(slotLength, allowedRequestsPerSlot, shareOfRetained, numberOfSlots);
+      } else {
+        runMultiSimulation(slotLength, allowedRequestsPerSlot, shareOfRetained, numberOfSlots, maxIPVal, maxBlockedVal);
+      }
+    }
+
+    // --- SINGLE-IP SIMULATION ---
+    function runSingleSimulation(slotLength, allowedRequestsPerSlot, shareOfRetained, numberOfSlots) {
       const rate = Math.max(0, parseFloat(simRate.value) || 0);
       const totalRequests = Math.max(0, parseInt(simTotal.value, 10) || 0);
 
-      // Requests per slot = rate * slotLength
       const requestsPerSlot = Math.round(rate * slotLength);
       simReqPerSlotHint.textContent = `Calculated: ${requestsPerSlot.toLocaleString()} reqs / slot (${rate} req/s × ${slotLength}s)`;
 
-      // 3. Sustainable request rate
-      // Formula from Google Sheet: allowedRequestsPerSlot / (slotLength * (1 + shareOfRetainedFormerRequests))
       const sustainableRate = allowedRequestsPerSlot / (slotLength * (1 + shareOfRetained));
       kpiSustainableRate.textContent = `${sustainableRate.toFixed(2)} req/s`;
 
@@ -1519,24 +2137,20 @@
         kpiSustainableBadge.className = 'kpi-badge badge-generous';
       }
 
-      // 4. Simulate 49 consecutive time slots (matching the Google Sheet)
       const TOTAL_SLOTS = 49;
       const slotData = [];
       let cumulativeAccesses = 0;
       let totalBlockedRequests = 0;
       let blockedSlotsCount = 0;
+      let firstBlockPoint = null;
       let completeBlockPoint = null;
 
       for (let i = 1; i <= TOTAL_SLOTS; i++) {
         const startTime = (i - 1) * slotLength;
-
-        // New accesses attempted in this slot (bounded by total remaining requests)
         const remaining = Math.max(0, totalRequests - cumulativeAccesses);
         const attempted = Math.min(requestsPerSlot, remaining);
         cumulativeAccesses += attempted;
 
-        // Retained old requests formula from Google Sheet:
-        // =ROUND(SUM(lookback E) * shareOfRetained / numberOfSlots)
         let retained = 0;
         if (i > 1 && shareOfRetained > 0 && numberOfSlots > 0) {
           let sumOfCounts = 0;
@@ -1547,11 +2161,7 @@
           retained = Math.round((sumOfCounts * shareOfRetained) / numberOfSlots);
         }
 
-        // Allowed new requests in slot: max(0, allowedRequestsPerSlot - retained)
-        // (In Google Sheet column J: =IF(allowedRequestsPerSlot >= retained, allowedRequestsPerSlot - retained, 0))
         const allowedThresholdInSlot = Math.max(0, allowedRequestsPerSlot - retained);
-
-        // Blocked requests in slot: IF(allowedThresholdInSlot >= attempted, 0, attempted - allowedThresholdInSlot)
         let allowed = 0;
         let blocked = 0;
         if (allowedThresholdInSlot >= attempted) {
@@ -1569,9 +2179,15 @@
         }
         totalBlockedRequests += blocked;
 
-        // Complete block point: when allowedThresholdInSlot reaches 0
+        // First block point: when the first blocked request occurs
+        if (firstBlockPoint === null && blocked > 0) {
+          firstBlockPoint = {
+            allowedBefore: (cumulativeAccesses - attempted) + allowed,
+            slot: i
+          };
+        }
+
         if (completeBlockPoint === null && allowedThresholdInSlot === 0 && attempted > 0) {
-          // Total requests until complete lockout
           completeBlockPoint = {
             requests: cumulativeAccesses - attempted,
             slot: i
@@ -1586,11 +2202,21 @@
           sumEvaluated,
           isBlocked,
           allowed,
-          blocked
+          blocked,
+          leaked: 0,
+          activeIPs: attempted > 0 && !isBlocked ? 1 : 0,
+          blockedIPs: isBlocked ? 1 : 0,
+          evictedActive: 0,
+          evictedBlocked: 0
         });
       }
 
-      // 5. Update KPI Cards
+      if (firstBlockPoint) {
+        kpiFirstBlockPoint.innerHTML = `${firstBlockPoint.allowedBefore.toLocaleString()} reqs <small style="font-size:0.85rem;font-weight:400;color:var(--text-muted);">(Slot #${firstBlockPoint.slot})</small>`;
+      } else {
+        kpiFirstBlockPoint.textContent = 'All allowed (No block)';
+      }
+
       if (completeBlockPoint) {
         kpiCompleteBlock.innerHTML = `${completeBlockPoint.requests.toLocaleString()} reqs <small style="font-size:0.85rem;font-weight:400;color:var(--text-muted);">(Slot #${completeBlockPoint.slot})</small>`;
       } else {
@@ -1604,17 +2230,290 @@
       const blockedSlotsPercent = Math.round((blockedSlotsCount / TOTAL_SLOTS) * 100);
       kpiBlockedSlots.innerHTML = `${blockedSlotsCount} / ${TOTAL_SLOTS} <small style="font-size:0.9rem;font-weight:400;color:var(--text-muted);">(${blockedSlotsPercent}%)</small>`;
 
-      // 6. Render Chart & Table
       renderChart(slotData, allowedRequestsPerSlot);
       renderTable(slotData);
     }
 
-    // SVG Chart Rendering
+    // --- MULTI-IP FLEET SIMULATION ---
+    function runMultiSimulation(slotLength, allowedRequestsPerSlot, shareOfRetained, numberOfSlots, maxIPCacheSize, maxBlockedIPCacheSize) {
+      const isMixed = simMultiIsMixed.checked;
+      let goodClients = 0, goodRate = 0, badClients = 0, badRate = 0;
+
+      if (isMixed) {
+        goodClients = Math.max(0, parseInt(simMixedGoodClients.value, 10) || 0);
+        goodRate = Math.max(0, parseFloat(simMixedGoodRate.value) || 0);
+        badClients = Math.max(0, parseInt(simMixedBadClients.value, 10) || 0);
+        badRate = Math.max(0, parseFloat(simMixedBadRate.value) || 0);
+      } else {
+        badClients = Math.max(0, parseInt(simMultiClients.value, 10) || 0);
+        badRate = Math.max(0, parseFloat(simMultiRate.value) || 0);
+      }
+
+      const totalClients = goodClients + badClients;
+      const totalFleetRate = (goodClients * goodRate) + (badClients * badRate);
+
+      if (isMixed) {
+        simMixedSummaryHint.textContent = `Combined Fleet: ${totalClients.toLocaleString()} clients (${goodClients.toLocaleString()} visitors + ${badClients.toLocaleString()} bots) • Total Ingress: ${Math.round(totalFleetRate).toLocaleString()} req/s (${Math.round(totalFleetRate * slotLength).toLocaleString()} reqs / slot)`;
+      } else {
+        simMultiClientsHint.textContent = `Simulating ${totalClients.toLocaleString()} concurrent IP addresses`;
+        simMultiFleetIngressHint.textContent = `Total Ingress: ${Math.round(totalFleetRate).toLocaleString()} req/s across fleet (${Math.round(totalFleetRate * slotLength).toLocaleString()} reqs / slot)`;
+      }
+
+      const isAsyncActive = maxIPCacheSize > 500;
+      const isAsyncBlocked = maxBlockedIPCacheSize > 500;
+
+      activeGaugeModeBadge.textContent = isAsyncActive ? '⚡ Async Batch (> 500)' : 'Sync LRU (≤ 500)';
+      activeGaugeModeBadge.className = `badge ${isAsyncActive ? 'badge-async' : 'badge-sync'}`;
+
+      blockedGaugeModeBadge.textContent = isAsyncBlocked ? '⚡ Async Batch (> 500)' : 'Sync LRU (≤ 500)';
+      blockedGaugeModeBadge.className = `badge ${isAsyncBlocked ? 'badge-async' : 'badge-sync'}`;
+
+      const TOTAL_SLOTS = 49;
+      const slotData = [];
+      let totalFleetBlocked = 0;
+      let totalFleetAllowed = 0;
+      let totalFleetLeaked = 0;
+      let peakActiveIPs = 0;
+      let peakBlockedIPs = 0;
+      let totalActiveEvictions = 0;
+      let totalBlockedLeaks = 0;
+
+      // Group historical data
+      const goodHistory = [];
+      const badHistory = [];
+
+      for (let i = 1; i <= TOTAL_SLOTS; i++) {
+        const startTime = (i - 1) * slotLength;
+
+        // Good clients calculations
+        let goodAttemptedSlot = 0;
+        let goodAllowedSlot = 0;
+        let goodBlockedSlot = 0;
+        let goodActiveCount = 0;
+        let goodBlockedCount = 0;
+
+        if (goodClients > 0 && goodRate > 0) {
+          const reqsPerGoodClient = Math.round(goodRate * slotLength);
+          let goodRetained = 0;
+          if (i > 1 && shareOfRetained > 0 && numberOfSlots > 0) {
+            let sumC = 0;
+            const lb = Math.min(i - 1, numberOfSlots);
+            for (let k = 1; k <= lb; k++) {
+              sumC += goodHistory[i - 1 - k];
+            }
+            goodRetained = Math.round((sumC * shareOfRetained) / numberOfSlots);
+          }
+
+          goodHistory.push(reqsPerGoodClient);
+
+          const clientThreshold = Math.max(0, allowedRequestsPerSlot - goodRetained);
+          const isGoodBlocked = (reqsPerGoodClient + goodRetained) > allowedRequestsPerSlot;
+
+          let perClientAllowed = 0;
+          let perClientBlocked = 0;
+          if (clientThreshold >= reqsPerGoodClient) {
+            perClientAllowed = reqsPerGoodClient;
+            perClientBlocked = 0;
+          } else {
+            perClientAllowed = clientThreshold;
+            perClientBlocked = reqsPerGoodClient - clientThreshold;
+          }
+
+          goodAttemptedSlot = reqsPerGoodClient * goodClients;
+          goodAllowedSlot = perClientAllowed * goodClients;
+          goodBlockedSlot = perClientBlocked * goodClients;
+
+          if (isGoodBlocked) {
+            goodBlockedCount = goodClients;
+          } else {
+            goodActiveCount = goodClients;
+          }
+        } else {
+          goodHistory.push(0);
+        }
+
+        // Bad / Bot clients calculations
+        let badAttemptedSlot = 0;
+        let badAllowedSlot = 0;
+        let badBlockedSlot = 0;
+        let badActiveCount = 0;
+        let badBlockedCount = 0;
+
+        if (badClients > 0 && badRate > 0) {
+          const reqsPerBadClient = Math.round(badRate * slotLength);
+          let badRetained = 0;
+          if (i > 1 && shareOfRetained > 0 && numberOfSlots > 0) {
+            let sumC = 0;
+            const lb = Math.min(i - 1, numberOfSlots);
+            for (let k = 1; k <= lb; k++) {
+              sumC += badHistory[i - 1 - k];
+            }
+            badRetained = Math.round((sumC * shareOfRetained) / numberOfSlots);
+          }
+
+          badHistory.push(reqsPerBadClient);
+
+          const clientThreshold = Math.max(0, allowedRequestsPerSlot - badRetained);
+          const isBadBlocked = (reqsPerBadClient + badRetained) > allowedRequestsPerSlot;
+
+          let perClientAllowed = 0;
+          let perClientBlocked = 0;
+          if (clientThreshold >= reqsPerBadClient) {
+            perClientAllowed = reqsPerBadClient;
+            perClientBlocked = 0;
+          } else {
+            perClientAllowed = clientThreshold;
+            perClientBlocked = reqsPerBadClient - clientThreshold;
+          }
+
+          badAttemptedSlot = reqsPerBadClient * badClients;
+          badAllowedSlot = perClientAllowed * badClients;
+          badBlockedSlot = perClientBlocked * badClients;
+
+          if (isBadBlocked) {
+            badBlockedCount = badClients;
+          } else {
+            badActiveCount = badClients;
+          }
+        } else {
+          badHistory.push(0);
+        }
+
+        // Continuous Fleet Ingress
+        const attemptedSlot = goodAttemptedSlot + badAttemptedSlot;
+
+        // Cache capacity evaluations
+        const slotActiveDemand = (attemptedSlot > 0) ? (goodActiveCount + badActiveCount) : 0;
+        const slotBlockedDemand = (attemptedSlot > 0) ? (goodBlockedCount + badBlockedCount) : 0;
+
+        if (slotActiveDemand > peakActiveIPs) peakActiveIPs = slotActiveDemand;
+        if (slotBlockedDemand > peakBlockedIPs) peakBlockedIPs = slotBlockedDemand;
+
+        // Active Cache Eviction
+        let evictedActiveInSlot = 0;
+        if (slotActiveDemand > maxIPCacheSize) {
+          if (isAsyncActive) {
+            evictedActiveInSlot = slotActiveDemand - Math.round(maxIPCacheSize * 0.9);
+          } else {
+            evictedActiveInSlot = slotActiveDemand - maxIPCacheSize;
+          }
+          totalActiveEvictions += evictedActiveInSlot;
+        }
+
+        // Blocked Cache Eviction & Unblocking Leaks
+        let evictedBlockedInSlot = 0;
+        let leakedRequestsInSlot = 0;
+        if (slotBlockedDemand > maxBlockedIPCacheSize) {
+          if (isAsyncBlocked) {
+            evictedBlockedInSlot = slotBlockedDemand - Math.round(maxBlockedIPCacheSize * 0.9);
+          } else {
+            evictedBlockedInSlot = slotBlockedDemand - maxBlockedIPCacheSize;
+          }
+          totalBlockedLeaks += evictedBlockedInSlot;
+
+          // Those evicted blocked IPs are discarded from blockedCounters!
+          // Subsequent requests from them are re-admitted (leaked allowed traffic).
+          const perBotBlocked = badClients > 0 ? (badBlockedSlot / badClients) : 0;
+          leakedRequestsInSlot = Math.round(evictedBlockedInSlot * Math.min(perBotBlocked, allowedRequestsPerSlot));
+        }
+
+        const totalAllowedInSlot = goodAllowedSlot + badAllowedSlot + leakedRequestsInSlot;
+        const totalBlockedInSlot = Math.max(0, (goodBlockedSlot + badBlockedSlot) - leakedRequestsInSlot);
+
+        totalFleetAllowed += totalAllowedInSlot;
+        totalFleetBlocked += totalBlockedInSlot;
+        totalFleetLeaked += leakedRequestsInSlot;
+
+        slotData.push({
+          slotNumber: i,
+          startTime,
+          attempted: attemptedSlot,
+          retained: 0,
+          sumEvaluated: attemptedSlot,
+          isBlocked: totalBlockedInSlot > 0,
+          allowed: totalAllowedInSlot,
+          blocked: totalBlockedInSlot,
+          leaked: leakedRequestsInSlot,
+          activeIPs: slotActiveDemand,
+          blockedIPs: slotBlockedDemand,
+          evictedActive: evictedActiveInSlot,
+          evictedBlocked: evictedBlockedInSlot
+        });
+      }
+
+      // Update Cache Gauges
+      // Active Cache: scale to 120% cap
+      const activeHardCap = Math.round(maxIPCacheSize * 1.2);
+      const activeLowWater = Math.round(maxIPCacheSize * 0.9);
+      const activePct = Math.min(100, Math.round((peakActiveIPs / activeHardCap) * 100));
+      activeGaugeFill.style.width = `${activePct}%`;
+      activeGaugeVals.textContent = `${peakActiveIPs.toLocaleString()} / ${maxIPCacheSize.toLocaleString()} IPs`;
+
+      if (peakActiveIPs >= activeHardCap) {
+        activeGaugeFill.className = 'gauge-fill danger';
+        activeGaugeStatus.innerHTML = '<span style="color:#b91c1c;font-weight:700;">⚡ 120% Circuit-Breaker Hard-Cap Active!</span>';
+      } else if (peakActiveIPs >= maxIPCacheSize) {
+        activeGaugeFill.className = 'gauge-fill danger';
+        activeGaugeStatus.innerHTML = '<span style="color:#b91c1c;font-weight:600;">⚡ 90% Low-Watermark Eviction Active</span>';
+      } else if (peakActiveIPs >= activeLowWater) {
+        activeGaugeFill.className = 'gauge-fill warning';
+        activeGaugeStatus.innerHTML = '<span style="color:#b45309;">Near 90% Low-Watermark</span>';
+      } else {
+        activeGaugeFill.className = 'gauge-fill';
+        activeGaugeStatus.innerHTML = '<span style="color:#15803d;">Normal Load (Within Capacity)</span>';
+      }
+      activeGaugeEvictions.textContent = `${totalActiveEvictions.toLocaleString()} total evictions`;
+
+      // Blocked Cache: scale to 120% cap
+      const blockedHardCap = Math.round(maxBlockedIPCacheSize * 1.2);
+      const blockedLowWater = Math.round(maxBlockedIPCacheSize * 0.9);
+      const blockedPct = Math.min(100, Math.round((peakBlockedIPs / blockedHardCap) * 100));
+      blockedGaugeFill.style.width = `${blockedPct}%`;
+      blockedGaugeVals.textContent = `${peakBlockedIPs.toLocaleString()} / ${maxBlockedIPCacheSize.toLocaleString()} IPs`;
+
+      if (peakBlockedIPs >= blockedHardCap) {
+        blockedGaugeFill.className = 'gauge-fill danger';
+        blockedGaugeStatus.innerHTML = '<span style="color:#b91c1c;font-weight:700;">⚡ 120% Circuit-Breaker Hard-Cap Active!</span>';
+        unblockingAlertBox.style.display = 'flex';
+        unblockingAlertMsg.innerHTML = `<strong>${totalBlockedLeaks.toLocaleString()} unique attacker IPs</strong> exceeded the blocked cache capacity (<strong>${maxBlockedIPCacheSize.toLocaleString()}</strong>) and were evicted! These attackers are immediately re-admitted as fresh unblocked traffic (${totalFleetLeaked.toLocaleString()} leaked requests). Increase <code>maxBlockedIPCacheSize</code> to at least <strong>${peakBlockedIPs.toLocaleString()}</strong> to maintain a lock on this fleet.`;
+      } else if (peakBlockedIPs > maxBlockedIPCacheSize) {
+        blockedGaugeFill.className = 'gauge-fill danger';
+        blockedGaugeStatus.innerHTML = '<span style="color:#b91c1c;font-weight:700;">⚠️ Cache Overflow (Leaks Active!)</span>';
+        unblockingAlertBox.style.display = 'flex';
+        unblockingAlertMsg.innerHTML = `<strong>${totalBlockedLeaks.toLocaleString()} unique attacker IPs</strong> exceeded the blocked cache capacity (<strong>${maxBlockedIPCacheSize.toLocaleString()}</strong>) and were evicted! These attackers are immediately re-admitted as fresh unblocked traffic (${totalFleetLeaked.toLocaleString()} leaked requests). Increase <code>maxBlockedIPCacheSize</code> to at least <strong>${peakBlockedIPs.toLocaleString()}</strong> to maintain a lock on this fleet.`;
+      } else if (peakBlockedIPs >= blockedLowWater) {
+        blockedGaugeFill.className = 'gauge-fill warning';
+        blockedGaugeStatus.innerHTML = '<span style="color:#b45309;">Near 90% Low-Watermark</span>';
+        unblockingAlertBox.style.display = 'none';
+      } else {
+        blockedGaugeFill.className = 'gauge-fill';
+        blockedGaugeStatus.innerHTML = '<span style="color:#15803d;">Protected (All Blocked IPs Contained)</span>';
+        unblockingAlertBox.style.display = 'none';
+      }
+      blockedGaugeLeaks.textContent = `${totalBlockedLeaks.toLocaleString()} unblocked IPs`;
+
+      // Update Multi KPIs
+      kpiMultiIngressRate.innerHTML = `${Math.round(totalFleetRate).toLocaleString()} req/s <small style="font-size:0.85rem;font-weight:400;color:var(--text-muted);">(Continuous Fleet Ingress)</small>`;
+      kpiMultiActiveState.innerHTML = `${peakActiveIPs.toLocaleString()} / ${maxIPCacheSize.toLocaleString()} <small style="font-size:0.85rem;font-weight:400;color:var(--text-muted);">(${Math.round((peakActiveIPs / maxIPCacheSize) * 100)}%)</small>`;
+      
+      const blockedRatioPct = peakBlockedIPs > 0 ? Math.round((peakBlockedIPs / maxBlockedIPCacheSize) * 100) : 0;
+      kpiMultiBlockedState.innerHTML = `${peakBlockedIPs.toLocaleString()} / ${maxBlockedIPCacheSize.toLocaleString()} <small style="font-size:0.85rem;font-weight:400;color:${peakBlockedIPs > maxBlockedIPCacheSize ? '#b91c1c' : 'var(--text-muted)'};">(${blockedRatioPct}%${peakBlockedIPs > maxBlockedIPCacheSize ? ' - OVERFLOW' : ''})</small>`;
+
+      const totalAttempted = totalFleetAllowed + totalFleetBlocked;
+      const blockedPercent = totalAttempted > 0 ? Math.round((totalFleetBlocked / totalAttempted) * 100) : 0;
+      kpiMultiBlockedRatio.innerHTML = `${blockedPercent}% Blocked <small style="font-size:0.85rem;font-weight:400;color:var(--text-muted);">(${totalFleetBlocked.toLocaleString()} denied)</small>`;
+
+      // Render Multi Chart & Table
+      renderChart(slotData, 0); // 0 threshold for multi (bars show allowed vs blocked)
+      renderTable(slotData);
+    }
+
+    // SVG Chart Rendering (Handles both single and multi-mode)
     function renderChart(slotData, threshold) {
       const svg = simChart;
       const width = 980;
       const height = 230;
-      const padding = { top: 20, right: 20, bottom: 30, left: 50 };
+      const padding = { top: 20, right: 20, bottom: 30, left: 55 };
 
       const chartW = width - padding.left - padding.right;
       const chartH = height - padding.top - padding.bottom;
@@ -1640,17 +2539,19 @@
         const y = padding.top + chartH - (val / maxY) * chartH;
         svgHtml += `
           <line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="#e2e8f0" stroke-width="1" />
-          <text x="${padding.left - 8}" y="${y + 4}" font-size="10" fill="#64748b" text-anchor="end" font-family="monospace">${val}</text>
+          <text x="${padding.left - 8}" y="${y + 4}" font-size="10" fill="#64748b" text-anchor="end" font-family="monospace">${val >= 1000 ? (val / 1000).toFixed(1) + 'k' : val}</text>
         `;
       }
 
-      // Dashed Threshold Line (allowedRequestsPerSlot)
-      const threshY = padding.top + chartH - (threshold / maxY) * chartH;
-      if (threshY >= padding.top && threshY <= padding.top + chartH) {
-        svgHtml += `
-          <line x1="${padding.left}" y1="${threshY}" x2="${width - padding.right}" y2="${threshY}" stroke="#0284c7" stroke-width="2" stroke-dasharray="4,4" />
-          <text x="${width - padding.right - 4}" y="${threshY - 5}" font-size="10" font-weight="bold" fill="#0284c7" text-anchor="end">Threshold (${threshold})</text>
-        `;
+      // Dashed Threshold Line (Only in Single Mode)
+      if (currentSimMode === 'single' && threshold > 0) {
+        const threshY = padding.top + chartH - (threshold / maxY) * chartH;
+        if (threshY >= padding.top && threshY <= padding.top + chartH) {
+          svgHtml += `
+            <line x1="${padding.left}" y1="${threshY}" x2="${width - padding.right}" y2="${threshY}" stroke="#0284c7" stroke-width="2" stroke-dasharray="4,4" />
+            <text x="${width - padding.right - 4}" y="${threshY - 5}" font-size="10" font-weight="bold" fill="#0284c7" text-anchor="end">Threshold (${threshold})</text>
+          `;
+        }
       }
 
       // Bars
@@ -1659,20 +2560,21 @@
 
         const allowedH = (d.allowed / maxY) * chartH;
         const blockedH = (d.blocked / maxY) * chartH;
+        const leakedH = ((d.leaked || 0) / maxY) * chartH;
 
         const allowedY = padding.top + chartH - allowedH;
         const blockedY = allowedY - blockedH;
+        const leakedY = blockedY - leakedH;
 
-        // Group for hover tooltip
         svgHtml += `
           <g class="chart-bar-group" data-idx="${idx}">
             ${d.allowed > 0 ? `<rect x="${x}" y="${allowedY}" width="${barW}" height="${allowedH}" fill="#22c55e" rx="1" />` : ''}
             ${d.blocked > 0 ? `<rect x="${x}" y="${blockedY}" width="${barW}" height="${blockedH}" fill="#ef4444" rx="1" />` : ''}
+            ${d.leaked > 0 ? `<rect x="${x}" y="${leakedY}" width="${barW}" height="${leakedH}" fill="#f97316" rx="1" />` : ''}
             <rect x="${x}" y="${padding.top}" width="${barW}" height="${chartH}" fill="transparent" />
           </g>
         `;
 
-        // X-axis label every 5 slots
         if (d.slotNumber === 1 || d.slotNumber % 5 === 0 || d.slotNumber === 49) {
           svgHtml += `
             <text x="${x + barW / 2}" y="${height - 10}" font-size="10" fill="#64748b" text-anchor="middle" font-family="monospace">#${d.slotNumber}</text>
@@ -1689,15 +2591,28 @@
           const idx = parseInt(bg.getAttribute('data-idx'), 10);
           const d = slotData[idx];
           chartTooltip.style.display = 'block';
-          chartTooltip.innerHTML = `
-            <strong>Slot #${d.slotNumber} (t = ${d.startTime}s)</strong><br>
-            • Attempted: <b>${d.attempted.toLocaleString()}</b><br>
-            • Retained from past: <b>${d.retained.toLocaleString()}</b><br>
-            • Sum evaluated: <b>${d.sumEvaluated.toLocaleString()}</b><br>
-            • Status: <b style="color:${d.isBlocked ? '#f87171' : '#4ade80'}">${d.isBlocked ? 'BLOCKED' : 'ALLOWED'}</b><br>
-            • Allowed in slot: <b>${d.allowed.toLocaleString()}</b><br>
-            • Blocked in slot: <b>${d.blocked.toLocaleString()}</b>
-          `;
+
+          if (currentSimMode === 'single') {
+            chartTooltip.innerHTML = `
+              <strong>Slot #${d.slotNumber} (t = ${d.startTime}s)</strong><br>
+              • Attempted: <b>${d.attempted.toLocaleString()}</b><br>
+              • Retained from past: <b>${d.retained.toLocaleString()}</b><br>
+              • Sum evaluated: <b>${d.sumEvaluated.toLocaleString()}</b><br>
+              • Status: <b style="color:${d.isBlocked ? '#f87171' : '#4ade80'}">${d.isBlocked ? 'BLOCKED' : 'ALLOWED'}</b><br>
+              • Allowed in slot: <b>${d.allowed.toLocaleString()}</b><br>
+              • Blocked in slot: <b>${d.blocked.toLocaleString()}</b>
+            `;
+          } else {
+            chartTooltip.innerHTML = `
+              <strong>Slot #${d.slotNumber} (t = ${d.startTime}s) - Fleet View</strong><br>
+              • Fleet Attempted: <b>${d.attempted.toLocaleString()} reqs</b><br>
+              • Fleet Allowed: <b style="color:#4ade80;">${d.allowed.toLocaleString()} reqs</b><br>
+              • Fleet Blocked: <b style="color:#f87171;">${d.blocked.toLocaleString()} reqs</b><br>
+              ${d.leaked > 0 ? `• <span style="color:#fb923c;">Unblocked Leaks: <b>${d.leaked.toLocaleString()} reqs</b></span><br>` : ''}
+              • Active IPs: <b>${d.activeIPs.toLocaleString()}</b> ${d.evictedActive > 0 ? `(${d.evictedActive.toLocaleString()} evicted)` : ''}<br>
+              • Blocked IPs: <b>${d.blockedIPs.toLocaleString()}</b> ${d.evictedBlocked > 0 ? `(${d.evictedBlocked.toLocaleString()} unblocked)` : ''}
+            `;
+          }
           updateTooltipPos(e);
         });
 
@@ -1712,33 +2627,90 @@
       const containerRect = simChart.parentElement.getBoundingClientRect();
       const x = e.clientX - containerRect.left + 15;
       const y = e.clientY - containerRect.top - 30;
-      chartTooltip.style.left = `${Math.min(x, containerRect.width - 200)}px`;
+      chartTooltip.style.left = `${Math.min(x, containerRect.width - 240)}px`;
       chartTooltip.style.top = `${Math.max(10, y)}px`;
     }
 
-    // Render Table
+    // Render Table (Single vs Multi mode)
     function renderTable(slotData) {
-      let rows = '';
-      slotData.forEach(d => {
-        const rowClass = d.isBlocked ? 'row-blocked' : '';
-        const badge = d.isBlocked
-          ? '<span class="status-badge blocked">Blocked</span>'
-          : '<span class="status-badge allowed">Allowed</span>';
+      const thead = document.getElementById('simTableHead');
 
-        rows += `
-          <tr class="${rowClass}">
-            <td class="col-center">#${d.slotNumber}</td>
-            <td>${d.startTime}s</td>
-            <td>${d.attempted.toLocaleString()}</td>
-            <td>${d.retained.toLocaleString()}</td>
-            <td>${d.sumEvaluated.toLocaleString()}</td>
-            <td class="col-center">${badge}</td>
-            <td style="color:#15803d;font-weight:600;">${d.allowed.toLocaleString()}</td>
-            <td style="color:#b91c1c;font-weight:600;">${d.blocked.toLocaleString()}</td>
+      if (currentSimMode === 'single') {
+        thead.innerHTML = `
+          <tr>
+            <th class="col-center">Slot #</th>
+            <th>Start (s)</th>
+            <th>Attempted</th>
+            <th>Retained</th>
+            <th>Sum Evaluated</th>
+            <th class="col-center">Blocked?</th>
+            <th>Allowed</th>
+            <th>Blocked</th>
           </tr>
         `;
-      });
-      simTableBody.innerHTML = rows;
+
+        let rows = '';
+        slotData.forEach(d => {
+          const rowClass = d.isBlocked ? 'row-blocked' : '';
+          const badge = d.isBlocked
+            ? '<span class="status-badge blocked">Blocked</span>'
+            : '<span class="status-badge allowed">Allowed</span>';
+
+          rows += `
+            <tr class="${rowClass}">
+              <td class="col-center">#${d.slotNumber}</td>
+              <td>${d.startTime}s</td>
+              <td>${d.attempted.toLocaleString()}</td>
+              <td>${d.retained.toLocaleString()}</td>
+              <td>${d.sumEvaluated.toLocaleString()}</td>
+              <td class="col-center">${badge}</td>
+              <td style="color:#15803d;font-weight:600;">${d.allowed.toLocaleString()}</td>
+              <td style="color:#b91c1c;font-weight:600;">${d.blocked.toLocaleString()}</td>
+            </tr>
+          `;
+        });
+        simTableBody.innerHTML = rows;
+      } else {
+        thead.innerHTML = `
+          <tr>
+            <th class="col-center">Slot #</th>
+            <th>Start (s)</th>
+            <th>Fleet Ingress</th>
+            <th>Allowed Reqs</th>
+            <th>Blocked Reqs</th>
+            <th>Active IPs</th>
+            <th>Blocked IPs</th>
+            <th>Evictions / Leaks</th>
+          </tr>
+        `;
+
+        let rows = '';
+        slotData.forEach(d => {
+          const hasLeak = d.leaked > 0 || d.evictedBlocked > 0;
+          const rowClass = hasLeak ? 'row-leak' : (d.isBlocked ? 'row-blocked' : '');
+
+          let leakBadge = '<span style="color:#64748b;">None</span>';
+          if (d.evictedBlocked > 0) {
+            leakBadge = `<span style="color:#c2410c;font-weight:700;">⚠️ ${d.evictedBlocked.toLocaleString()} IPs unblocked (${d.leaked.toLocaleString()} reqs)</span>`;
+          } else if (d.evictedActive > 0) {
+            leakBadge = `<span style="color:#d97706;">⚡ ${d.evictedActive.toLocaleString()} active evicted</span>`;
+          }
+
+          rows += `
+            <tr class="${rowClass}">
+              <td class="col-center">#${d.slotNumber}</td>
+              <td>${d.startTime}s</td>
+              <td>${d.attempted.toLocaleString()}</td>
+              <td style="color:#15803d;font-weight:600;">${d.allowed.toLocaleString()}</td>
+              <td style="color:#b91c1c;font-weight:600;">${d.blocked.toLocaleString()}</td>
+              <td>${d.activeIPs.toLocaleString()}</td>
+              <td>${d.blockedIPs.toLocaleString()}</td>
+              <td style="text-align:left;">${leakBadge}</td>
+            </tr>
+          `;
+        });
+        simTableBody.innerHTML = rows;
+      }
     }
 
     // Form change event listeners
