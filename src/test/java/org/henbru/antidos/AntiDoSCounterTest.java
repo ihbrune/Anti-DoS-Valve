@@ -57,4 +57,20 @@ class AntiDoSCounterTest {
 		rec.setRetainedCounts(123);
 		assertEquals(125, rec.getCountCombined());
 	}
+
+	@Test
+	void testTouch() {
+		AntiDoSCounter rec = new AntiDoSCounter();
+		assertEquals(0, rec.getAccessOrder());
+
+		long t0 = System.nanoTime();
+		rec.touch();
+		long t1 = System.nanoTime();
+
+		assertTrue(rec.getAccessOrder() >= t0);
+		assertTrue(rec.getAccessOrder() <= t1);
+
+		rec.touch(42L);
+		assertEquals(42L, rec.getAccessOrder());
+	}
 }

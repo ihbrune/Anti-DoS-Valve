@@ -52,9 +52,16 @@ public class AntiDoSCounter {
 	private volatile boolean locked = false;
 
 	/**
+	 * Updates the access order timestamp to current System.nanoTime() for LRU recency tracking.
+	 */
+	public void touch() {
+		touch(System.nanoTime());
+	}
+
+	/**
 	 * Updates the access order sequence for LRU recency tracking.
 	 * 
-	 * @param order A monotonic sequence number
+	 * @param order A monotonic timestamp or sequence number
 	 */
 	public void touch(long order) {
 		ACCESS_ORDER.setVolatile(this, order);

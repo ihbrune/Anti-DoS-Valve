@@ -52,7 +52,6 @@ public class AntiDoSSlot {
 
 	private int maxCountersPerSlot;
 	private int maxBlockedCountersPerSlot;
-	private final AtomicLong accessSequence = new AtomicLong(0);
 	private final AtomicBoolean activeCacheFullLogged = new AtomicBoolean(false);
 	private final AtomicBoolean blockedCacheFullLogged = new AtomicBoolean(false);
 	private final ReentrantLock activeEvictionLock = new ReentrantLock();
@@ -151,21 +150,21 @@ public class AntiDoSSlot {
 		// 1. Check blocked counters (fast path for already blocked IPs)
 		AntiDoSCounter blocked = blockedCounters.get(counterName);
 		if (blocked != null) {
-			blocked.touch(accessSequence.incrementAndGet());
+			blocked.touch();
 			return blocked;
 		}
 
 		// 2. Check active counters (fast path for non-blocked IPs)
 		AntiDoSCounter active = activeCounters.get(counterName);
 		if (active != null) {
-			active.touch(accessSequence.incrementAndGet());
+			active.touch();
 			return active;
 		}
 
 		// 3. Re-check blockedCounters in case concurrent promotion happened
 		blocked = blockedCounters.get(counterName);
 		if (blocked != null) {
-			blocked.touch(accessSequence.incrementAndGet());
+			blocked.touch();
 			return blocked;
 		}
 
@@ -180,17 +179,17 @@ public class AntiDoSSlot {
 			}
 			triggerAsyncActiveEviction();
 			AntiDoSCounter transientCounter = new AntiDoSCounter();
-			transientCounter.touch(accessSequence.incrementAndGet());
+			transientCounter.touch();
 			transientCounter.setRetainedCounts(0);
 			return transientCounter;
 		}
 
 		// 5. New counter insertion into activeCounters
 		AntiDoSCounter newCounter = new AntiDoSCounter();
-		newCounter.touch(accessSequence.incrementAndGet());
+		newCounter.touch();
 		AntiDoSCounter previous = activeCounters.putIfAbsent(counterName, newCounter);
 		if (previous != null) {
-			previous.touch(accessSequence.incrementAndGet());
+			previous.touch();
 			return previous;
 		}
 
