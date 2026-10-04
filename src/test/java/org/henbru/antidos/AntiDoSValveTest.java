@@ -931,6 +931,142 @@ class AntiDoSValveTest {
 	}
 
 	@Test
+	void testBuildDashboardUrl() {
+		assertEquals("?", AntiDoSValve.buildDashboardUrl(null, null, null, null));
+		assertEquals("?token=myToken", AntiDoSValve.buildDashboardUrl("myToken", null, null, null));
+		assertEquals("?token=myToken&amp;valve=myValve", AntiDoSValve.buildDashboardUrl("myToken", "myValve", null, null));
+		assertEquals("?token=myToken&amp;valve=myValve&amp;view=details", AntiDoSValve.buildDashboardUrl("myToken", "myValve", "details", null));
+		assertEquals("?token=myToken&amp;valve=myValve&amp;view=details&amp;format=json", AntiDoSValve.buildDashboardUrl("myToken", "myValve", "details", "json"));
+		// URL encoding check for special characters
+		assertEquals("?token=pass%2Bword%261%3D2&amp;valve=Valve%231", AntiDoSValve.buildDashboardUrl("pass+word&1=2", "Valve#1", null, null));
+		// Non-HTML separator check
+		assertEquals("?token=myToken&valve=myValve", AntiDoSValve.buildDashboardUrl("myToken", "myValve", null, null, false));
+	}
+
+	@Test
+	void testStatusRelevantPathsDisplayBugFix() throws Exception {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "RELEVANT_PATHS_TEST");
+		valve.setRelevantPaths(null); // Explicitly unconfigured
+		valve.start();
+
+		String html = valve.buildStatusHtml("RELEVANT_PATHS_TEST");
+		assertTrue(html.contains("none (no requests monitored)"));
+		assertFalse(html.contains("all requests"));
+
+		String htmlDetails = valve.buildStatusHtmlDetails("RELEVANT_PATHS_TEST", null);
+		assertTrue(htmlDetails.contains("none (no requests monitored)"));
+		assertFalse(htmlDetails.contains("all requests"));
+
+		valve.stop();
+	}
+
+	@Test
+	void testStatusDetailsHtmlAndJson() throws Exception {
+		AntiDoSValve.clearActiveValves();
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "DETAILS_TEST");
+		valve.setRelevantPaths("/api/.*");
+		valve.setAllowedRequestsPerSlot(5);
+		valve.start();
+
+		// Generate some requests:
+		// 10.0.0.1 -> 2 requests (active)
+		valve.isIPAddressBlocked("10.0.0.1");
+		valve.isIPAddressBlocked("10.0.0.1");
+
+		// 10.0.0.2 -> 6 requests (exceeds limit 5 -> blocked)
+		for (int i = 0; i < 6; i++) {
+			valve.isIPAddressBlocked("10.0.0.2");
+		}
+
+		String token = "secretToken123";
+
+		// HTML Details view
+		String detailsHtml = valve.buildStatusHtmlDetails("DETAILS_TEST", token);
+		assertNotNull(detailsHtml);
+		assertTrue(detailsHtml.contains("AntiDoSValve [DETAILS_TEST] Details"));
+		assertTrue(detailsHtml.contains("Slot Ring Buffer Timeline"));
+		assertTrue(detailsHtml.contains("CURRENT"));
+		assertTrue(detailsHtml.contains("Blocked Clients (Current Slot)"));
+		assertTrue(detailsHtml.contains("Top Active Clients (Current Slot)"));
+		assertTrue(detailsHtml.contains("10.0.0.2"));
+		assertTrue(detailsHtml.contains("10.0.0.1"));
+		assertTrue(detailsHtml.contains("BLOCKED"));
+
+		// Check links carry token
+		assertTrue(detailsHtml.contains("?token=" + token));
+		assertTrue(detailsHtml.contains("Back to Overview"));
+		assertTrue(detailsHtml.contains("Refresh"));
+		assertTrue(detailsHtml.contains("JSON Details"));
+
+		// JSON Details view
+		String detailsJson = valve.buildStatusJsonDetails("DETAILS_TEST");
+		assertNotNull(detailsJson);
+		assertTrue(detailsJson.contains("\"monitorName\": \"DETAILS_TEST\""));
+		assertTrue(detailsJson.contains("\"slots\": ["));
+		assertTrue(detailsJson.contains("\"blockedClients\": ["));
+		assertTrue(detailsJson.contains("\"topActiveClients\": ["));
+		assertTrue(detailsJson.contains("\"key\": \"10.0.0.2\""));
+		assertTrue(detailsJson.contains("\"key\": \"10.0.0.1\""));
+
+		// Unknown valve error handling
+		String notFoundHtml = valve.buildStatusHtmlDetails("NON_EXISTENT", token);
+		assertTrue(notFoundHtml.contains("Valve not found: NON_EXISTENT"));
+		assertTrue(notFoundHtml.contains("href=\"?token=" + token + "\""));
+
+		String notFoundJson = valve.buildStatusJsonDetails("NON_EXISTENT");
+		assertTrue(notFoundJson.contains("Valve not found: NON_EXISTENT"));
+
+		valve.stop();
+	}
+
+	@Test
+	void testStatusRequestTokenPropagationInLinks() throws Exception {
+		AntiDoSValve.clearActiveValves();
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "PROPAGATE_TEST");
+		valve.setStatusUri("/antidos-status");
+		valve.setStatusPassword("mySuperSecretToken");
+		valve.start();
+
+		// Overview request via token parameter
+		TestRequest reqOverview = new TestRequest("/antidos-status", "127.0.0.1");
+		reqOverview.setParameter("token", "mySuperSecretToken");
+		TestResponse respOverview = new TestResponse();
+		valve.handleStatusRequest(reqOverview, respOverview, "127.0.0.1");
+		assertEquals(-1, respOverview.getErrorCode());
+		String overviewHtml = respOverview.getOutput();
+		assertTrue(overviewHtml.contains("token=mySuperSecretToken"));
+		assertTrue(overviewHtml.contains("view=details"));
+		assertTrue(overviewHtml.contains("format=json"));
+
+		// Details request with view=details
+		TestRequest reqDetails = new TestRequest("/antidos-status", "127.0.0.1");
+		reqDetails.setParameter("token", "mySuperSecretToken");
+		reqDetails.setParameter("view", "details");
+		reqDetails.setParameter("valve", "PROPAGATE_TEST");
+		TestResponse respDetails = new TestResponse();
+		valve.handleStatusRequest(reqDetails, respDetails, "127.0.0.1");
+		assertEquals(-1, respDetails.getErrorCode());
+		String detailsHtml = respDetails.getOutput();
+		assertTrue(detailsHtml.contains("AntiDoSValve [PROPAGATE_TEST] Details"));
+		assertTrue(detailsHtml.contains("token=mySuperSecretToken"));
+
+		// Details request with details=true parameter
+		TestRequest reqDetailsBool = new TestRequest("/antidos-status", "127.0.0.1");
+		reqDetailsBool.setParameter("token", "mySuperSecretToken");
+		reqDetailsBool.setParameter("details", "true");
+		reqDetailsBool.setParameter("valve", "PROPAGATE_TEST");
+		TestResponse respDetailsBool = new TestResponse();
+		valve.handleStatusRequest(reqDetailsBool, respDetailsBool, "127.0.0.1");
+		assertEquals(-1, respDetailsBool.getErrorCode());
+		assertTrue(respDetailsBool.getOutput().contains("AntiDoSValve [PROPAGATE_TEST] Details"));
+
+		valve.stop();
+	}
+
+	@Test
 	void testStatusRequestIPWhitelist() throws Exception {
 		AntiDoSValve valve = new AntiDoSValve();
 		setValidAntiDoSMonitorconfiguration(valve, "IP_WHITELIST_TEST");

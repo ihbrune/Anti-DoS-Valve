@@ -429,6 +429,14 @@ public class AntiDoSSlot {
 		return blockedCounters.size();
 	}
 
+	public ConcurrentHashMap<String, AntiDoSCounter> getActiveCounters() {
+		return activeCounters;
+	}
+
+	public ConcurrentHashMap<String, AntiDoSCounter> getBlockedCounters() {
+		return blockedCounters;
+	}
+
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder();

@@ -286,7 +286,7 @@ public class AntiDoSMonitor {
 	 * 
 	 * @return The current active slot, or <code>null</code> if it has not yet been initialized or rotated
 	 */
-	private AntiDoSSlot getCurrentSlotIfExists() {
+	public AntiDoSSlot getCurrentSlotIfExists() {
 		long slotKey = getCurrentSlotKey();
 		int index = (int) Math.floorMod(slotKey, numberOfSlots);
 		AntiDoSSlot slot = slots.get(index);
@@ -294,6 +294,19 @@ public class AntiDoSMonitor {
 			return slot;
 		}
 		return null;
+	}
+
+	/**
+	 * Returns the slot at the specified ring buffer index (0 to numberOfSlots - 1).
+	 *
+	 * @param index The slot index
+	 * @return The slot at the given index, or <code>null</code> if uninitialized or index out of bounds
+	 */
+	public AntiDoSSlot getSlot(int index) {
+		if (index < 0 || index >= numberOfSlots) {
+			return null;
+		}
+		return slots.get(index);
 	}
 
 	/**
