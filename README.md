@@ -73,10 +73,7 @@ You can test its functionality using a non-existent URL to avoid impacting real 
 
         <Valve className="org.henbru.antidos.AntiDoSValve"
                 monitorName="TEST VALVE"
-                alwaysAllowedIPs=""
-                alwaysForbiddenIPs=""
                 relevantPaths="/valvetest"
-                nonRelevantPaths=""
                 maxIPCacheSize="50"
                 numberOfSlots="10"
                 slotLength="30"
@@ -121,12 +118,21 @@ It provides:
 
 When an incoming HTTP request reaches the valve, it is evaluated sequentially through the following decision pipeline:
 
+0. **Internal Status Endpoint (`statusUri`)**: Does the request URI match the configured `statusUri`?
+   * **Yes**: The request is intercepted **immediately** by the valve and never reaches the web application or downstream valves:
+     * **IP Whitelist (`statusAllowedIPs`)**: If configured, the client IP must match this pattern; otherwise &rarr; **404 Not Found**.
+     * **Authentication**: Token must be valid (via `?token=...` or `Authorization: Bearer <token>`):
+       * **Valid Token**: **Allow (200 OK)** and render the dashboard (HTML or JSON). Valid status queries are never counted in DoS counters. An administrator with the correct token is granted access **even if their IP address is currently blocked on other application paths** (e.g. after testing rate limits).
+       * **Invalid or Missing Token**: If the client IP is already blocked by the DoS monitor &rarr; **Block (HTTP error code, e.g. 429)**. If not yet blocked, the failed attempt is recorded in the monitor as an asymmetric brute-force defense &rarr; **401 Unauthorized**.
+     * Request execution finishes here (`return`).
+   * **No**: The request continues down the standard pipeline below.
+
 1. **Static Blacklist (`alwaysForbiddenIPs`)**: Does the client IP address match the regular expression pattern? &rarr; **Block (HTTP error code)**.  
    *(Evaluated directly on the individual client IP address string; request is not counted in the dynamic rate monitor).*
 2. **Static Whitelist (`alwaysAllowedIPs`)**: Does the client IP address match the regular expression pattern? &rarr; **Allow**.  
    *(Evaluated directly on the individual client IP address string; request is not counted in the dynamic rate monitor).*
 3. **Path Whitelist (`nonRelevantPaths`)**: Does the request URI match `nonRelevantPaths`? &rarr; **Allow**.  
-   *(Request is not counted; bypasses rate limiting for health-checks, status endpoints, or static error pages even if the client IP or its subnet is currently blocked).*
+   *(Evaluated before `relevantPaths`; request is not counted; bypasses rate limiting for health-checks or static error pages even if the client IP or its subnet is currently blocked).*
 4. **Detector Match (`relevantPaths`)**: Does the request URI match `relevantPaths`?
    * **Yes**: The client IP is resolved to a counter key — either the **individual IP address** or the **aggregated CIDR subnet** (if `ipv4SubnetMask` or `ipv6SubnetMask` is configured). The request is registered and counted in the rate limiting monitor. If the threshold for this counter key is exceeded (or already locked) &rarr; **Block**; otherwise &rarr; **Allow**.
 5. **Server-Wide Enforcement (`serverWideBlocking`)**: If the URI does *not* match `relevantPaths`, but `serverWideBlocking="true"` is enabled:
@@ -176,6 +182,11 @@ Example values:
 * `".*"`: All requests are processed by the Anti-DoS Monitor.
 * `"/manager.*"`: Only requests to the Tomcat Manager application are monitored; all other requests bypass the valve.
 
+### Interaction with `nonRelevantPaths` and `statusUri`
+
+* **Precedence of `nonRelevantPaths`**: If a request URI matches both `relevantPaths` and `nonRelevantPaths`, `nonRelevantPaths` takes precedence and the request is **not** monitored or rate-limited.
+* **Precedence of `statusUri`**: Requests matching `statusUri` are intercepted at the valve entry point before `relevantPaths` is evaluated. Even if `relevantPaths=".*"` matches all URLs, `statusUri` is handled by the internal status dashboard and is not subject to standard application request quotas.
+
 ## nonRelevantPaths
 
 Available since version 1.4.0 and evaluated before *relevantPaths*: allows specific URL paths to be excluded from monitoring so they are never rate-limited.
@@ -184,6 +195,12 @@ This is especially helpful when an entire path hierarchy should be protected, ex
 
 * `relevantPaths="/myexampleapi/.*"` protects all API endpoints.
 * `nonRelevantPaths="/myexampleapi/status"` keeps only the health/status endpoint accessible without rate limiting. Without `nonRelevantPaths`, you would have to enumerate every other endpoint individually in `relevantPaths`, and remember to update it whenever a new endpoint is deployed. With `nonRelevantPaths`, newly added endpoints are protected automatically.
+
+### Interaction with Other Parameters
+
+* **`relevantPaths`**: `nonRelevantPaths` is checked before `relevantPaths`. If a path matches `nonRelevantPaths`, it immediately bypasses rate limiting, regardless of `relevantPaths`.
+* **`statusUri`**: The internal status endpoint `statusUri` does **not** need to be added to `nonRelevantPaths`. `statusUri` is intercepted prior to the path evaluation pipeline.
+* **`serverWideBlocking`**: Even when `serverWideBlocking="true"` is enabled, paths matching `nonRelevantPaths` remain reachable by all clients (including clients that are currently blocked on other endpoints).
 
 ## serverWideBlocking (optional)
 
@@ -294,6 +311,24 @@ Since version 1.4.1, this optional parameter defines the HTTP status code return
 
 When responding with status `429`, the valve automatically includes an RFC 6585 / RFC 9110 compliant `Retry-After: <seconds>` HTTP header indicating the exact remaining seconds until the current time slot ends (at least 1 second). This tells well-behaved API clients, mobile apps, and crawlers how long to wait before retrying, preventing futile immediate retries during the blocked window.
 
+## statusUri (optional)
+
+Available since version 1.6.0, specifies the URI path under which the internal status dashboard is served. The path must start with a leading `/` (e.g. `/antidos-status`). If omitted or empty, the dashboard is completely disabled (default). See [Internal Status Dashboard](#internal-status-dashboard) for details.
+
+### Interaction with `relevantPaths`, `nonRelevantPaths`, and Blocked IPs
+
+* **Early Interception**: `statusUri` is intercepted before the request reaches the standard pipeline or the web application. Downstream servlets or valves are not invoked.
+* **No Configuration in `nonRelevantPaths` Required**: You do not need to add `statusUri` to `nonRelevantPaths` or exclude it from `relevantPaths`. It is handled completely independently.
+* **Access from Blocked IPs**: If an administrator's IP address has been blocked by the valve (for example, while testing rate limits against `relevantPaths`), the administrator can **still access** the status dashboard by providing the valid token. This ensures administrators are never locked out of monitoring the valve. Conversely, requests from blocked IPs with missing or incorrect tokens are immediately rejected with HTTP 429 without performing password verification.
+
+## statusAllowedIPs (optional)
+
+Optional regular expression restricting access to the status dashboard to specific client IP addresses or subnets (e.g. `statusAllowedIPs="127\.0\.0\.1|::1|10\..*"`). Requests from unauthorized IPs receive `404 Not Found`.
+
+## statusPassword (optional)
+
+Access password for the status dashboard. If explicitly configured, it must be at least 10 characters long. If left empty or omitted, a secure random token is automatically generated on server startup and printed to the logs.
+
 # Sample Configurations
 
 The configuration shown above can serve as a starting point for your production setup.
@@ -305,7 +340,6 @@ Finally, define your *relevantPaths* pattern. Ideally, this should cover only en
         <Valve className="org.henbru.antidos.AntiDoSValve"
                 monitorName="MY VALVE"
                 alwaysAllowedIPs="10\.68\.\d+\.\d+|10\.77\.\d+\.\d+"
-                alwaysForbiddenIPs=""
                 relevantPaths=".*(jsp|/download/|/pdf/).*"
                 maxIPCacheSize="250"
                 numberOfSlots="20"
@@ -328,6 +362,8 @@ After initial deployment, the valve should be monitored closely to detect and re
 Blocked requests are recorded in the Tomcat log files and can be filtered using the keyword `AntiDoSMonitor`.
 
 Alternatively, the valve can be monitored via JMX (e.g. using `JConsole` or VisualVM). Internal monitor metrics are exposed via JMX, and configuration parameters can even be adjusted at runtime without restarting the server.
+
+Since version 1.6.0 the [Internal Status Dashboard](#internal-status-dashboard) adds an additional HTTP endpoint to monitor the valve. This can be used for monitoring the valve in a more convenient way.
 
 # Marking Mode
 
@@ -441,4 +477,83 @@ If known partners need to access your service at higher rates than public users,
 Under massive DDoS attacks with thousands of rejected requests per second, writing a log entry for every blocked request would quickly saturate disk I/O and create thread contention within the logging subsystem. To protect server stability, the valve incorporates an internal, lock-free log rate limiter that caps block messages at **20 logs per second** by default. Any surplus messages within that second are dropped, and an aggregated summary line (`Suppressed X block log events in the previous interval`) is logged at the start of the next second.
 
 *Note:* Log throttling is designed as a built-in safety net and cannot currently be configured through XML attributes in `server.xml`. (Programmatic customization via `setMaxBlockLogsPerSecond(...)` is available in code for testing or custom integrations).
+
+# Internal Status Dashboard
+
+While the valve's runtime state can be monitored via JMX (e.g. using `JConsole` or VisualVM), in modern containerized and cloud environments (Docker, Kubernetes) JMX ports are often not exposed or require cumbersome port-forwarding and certificate management. To simplify operations, troubleshooting, and health checks, version 1.6.0 introduces an optional built-in **HTTP Status Dashboard**.
+
+The dashboard provides an instant, unified overview of all AntiDoS valves active within the Tomcat JVM, their effective configurations, and real-time cache utilization metrics.
+
+## Single Pane of Glass: Multi-Valve Aggregation
+
+In servers running multiple valve instances (e.g., host-level rate limiting alongside application-specific rules), you only need to configure `statusUri` on **one** valve. When accessed, that valve automatically collects and displays information from all active valves in the server:
+
+* **Valve Configuration:** Mode (`BLOCKING` / `MARKING`), HTTP status code, simulation mode, server-wide blocking, relevant and non-relevant path patterns.
+* **Rate Limiting Parameters:** Request limits, slot lengths, retention factor, active slots count.
+* **Subnet Aggregation:** Configured IPv4 and IPv6 subnet aggregation masks.
+* **Cache & Memory Utilization:** Current count of tracked IP counters vs. configured cache caps, currently blocked IPs, and total lifetime request counts.
+
+## Lightweight, Self-Contained Design
+
+The status dashboard is engineered for high performance and zero external footprint:
+* **No External Dependencies:** No external stylesheets, fonts, or JavaScript libraries (100% self-contained).
+* **Minimal Payload:** Compact HTML (< 4 KB) styled with system monospaced fonts (`ui-monospace`, `Menlo`, `Consolas`) for a clean terminal/dashboard look.
+* **Zero Reflection / Low Overhead:** Generated directly via an internal `StringBuilder` without template engines.
+* **JSON API:** Appending `?format=json` or sending an `Accept: application/json` header returns a machine-readable JSON representation, ideal for automated health checks, uptime monitoring, or Prometheus scrapers.
+
+## Security Considerations & Defense Mechanisms
+
+Exposing internal rate-limiting metrics over HTTP presents security risks (such as reconnaissance or brute-force attempts). The dashboard incorporates multiple layers of defense to remain safe by default:
+
+1. **Secure by Default:**
+   The dashboard is **completely disabled** unless `statusUri` is explicitly set in `server.xml`.
+2. **Auto-Generated Cryptographic Random Password:**
+   If `statusPassword` is left empty or omitted, the valve automatically generates a cryptographically secure random token (16–20 characters) using `SecureRandom` and prints it to the server logs on startup.
+   * **Console-Friendly HEX Alphabet (`0-9a-f`):** The token uses exclusively lowercase hexadecimal characters without symbols or ambiguous characters (`0`/`O`, `1`/`l`). This allows quick double-click selection and copy-pasting from terminal logs without shell-escaping issues in `curl`.
+   * **Confidentiality in Logs:** If a custom password is configured in `server.xml`, it is **never** printed to the server logs to prevent leaking credentials into central log aggregators. Only auto-generated tokens are logged on startup.
+   * **JVM-Wide Token:** The auto-generated token is shared across all valves in the JVM, ensuring consistent authentication across multi-valve deployments.
+3. **Protection Against Brute-Force via Asymmetric Rate Limiting:**
+   Authentication attempts against the status endpoint are protected by the valve's own DoS rate limiter:
+   * **Legitimate Requests:** Successfully authenticated requests with the correct token are **not** counted against rate limits, ensuring administrators do not lock themselves out while refreshing the dashboard.
+   * **Failed Attempts:** Any request with a missing or incorrect password is immediately registered as a request in the valve's monitor. If an attacker repeatedly guesses passwords, their IP address exceeds the allowed threshold and is automatically blocked (`HTTP 429 Too Many Requests`).
+   * **Pre-Check Block for Unauthorized Requests:** If an IP is already blocked for DoS violations and attempts to query the status endpoint without the correct token, it is immediately rejected with HTTP 429 without performing password verification or consuming monitor resources. Valid authentication with the admin token, however, is always honored so administrators can inspect the valve even from a temporarily blocked IP.
+4. **IP Whitelisting (`statusAllowedIPs`):**
+   Access can be restricted to internal management subnets or localhost using a regular expression (e.g. `statusAllowedIPs="127\.0\.0\.1|::1|10\..*"`). Requests from unauthorized IPs receive `404 Not Found` to conceal the endpoint's existence.
+5. **Constant-Time Token Comparison:**
+   Passwords are verified using `MessageDigest.isEqual(...)` to prevent timing-based side-channel attacks.
+
+## Configuration Options
+
+| Attribute | Required | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `statusUri` | No | *(disabled)* | The URI path at which the dashboard is served (e.g. `/antidos-status`). If empty or omitted, the endpoint is disabled. |
+| `statusAllowedIPs` | No | *(all IPs allowed)* | Regular expression matching client IPs permitted to query the dashboard. Unauthorized IPs receive `404 Not Found`. |
+| `statusPassword` | No | *(auto-generated)* | Access password. If specified, must be at least 10 characters long. If omitted, a random 16–20 character HEX token is generated and printed to the console on startup. |
+
+## Configuration Example
+
+```xml
+<Valve className="org.henbru.antidos.AntiDoSValve"
+       monitorName="API RATE LIMITER"
+       statusUri="/antidos-status"
+       statusAllowedIPs="127\.0\.0\.1|::1|10\..*"
+       statusPassword=""
+       relevantPaths="/api/.*"
+       allowedRequestsPerSlot="100"
+       slotLength="60"
+       numberOfSlots="5"
+       maxIPCacheSize="5000" />
+```
+
+### Accessing the Dashboard
+
+* **In the browser:**
+  `http://localhost:8080/antidos-status?token=<token>`
+* **Via Bearer Authorization:**
+  `curl -H "Authorization: Bearer <token>" http://localhost:8080/antidos-status`
+* **JSON Output:**
+  `curl -H "Authorization: Bearer <token>" "http://localhost:8080/antidos-status?format=json"`
+* **Filter Specific Valve:**
+  `http://localhost:8080/antidos-status?token=<token>&valve=API+RATE+LIMITER`
+
 

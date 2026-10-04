@@ -253,6 +253,94 @@
       color: #991b1b;
     }
 
+    .status-field-hint {
+      font-size: 0.75rem;
+      margin-top: 6px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      line-height: 1.4;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .status-field-hint.neutral {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      color: #475569;
+    }
+
+    .status-field-hint.valid {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      color: #166534;
+    }
+
+    .status-field-hint.invalid {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+    }
+
+    input.input-invalid {
+      border-color: #ef4444 !important;
+      background-color: #fff5f5 !important;
+      outline-color: #ef4444 !important;
+    }
+
+    .status-dashboard-section {
+      margin-top: 24px;
+      padding: 18px 20px;
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-left: 4px solid var(--primary);
+      border-radius: var(--radius);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    }
+
+    .status-dashboard-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .status-dashboard-title {
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-dashboard-icon {
+      color: var(--primary);
+      font-size: 1.1rem;
+    }
+
+    .badge-optional-feature {
+      background: #e0f2fe;
+      color: #0369a1;
+      border: 1px solid #bae6fd;
+    }
+
+    .status-dashboard-desc {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      line-height: 1.45;
+      margin-bottom: 16px;
+    }
+
+    .status-field-group {
+      background: #ffffff;
+      padding: 12px 14px;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+      margin-bottom: 12px;
+    }
+
     .field-desc {
       font-size: 0.8rem;
       color: var(--text-muted);
@@ -1269,6 +1357,53 @@
               <input type="number" id="httpStatusCode" name="httpStatusCode" min="100" max="599" step="1"
                 placeholder="429">
             </div>
+
+            <!-- Optional Feature: Internal Status Dashboard -->
+            <div class="status-dashboard-section">
+              <div class="status-dashboard-header">
+                <div class="status-dashboard-title">
+                  <span class="status-dashboard-icon">&#9889;</span>
+                  <span>Internal Status Dashboard</span>
+                </div>
+                <span class="badge badge-optional-feature">Optional Feature</span>
+              </div>
+              <div class="status-dashboard-desc">
+                Exposes a high-performance, self-contained HTTP dashboard showing the real-time configuration and cache status of all valves running in the Tomcat JVM. Fully protected by rate-limiting against brute force.
+              </div>
+
+              <!-- 17. statusUri -->
+              <div class="field-group status-field-group">
+                <div class="field-header">
+                  <label for="statusUri" class="field-label">statusUri</label>
+                  <span class="badge badge-optional">Optional</span>
+                </div>
+                <div class="field-desc">URI path under which the status dashboard is served (must start with <code>/</code>, e.g. <code>/antidos-status</code>). Leave empty to completely disable the status endpoint.</div>
+                <input type="text" id="statusUri" name="statusUri" pattern="^/.*" placeholder="e.g. /antidos-status (Default: disabled)">
+                <div id="hintStatusUri" class="status-field-hint neutral"></div>
+              </div>
+
+              <!-- 18. statusAllowedIPs -->
+              <div class="field-group status-field-group">
+                <div class="field-header">
+                  <label for="statusAllowedIPs" class="field-label">statusAllowedIPs</label>
+                  <span class="badge badge-optional">Optional</span>
+                </div>
+                <div class="field-desc">Regular expression matching client IPs allowed to query the dashboard (e.g. <code>127\.0\.0\.1|::1|10\..*</code>). Requests from unauthorized IPs receive <code>404 Not Found</code>.</div>
+                <input type="text" id="statusAllowedIPs" name="statusAllowedIPs" placeholder="e.g. 127\.0\.0\.1|::1 (Default: any IP)">
+                <div id="hintStatusAllowedIPs" class="status-field-hint neutral"></div>
+              </div>
+
+              <!-- 19. statusPassword -->
+              <div class="field-group status-field-group" style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
+                <div class="field-header">
+                  <label for="statusPassword" class="field-label">statusPassword</label>
+                  <span class="badge badge-optional">Optional</span>
+                </div>
+                <div class="field-desc">Access password for the dashboard. Passed via <code>?token=...</code> or <code>Authorization: Bearer &lt;token&gt;</code> header. <strong>If left empty, a secure random HEX token is automatically generated on server startup and printed to the logs.</strong> If entered, must be at least 10 characters long.</div>
+                <input type="text" id="statusPassword" name="statusPassword" minlength="10" placeholder="Leave empty for auto-generated HEX token (min. 10 chars)">
+                <div id="hintStatusPassword" class="status-field-hint neutral"></div>
+              </div>
+            </div>
           </form>
         </div>
       </div>
@@ -1825,7 +1960,10 @@
       { key: 'shareOfRetainedFormerRequests', isRequired: true, defaultVal: 0 },
       { key: 'monitorMode', isRequired: false, defaultVal: 'BLOCKING' },
       { key: 'simulationMode', isRequired: false, defaultVal: false, isBoolean: true },
-      { key: 'httpStatusCode', isRequired: false, defaultVal: 429 }
+      { key: 'httpStatusCode', isRequired: false, defaultVal: 429 },
+      { key: 'statusUri', isRequired: false, defaultVal: '' },
+      { key: 'statusAllowedIPs', isRequired: false, defaultVal: '' },
+      { key: 'statusPassword', isRequired: false, defaultVal: '' }
     ];
 
     const form = document.getElementById('valveForm');
@@ -1901,6 +2039,7 @@
       updateXml();
       updateEvictionIndicators();
       updateSubnetMaskIndicators();
+      updateStatusDashboardIndicators();
       runSimulation();
     }
 
@@ -1921,6 +2060,11 @@
           val = el.value.trim();
         }
 
+        // Auto-correct statusUri to leading slash in output if non-empty
+        if (param.key === 'statusUri' && val !== '' && !val.startsWith('/')) {
+          val = '/' + val;
+        }
+
         // Filtering logic for compact output
         if (onlyChanged) {
           if (param.isBoolean) {
@@ -1931,7 +2075,16 @@
             if (param.key === 'httpStatusCode' && (val === '429' || val === 429)) return;
             if (param.key === 'ipv4SubnetMask' && (val === '32' || val === '-1')) return;
             if (param.key === 'ipv6SubnetMask' && (val === '128' || val === '-1')) return;
+            if ((param.key === 'statusAllowedIPs' || param.key === 'statusPassword') && !document.getElementById('statusUri').value.trim()) return;
           }
+        }
+
+        // Enforce min. 10 chars for statusPassword in helper: do not emit insecure password shorter than 10 characters
+        if (param.key === 'statusPassword' && val !== '' && val.length < 10) {
+          if (document.getElementById('statusUri').value.trim()) {
+            lines.push(`       <!-- statusPassword="${escapeXml(val)}" is too short (min. 10 chars required) - auto-generated token will be used -->`);
+          }
+          return;
         }
 
         // Add attribute if required, or if non-empty, or if full output mode
@@ -2156,6 +2309,72 @@
       }
       if (v6Input && v6Hint) {
         updateSingleSubnetHint(v6Input.value, 128, v6Hint);
+      }
+    }
+
+    function updateStatusDashboardIndicators() {
+      const uriInput = document.getElementById('statusUri');
+      const uriHint = document.getElementById('hintStatusUri');
+      const ipsInput = document.getElementById('statusAllowedIPs');
+      const ipsHint = document.getElementById('hintStatusAllowedIPs');
+      const pwdInput = document.getElementById('statusPassword');
+      const pwdHint = document.getElementById('hintStatusPassword');
+
+      // 1. statusUri validation
+      if (uriInput && uriHint) {
+        const rawUri = uriInput.value.trim();
+        if (!rawUri) {
+          uriInput.classList.remove('input-invalid');
+          uriHint.className = 'status-field-hint neutral';
+          uriHint.innerHTML = '<span>&#9432;</span><div><strong>Endpoint disabled</strong> &ndash; Leave empty to completely deactivate the internal status dashboard.</div>';
+        } else if (!rawUri.startsWith('/')) {
+          uriInput.classList.add('input-invalid');
+          uriHint.className = 'status-field-hint invalid';
+          uriHint.innerHTML = `<span>&#9888;</span><div><strong>Invalid path:</strong> URI path must begin with a leading <code>/</code> (e.g. <code>/${escapeHtml(rawUri)}</code>). A path without <code>/</code> cannot be matched by Tomcat.</div>`;
+        } else {
+          uriInput.classList.remove('input-invalid');
+          uriHint.className = 'status-field-hint valid';
+          uriHint.innerHTML = `<span>&#10003;</span><div><strong>Endpoint active:</strong> Dashboard will be exposed at <code>${escapeHtml(rawUri)}</code>.</div>`;
+        }
+      }
+
+      // 2. statusAllowedIPs validation
+      if (ipsInput && ipsHint) {
+        const rawIps = ipsInput.value.trim();
+        if (!rawIps) {
+          ipsInput.classList.remove('input-invalid');
+          ipsHint.className = 'status-field-hint neutral';
+          ipsHint.innerHTML = '<span>&#9432;</span><div><strong>All IP addresses permitted</strong> &ndash; Access allowed from any client IP (subject to password and rate limiting).</div>';
+        } else {
+          try {
+            new RegExp(rawIps);
+            ipsInput.classList.remove('input-invalid');
+            ipsHint.className = 'status-field-hint valid';
+            ipsHint.innerHTML = `<span>&#10003;</span><div><strong>IP whitelist active:</strong> Only clients matching <code>${escapeHtml(rawIps)}</code> can query the endpoint (others receive 404).</div>`;
+          } catch (e) {
+            ipsInput.classList.add('input-invalid');
+            ipsHint.className = 'status-field-hint invalid';
+            ipsHint.innerHTML = `<span>&#9888;</span><div><strong>Invalid Regular Expression:</strong> ${escapeHtml(e.message)}</div>`;
+          }
+        }
+      }
+
+      // 3. statusPassword validation
+      if (pwdInput && pwdHint) {
+        const rawPwd = pwdInput.value.trim();
+        if (!rawPwd) {
+          pwdInput.classList.remove('input-invalid');
+          pwdHint.className = 'status-field-hint neutral';
+          pwdHint.innerHTML = '<span>&#9432;</span><div><strong>Auto-generated token (recommended):</strong> A secure random 15–20 char HEX token will be generated on startup and logged to catalina.out.</div>';
+        } else if (rawPwd.length < 10) {
+          pwdInput.classList.add('input-invalid');
+          pwdHint.className = 'status-field-hint invalid';
+          pwdHint.innerHTML = `<span>&#9888;</span><div><strong>Password too short:</strong> Must be at least <strong>10 characters</strong> long (currently ${rawPwd.length}/10). Passwords shorter than 10 characters are rejected.</div>`;
+        } else {
+          pwdInput.classList.remove('input-invalid');
+          pwdHint.className = 'status-field-hint valid';
+          pwdHint.innerHTML = `<span>&#10003;</span><div><strong>Custom password configured:</strong> ${rawPwd.length} characters. Authenticate via <code>?token=...</code> or <code>Authorization: Bearer &lt;token&gt;</code>.</div>`;
+        }
       }
     }
 
@@ -2985,6 +3204,7 @@
       updateXml();
       updateEvictionIndicators();
       updateSubnetMaskIndicators();
+      updateStatusDashboardIndicators();
       runSimulation();
     });
 
@@ -2992,8 +3212,22 @@
       updateXml();
       updateEvictionIndicators();
       updateSubnetMaskIndicators();
+      updateStatusDashboardIndicators();
       runSimulation();
     });
+
+    // Auto-prepend leading slash on blur for statusUri if non-empty
+    const statusUriField = document.getElementById('statusUri');
+    if (statusUriField) {
+      statusUriField.addEventListener('blur', () => {
+        const val = statusUriField.value.trim();
+        if (val && !val.startsWith('/')) {
+          statusUriField.value = '/' + val;
+          updateStatusDashboardIndicators();
+          updateXml();
+        }
+      });
+    }
 
     optOnlyChanged.addEventListener('change', () => {
       updateXml();

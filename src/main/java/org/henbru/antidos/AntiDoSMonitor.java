@@ -235,7 +235,7 @@ public class AntiDoSMonitor {
 	private AntiDoSSlot provideCurrentSlot() {
 		// Integer division, which provides the same result for every
 		// millisecond within the slot length:
-		long slotKey = getTimeInMillis() / slotLength;
+		long slotKey = getCurrentSlotKey();
 		int index = (int) Math.floorMod(slotKey, numberOfSlots);
 
 		AntiDoSSlot slot = slots.get(index);
@@ -269,6 +269,31 @@ public class AntiDoSMonitor {
 	 */
 	protected long getTimeInMillis() {
 		return System.currentTimeMillis();
+	}
+
+	/**
+	 * Calculates the slot key for the current reference time by integer division of
+	 * {@link #getTimeInMillis()} by the slot length.
+	 * 
+	 * @return The current slot key
+	 */
+	public long getCurrentSlotKey() {
+		return getTimeInMillis() / slotLength;
+	}
+
+	/**
+	 * Returns the slot corresponding to the current time, if it is currently active.
+	 * 
+	 * @return The current active slot, or <code>null</code> if it has not yet been initialized or rotated
+	 */
+	private AntiDoSSlot getCurrentSlotIfExists() {
+		long slotKey = getCurrentSlotKey();
+		int index = (int) Math.floorMod(slotKey, numberOfSlots);
+		AntiDoSSlot slot = slots.get(index);
+		if (slot != null && slot.getSlotKey() == slotKey) {
+			return slot;
+		}
+		return null;
 	}
 
 	/**
@@ -321,7 +346,7 @@ public class AntiDoSMonitor {
 	 * @return The number of currently active slots in the monitor
 	 */
 	public int getNumberOfActiveSlots() {
-		long currentSlotKey = getTimeInMillis() / slotLength;
+		long currentSlotKey = getCurrentSlotKey();
 		int count = 0;
 		for (int i = 0; i < numberOfSlots; i++) {
 			AntiDoSSlot slot = slots.get(i);
@@ -377,6 +402,40 @@ public class AntiDoSMonitor {
 	 */
 	public void setMaxBlockLogsPerSecond(int maxBlockLogsPerSecond) {
 		this.blockLogThrottler.setMaxLogsPerSecond(maxBlockLogsPerSecond);
+	}
+
+	public String getMonitorName() {
+		return this.monitorName;
+	}
+
+	public int getMaxCountersPerSlot() {
+		return this.maxCountersPerSlot;
+	}
+
+	public int getMaxBlockedCountersPerSlot() {
+		return this.maxBlockedCountersPerSlot;
+	}
+
+	public int getNumberOfSlots() {
+		return this.numberOfSlots;
+	}
+
+	public int getAllowedRequestsPerSlot() {
+		return this.allowedRequestsPerSlot;
+	}
+
+	public float getShareOfRetainedFormerRequests() {
+		return this.shareOfRetainedFormerRequests;
+	}
+
+	public int getCurrentActiveCounterCount() {
+		AntiDoSSlot slot = getCurrentSlotIfExists();
+		return slot != null ? slot.getActiveCounterCount() : 0;
+	}
+
+	public int getCurrentBlockedCounterCount() {
+		AntiDoSSlot slot = getCurrentSlotIfExists();
+		return slot != null ? slot.getBlockedCounterCount() : 0;
 	}
 
 	/**

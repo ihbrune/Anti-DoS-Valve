@@ -1,10 +1,19 @@
 package org.henbru.antidos;
 
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
+import java.text.SimpleDateFormat;
+import java.util.Collections;
+import java.util.Date;
 import java.util.Map;
+import java.util.Set;
+import java.util.TimeZone;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
@@ -124,6 +133,20 @@ public class AntiDoSValve extends ValveBase {
 	 * Map of monitor objects for different valve instances
 	 */
 	private static final Map<String, AntiDoSMonitor> monitors = new ConcurrentHashMap<>();
+
+	/**
+	 * Set of all currently active valve instances in the JVM.
+	 */
+	private static final Set<AntiDoSValve> activeValves = ConcurrentHashMap.newKeySet();
+
+	private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+	private static volatile String generatedStatusToken = null;
+
+	private volatile String statusUri = null;
+	private volatile String statusAllowedIPsConfigValue = null;
+	private volatile Pattern statusAllowedIPs = null;
+	private volatile boolean statusAllowedIPsValid = true;
+	private volatile String statusPassword = null;
 
 	private volatile int maxIPCacheSize = -1;
 	private volatile int maxBlockedIPCacheSize = -1;
@@ -631,6 +654,10 @@ public class AntiDoSValve extends ValveBase {
 		this.numberOfSlots = numberOfSlots;
 	}
 
+	public int getNumberOfSlots() {
+		return numberOfSlots;
+	}
+
 	/**
 	 * 
 	 * @param slotLength The length of the individual slots in seconds
@@ -650,6 +677,10 @@ public class AntiDoSValve extends ValveBase {
 	 */
 	public void setAllowedRequestsPerSlot(int allowedRequestsPerSlot) {
 		this.allowedRequestsPerSlot = allowedRequestsPerSlot;
+	}
+
+	public int getAllowedRequestsPerSlot() {
+		return allowedRequestsPerSlot;
 	}
 
 	/**
@@ -678,6 +709,10 @@ public class AntiDoSValve extends ValveBase {
 			this.shareOfRetainedFormerRequests = Float.parseFloat(shareOfRetainedFormerRequests);
 		} catch (NumberFormatException | NullPointerException ex) {
 		}
+	}
+
+	public float getShareOfRetainedFormerRequests() {
+		return shareOfRetainedFormerRequests;
 	}
 
 	/**
@@ -756,6 +791,143 @@ public class AntiDoSValve extends ValveBase {
 		return httpStatusCode >= 100 && httpStatusCode <= 599;
 	}
 
+	public String getName4logging() {
+		return name4logging;
+	}
+
+	/**
+	 * @return Set of all active AntiDoSValve instances currently running in the JVM
+	 */
+	public static Set<AntiDoSValve> getActiveValves() {
+		return Collections.unmodifiableSet(activeValves);
+	}
+
+	/**
+	 * Clears the set of active valves. Primarily used in unit tests.
+	 */
+	public static void clearActiveValves() {
+		activeValves.clear();
+	}
+
+	/**
+	 * Returns the shared randomly generated status access token, generating one if not already created.
+	 * The token is generated using {@link SecureRandom} and consists of 16 to 20 hexadecimal characters (0-9a-f),
+	 * which allows easy double-click copying in console windows without special characters.
+	 *
+	 * @return The random HEX access token
+	 */
+	public static synchronized String getOrGenerateStatusToken() {
+		if (generatedStatusToken == null) {
+			int byteLength = 8 + SECURE_RANDOM.nextInt(3); // 8, 9, or 10 bytes -> 16, 18, or 20 hex chars
+			byte[] bytes = new byte[byteLength];
+			SECURE_RANDOM.nextBytes(bytes);
+			StringBuilder sb = new StringBuilder(byteLength * 2);
+			for (byte b : bytes) {
+				sb.append(String.format("%02x", b));
+			}
+			generatedStatusToken = sb.toString();
+		}
+		return generatedStatusToken;
+	}
+
+	/**
+	 * Resets the shared random status access token. Primarily used in unit tests.
+	 */
+	public static synchronized void resetGeneratedStatusToken() {
+		generatedStatusToken = null;
+	}
+
+	/**
+	 * @return The URI path at which the status dashboard is exposed, or <code>null</code> if disabled
+	 */
+	public String getStatusUri() {
+		return statusUri;
+	}
+
+	/**
+	 * Sets the URI path at which the internal status dashboard is exposed (e.g. "/antidos-status").
+	 * If null or empty, the status dashboard is disabled (default).
+	 *
+	 * @param statusUri The status URI path
+	 */
+	public void setStatusUri(String statusUri) {
+		if (statusUri == null || statusUri.trim().isEmpty()) {
+			this.statusUri = null;
+		} else {
+			String uri = statusUri.trim();
+			if (!uri.startsWith("/")) {
+				uri = "/" + uri;
+			}
+			this.statusUri = uri;
+		}
+	}
+
+	/**
+	 * @return The regular expression matching IP addresses allowed to access the status dashboard
+	 */
+	public String getStatusAllowedIPs() {
+		return statusAllowedIPsConfigValue;
+	}
+
+	/**
+	 * Sets a regular expression matching client IP addresses allowed to access the status dashboard.
+	 * If null or empty, all client IPs are allowed (subject to password and rate limiting).
+	 *
+	 * @param statusAllowedIPs Regular expression for allowed client IPs
+	 */
+	public void setStatusAllowedIPs(String statusAllowedIPs) {
+		this.statusAllowedIPsConfigValue = statusAllowedIPs;
+		if (statusAllowedIPs == null || statusAllowedIPs.trim().isEmpty()) {
+			this.statusAllowedIPs = null;
+			this.statusAllowedIPsValid = true;
+			return;
+		}
+		try {
+			this.statusAllowedIPs = Pattern.compile(statusAllowedIPs.trim());
+			this.statusAllowedIPsValid = true;
+		} catch (Exception e) {
+			this.statusAllowedIPsValid = false;
+		}
+	}
+
+	/**
+	 * @return <code>true</code> if {@link #getStatusAllowedIPs()} contains a valid regular expression
+	 */
+	public boolean isStatusAllowedIPsValid() {
+		return statusAllowedIPsValid;
+	}
+
+	/**
+	 * @return The configured password for the status dashboard, or <code>null</code> if unconfigured
+	 */
+	public String getStatusPassword() {
+		return statusPassword;
+	}
+
+	/**
+	 * Sets the access password for the status dashboard. If null or empty, a secure random HEX token
+	 * is automatically generated on startup and logged to the server console.
+	 *
+	 * @param statusPassword The access password
+	 */
+	public void setStatusPassword(String statusPassword) {
+		if (statusPassword == null || statusPassword.trim().isEmpty()) {
+			this.statusPassword = null;
+		} else {
+			this.statusPassword = statusPassword.trim();
+		}
+	}
+
+	/**
+	 * @return The effective password used to protect the status dashboard (configured password or generated HEX token)
+	 */
+	public String getEffectiveStatusPassword() {
+		if (statusPassword != null && !statusPassword.trim().isEmpty()) {
+			return statusPassword.trim();
+		}
+		return getOrGenerateStatusToken();
+	}
+
 	/**
 	 * This method is called on every request. It uses
 	 * {@link #isRequestAllowed(String, String)} for its checks. If a request is
@@ -771,6 +943,11 @@ public class AntiDoSValve extends ValveBase {
 
 		String ip = request.getRemoteAddr();
 		String path = request.getRequestURI();
+
+		if (statusUri != null && statusUri.equals(path)) {
+			handleStatusRequest(request, response, ip);
+			return;
+		}
 
 		if (log.isDebugEnabled()) {
 			log.debug(name4logging + ", ip: " + ip);
@@ -797,6 +974,373 @@ public class AntiDoSValve extends ValveBase {
 		}
 	}
 
+	/**
+	 * Handles status dashboard requests.
+	 *
+	 * @param request  The incoming request
+	 * @param response The response to send
+	 * @param ip       The client IP address
+	 * @throws IOException
+	 */
+	void handleStatusRequest(Request request, Response response, String ip) throws IOException {
+		// 1. Check IP whitelist if configured
+		if (statusAllowedIPs != null && !statusAllowedIPs.matcher(ip).matches()) {
+			if (log.isDebugEnabled()) {
+				log.debug(name4logging + " Status request rejected (IP not allowed): " + ip);
+			}
+			response.sendError(HttpServletResponse.SC_NOT_FOUND);
+			return;
+		}
+
+		// 2. Check password/token
+		if (!isStatusTokenValid(request)) {
+			// If the IP is already blocked, reject with httpStatusCode (e.g. 429) before counting
+			if (isIPAddressCurrentlyBlocked(ip)) {
+				if (log.isDebugEnabled()) {
+					log.debug(name4logging + " Status request rejected (IP currently blocked and invalid token): " + ip);
+				}
+				if (httpStatusCode == DEFAULT_HTTP_STATUS_CODE) {
+					response.setHeader("Retry-After", Integer.toString(provideRetryAfterSeconds()));
+				}
+				response.sendError(httpStatusCode);
+				return;
+			}
+
+			if (log.isDebugEnabled()) {
+				log.debug(name4logging + " Status request unauthorized (invalid or missing token): " + ip);
+			}
+			// Asymmetric counting: record failed authentication attempt in the monitor!
+			isIPAddressBlocked(ip);
+			response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+			return;
+		}
+
+		// 3. Authorized (valid token): Render dashboard (NOT blocked, NOT counted in monitor)
+		String format = request.getParameter("format");
+		boolean isJson = "json".equalsIgnoreCase(format) ||
+				(request.getHeader("Accept") != null && request.getHeader("Accept").contains("application/json"));
+
+		String filterValve = request.getParameter("valve");
+
+		if (isJson) {
+			renderStatusJson(response, filterValve);
+		} else {
+			renderStatusHtml(response, filterValve);
+		}
+	}
+
+	boolean isStatusTokenValid(Request request) {
+		String expected = getEffectiveStatusPassword();
+		if (expected == null || expected.isEmpty()) {
+			return false;
+		}
+
+		String provided = request.getParameter("token");
+		if (provided == null || provided.isEmpty()) {
+			String authHeader = request.getHeader("Authorization");
+			if (authHeader != null && authHeader.regionMatches(true, 0, "Bearer ", 0, 7)) {
+				provided = authHeader.substring(7).trim();
+			}
+		}
+
+		if (provided == null) {
+			return false;
+		}
+
+		return MessageDigest.isEqual(provided.trim().getBytes(StandardCharsets.UTF_8),
+				expected.getBytes(StandardCharsets.UTF_8));
+	}
+
+	/**
+	 * Generates the HTML status dashboard.
+	 *
+	 * @param response    The HTTP response
+	 * @param filterValve The valve to filter by
+	 * @throws IOException If an I/O error occurs
+	 */
+	private void renderStatusHtml(Response response, String filterValve) throws IOException {
+		response.setContentType("text/html;charset=UTF-8");
+		response.setCharacterEncoding("UTF-8");
+		PrintWriter out = response.getWriter();
+		out.write(buildStatusHtml(filterValve));
+		out.flush();
+	}
+
+	/**
+	 * Generates the JSON status dashboard.
+	 *
+	 * @param response    The HTTP response
+	 * @param filterValve The valve to filter by
+	 * @throws IOException If an I/O error occurs
+	 */
+	private void renderStatusJson(Response response, String filterValve) throws IOException {
+		response.setContentType("application/json;charset=UTF-8");
+		response.setCharacterEncoding("UTF-8");
+		PrintWriter out = response.getWriter();
+		out.write(buildStatusJson(filterValve));
+		out.flush();
+	}
+
+	private Set<AntiDoSValve> getValvesToRender() {
+		if (activeValves.isEmpty()) {
+			Set<AntiDoSValve> fallback = ConcurrentHashMap.newKeySet();
+			fallback.add(this);
+			return fallback;
+		}
+		if (!activeValves.contains(this)) {
+			activeValves.add(this);
+		}
+		return activeValves;
+	}
+
+	String buildStatusHtml(String filterValve) {
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+		sdf.setTimeZone(TimeZone.getDefault());
+		String serverTime = sdf.format(new Date(getTimeInMillis()));
+
+		Set<AntiDoSValve> valves = getValvesToRender();
+
+		StringBuilder sb = new StringBuilder(4096);
+		sb.append("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n")
+				.append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n")
+				.append("<title>Anti-DoS Valve Monitor</title>\n")
+				.append("<style>\n")
+				.append(":root{--bg:#0f172a;--card:#1e293b;--text:#e2e8f0;--muted:#94a3b8;--border:#334155;--accent:#38bdf8;--green:#22c55e;--red:#ef4444;--yellow:#eab308}\n")
+				.append("body{font-family:ui-monospace,\"SF Mono\",Menlo,Consolas,\"Liberation Mono\",monospace;background:var(--bg);color:var(--text);margin:0;padding:24px;font-size:13px;line-height:1.5}\n")
+				.append(".header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:24px;flex-wrap:wrap;gap:8px}\n")
+				.append(".title{font-size:16px;font-weight:700;color:var(--accent);display:flex;align-items:center;gap:8px}\n")
+				.append(".subtitle{color:var(--muted);font-size:12px}\n")
+				.append(".card{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:16px 20px;margin-bottom:20px}\n")
+				.append(".card-header{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}\n")
+				.append(".valve-name{font-size:15px;font-weight:700}\n")
+				.append(".badge{padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:0.5px}\n")
+				.append(".badge-blocking{background:#450a0a;color:#fca5a5;border:1px solid #7f1d1d}\n")
+				.append(".badge-marking{background:#172554;color:#93c5fd;border:1px solid #1e40af}\n")
+				.append(".badge-warn{background:#422006;color:#fde047;border:1px solid #713f12}\n")
+				.append(".badge-info{background:#0b1329;color:#7dd3fc;border:1px solid #0369a1}\n")
+				.append("table{width:100%;border-collapse:collapse;margin-top:6px}\n")
+				.append("th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--border)}\n")
+				.append("th{color:var(--muted);font-weight:500;width:30%;vertical-align:top}\n")
+				.append("td{color:var(--text)}\n")
+				.append("code{background:#0b1120;padding:2px 6px;border-radius:4px;color:#cbd5e1;border:1px solid #1e293b}\n")
+				.append(".metric-bar{background:#0b1120;border-radius:3px;height:8px;width:120px;display:inline-block;vertical-align:middle;overflow:hidden;margin-left:8px;border:1px solid var(--border)}\n")
+				.append(".metric-fill{height:100%;background:var(--accent)}\n")
+				.append(".metric-fill.high{background:var(--red)}\n")
+				.append(".metric-fill.med{background:var(--yellow)}\n")
+				.append("</style>\n</head>\n<body>\n")
+				.append("<div class=\"header\">\n")
+				.append("  <div class=\"title\"><span>&#9889;</span> Anti-DoS Valve Monitor</div>\n")
+				.append("  <div class=\"subtitle\">Server Time: ").append(serverTime)
+				.append(" &bull; Active Valves: ").append(valves.size()).append("</div>\n")
+				.append("</div>\n");
+
+		int renderedCount = 0;
+		for (AntiDoSValve v : valves) {
+			if (filterValve != null && !filterValve.trim().isEmpty()) {
+				if (!v.getMonitorName().equalsIgnoreCase(filterValve.trim())) {
+					continue;
+				}
+			}
+			renderedCount++;
+
+			AntiDoSMonitor monitor = v.provideMonitor();
+			int activeCounters = monitor != null ? monitor.getCurrentActiveCounterCount() : 0;
+			int blockedCounters = monitor != null ? monitor.getCurrentBlockedCounterCount() : 0;
+			long totalReqs = monitor != null ? monitor.getTotalrequests() : 0;
+			int activeSlots = monitor != null ? monitor.getNumberOfActiveSlots() : 0;
+
+			int maxActive = v.getMaxIPCacheSize();
+			int maxBlocked = v.getMaxBlockedIPCacheSize() > 0 ? v.getMaxBlockedIPCacheSize() : maxActive;
+
+			double activeRatio = maxActive > 0 ? (double) activeCounters / maxActive : 0.0;
+			double blockedRatio = maxBlocked > 0 ? (double) blockedCounters / maxBlocked : 0.0;
+
+			int activePercent = (int) Math.min(100, Math.round(activeRatio * 100));
+			int blockedPercent = (int) Math.min(100, Math.round(blockedRatio * 100));
+
+			String activeFillClass = activePercent > 85 ? "high" : (activePercent > 50 ? "med" : "");
+			String blockedFillClass = blockedPercent > 85 ? "high" : (blockedPercent > 50 ? "med" : "");
+
+			sb.append("<div class=\"card\">\n")
+					.append("  <div class=\"card-header\">\n")
+					.append("    <span class=\"valve-name\">").append(escapeHtml(v.getName4logging())).append("</span>\n");
+
+			if (v.isMonitorModeDefault()) {
+				sb.append("    <span class=\"badge badge-blocking\">MODE: BLOCKING (").append(v.getHttpStatusCode()).append(")</span>\n");
+			} else {
+				sb.append("    <span class=\"badge badge-marking\">MODE: MARKING</span>\n");
+			}
+
+			if (v.isSimulationMode()) {
+				sb.append("    <span class=\"badge badge-warn\">SIMULATION MODE</span>\n");
+			}
+			if (v.isServerWideBlocking()) {
+				sb.append("    <span class=\"badge badge-warn\">SERVER-WIDE BLOCKING</span>\n");
+			}
+
+			sb.append("  </div>\n")
+					.append("  <table>\n");
+
+			// Relevant & non-relevant paths
+			sb.append("    <tr><th>Relevant Paths</th><td>")
+					.append(v.getRelevantPathsConfigValue() != null ? "<code>" + escapeHtml(v.getRelevantPathsConfigValue()) + "</code>" : "<em>all requests</em>")
+					.append("</td></tr>\n");
+
+			if (v.getNonRelevantPathsConfigValue() != null) {
+				sb.append("    <tr><th>Non-Relevant Paths</th><td><code>").append(escapeHtml(v.getNonRelevantPathsConfigValue())).append("</code></td></tr>\n");
+			}
+
+			if (v.getAlwaysAllowedIPsConfigValue() != null) {
+				sb.append("    <tr><th>Always Allowed IPs</th><td><code>").append(escapeHtml(v.getAlwaysAllowedIPsConfigValue())).append("</code></td></tr>\n");
+			}
+			if (v.getAlwaysForbiddenIPsConfigValue() != null) {
+				sb.append("    <tr><th>Always Forbidden IPs</th><td><code>").append(escapeHtml(v.getAlwaysForbiddenIPsConfigValue())).append("</code></td></tr>\n");
+			}
+
+			// Rate limit parameters
+			int retentionPct = Math.round(v.getShareOfRetainedFormerRequests() * 100);
+			sb.append("    <tr><th>Rate Limit</th><td><strong>").append(v.getAllowedRequestsPerSlot())
+					.append("</strong> req / <strong>").append(v.getSlotLength()).append("s</strong> slot (Slots: ")
+					.append(v.getNumberOfSlots()).append(", Retention: ").append(retentionPct).append("%)</td></tr>\n");
+
+			// Subnet masks
+			String v4Str = v.getIpv4SubnetMask() == 32 ? "single IP (/32, no aggregation)" : "/" + v.getIpv4SubnetMask();
+			String v6Str = v.getIpv6SubnetMask() == 128 ? "single IP (/128, no aggregation)" : "/" + v.getIpv6SubnetMask();
+			sb.append("    <tr><th>Subnet Aggregation</th><td>IPv4: <code>").append(v4Str)
+					.append("</code> &bull; IPv6: <code>").append(v6Str).append("</code></td></tr>\n");
+
+			// Cache usage & slots
+			sb.append("    <tr><th>Active IP Cache</th><td>").append(activeCounters).append(" / ").append(maxActive)
+					.append(" <div class=\"metric-bar\"><div class=\"metric-fill ").append(activeFillClass)
+					.append("\" style=\"width:").append(activePercent).append("%\"></div></div></td></tr>\n");
+
+			sb.append("    <tr><th>Blocked IP Cache</th><td>").append(blockedCounters).append(" / ").append(maxBlocked)
+					.append(" <div class=\"metric-bar\"><div class=\"metric-fill ").append(blockedFillClass)
+					.append("\" style=\"width:").append(blockedPercent).append("%\"></div></div></td></tr>\n");
+
+			sb.append("    <tr><th>Total Requests Processed</th><td><strong>").append(totalReqs)
+					.append("</strong> (Active Slots: ").append(activeSlots).append(" / ").append(v.getNumberOfSlots()).append(")</td></tr>\n");
+
+			// Log Throttling & Async Eviction
+			String logThrottling = v.getMaxBlockLogsPerSecond() >= 0 ? v.getMaxBlockLogsPerSecond() + " logs/s" : "disabled";
+			String asyncEvict = v.getAsyncEviction() == null ? "auto" : v.getAsyncEviction().toString();
+			sb.append("    <tr><th>System Settings</th><td>Log Throttling: <code>").append(logThrottling)
+					.append("</code> &bull; Async Eviction: <code>").append(asyncEvict).append("</code></td></tr>\n");
+
+			sb.append("  </table>\n</div>\n");
+		}
+
+		if (renderedCount == 0) {
+			sb.append("<div class=\"card\"><div class=\"card-header\"><span class=\"valve-name\">No valves matched the filter: ")
+					.append(escapeHtml(filterValve)).append("</span></div></div>\n");
+		}
+
+		sb.append("</body>\n</html>\n");
+		return sb.toString();
+	}
+
+	String buildStatusJson(String filterValve) {
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
+		sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
+		String serverTime = sdf.format(new Date(getTimeInMillis()));
+
+		Set<AntiDoSValve> valves = getValvesToRender();
+
+		StringBuilder sb = new StringBuilder(2048);
+		sb.append("{\n  \"serverTime\": \"").append(serverTime).append("\",\n");
+		sb.append("  \"totalActiveValves\": ").append(valves.size()).append(",\n");
+		sb.append("  \"valves\": [\n");
+
+		boolean first = true;
+		for (AntiDoSValve v : valves) {
+			if (filterValve != null && !filterValve.trim().isEmpty()) {
+				if (!v.getMonitorName().equalsIgnoreCase(filterValve.trim())) {
+					continue;
+				}
+			}
+			if (!first) {
+				sb.append(",\n");
+			}
+			first = false;
+
+			AntiDoSMonitor monitor = v.provideMonitor();
+			int activeCounters = monitor != null ? monitor.getCurrentActiveCounterCount() : 0;
+			int blockedCounters = monitor != null ? monitor.getCurrentBlockedCounterCount() : 0;
+			long totalReqs = monitor != null ? monitor.getTotalrequests() : 0;
+			int activeSlots = monitor != null ? monitor.getNumberOfActiveSlots() : 0;
+
+			int maxActive = v.getMaxIPCacheSize();
+			int maxBlocked = v.getMaxBlockedIPCacheSize() > 0 ? v.getMaxBlockedIPCacheSize() : maxActive;
+
+			sb.append("    {\n")
+					.append("      \"monitorName\": \"").append(escapeJson(v.getMonitorName())).append("\",\n")
+					.append("      \"monitorMode\": \"").append(escapeJson(v.getMonitorMode())).append("\",\n")
+					.append("      \"simulationMode\": ").append(v.isSimulationMode()).append(",\n")
+					.append("      \"serverWideBlocking\": ").append(v.isServerWideBlocking()).append(",\n")
+					.append("      \"relevantPaths\": ").append(v.getRelevantPathsConfigValue() != null ? "\"" + escapeJson(v.getRelevantPathsConfigValue()) + "\"" : "null").append(",\n")
+					.append("      \"nonRelevantPaths\": ").append(v.getNonRelevantPathsConfigValue() != null ? "\"" + escapeJson(v.getNonRelevantPathsConfigValue()) + "\"" : "null").append(",\n")
+					.append("      \"allowedRequestsPerSlot\": ").append(v.getAllowedRequestsPerSlot()).append(",\n")
+					.append("      \"slotLength\": ").append(v.getSlotLength()).append(",\n")
+					.append("      \"numberOfSlots\": ").append(v.getNumberOfSlots()).append(",\n")
+					.append("      \"shareOfRetainedFormerRequests\": ").append(v.getShareOfRetainedFormerRequests()).append(",\n")
+					.append("      \"ipv4SubnetMask\": ").append(v.getIpv4SubnetMask()).append(",\n")
+					.append("      \"ipv6SubnetMask\": ").append(v.getIpv6SubnetMask()).append(",\n")
+					.append("      \"maxIPCacheSize\": ").append(maxActive).append(",\n")
+					.append("      \"maxBlockedIPCacheSize\": ").append(maxBlocked).append(",\n")
+					.append("      \"currentActiveCounters\": ").append(activeCounters).append(",\n")
+					.append("      \"currentBlockedCounters\": ").append(blockedCounters).append(",\n")
+					.append("      \"totalRequests\": ").append(totalReqs).append(",\n")
+					.append("      \"activeSlots\": ").append(activeSlots).append(",\n")
+					.append("      \"httpStatusCode\": ").append(v.getHttpStatusCode()).append("\n")
+					.append("    }");
+		}
+
+		sb.append("\n  ]\n}\n");
+		return sb.toString();
+	}
+
+	static String escapeHtml(String text) {
+		if (text == null) return "-";
+		StringBuilder sb = new StringBuilder(text.length());
+		for (int i = 0; i < text.length(); i++) {
+			char c = text.charAt(i);
+			switch (c) {
+				case '<' -> sb.append("&lt;");
+				case '>' -> sb.append("&gt;");
+				case '&' -> sb.append("&amp;");
+				case '"' -> sb.append("&quot;");
+				case '\'' -> sb.append("&#39;");
+				default -> sb.append(c);
+			}
+		}
+		return sb.toString();
+	}
+
+	static String escapeJson(String text) {
+		if (text == null) return "";
+		StringBuilder sb = new StringBuilder(text.length());
+		for (int i = 0; i < text.length(); i++) {
+			char c = text.charAt(i);
+			switch (c) {
+				case '"' -> sb.append("\\\"");
+				case '\\' -> sb.append("\\\\");
+				case '\b' -> sb.append("\\b");
+				case '\f' -> sb.append("\\f");
+				case '\n' -> sb.append("\\n");
+				case '\r' -> sb.append("\\r");
+				case '\t' -> sb.append("\\t");
+				default -> {
+					if (c < ' ') {
+						sb.append(String.format("\\u%04x", (int) c));
+					} else {
+						sb.append(c);
+					}
+				}
+			}
+		}
+		return sb.toString();
+	}
+
 	@Override
 	protected void initInternal() throws LifecycleException {
 		super.initInternal();
@@ -807,10 +1351,25 @@ public class AntiDoSValve extends ValveBase {
 	protected synchronized void startInternal() throws LifecycleException {
 		checkConfiguration();
 		super.startInternal();
+		activeValves.add(this);
+
+		if (statusUri != null) {
+			if (statusPassword != null && !statusPassword.trim().isEmpty()) {
+				log.info(name4logging + " Status dashboard active at: " + statusUri + " (using configured password)");
+			} else {
+				String token = getEffectiveStatusPassword();
+				log.info("======================================================================\n"
+						+ name4logging + " Status dashboard active at: " + statusUri + "\n"
+						+ name4logging + " No password configured. Generated random HEX access token:\n"
+						+ "               --> " + token + " <--\n"
+						+ "======================================================================");
+			}
+		}
 	}
 
 	@Override
 	protected synchronized void stopInternal() throws LifecycleException {
+		activeValves.remove(this);
 		super.stopInternal();
 		AntiDoSMonitor monitor = monitors.get(monitorName);
 		if (monitor != null) {
@@ -831,6 +1390,8 @@ public class AntiDoSValve extends ValveBase {
 			throw new LifecycleException(name4logging + ".alwaysAllowedIPs is invalid");
 		if (!relevantPathsValid)
 			throw new LifecycleException(name4logging + ".relevantPaths is invalid");
+		if (!statusAllowedIPsValid)
+			throw new LifecycleException(name4logging + ".statusAllowedIPs is invalid: " + statusAllowedIPsConfigValue);
 		if (!isMonitorModeValid())
 			throw new LifecycleException(name4logging + ".monitorMode is invalid");
 		if (!isHttpStatusCodeValid())

@@ -146,9 +146,10 @@
                prefix="localhost_access_log" suffix=".txt"
                pattern="%h %l %u %t &quot;%r&quot; %s %b" />
 
-        <!-- AntiDoSValve demo configuration -->
+        <!-- AntiDoSValve demo configuration with internal status dashboard  -->
         <Valve className="org.henbru.antidos.AntiDoSValve"
                 monitorName="TEST VALVE"
+                statusUri="/antidos-status"
                 alwaysAllowedIPs=""
                 alwaysForbiddenIPs=""
                 relevantPaths="/valvetest.*"

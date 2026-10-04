@@ -282,5 +282,31 @@ class AntiDoSMonitorTest {
 		assertEquals(-1, mon.getMaxBlockLogsPerSecond());
 		assertFalse(mon.registerAndCheckRequest("10.0.0.1"));
 	}
+
+	@Test
+	void testGetCurrentSlotKeyAndCounterCounts() {
+		// slotLength = 10s (10000ms)
+		AntiDoSMonitor4Test mon = new AntiDoSMonitor4Test(10, 3, 10, 2, 0.5f);
+		mon.referencetime = 25000;
+		assertEquals(2, mon.getCurrentSlotKey());
+
+		mon.referencetime = 30000;
+		assertEquals(3, mon.getCurrentSlotKey());
+
+		// Initially 0 counters
+		assertEquals(0, mon.getCurrentActiveCounterCount());
+		assertEquals(0, mon.getCurrentBlockedCounterCount());
+
+		// Register request
+		mon.registerAndCheckRequest("192.168.1.1");
+		assertEquals(1, mon.getCurrentActiveCounterCount());
+		assertEquals(0, mon.getCurrentBlockedCounterCount());
+
+		// Exceed limit to block
+		mon.registerAndCheckRequest("192.168.1.1");
+		mon.registerAndCheckRequest("192.168.1.1"); // blocked
+		assertEquals(0, mon.getCurrentActiveCounterCount());
+		assertEquals(1, mon.getCurrentBlockedCounterCount());
+	}
 }
 

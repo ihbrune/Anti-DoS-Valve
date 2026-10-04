@@ -8,7 +8,15 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.util.HashMap;
+import java.util.Map;
+
 import org.apache.catalina.LifecycleException;
+import org.apache.catalina.connector.Connector;
+import org.apache.catalina.connector.Request;
+import org.apache.catalina.connector.Response;
 import org.apache.catalina.core.StandardEngine;
 import org.junit.jupiter.api.Test;
 
@@ -755,11 +763,465 @@ class AntiDoSValveTest {
 	}
 
 	private static void setValidAntiDoSMonitorconfiguration(AntiDoSValve valve, String monitorName) {
+		valve.setContainer(new StandardEngine());
 		valve.setMonitorName(monitorName);
 		valve.setNumberOfSlots(10);
 		valve.setSlotLength(30);
 		valve.setShareOfRetainedFormerRequests("1");
 		valve.setAllowedRequestsPerSlot(50);
 		valve.setMaxIPCacheSize(100);
+	}
+
+	@Test
+	void testStatusUriConfig() {
+		AntiDoSValve valve = new AntiDoSValve();
+		assertNull(valve.getStatusUri());
+
+		valve.setStatusUri("antidos-status");
+		assertEquals("/antidos-status", valve.getStatusUri());
+
+		valve.setStatusUri("/custom/status");
+		assertEquals("/custom/status", valve.getStatusUri());
+
+		valve.setStatusUri("  ");
+		assertNull(valve.getStatusUri());
+
+		valve.setStatusUri(null);
+		assertNull(valve.getStatusUri());
+	}
+
+	@Test
+	void testStatusAllowedIPsConfig() throws LifecycleException {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "STATUS_IP_TEST");
+
+		assertTrue(valve.isStatusAllowedIPsValid());
+		assertNull(valve.getStatusAllowedIPs());
+
+		valve.setStatusAllowedIPs("127\\.0\\.0\\.1|::1|10\\..*");
+		assertTrue(valve.isStatusAllowedIPsValid());
+		assertEquals("127\\.0\\.0\\.1|::1|10\\..*", valve.getStatusAllowedIPs());
+
+		// Test invalid regex
+		valve.setStatusAllowedIPs("[invalid-regex");
+		assertFalse(valve.isStatusAllowedIPsValid());
+
+		// LifecycleException thrown during start
+		LifecycleException thrown = assertThrows(LifecycleException.class, () -> valve.init());
+		assertTrue(thrown.getMessage().contains("statusAllowedIPs is invalid"));
+
+		// Reset to null
+		valve.setStatusAllowedIPs(null);
+		assertTrue(valve.isStatusAllowedIPsValid());
+	}
+
+	@Test
+	void testStatusPasswordAndRandomTokenGeneration() {
+		AntiDoSValve valve = new AntiDoSValve();
+		assertNull(valve.getStatusPassword());
+
+		// When configured explicitly
+		valve.setStatusPassword("superSecretAdmin123");
+		assertEquals("superSecretAdmin123", valve.getStatusPassword());
+		assertEquals("superSecretAdmin123", valve.getEffectiveStatusPassword());
+
+		// When unconfigured, falls back to generated random HEX token
+		valve.setStatusPassword(null);
+		AntiDoSValve.resetGeneratedStatusToken();
+		String token1 = valve.getEffectiveStatusPassword();
+		assertNotNull(token1);
+		assertTrue(token1.length() >= 16 && token1.length() <= 20,
+				"Token length should be between 16 and 20, was: " + token1.length());
+		assertTrue(token1.matches("^[0-9a-f]+$"), "Token must consist strictly of hex digits (0-9a-f): " + token1);
+
+		// Token is shared and idempotent across calls
+		String token2 = valve.getEffectiveStatusPassword();
+		assertEquals(token1, token2);
+		assertEquals(token1, AntiDoSValve.getOrGenerateStatusToken());
+
+		// Another valve gets the exact same shared token
+		AntiDoSValve valve2 = new AntiDoSValve();
+		assertEquals(token1, valve2.getEffectiveStatusPassword());
+
+		// After reset, a fresh token is generated
+		AntiDoSValve.resetGeneratedStatusToken();
+		String token3 = valve.getEffectiveStatusPassword();
+		assertNotNull(token3);
+		assertTrue(token3.matches("^[0-9a-f]+$"));
+	}
+
+	@Test
+	void testActiveValvesLifecycle() throws LifecycleException {
+		AntiDoSValve.clearActiveValves();
+		AntiDoSValve valve1 = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve1, "LIFECYCLE_VALVE_1");
+		valve1.setStatusUri("/antidos-status");
+
+		AntiDoSValve valve2 = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve2, "LIFECYCLE_VALVE_2");
+
+		valve1.start();
+		assertTrue(AntiDoSValve.getActiveValves().contains(valve1));
+		assertEquals(1, AntiDoSValve.getActiveValves().size());
+
+		valve2.start();
+		assertTrue(AntiDoSValve.getActiveValves().contains(valve2));
+		assertEquals(2, AntiDoSValve.getActiveValves().size());
+
+		valve1.stop();
+		assertFalse(AntiDoSValve.getActiveValves().contains(valve1));
+		assertTrue(AntiDoSValve.getActiveValves().contains(valve2));
+		assertEquals(1, AntiDoSValve.getActiveValves().size());
+
+		valve2.stop();
+		assertFalse(AntiDoSValve.getActiveValves().contains(valve2));
+		assertTrue(AntiDoSValve.getActiveValves().isEmpty());
+	}
+
+	@Test
+	void testBuildStatusHtmlAndJson() throws Exception {
+		AntiDoSValve.clearActiveValves();
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "DASHBOARD_TEST");
+		valve.setRelevantPaths("/api/.*");
+		valve.setNonRelevantPaths("/api/public");
+		valve.setIpv4SubnetMask(24);
+		valve.start();
+
+		// HTML Generation
+		String html = valve.buildStatusHtml(null);
+		assertNotNull(html);
+		assertTrue(html.contains("<!DOCTYPE html>"));
+		assertTrue(html.contains("Anti-DoS Valve Monitor"));
+		assertTrue(html.contains("DASHBOARD_TEST"));
+		assertTrue(html.contains("/api/.*"));
+		assertTrue(html.contains("/api/public"));
+		assertTrue(html.contains("MODE: BLOCKING"));
+		assertTrue(html.contains("/24"));
+		assertTrue(html.contains("ui-monospace"));
+
+		// Filter matching valve
+		String htmlFiltered = valve.buildStatusHtml("DASHBOARD_TEST");
+		assertTrue(htmlFiltered.contains("DASHBOARD_TEST"));
+
+		// Filter non-existent valve
+		String htmlNotFound = valve.buildStatusHtml("UNKNOWN_VALVE");
+		assertTrue(htmlNotFound.contains("No valves matched the filter: UNKNOWN_VALVE"));
+
+		// HTML Escaping test
+		AntiDoSValve xssValve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(xssValve, "<script>alert('xss')</script>");
+		xssValve.start();
+		String xssHtml = xssValve.buildStatusHtml("<script>alert('xss')</script>");
+		assertFalse(xssHtml.contains("<script>alert('xss')</script>"));
+		assertTrue(xssHtml.contains("&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;"));
+		xssValve.stop();
+
+		// JSON Generation
+		String json = valve.buildStatusJson(null);
+		assertNotNull(json);
+		assertTrue(json.contains("\"serverTime\":"));
+		assertTrue(json.contains("\"totalActiveValves\":"));
+		assertTrue(json.contains("\"monitorName\": \"DASHBOARD_TEST\""));
+		assertTrue(json.contains("\"relevantPaths\": \"/api/.*\""));
+		assertTrue(json.contains("\"allowedRequestsPerSlot\": 50"));
+		assertTrue(json.contains("\"ipv4SubnetMask\": 24"));
+
+		valve.stop();
+	}
+
+	@Test
+	void testStatusRequestIPWhitelist() throws Exception {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "IP_WHITELIST_TEST");
+		valve.setStatusUri("/antidos-status");
+		valve.setStatusAllowedIPs("127\\.0\\.0\\.1");
+		valve.setStatusPassword("secret123");
+		valve.start();
+
+		// Unauthorized IP -> 404
+		TestRequest reqForbidden = new TestRequest("/antidos-status", "192.168.1.50");
+		reqForbidden.setParameter("token", "secret123");
+		TestResponse respForbidden = new TestResponse();
+		valve.handleStatusRequest(reqForbidden, respForbidden, "192.168.1.50");
+		assertEquals(404, respForbidden.getErrorCode());
+
+		// Authorized IP with valid token -> 200
+		TestRequest reqAllowed = new TestRequest("/antidos-status", "127.0.0.1");
+		reqAllowed.setParameter("token", "secret123");
+		TestResponse respAllowed = new TestResponse();
+		valve.handleStatusRequest(reqAllowed, respAllowed, "127.0.0.1");
+		assertEquals(-1, respAllowed.getErrorCode()); // no error sent
+		assertTrue(respAllowed.getOutput().contains("Anti-DoS Valve Monitor"));
+
+		valve.stop();
+	}
+
+	@Test
+	void testStatusRequestAsymmetricRateLimiting() throws Exception {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "RATE_LIMIT_STATUS_TEST");
+		valve.setStatusUri("/antidos-status");
+		valve.setStatusPassword("myAdminToken");
+		valve.setAllowedRequestsPerSlot(2); // threshold = 2 requests
+		valve.setSlotLength(60);
+		valve.start();
+
+		String attackerIp = "198.51.100.25";
+
+		// Attempt 1 with WRONG token: 401 Unauthorized, recorded in monitor
+		TestRequest req1 = new TestRequest("/antidos-status", attackerIp);
+		req1.setParameter("token", "wrongPassword");
+		TestResponse resp1 = new TestResponse();
+		valve.handleStatusRequest(req1, resp1, attackerIp);
+		assertEquals(401, resp1.getErrorCode());
+		assertFalse(valve.isIPAddressCurrentlyBlocked(attackerIp));
+
+		// Attempt 2 with WRONG token: 401 Unauthorized, reaches limit of 2 requests
+		TestRequest req2 = new TestRequest("/antidos-status", attackerIp);
+		req2.setParameter("token", "wrongPassword");
+		TestResponse resp2 = new TestResponse();
+		valve.handleStatusRequest(req2, resp2, attackerIp);
+		assertEquals(401, resp2.getErrorCode());
+
+		// Attempt 3 with WRONG token: 3rd request exceeds limit -> IP is now blocked!
+		TestRequest req3 = new TestRequest("/antidos-status", attackerIp);
+		req3.setParameter("token", "wrongPassword");
+		TestResponse resp3 = new TestResponse();
+		valve.handleStatusRequest(req3, resp3, attackerIp);
+		assertEquals(401, resp3.getErrorCode());
+		assertTrue(valve.isIPAddressCurrentlyBlocked(attackerIp));
+
+		// Next request with WRONG token from blocked IP: rejected directly with 429 Too Many Requests
+		TestRequest reqBlockedWrong = new TestRequest("/antidos-status", attackerIp);
+		reqBlockedWrong.setParameter("token", "wrongPasswordAgain");
+		TestResponse respBlockedWrong = new TestResponse();
+		valve.handleStatusRequest(reqBlockedWrong, respBlockedWrong, attackerIp);
+		assertEquals(429, respBlockedWrong.getErrorCode());
+
+		// But an Administrator with the VALID token can access the dashboard EVEN IF their IP is currently blocked (e.g. while testing application endpoints):
+		TestRequest reqAdminBlockedIp = new TestRequest("/antidos-status", attackerIp);
+		reqAdminBlockedIp.setParameter("token", "myAdminToken");
+		TestResponse respAdminBlockedIp = new TestResponse();
+		valve.handleStatusRequest(reqAdminBlockedIp, respAdminBlockedIp, attackerIp);
+		assertEquals(-1, respAdminBlockedIp.getErrorCode()); // 200 OK
+		assertTrue(respAdminBlockedIp.getOutput().contains("RATE_LIMIT_STATUS_TEST"));
+
+		// Legitimate Admin from clean IP: requests are NOT counted against the rate limit
+		String adminIp = "192.168.1.10";
+		for (int i = 0; i < 5; i++) {
+			TestRequest reqAdmin = new TestRequest("/antidos-status", adminIp);
+			reqAdmin.setParameter("token", "myAdminToken");
+			TestResponse respAdmin = new TestResponse();
+			valve.handleStatusRequest(reqAdmin, respAdmin, adminIp);
+			assertEquals(-1, respAdmin.getErrorCode()); // 200 OK (no error)
+		}
+		// Admin is NOT blocked despite 5 requests (well above limit of 2)
+		assertFalse(valve.isIPAddressCurrentlyBlocked(adminIp));
+
+		valve.stop();
+	}
+
+	@Test
+	void testStatusRequestAuthenticationMethods() throws Exception {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "AUTH_METHODS_TEST");
+		valve.setStatusUri("/antidos-status");
+		valve.setStatusPassword("validKey");
+		valve.start();
+
+		String ip = "10.0.0.1";
+
+		// 1. Via ?token=... (Accepted)
+		TestRequest reqToken = new TestRequest("/antidos-status", ip);
+		reqToken.setParameter("token", "validKey");
+		TestResponse respToken = new TestResponse();
+		valve.handleStatusRequest(reqToken, respToken, ip);
+		assertEquals(-1, respToken.getErrorCode());
+
+		// 2. Via Authorization: Bearer <token> (Accepted)
+		TestRequest reqBearer = new TestRequest("/antidos-status", ip);
+		reqBearer.setHeader("Authorization", "Bearer validKey");
+		TestResponse respBearer = new TestResponse();
+		valve.handleStatusRequest(reqBearer, respBearer, ip);
+		assertEquals(-1, respBearer.getErrorCode());
+
+		// 3. Alternative names like ?pwd= are NOT accepted (401)
+		TestRequest reqPwd = new TestRequest("/antidos-status", ip);
+		reqPwd.setParameter("pwd", "validKey");
+		TestResponse respPwd = new TestResponse();
+		valve.handleStatusRequest(reqPwd, respPwd, ip);
+		assertEquals(401, respPwd.getErrorCode());
+
+		// 4. Custom header X-AntiDoS-Token is NOT accepted (401)
+		TestRequest reqHeader = new TestRequest("/antidos-status", ip);
+		reqHeader.setHeader("X-AntiDoS-Token", "validKey");
+		TestResponse respHeader = new TestResponse();
+		valve.handleStatusRequest(reqHeader, respHeader, ip);
+		assertEquals(401, respHeader.getErrorCode());
+
+		// 5. Completely missing token (no parameter, no Authorization header) -> 401
+		TestRequest reqNoToken = new TestRequest("/antidos-status", ip);
+		TestResponse respNoToken = new TestResponse();
+		valve.handleStatusRequest(reqNoToken, respNoToken, ip);
+		assertEquals(401, respNoToken.getErrorCode());
+
+		// 6. Invalid token via Authorization: Bearer <wrongToken> -> 401
+		TestRequest reqWrongBearer = new TestRequest("/antidos-status", ip);
+		reqWrongBearer.setHeader("Authorization", "Bearer wrongBearerToken");
+		TestResponse respWrongBearer = new TestResponse();
+		valve.handleStatusRequest(reqWrongBearer, respWrongBearer, ip);
+		assertEquals(401, respWrongBearer.getErrorCode());
+
+		// JSON format via ?format=json
+		TestRequest reqJson = new TestRequest("/antidos-status", ip);
+		reqJson.setParameter("token", "validKey");
+		reqJson.setParameter("format", "json");
+		TestResponse respJson = new TestResponse();
+		valve.handleStatusRequest(reqJson, respJson, ip);
+		assertEquals(-1, respJson.getErrorCode());
+		assertTrue(respJson.getOutput().contains("\"totalActiveValves\":"));
+
+		valve.stop();
+	}
+
+	@Test
+	void testInvokeInterceptsStatusUri() throws Exception {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "INVOKE_INTERCEPT_TEST");
+		valve.setStatusUri("/my-status");
+		valve.setStatusPassword("testSecret");
+		valve.start();
+
+		TestRequest req = new TestRequest("/my-status", "127.0.0.1");
+		req.setParameter("token", "testSecret");
+		TestResponse resp = new TestResponse();
+
+		valve.invoke(req, resp);
+		assertEquals(-1, resp.getErrorCode());
+		assertTrue(resp.getOutput().contains("Anti-DoS Valve Monitor"));
+
+		valve.stop();
+	}
+
+	@Test
+	void testBlockedIpCanStillAccessStatusWithValidToken() throws Exception {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "BLOCKED_IP_STATUS_TEST");
+		valve.setStatusUri("/antidos-status");
+		valve.setStatusPassword("secureAdminPass");
+		valve.setRelevantPaths("/valvetest.*");
+		valve.setAllowedRequestsPerSlot(2);
+		valve.setSlotLength(60);
+		valve.start();
+
+		String clientIp = "192.168.1.55";
+
+		// 1. Call /valvetest until IP is blocked
+		assertTrue(valve.isRequestAllowed(clientIp, "/valvetest")); // 1
+		assertTrue(valve.isRequestAllowed(clientIp, "/valvetest")); // 2
+		assertFalse(valve.isRequestAllowed(clientIp, "/valvetest")); // 3 -> blocked!
+		assertTrue(valve.isIPAddressCurrentlyBlocked(clientIp));
+
+		// 2. Now call /antidos-status with VALID token: Must SUCCEED so admin can inspect the valve
+		TestRequest statusReqValid = new TestRequest("/antidos-status", clientIp);
+		statusReqValid.setParameter("token", "secureAdminPass");
+		TestResponse statusRespValid = new TestResponse();
+		valve.invoke(statusReqValid, statusRespValid);
+		assertEquals(-1, statusRespValid.getErrorCode()); // 200 OK!
+		assertTrue(statusRespValid.getOutput().contains("Anti-DoS Valve Monitor"));
+		assertTrue(statusRespValid.getOutput().contains("BLOCKED_IP_STATUS_TEST"));
+		assertEquals(1, valve.provideMonitor().getCurrentBlockedCounterCount());
+
+		// 3. Call /antidos-status with WRONG token: Must be rejected with 429 because IP is blocked
+		TestRequest statusReqWrong = new TestRequest("/antidos-status", clientIp);
+		statusReqWrong.setParameter("token", "wrongToken");
+		TestResponse statusRespWrong = new TestResponse();
+		valve.invoke(statusReqWrong, statusRespWrong);
+		assertEquals(429, statusRespWrong.getErrorCode());
+
+		valve.stop();
+	}
+
+	private static class TestRequest extends Request {
+		private final String testUri;
+		private final String testRemoteAddr;
+		private final Map<String, String> params = new HashMap<>();
+		private final Map<String, String> headers = new HashMap<>();
+
+		TestRequest(String uri, String remoteAddr) {
+			super(new Connector());
+			this.testUri = uri;
+			this.testRemoteAddr = remoteAddr;
+		}
+
+		@Override
+		public String getRequestURI() {
+			return testUri;
+		}
+
+		@Override
+		public String getRemoteAddr() {
+			return testRemoteAddr;
+		}
+
+		@Override
+		public String getParameter(String name) {
+			return params.get(name);
+		}
+
+		void setParameter(String name, String value) {
+			params.put(name, value);
+		}
+
+		@Override
+		public String getHeader(String name) {
+			return headers.get(name);
+		}
+
+		void setHeader(String name, String value) {
+			headers.put(name, value);
+		}
+	}
+
+	private static class TestResponse extends Response {
+		private int errorCode = -1;
+		private final StringWriter sw = new StringWriter();
+		private final PrintWriter pw = new PrintWriter(sw);
+
+		TestResponse() {
+			super();
+		}
+
+		@Override
+		public void sendError(int status) {
+			this.errorCode = status;
+		}
+
+		@Override
+		public void setContentType(String type) {
+		}
+
+		@Override
+		public void setCharacterEncoding(String charset) {
+		}
+
+		@Override
+		public void setHeader(String name, String value) {
+		}
+
+		@Override
+		public PrintWriter getWriter() {
+			return pw;
+		}
+
+		String getOutput() {
+			pw.flush();
+			return sw.toString();
+		}
+
+		int getErrorCode() {
+			return errorCode;
+		}
 	}
 }
