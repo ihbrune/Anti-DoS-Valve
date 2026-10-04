@@ -146,12 +146,20 @@
                prefix="localhost_access_log" suffix=".txt"
                pattern="%h %l %u %t &quot;%r&quot; %s %b" />
 
-        <!-- AntiDoSValve demo configuration with internal status dashboard  -->
+        <!-- AntiDoSValve demo configuration for internal status dashboard  -->
+        <Valve className="org.henbru.antidos.AntiDoSValve"
+                monitorName="STATUS VALVE"
+                statusUri="/antidos-status"
+                maxIPCacheSize="10"
+                numberOfSlots="5"
+                slotLength="10"
+                allowedRequestsPerSlot="5"
+                shareOfRetainedFormerRequests="0"
+        />
+
+        <!-- AntiDoSValve demo configuration for testing  -->
         <Valve className="org.henbru.antidos.AntiDoSValve"
                 monitorName="TEST VALVE"
-                statusUri="/antidos-status"
-                alwaysAllowedIPs=""
-                alwaysForbiddenIPs=""
                 relevantPaths="/valvetest.*"
                 nonRelevantPaths="/valvetest/ex"
                 maxIPCacheSize="50"
@@ -164,8 +172,6 @@
         <Valve className="org.henbru.antidos.AntiDoSValve"
     			   monitorMode="marking"
                 monitorName="MARKING VALVE"
-                alwaysAllowedIPs=""
-                alwaysForbiddenIPs=""
                 relevantPaths="/advdemo.*"
                 maxIPCacheSize="50"
                 numberOfSlots="10"
