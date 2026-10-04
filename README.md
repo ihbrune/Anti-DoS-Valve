@@ -323,6 +323,7 @@ Available since version 1.6.0, specifies the URI path under which the internal s
 
 * **Early Interception**: `statusUri` is intercepted before the request reaches the standard pipeline or the web application. Downstream servlets or valves are not invoked.
 * **No Configuration in `nonRelevantPaths` Required**: You do not need to add `statusUri` to `nonRelevantPaths` or exclude it from `relevantPaths`. It is handled completely independently.
+* **Multi-Valve Deployments (Place on the First Valve)**: In setups with multiple valves, configure `statusUri` **only on the first valve in the pipeline** (or define a dedicated status valve placed first in `server.xml`). Because Tomcat processes valves sequentially, placing `statusUri` on the first valve ensures dashboard requests are intercepted immediately before any subsequent application valves can inspect, count, or rate-limit them.
 * **Access from Blocked IPs**: If an administrator's IP address has been blocked by the valve (for example, while testing rate limits against `relevantPaths`), the administrator can **still access** the status dashboard by providing the valid token. This ensures administrators are never locked out of monitoring the valve. Conversely, requests from blocked IPs with missing or incorrect tokens are immediately rejected with HTTP 429 without performing password verification.
 
 ## statusAllowedIPs (optional)
@@ -478,7 +479,12 @@ If known partners need to access your service at higher rates than public users,
 
 ## Separate configuration for status interface and monitor valves
 
-If you plan to use the dashboard feature, you should configure a separate valve for the status interface. The status interface valve should only be accessible from trusted IP addresses, and it should not be used to block any requests.
+If you plan to use the dashboard feature in a multi-valve setup, it is strongly recommended to configure a **dedicated valve for the status interface and place it as the first valve in the pipeline** (`server.xml`).
+
+**Why place the status valve first?**
+* **Early Pipeline Interception:** Tomcat evaluates valves strictly in the order they are declared in `server.xml`. Placing the dedicated status valve first ensures requests to `statusUri` are intercepted and fulfilled immediately.
+* **No Unintended Rate Limiting:** If `statusUri` were placed on a downstream valve, any preceding valve configured with general path patterns (e.g. `relevantPaths=".*"`) would treat dashboard requests as normal application traffic, counting them toward quota limits and potentially blocking administrators.
+* **Fleet-Wide Visibility:** Because the status dashboard automatically discovers and aggregates metrics from all active valves in the Tomcat JVM, a single dedicated status valve placed at the top provides full observability without needing `statusUri` configured anywhere else.
 
 Here is an example configuration:
 
@@ -523,6 +529,11 @@ In servers running multiple valve instances (e.g., host-level rate limiting alon
 * **Rate Limiting Parameters:** Request limits, slot lengths, retention factor, active slots count.
 * **Subnet Aggregation:** Configured IPv4 and IPv6 subnet aggregation masks.
 * **Cache & Memory Utilization:** Current count of tracked IP counters vs. configured cache caps, currently blocked IPs, and total lifetime request counts.
+
+### Recommendation for Multi-Valve Setups
+
+* **Configure `statusUri` only on the first valve (or a dedicated status valve):** Always configure `statusUri` on the **first valve in the pipeline** in `server.xml`, or create a dedicated status valve placed before all application valves. Because Tomcat processes valves sequentially, this ensures dashboard requests are answered directly at the entrance of the valve chain and are never subject to the path filters, request counting, or quota limits of other valves.
+* **Avoid multiple different `statusUri` configurations:** Configuring different status URIs across multiple valves creates redundant endpoints with separate passwords/tokens. Moreover, upstream valves would interpret requests to downstream status endpoints as regular application traffic unless explicitly excluded via `nonRelevantPaths`.
 
 ## Lightweight, Self-Contained Design
 
