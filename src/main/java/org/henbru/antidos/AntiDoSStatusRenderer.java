@@ -162,6 +162,7 @@ public class AntiDoSStatusRenderer {
 				.append(".badge-marking{background:#172554;color:#93c5fd;border:1px solid #1e40af}\n")
 				.append(".badge-warn{background:#422006;color:#fde047;border:1px solid #713f12}\n")
 				.append(".badge-info{background:#0b1329;color:#7dd3fc;border:1px solid #0369a1}\n")
+				.append(".badge-status{background:#064e3b;color:#6ee7b7;border:1px solid #047857}\n")
 				.append("table{width:100%;border-collapse:collapse;margin-top:6px}\n")
 				.append("th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--border)}\n")
 				.append("th{color:var(--muted);font-weight:500;width:30%;vertical-align:top}\n")
@@ -178,7 +179,12 @@ public class AntiDoSStatusRenderer {
 				.append("<div class=\"header\">\n")
 				.append("  <div class=\"title\"><span>&#9889;</span> Anti-DoS Valve Monitor</div>\n")
 				.append("  <div class=\"subtitle\"><span>Server Time: ").append(serverTime)
-				.append(" &bull; Active Valves: ").append(valves.size()).append("</span>")
+				.append(" &bull; Active Valves: ").append(valves.size());
+		if (valve != null && valve.getStatusUri() != null) {
+			sb.append(" &bull; Dashboard Host: <strong>").append(escapeHtml(valve.getName4logging()))
+					.append("</strong> (<code>").append(escapeHtml(valve.getStatusUri())).append("</code>)");
+		}
+		sb.append("</span>")
 				.append("<a class=\"btn\" href=\"").append(buildDashboardUrl(token, null, null, "json")).append("\">{ } JSON (All)</a>")
 				.append("</div>\n")
 				.append("</div>\n");
@@ -215,6 +221,14 @@ public class AntiDoSStatusRenderer {
 					.append("    <div class=\"card-title-group\">\n")
 					.append("      <span class=\"valve-name\">").append(escapeHtml(v.getName4logging())).append("</span>\n");
 
+			if (v.getStatusUri() != null) {
+				if (v == valve) {
+					sb.append("      <span class=\"badge badge-status\">&#9889; STATUS DASHBOARD (CURRENT HOST): ").append(escapeHtml(v.getStatusUri())).append("</span>\n");
+				} else {
+					sb.append("      <span class=\"badge badge-status\">&#9889; STATUS DASHBOARD: ").append(escapeHtml(v.getStatusUri())).append("</span>\n");
+				}
+			}
+
 			if (v.isMonitorModeDefault()) {
 				sb.append("      <span class=\"badge badge-blocking\">MODE: BLOCKING (").append(v.getHttpStatusCode()).append(")</span>\n");
 			} else {
@@ -236,10 +250,34 @@ public class AntiDoSStatusRenderer {
 					.append("  </div>\n")
 					.append("  <table>\n");
 
+			// Status Dashboard row
+			if (v.getStatusUri() != null) {
+				sb.append("    <tr><th>Status Dashboard</th><td><code>").append(escapeHtml(v.getStatusUri())).append("</code>");
+				if (v == valve) {
+					sb.append(" <span class=\"badge badge-status\">Current Host</span>");
+				} else {
+					sb.append(" <span class=\"badge badge-info\">Active</span>");
+				}
+				if (v.getStatusPassword() != null && !v.getStatusPassword().isEmpty()) {
+					sb.append(" &bull; <em>Password Protected</em>");
+				} else {
+					sb.append(" &bull; <em>Auto-Generated Token</em>");
+				}
+				sb.append("</td></tr>\n");
+			} else {
+				sb.append("    <tr><th>Status Dashboard</th><td><em>none (disabled on this valve)</em></td></tr>\n");
+			}
+
 			// Relevant & non-relevant paths
-			sb.append("    <tr><th>Relevant Paths</th><td>")
-					.append(v.getRelevantPathsConfigValue() != null ? "<code>" + escapeHtml(v.getRelevantPathsConfigValue()) + "</code>" : "<em>none (no requests monitored)</em>")
-					.append("</td></tr>\n");
+			sb.append("    <tr><th>Relevant Paths</th><td>");
+			if (v.getRelevantPathsConfigValue() != null) {
+				sb.append("<code>").append(escapeHtml(v.getRelevantPathsConfigValue())).append("</code>");
+			} else if (v.getStatusUri() != null) {
+				sb.append("<em>none (no requests monitored &mdash; dedicated to Status Dashboard at <code>").append(escapeHtml(v.getStatusUri())).append("</code>)</em>");
+			} else {
+				sb.append("<em>none (no requests monitored)</em>");
+			}
+			sb.append("</td></tr>\n");
 
 			if (v.getNonRelevantPathsConfigValue() != null) {
 				sb.append("    <tr><th>Non-Relevant Paths</th><td><code>").append(escapeHtml(v.getNonRelevantPathsConfigValue())).append("</code></td></tr>\n");
@@ -334,6 +372,7 @@ public class AntiDoSStatusRenderer {
 				.append(".badge-marking{background:#172554;color:#93c5fd;border:1px solid #1e40af}\n")
 				.append(".badge-warn{background:#422006;color:#fde047;border:1px solid #713f12}\n")
 				.append(".badge-info{background:#0b1329;color:#7dd3fc;border:1px solid #0369a1}\n")
+				.append(".badge-status{background:#064e3b;color:#6ee7b7;border:1px solid #047857}\n")
 				.append("table{width:100%;border-collapse:collapse;margin-top:6px}\n")
 				.append("th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--border)}\n")
 				.append("th{color:var(--muted);font-weight:500;width:30%;vertical-align:top}\n")
@@ -382,7 +421,12 @@ public class AntiDoSStatusRenderer {
 		sb.append("<div class=\"header\">\n")
 				.append("  <div class=\"title\"><span>&#9889;</span> Anti-DoS Valve Monitor &bull; <span>").append(escapeHtml(target.getName4logging())).append(" Details</span></div>\n")
 				.append("  <div class=\"subtitle\">\n")
-				.append("    <span>Server Time: ").append(serverTime).append("</span>\n")
+				.append("    <span>Server Time: ").append(serverTime);
+		if (valve != null && valve.getStatusUri() != null) {
+			sb.append(" &bull; Dashboard Host: <strong>").append(escapeHtml(valve.getName4logging()))
+					.append("</strong> (<code>").append(escapeHtml(valve.getStatusUri())).append("</code>)");
+		}
+		sb.append("</span>\n")
 				.append("    <a class=\"btn\" href=\"").append(buildDashboardUrl(token, null, null, null)).append("\">&#8592; Back to Overview</a>\n")
 				.append("    <a class=\"btn\" href=\"").append(buildDashboardUrl(token, target.getMonitorName(), "details", null)).append("\">&#128260; Refresh</a>\n")
 				.append("    <a class=\"btn\" href=\"").append(buildDashboardUrl(token, target.getMonitorName(), "details", "json")).append("\">{ } JSON Details</a>\n")
@@ -394,6 +438,14 @@ public class AntiDoSStatusRenderer {
 				.append("  <div class=\"card-header\">\n")
 				.append("    <div class=\"card-title-group\">\n")
 				.append("      <span class=\"valve-name\">Configuration &amp; Metrics Summary</span>\n");
+
+		if (target.getStatusUri() != null) {
+			if (target == valve) {
+				sb.append("      <span class=\"badge badge-status\">&#9889; STATUS DASHBOARD (CURRENT HOST): ").append(escapeHtml(target.getStatusUri())).append("</span>\n");
+			} else {
+				sb.append("      <span class=\"badge badge-status\">&#9889; STATUS DASHBOARD: ").append(escapeHtml(target.getStatusUri())).append("</span>\n");
+			}
+		}
 
 		if (target.isMonitorModeDefault()) {
 			sb.append("      <span class=\"badge badge-blocking\">MODE: BLOCKING (").append(target.getHttpStatusCode()).append(")</span>\n");
@@ -409,10 +461,35 @@ public class AntiDoSStatusRenderer {
 
 		sb.append("    </div>\n")
 				.append("  </div>\n")
-				.append("  <table>\n")
-				.append("    <tr><th>Relevant Paths</th><td>")
-				.append(target.getRelevantPathsConfigValue() != null ? "<code>" + escapeHtml(target.getRelevantPathsConfigValue()) + "</code>" : "<em>none (no requests monitored)</em>")
-				.append("</td></tr>\n");
+				.append("  <table>\n");
+
+		// Status Dashboard row
+		if (target.getStatusUri() != null) {
+			sb.append("    <tr><th>Status Dashboard</th><td><code>").append(escapeHtml(target.getStatusUri())).append("</code>");
+			if (target == valve) {
+				sb.append(" <span class=\"badge badge-status\">Current Host</span>");
+			} else {
+				sb.append(" <span class=\"badge badge-info\">Active</span>");
+			}
+			if (target.getStatusPassword() != null && !target.getStatusPassword().isEmpty()) {
+				sb.append(" &bull; <em>Password Protected</em>");
+			} else {
+				sb.append(" &bull; <em>Auto-Generated Token</em>");
+			}
+			sb.append("</td></tr>\n");
+		} else {
+			sb.append("    <tr><th>Status Dashboard</th><td><em>none (disabled on this valve)</em></td></tr>\n");
+		}
+
+		sb.append("    <tr><th>Relevant Paths</th><td>");
+		if (target.getRelevantPathsConfigValue() != null) {
+			sb.append("<code>").append(escapeHtml(target.getRelevantPathsConfigValue())).append("</code>");
+		} else if (target.getStatusUri() != null) {
+			sb.append("<em>none (no requests monitored &mdash; dedicated to Status Dashboard at <code>").append(escapeHtml(target.getStatusUri())).append("</code>)</em>");
+		} else {
+			sb.append("<em>none (no requests monitored)</em>");
+		}
+		sb.append("</td></tr>\n");
 
 		if (target.getNonRelevantPathsConfigValue() != null) {
 			sb.append("    <tr><th>Non-Relevant Paths</th><td><code>").append(escapeHtml(target.getNonRelevantPathsConfigValue())).append("</code></td></tr>\n");
@@ -631,6 +708,9 @@ public class AntiDoSStatusRenderer {
 					.append("      \"currentBlockedCounters\": ").append(blockedCounters).append(",\n")
 					.append("      \"totalRequests\": ").append(totalReqs).append(",\n")
 					.append("      \"activeSlots\": ").append(activeSlots).append(",\n")
+					.append("      \"statusUri\": ").append(v.getStatusUri() != null ? "\"" + escapeJson(v.getStatusUri()) + "\"" : "null").append(",\n")
+					.append("      \"isStatusHost\": ").append(v.getStatusUri() != null).append(",\n")
+					.append("      \"isCurrentHost\": ").append(v == valve).append(",\n")
 					.append("      \"httpStatusCode\": ").append(v.getHttpStatusCode()).append("\n")
 					.append("    }");
 		}
@@ -690,6 +770,9 @@ public class AntiDoSStatusRenderer {
 				.append("    \"currentBlockedCounters\": ").append(blockedCounters).append(",\n")
 				.append("    \"totalRequests\": ").append(totalReqs).append(",\n")
 				.append("    \"activeSlots\": ").append(activeSlots).append(",\n")
+				.append("    \"statusUri\": ").append(target.getStatusUri() != null ? "\"" + escapeJson(target.getStatusUri()) + "\"" : "null").append(",\n")
+				.append("    \"isStatusHost\": ").append(target.getStatusUri() != null).append(",\n")
+				.append("    \"isCurrentHost\": ").append(target == valve).append(",\n")
 				.append("    \"httpStatusCode\": ").append(target.getHttpStatusCode()).append("\n")
 				.append("  },\n");
 

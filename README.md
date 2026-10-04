@@ -466,15 +466,42 @@ The second valve only monitors requests to `/valvetest2` and applies a stricter 
 
 Use cases for multi-instance configurations:
 
-*Testing a new configuration:*
+## Testing a new configuration
 
 You can run a new configuration alongside the active one in simulation mode to evaluate how it behaves under real traffic. This keeps your server protected while you fine-tune the new rules before switching over.
 
-*Allowing higher rate limits for trusted partner servers:*
+## Allowing higher rate limits for trusted partner servers
 
 If known partners need to access your service at higher rates than public users, you can use two valves:
 1. The first valve enforces the standard (stricter) limit for general traffic. In *alwaysAllowedIPs*, you whitelist the trusted partner IPs so this valve ignores them.
 2. The second valve defines the higher limit intended for those partners. While this limit technically applies to all traffic, public clients will have already been constrained by the first valve.
+
+## Separate configuration for status interface and monitor valves
+
+If you plan to use the dashboard feature, you should configure a separate valve for the status interface. The status interface valve should only be accessible from trusted IP addresses, and it should not be used to block any requests.
+
+Here is an example configuration:
+
+    <Valve className="org.henbru.antidos.AntiDoSValve"
+        monitorName="STATUS VALVE"
+        statusUri="/antidos-status"
+        maxIPCacheSize="10"
+        numberOfSlots="5"
+        slotLength="10"
+        allowedRequestsPerSlot="5"
+        shareOfRetainedFormerRequests="0"
+    />
+
+    <Valve className="org.henbru.antidos.AntiDoSValve"
+        monitorName="MARKING VALVE"
+        monitorMode="marking"
+        relevantPaths=".*/swa"
+        maxIPCacheSize="50"
+        numberOfSlots="10"
+        slotLength="30"
+        allowedRequestsPerSlot="5"
+    />
+
 
 # Block Log Throttling
 

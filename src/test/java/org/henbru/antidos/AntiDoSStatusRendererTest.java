@@ -105,4 +105,30 @@ class AntiDoSStatusRendererTest {
 		assertTrue(jsonDetails.contains("\"blockedClients\": ["));
 		assertTrue(jsonDetails.contains("\"topActiveClients\": ["));
 	}
+
+	@Test
+	void testStatusDashboardHostAndIndicatorDisplay() throws Exception {
+		valve.setStatusUri("/antidos-status");
+
+		String htmlOverview = renderer.buildStatusHtml(null, "tok");
+		assertTrue(htmlOverview.contains("STATUS DASHBOARD (CURRENT HOST): /antidos-status"));
+		assertTrue(htmlOverview.contains("Dashboard Host: <strong>AntiDoSValve [RENDERER_TEST]</strong> (<code>/antidos-status</code>)"));
+		assertTrue(htmlOverview.contains("<th>Status Dashboard</th><td><code>/antidos-status</code>"));
+		assertTrue(htmlOverview.contains("Current Host"));
+		assertTrue(htmlOverview.contains("dedicated to Status Dashboard at <code>/antidos-status</code>"));
+
+		String htmlDetails = renderer.buildStatusHtmlDetails("RENDERER_TEST", "tok");
+		assertTrue(htmlDetails.contains("STATUS DASHBOARD (CURRENT HOST): /antidos-status"));
+		assertTrue(htmlDetails.contains("<th>Status Dashboard</th><td><code>/antidos-status</code>"));
+
+		String jsonOverview = renderer.buildStatusJson(null);
+		assertTrue(jsonOverview.contains("\"statusUri\": \"/antidos-status\""));
+		assertTrue(jsonOverview.contains("\"isStatusHost\": true"));
+		assertTrue(jsonOverview.contains("\"isCurrentHost\": true"));
+
+		String jsonDetails = renderer.buildStatusJsonDetails("RENDERER_TEST");
+		assertTrue(jsonDetails.contains("\"statusUri\": \"/antidos-status\""));
+		assertTrue(jsonDetails.contains("\"isStatusHost\": true"));
+		assertTrue(jsonDetails.contains("\"isCurrentHost\": true"));
+	}
 }
