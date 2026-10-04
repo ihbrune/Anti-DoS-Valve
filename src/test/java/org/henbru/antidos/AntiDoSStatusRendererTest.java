@@ -1,7 +1,6 @@
 package org.henbru.antidos;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -18,7 +17,7 @@ class AntiDoSStatusRendererTest {
 	private AntiDoSStatusRenderer renderer;
 
 	@BeforeEach
-	void setUp() throws Exception {
+	public void setUp() throws Exception {
 		AntiDoSValve.clearActiveValves();
 		valve = new AntiDoSValve();
 		valve.setContainer(new org.apache.catalina.core.StandardEngine());
@@ -33,7 +32,7 @@ class AntiDoSStatusRendererTest {
 	}
 
 	@AfterEach
-	void tearDown() throws Exception {
+	public void tearDown() throws Exception {
 		if (valve != null) {
 			valve.stop();
 		}

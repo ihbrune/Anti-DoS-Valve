@@ -1,22 +1,15 @@
 package org.henbru.antidos;
 
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.net.Inet6Address;
 import java.net.InetAddress;
-import java.net.URLEncoder;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Date;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TimeZone;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
@@ -1083,39 +1076,39 @@ public class AntiDoSValve extends ValveBase {
 		return activeValves;
 	}
 
-	String buildStatusHtml(String filterValve) {
+	public String buildStatusHtml(String filterValve) {
 		return statusRenderer.buildStatusHtml(filterValve);
 	}
 
-	String buildStatusHtml(String filterValve, String token) {
+	public String buildStatusHtml(String filterValve, String token) {
 		return statusRenderer.buildStatusHtml(filterValve, token);
 	}
 
-	String buildStatusHtmlDetails(String valveName, String token) {
+	public String buildStatusHtmlDetails(String valveName, String token) {
 		return statusRenderer.buildStatusHtmlDetails(valveName, token);
 	}
 
-	String buildStatusJson(String filterValve) {
+	public String buildStatusJson(String filterValve) {
 		return statusRenderer.buildStatusJson(filterValve);
 	}
 
-	String buildStatusJsonDetails(String filterValve) {
+	public String buildStatusJsonDetails(String filterValve) {
 		return statusRenderer.buildStatusJsonDetails(filterValve);
 	}
 
-	static String buildDashboardUrl(String token, String valve, String view, String format) {
+	public static String buildDashboardUrl(String token, String valve, String view, String format) {
 		return AntiDoSStatusRenderer.buildDashboardUrl(token, valve, view, format);
 	}
 
-	static String buildDashboardUrl(String token, String valve, String view, String format, boolean forHtml) {
+	public static String buildDashboardUrl(String token, String valve, String view, String format, boolean forHtml) {
 		return AntiDoSStatusRenderer.buildDashboardUrl(token, valve, view, format, forHtml);
 	}
 
-	static String escapeHtml(String text) {
+	public static String escapeHtml(String text) {
 		return AntiDoSStatusRenderer.escapeHtml(text);
 	}
 
-	static String escapeJson(String text) {
+	public static String escapeJson(String text) {
 		return AntiDoSStatusRenderer.escapeJson(text);
 	}
 
