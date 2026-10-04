@@ -540,6 +540,21 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
+	 * Sets the number of blocked IP addresses that can be monitored within a time
+	 * slot from a string. If null or empty, falls back to -1 (default, which falls
+	 * back to {@link #getMaxIPCacheSize()}).
+	 * 
+	 * @param maxBlockedIPCacheSize The number of blocked IP addresses as string
+	 */
+	public void setMaxBlockedIPCacheSize(String maxBlockedIPCacheSize) {
+		if (maxBlockedIPCacheSize == null || maxBlockedIPCacheSize.trim().isEmpty()) {
+			this.maxBlockedIPCacheSize = -1;
+		} else {
+			this.maxBlockedIPCacheSize = Integer.parseInt(maxBlockedIPCacheSize.trim());
+		}
+	}
+
+	/**
 	 * @return The IPv4 subnet mask prefix length (e.g. 24 for /24, 32 for no aggregation)
 	 */
 	public int getIpv4SubnetMask() {
@@ -721,6 +736,20 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
+	 * Sets the HTTP response status code used when blocking requests from a string.
+	 * If null or empty, defaults to {@link #DEFAULT_HTTP_STATUS_CODE} (429).
+	 *
+	 * @param httpStatusCode The HTTP status code as string
+	 */
+	public void setHttpStatusCode(String httpStatusCode) {
+		if (httpStatusCode == null || httpStatusCode.trim().isEmpty()) {
+			this.httpStatusCode = DEFAULT_HTTP_STATUS_CODE;
+		} else {
+			this.httpStatusCode = Integer.parseInt(httpStatusCode.trim());
+		}
+	}
+
+	/**
 	 * @return <code>true</code> if {@link #getHttpStatusCode()} is a valid HTTP status code
 	 */
 	public boolean isHttpStatusCodeValid() {
@@ -897,6 +926,20 @@ public class AntiDoSValve extends ValveBase {
 		AntiDoSMonitor monitor = provideMonitor();
 		if (monitor != null) {
 			monitor.setMaxBlockLogsPerSecond(maxBlockLogsPerSecond);
+		}
+	}
+
+	/**
+	 * Sets the maximum number of block log entries allowed per second from a string.
+	 * If null or empty, defaults to -1 (disabled).
+	 *
+	 * @param maxBlockLogsPerSecond the maximum logs per second as string
+	 */
+	public void setMaxBlockLogsPerSecond(String maxBlockLogsPerSecond) {
+		if (maxBlockLogsPerSecond == null || maxBlockLogsPerSecond.trim().isEmpty()) {
+			setMaxBlockLogsPerSecond(-1);
+		} else {
+			setMaxBlockLogsPerSecond(Integer.parseInt(maxBlockLogsPerSecond.trim()));
 		}
 	}
 

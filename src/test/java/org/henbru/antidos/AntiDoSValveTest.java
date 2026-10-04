@@ -357,6 +357,16 @@ class AntiDoSValveTest {
 
 		valve.setHttpStatusCode(-1);
 		assertFalse(valve.isHttpStatusCodeValid());
+
+		// String setter
+		valve.setHttpStatusCode("403");
+		assertEquals(403, valve.getHttpStatusCode());
+		valve.setHttpStatusCode("");
+		assertEquals(AntiDoSValve.DEFAULT_HTTP_STATUS_CODE, valve.getHttpStatusCode());
+		valve.setHttpStatusCode("   ");
+		assertEquals(AntiDoSValve.DEFAULT_HTTP_STATUS_CODE, valve.getHttpStatusCode());
+		valve.setHttpStatusCode((String) null);
+		assertEquals(AntiDoSValve.DEFAULT_HTTP_STATUS_CODE, valve.getHttpStatusCode());
 	}
 
 	@Test
@@ -391,6 +401,19 @@ class AntiDoSValveTest {
 		status = valve.getMonitorStatus();
 		assertNotNull(status);
 		assertTrue(status.contains("maxBlockedCountersPerSlot: 100"));
+
+		// String setter with valid number, empty string, spaces, and null
+		valve.setMaxBlockedIPCacheSize("750");
+		assertEquals(750, valve.getMaxBlockedIPCacheSize());
+
+		valve.setMaxBlockedIPCacheSize("");
+		assertEquals(-1, valve.getMaxBlockedIPCacheSize());
+
+		valve.setMaxBlockedIPCacheSize("   ");
+		assertEquals(-1, valve.getMaxBlockedIPCacheSize());
+
+		valve.setMaxBlockedIPCacheSize((String) null);
+		assertEquals(-1, valve.getMaxBlockedIPCacheSize());
 	}
 
 	@Test
