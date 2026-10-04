@@ -141,6 +141,31 @@
       margin-top: 2px;
     }
 
+    .btn-reset {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn-reset:hover {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+      color: var(--text);
+    }
+
+    .btn-reset svg {
+      flex-shrink: 0;
+    }
+
     /* Form Fields */
     .field-group {
       margin-bottom: 16px;
@@ -1125,6 +1150,13 @@
         <div class="card">
           <div class="card-title">
             <span>Configuration Presets</span>
+            <button type="button" id="resetBtn" class="btn-reset" title="Reset configuration to default preset and clear saved browser state">
+              <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                <path d="M3 3v5h5"/>
+              </svg>
+              <span>Reset to Default</span>
+            </button>
           </div>
           <div class="presets-grid" id="presetsContainer">
             <!-- Dynamically populated via PRESETS -->
@@ -2041,6 +2073,7 @@
       updateSubnetMaskIndicators();
       updateStatusDashboardIndicators();
       runSimulation();
+      saveStateToLocalStorage();
     }
 
     // Generate XML code
@@ -2427,6 +2460,7 @@
       }
 
       runSimulation();
+      saveStateToLocalStorage();
     }
 
     // --- Single-IP Scenario & Controls ---
@@ -3197,6 +3231,118 @@
       }
     }
 
+    // ==========================================
+    // LOCAL STORAGE PERSISTENCE
+    // ==========================================
+    const STORAGE_KEY = 'anti_dos_valve_config';
+
+    function saveStateToLocalStorage() {
+      try {
+        const values = {};
+        PARAMETERS.forEach(param => {
+          const el = document.getElementById(param.key);
+          if (!el) return;
+          if (param.isBoolean) {
+            values[param.key] = el.checked;
+          } else {
+            values[param.key] = el.value;
+          }
+        });
+
+        const state = {
+          version: 1,
+          presetId: currentPresetId,
+          onlyChanged: optOnlyChanged ? optOnlyChanged.checked : true,
+          simMode: currentSimMode,
+          values: values
+        };
+
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (err) {
+        // Silently catch quota or permission issues (e.g. private browsing or restricted iframe)
+        console.warn('Unable to persist config to localStorage:', err);
+      }
+    }
+
+    function clearSavedState() {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (err) {
+        console.warn('Unable to clear localStorage:', err);
+      }
+    }
+
+    function loadStateFromLocalStorage() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return false;
+
+        const state = JSON.parse(raw);
+        if (!state || typeof state !== 'object' || Array.isArray(state)) {
+          return false;
+        }
+
+        const values = state.values;
+        if (!values || typeof values !== 'object' || Array.isArray(values)) {
+          return false;
+        }
+
+        // Restore preset ID only if it exists in current PRESETS
+        if (typeof state.presetId === 'string' && PRESETS.some(p => p.id === state.presetId)) {
+          currentPresetId = state.presetId;
+        } else {
+          currentPresetId = null;
+        }
+
+        // Restore XML compact toggle if present
+        if (optOnlyChanged && typeof state.onlyChanged === 'boolean') {
+          optOnlyChanged.checked = state.onlyChanged;
+        }
+
+        // Defensive parameter restoration:
+        // Handles new parameters (uses defaultVal) and skips deleted or unknown parameters
+        PARAMETERS.forEach(param => {
+          const el = document.getElementById(param.key);
+          if (!el) return;
+
+          if (Object.prototype.hasOwnProperty.call(values, param.key)) {
+            const storedVal = values[param.key];
+            if (param.isBoolean) {
+              el.checked = (storedVal === true || storedVal === 'true' || storedVal === 1);
+            } else if (storedVal !== null && storedVal !== undefined && typeof storedVal !== 'object') {
+              el.value = String(storedVal);
+            } else {
+              el.value = (param.defaultVal !== null && param.defaultVal !== undefined) ? String(param.defaultVal) : '';
+            }
+          } else {
+            // Parameter was introduced in a newer version and doesn't exist in older stored state
+            if (param.isBoolean) {
+              el.checked = Boolean(param.defaultVal);
+            } else {
+              el.value = (param.defaultVal !== null && param.defaultVal !== undefined) ? String(param.defaultVal) : '';
+            }
+          }
+        });
+
+        if (state.simMode === 'multi' || state.simMode === 'single') {
+          switchSimMode(state.simMode);
+        }
+
+        // Update all derived UI views
+        renderPresets();
+        updateXml();
+        updateEvictionIndicators();
+        updateSubnetMaskIndicators();
+        updateStatusDashboardIndicators();
+        runSimulation();
+
+        return true;
+      } catch (err) {
+        console.warn('Failed to load saved state from localStorage, falling back to default:', err);
+        return false;
+      }
+    }
+
     // Form change event listeners
     form.addEventListener('input', () => {
       currentPresetId = null;
@@ -3206,6 +3352,7 @@
       updateSubnetMaskIndicators();
       updateStatusDashboardIndicators();
       runSimulation();
+      saveStateToLocalStorage();
     });
 
     form.addEventListener('change', () => {
@@ -3214,6 +3361,7 @@
       updateSubnetMaskIndicators();
       updateStatusDashboardIndicators();
       runSimulation();
+      saveStateToLocalStorage();
     });
 
     // Auto-prepend leading slash on blur for statusUri if non-empty
@@ -3225,12 +3373,14 @@
           statusUriField.value = '/' + val;
           updateStatusDashboardIndicators();
           updateXml();
+          saveStateToLocalStorage();
         }
       });
     }
 
     optOnlyChanged.addEventListener('change', () => {
       updateXml();
+      saveStateToLocalStorage();
     });
 
     // Copy to Clipboard
@@ -3262,8 +3412,19 @@
       }
     });
 
-    // Initialize with first preset (Test Configuration)
-    applyPreset('test');
+    // Reset button
+    const resetBtn = document.getElementById('resetBtn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
+        clearSavedState();
+        applyPreset('test');
+      });
+    }
+
+    // Initialize: Try restoring saved configuration from localStorage; fall back to 'test' preset
+    if (!loadStateFromLocalStorage()) {
+      applyPreset('test');
+    }
   </script>
 </body>
 
