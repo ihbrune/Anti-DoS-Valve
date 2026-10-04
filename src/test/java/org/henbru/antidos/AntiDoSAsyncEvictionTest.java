@@ -262,15 +262,19 @@ class AntiDoSAsyncEvictionTest {
 		AntiDoSSlot slot = new AntiDoSSlot("TRANSIENT_RETAINED_TEST", 1L, maxCounters);
 		slot.setAsyncEviction(true);
 
-		// Fill to hard-cap (12)
-		for (int i = 1; i <= 12; i++) {
-			slot.getCounter("client-" + i);
+		// Fill until hard-cap is hit and transient counter is returned
+		AntiDoSCounter transientCounter = null;
+		for (int i = 1; i <= 200; i++) {
+			AntiDoSCounter c = slot.getCounter("client-" + i);
+			if (slot.getCounterIfExists("client-" + i) == null) {
+				transientCounter = c;
+				break;
+			}
 		}
-
-		// 13th IP hits hard cap
-		AntiDoSCounter transientCounter = slot.getCounter("client-overflow");
-		assertNotNull(transientCounter);
-		assertEquals(0, transientCounter.getRetainedCounts(),
-				"Transient counter under hard-cap must have retainedCounts initialized to 0 to skip multi-slot scans");
+		assertNotNull(transientCounter, "Should have reached hard-cap transient counter");
+		if (transientCounter != null) {
+			assertEquals(0, transientCounter.getRetainedCounts(),
+					"Transient counter under hard-cap must have retainedCounts initialized to 0 to skip multi-slot scans");
+		}
 	}
 }

@@ -16,6 +16,8 @@ A Dockerfile is included to run Tomcat with the valve using minimal setup.
 
 Since version 1.4, the valve is built against Tomcat 10.1 libraries. This means it makes use of the <strong>jakarta.servlet.\*</strong> packages. Versions prior to 1.3.0 of the valve were tested on Tomcat 7.0, 8.0, and 9.0, using the legacy <strong>javax.servlet.\*</strong> packages.
 
+Since version 1.6.0, Tomcat 9 compatibility is provided by shading the valve code with javax.servlet. The section below "[Installation and Setup](#installation-and-setup)" describes how to use the valve with Tomcat 9.
+
 # Implementation of Dynamic Access Rate Limiting
 
 The goal of the implementation was to create a flexible solution that maintains low complexity and minimal overhead on the server.
@@ -62,8 +64,10 @@ In 2026, new traffic patterns from AI crawlers—partly routed through residenti
 
 Here are the steps to set up and activate the valve:
 
-1. Clone the project from GitHub and build the JAR with Maven: `mvn package` (or `mvn install`)
-2. Make the JAR available in Tomcat. For example, copy it into `<CATALINA_HOME>/lib/` (probably alongside your JDBC drivers).
+1. Clone the project from GitHub and build the JARs with Maven: `mvn package` (or `mvn install`). Both variants are generated automatically in `target/`:
+   * **Tomcat 10 / 11 (Jakarta EE):** `anti-dos-valve-<version>.jar`
+   * **Tomcat 9 (`javax.servlet`):** `anti-dos-valve-<version>-tomcat9.jar`
+2. Make the appropriate JAR available in Tomcat. For example, copy it into `<CATALINA_HOME>/lib/` (probably alongside your JDBC drivers).
 3. In `server.xml`, configure the valve inside the appropriate `<Host>` element (see example below).
 4. Ensure logging is enabled so that blocked requests are logged (this is already enabled in the default configuration).
 
