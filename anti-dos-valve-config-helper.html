@@ -223,6 +223,36 @@
       color: #166534;
     }
 
+    .subnet-mask-hint {
+      font-size: 0.75rem;
+      margin-top: 6px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      line-height: 1.4;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .subnet-mask-hint.neutral {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      color: #475569;
+    }
+
+    .subnet-mask-hint.active {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      color: #1e40af;
+    }
+
+    .subnet-mask-hint.invalid {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+    }
+
     .field-desc {
       font-size: 0.8rem;
       color: var(--text-muted);
@@ -1138,6 +1168,7 @@
               </div>
               <input type="text" id="ipv4SubnetMask" name="ipv4SubnetMask"
                 placeholder="e.g. 24, /24, or 255.255.255.0 (Default: 32)">
+              <div id="hintIpv4SubnetMask" class="subnet-mask-hint neutral"></div>
             </div>
 
             <!-- 9. ipv6SubnetMask -->
@@ -1150,6 +1181,7 @@
                 <code>64</code> or <code>/64</code>). <code>128</code> or empty disables aggregation.
               </div>
               <input type="text" id="ipv6SubnetMask" name="ipv6SubnetMask" placeholder="e.g. 64 or /64 (Default: 128)">
+              <div id="hintIpv6SubnetMask" class="subnet-mask-hint neutral"></div>
             </div>
 
             <!-- 10. slotLength -->
@@ -1868,6 +1900,7 @@
       renderPresets();
       updateXml();
       updateEvictionIndicators();
+      updateSubnetMaskIndicators();
       runSimulation();
     }
 
@@ -2022,6 +2055,107 @@
       cfgMaxHeapDetails.innerHTML = `${numSlots.toLocaleString()} slots &times; (${maxIPVal.toLocaleString()} active + ${effectiveBlockedVal.toLocaleString()} blocked) = <strong>${totalNominalCounters.toLocaleString()} total counters</strong>.<br>Nominal: <strong>~${formatBytes(nominalHeapBytes)}</strong> &bull; Peak with 120% hard-cap: <strong>~${formatBytes(hardCapHeapBytes)}</strong>.`;
       if (cfgBytesPerCounterNote) {
         cfgBytesPerCounterNote.innerHTML = `Calculated at <strong>${BYTES_PER_COUNTER} Bytes</strong> per counter on 64-bit JVM (AntiDoSCounter + IP String + Map Node).`;
+      }
+    }
+
+    // Parse subnet mask value and compute aggregation capacity details
+    function parseSubnetMaskInfo(rawVal, maxBits) {
+      if (!rawVal || !rawVal.trim()) {
+        return { valid: true, prefix: maxBits, isEmpty: true };
+      }
+      let s = rawVal.trim();
+      if (s.startsWith('/')) {
+        s = s.substring(1).trim();
+      }
+      if (maxBits === 32 && s.includes('.')) {
+        const parts = s.split('.');
+        if (parts.length !== 4) {
+          return { valid: false, error: 'Invalid dotted-decimal format (must have 4 octets).' };
+        }
+        let val = 0;
+        for (let i = 0; i < 4; i++) {
+          if (!/^\d+$/.test(parts[i].trim())) {
+            return { valid: false, error: 'Invalid octet in dotted-decimal netmask.' };
+          }
+          const num = parseInt(parts[i].trim(), 10);
+          if (num < 0 || num > 255) {
+            return { valid: false, error: 'Netmask octet out of range (0-255).' };
+          }
+          val = (val * 256) + num;
+        }
+        let bitCount = 0;
+        for (let i = 31; i >= 0; i--) {
+          if ((val & Math.pow(2, i)) !== 0) {
+            bitCount++;
+          }
+        }
+        let expected = 0;
+        for (let i = 0; i < bitCount; i++) {
+          expected += Math.pow(2, 31 - i);
+        }
+        if (val !== expected) {
+          return { valid: false, error: 'Non-contiguous dotted-decimal netmask.' };
+        }
+        if (bitCount < 1 || bitCount > 32) {
+          return { valid: false, error: 'Prefix must be between 1 and 32.' };
+        }
+        return { valid: true, prefix: bitCount, isDotted: true, dottedStr: s };
+      }
+
+      if (!/^-?\d+$/.test(s)) {
+        return { valid: false, error: `Invalid subnet format. Expected 1-${maxBits} or ${maxBits === 32 ? 'dotted netmask' : '/prefix'}.` };
+      }
+
+      const prefix = parseInt(s, 10);
+      if (prefix === -1) {
+        return { valid: true, prefix: maxBits, isExplicitNone: true };
+      }
+      if (prefix < 1 || prefix > maxBits) {
+        return { valid: false, error: `Prefix must be between 1 and ${maxBits} (or -1).` };
+      }
+      return { valid: true, prefix: prefix };
+    }
+
+    function updateSingleSubnetHint(rawVal, maxBits, hintEl) {
+      const res = parseSubnetMaskInfo(rawVal, maxBits);
+      if (!res.valid) {
+        hintEl.className = 'subnet-mask-hint invalid';
+        hintEl.innerHTML = `<span>&#9888;</span><div><strong>Invalid mask:</strong> ${escapeHtml(res.error)}</div>`;
+        return;
+      }
+
+      const prefix = res.prefix;
+      const exp = maxBits - prefix;
+
+      if (exp === 0) {
+        // No aggregation
+        hintEl.className = 'subnet-mask-hint neutral';
+        const reason = res.isExplicitNone ? 'disabled via -1' : (res.isEmpty ? 'default' : `/${prefix}`);
+        hintEl.innerHTML = `<span>&#9432;</span><div><strong>1 IP address per counter</strong> (2<sup>0</sup> &ndash; single-IP tracking, no aggregation; ${reason})</div>`;
+      } else {
+        // Subnet aggregation active
+        hintEl.className = 'subnet-mask-hint active';
+        let countDetail = '';
+        if (exp <= 32) {
+          const count = Math.pow(2, exp);
+          countDetail = ` (= <strong>${count.toLocaleString()}</strong>)`;
+        }
+        const dottedInfo = res.isDotted ? ` &bull; <code>${escapeHtml(res.dottedStr)}</code>` : '';
+        hintEl.innerHTML = `<span>&#9432;</span><div>Max. <strong>2<sup>${exp}</sup></strong>${countDetail} IP addresses per counter (<strong>/${prefix}</strong> subnet${dottedInfo})</div>`;
+      }
+    }
+
+    function updateSubnetMaskIndicators() {
+      const v4Input = document.getElementById('ipv4SubnetMask');
+      const v6Input = document.getElementById('ipv6SubnetMask');
+      const v4Hint = document.getElementById('hintIpv4SubnetMask');
+      const v6Hint = document.getElementById('hintIpv6SubnetMask');
+
+      if (v4Input && v4Hint) {
+        updateSingleSubnetHint(v4Input.value, 32, v4Hint);
+      }
+      if (v6Input && v6Hint) {
+        updateSingleSubnetHint(v6Input.value, 128, v6Hint);
       }
     }
 
@@ -2850,12 +2984,14 @@
       renderPresets();
       updateXml();
       updateEvictionIndicators();
+      updateSubnetMaskIndicators();
       runSimulation();
     });
 
     form.addEventListener('change', () => {
       updateXml();
       updateEvictionIndicators();
+      updateSubnetMaskIndicators();
       runSimulation();
     });
 
