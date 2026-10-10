@@ -11,6 +11,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.regex.Pattern;
 
 import org.apache.catalina.LifecycleException;
@@ -199,6 +200,7 @@ public class AntiDoSValve extends ValveBase {
 	 * receives an invalid value
 	 */
 	private volatile boolean alwaysForbiddenIPsValid = true;
+	private final LongAdder alwaysForbiddenBlockedRequests = new LongAdder();
 
 	/**
 	 * Regular expression with IP addresses that are never blocked
@@ -398,6 +400,13 @@ public class AntiDoSValve extends ValveBase {
 	 */
 	public boolean isAlwaysForbiddenIPsValid() {
 		return alwaysForbiddenIPsValid;
+	}
+
+	/**
+	 * @return The total number of requests blocked by alwaysForbiddenIPs during the lifetime of this valve
+	 */
+	public long getAlwaysForbiddenBlockedRequests() {
+		return alwaysForbiddenBlockedRequests.sum();
 	}
 
 	/**
@@ -1355,6 +1364,7 @@ public class AntiDoSValve extends ValveBase {
 	public boolean isRequestAllowed(String ip, String requestURI) {
 
 		if (isIPAddressInAlwaysForbidden(ip)) {
+			alwaysForbiddenBlockedRequests.increment();
 			if (log.isDebugEnabled())
 				log.debug(name4logging + " Is in AlwaysForbiddenIPs: " + ip);
 

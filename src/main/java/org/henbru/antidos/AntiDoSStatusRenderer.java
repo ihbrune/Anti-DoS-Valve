@@ -288,6 +288,7 @@ public class AntiDoSStatusRenderer {
 			}
 			if (v.getAlwaysForbiddenIPsConfigValue() != null) {
 				sb.append("    <tr><th>Always Forbidden IPs</th><td><code>").append(escapeHtml(v.getAlwaysForbiddenIPsConfigValue())).append("</code></td></tr>\n");
+				sb.append("    <tr><th>Always Forbidden Blocks</th><td><strong>").append(v.getAlwaysForbiddenBlockedRequests()).append("</strong> requests rejected</td></tr>\n");
 			}
 
 			// Rate limit parameters
@@ -499,6 +500,7 @@ public class AntiDoSStatusRenderer {
 		}
 		if (target.getAlwaysForbiddenIPsConfigValue() != null) {
 			sb.append("    <tr><th>Always Forbidden IPs</th><td><code>").append(escapeHtml(target.getAlwaysForbiddenIPsConfigValue())).append("</code></td></tr>\n");
+			sb.append("    <tr><th>Always Forbidden Blocks</th><td><strong>").append(target.getAlwaysForbiddenBlockedRequests()).append("</strong> requests rejected</td></tr>\n");
 		}
 
 		int retentionPct = Math.round(target.getShareOfRetainedFormerRequests() * 100);
@@ -697,6 +699,8 @@ public class AntiDoSStatusRenderer {
 					.append("      \"serverWideBlocking\": ").append(v.isServerWideBlocking()).append(",\n")
 					.append("      \"relevantPaths\": ").append(v.getRelevantPathsConfigValue() != null ? "\"" + escapeJson(v.getRelevantPathsConfigValue()) + "\"" : "null").append(",\n")
 					.append("      \"nonRelevantPaths\": ").append(v.getNonRelevantPathsConfigValue() != null ? "\"" + escapeJson(v.getNonRelevantPathsConfigValue()) + "\"" : "null").append(",\n")
+					.append("      \"alwaysAllowedIPs\": ").append(v.getAlwaysAllowedIPsConfigValue() != null ? "\"" + escapeJson(v.getAlwaysAllowedIPsConfigValue()) + "\"" : "null").append(",\n")
+					.append("      \"alwaysForbiddenIPs\": ").append(v.getAlwaysForbiddenIPsConfigValue() != null ? "\"" + escapeJson(v.getAlwaysForbiddenIPsConfigValue()) + "\"" : "null").append(",\n")
 					.append("      \"allowedRequestsPerSlot\": ").append(v.getAllowedRequestsPerSlot()).append(",\n")
 					.append("      \"slotLength\": ").append(v.getSlotLength()).append(",\n")
 					.append("      \"numberOfSlots\": ").append(v.getNumberOfSlots()).append(",\n")
@@ -712,6 +716,7 @@ public class AntiDoSStatusRenderer {
 					.append("      \"statusUri\": ").append(v.getStatusUri() != null ? "\"" + escapeJson(v.getStatusUri()) + "\"" : "null").append(",\n")
 					.append("      \"isStatusHost\": ").append(v.getStatusUri() != null).append(",\n")
 					.append("      \"isCurrentHost\": ").append(v == valve).append(",\n")
+					.append("      \"alwaysForbiddenBlockedRequests\": ").append(v.getAlwaysForbiddenBlockedRequests()).append(",\n")
 					.append("      \"httpStatusCode\": ").append(v.getHttpStatusCode()).append("\n")
 					.append("    }");
 		}
@@ -759,6 +764,8 @@ public class AntiDoSStatusRenderer {
 				.append("    \"serverWideBlocking\": ").append(target.isServerWideBlocking()).append(",\n")
 				.append("    \"relevantPaths\": ").append(target.getRelevantPathsConfigValue() != null ? "\"" + escapeJson(target.getRelevantPathsConfigValue()) + "\"" : "null").append(",\n")
 				.append("    \"nonRelevantPaths\": ").append(target.getNonRelevantPathsConfigValue() != null ? "\"" + escapeJson(target.getNonRelevantPathsConfigValue()) + "\"" : "null").append(",\n")
+				.append("    \"alwaysAllowedIPs\": ").append(target.getAlwaysAllowedIPsConfigValue() != null ? "\"" + escapeJson(target.getAlwaysAllowedIPsConfigValue()) + "\"" : "null").append(",\n")
+				.append("    \"alwaysForbiddenIPs\": ").append(target.getAlwaysForbiddenIPsConfigValue() != null ? "\"" + escapeJson(target.getAlwaysForbiddenIPsConfigValue()) + "\"" : "null").append(",\n")
 				.append("    \"allowedRequestsPerSlot\": ").append(target.getAllowedRequestsPerSlot()).append(",\n")
 				.append("    \"slotLength\": ").append(target.getSlotLength()).append(",\n")
 				.append("    \"numberOfSlots\": ").append(target.getNumberOfSlots()).append(",\n")
@@ -774,6 +781,7 @@ public class AntiDoSStatusRenderer {
 				.append("    \"statusUri\": ").append(target.getStatusUri() != null ? "\"" + escapeJson(target.getStatusUri()) + "\"" : "null").append(",\n")
 				.append("    \"isStatusHost\": ").append(target.getStatusUri() != null).append(",\n")
 				.append("    \"isCurrentHost\": ").append(target == valve).append(",\n")
+				.append("    \"alwaysForbiddenBlockedRequests\": ").append(target.getAlwaysForbiddenBlockedRequests()).append(",\n")
 				.append("    \"httpStatusCode\": ").append(target.getHttpStatusCode()).append("\n")
 				.append("  },\n");
 

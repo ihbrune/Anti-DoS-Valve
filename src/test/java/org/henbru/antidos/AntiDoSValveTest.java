@@ -126,7 +126,7 @@ class AntiDoSValveTest {
 		assertTrue(valve.isIPAddressInAlwaysAllowed("127.0.0.1"));
 
 		assertFalse(valve.isRequestAllowed("127.0.0.1", "/xyz"));
-
+		assertEquals(2, valve.getAlwaysForbiddenBlockedRequests());
 	}
 
 	@Test

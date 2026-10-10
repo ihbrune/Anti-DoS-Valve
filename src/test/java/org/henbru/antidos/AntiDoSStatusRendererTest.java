@@ -1,6 +1,7 @@
 package org.henbru.antidos;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -132,5 +133,41 @@ class AntiDoSStatusRendererTest {
 		assertTrue(jsonDetails.contains("\"statusUri\": \"/antidos-status\""));
 		assertTrue(jsonDetails.contains("\"isStatusHost\": true"));
 		assertTrue(jsonDetails.contains("\"isCurrentHost\": true"));
+	}
+
+	@Test
+	void testAlwaysForbiddenBlocksDisplay() {
+		// When alwaysForbiddenIPs is NOT configured, the row should NOT appear
+		String htmlNoConfig = renderer.buildStatusHtml(null, null);
+		assertFalse(htmlNoConfig.contains("Always Forbidden Blocks"));
+
+		// Configure alwaysForbiddenIPs
+		valve.setAlwaysForbiddenIPs("10\\.0\\.0\\..*");
+		valve.isRequestAllowed("10.0.0.1", "/api/test");
+		valve.isRequestAllowed("10.0.0.2", "/api/test");
+		valve.isRequestAllowed("10.0.0.3", "/api/test");
+		valve.isRequestAllowed("192.168.1.1", "/api/test"); // Not forbidden
+
+		assertEquals(3, valve.getAlwaysForbiddenBlockedRequests());
+
+		String htmlOverview = renderer.buildStatusHtml(null, null);
+		assertTrue(htmlOverview.contains("<th>Always Forbidden IPs</th>"));
+		assertTrue(htmlOverview.contains("<th>Always Forbidden Blocks</th><td><strong>3</strong> requests rejected</td>"));
+
+		String htmlDetails = renderer.buildStatusHtmlDetails("RENDERER_TEST", null);
+		assertTrue(htmlDetails.contains("<th>Always Forbidden IPs</th>"));
+		assertTrue(htmlDetails.contains("<th>Always Forbidden Blocks</th><td><strong>3</strong> requests rejected</td>"));
+
+		String jsonOverview = renderer.buildStatusJson(null);
+		assertTrue(jsonOverview.contains("\"alwaysForbiddenBlockedRequests\": 3"));
+		assertTrue(jsonOverview.contains("\"alwaysForbiddenIPs\": \"10\\\\.0\\\\.0\\\\..*\""));
+
+		String jsonDetails = renderer.buildStatusJsonDetails("RENDERER_TEST");
+		assertTrue(jsonDetails.contains("\"alwaysForbiddenBlockedRequests\": 3"));
+		assertTrue(jsonDetails.contains("\"alwaysForbiddenIPs\": \"10\\\\.0\\\\.0\\\\..*\""));
+
+		valve.setAlwaysAllowedIPs("192\\.168\\..*");
+		String jsonWithAllowed = renderer.buildStatusJson(null);
+		assertTrue(jsonWithAllowed.contains("\"alwaysAllowedIPs\": \"192\\\\.168\\\\..*\""));
 	}
 }
