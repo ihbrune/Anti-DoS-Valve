@@ -7,14 +7,23 @@ import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.regex.Pattern;
 
+import org.apache.catalina.Container;
 import org.apache.catalina.LifecycleException;
+import org.apache.catalina.Pipeline;
+import org.apache.catalina.Valve;
 import org.apache.catalina.connector.Request;
 import org.apache.catalina.connector.Response;
 import org.apache.catalina.valves.ValveBase;
@@ -132,9 +141,19 @@ public class AntiDoSValve extends ValveBase {
 	private static final Map<String, AntiDoSMonitor> monitors = new ConcurrentHashMap<>();
 
 	/**
-	 * Set of all currently active valve instances in the JVM.
+	 * Set of all currently active valve instances in the JVM, preserving registration/startup order.
 	 */
-	private static final Set<AntiDoSValve> activeValves = ConcurrentHashMap.newKeySet();
+	private static final Set<AntiDoSValve> activeValves = new CopyOnWriteArraySet<>();
+
+	/**
+	 * Global sequence counter for assigning unique, sequential startup/registration indices to valve instances.
+	 */
+	private static final AtomicInteger registrationSequence = new AtomicInteger(0);
+
+	/**
+	 * 1-based sequential index assigned to this valve instance during startup or registration.
+	 */
+	private volatile int registrationIndex = 0;
 
 	private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 	private static volatile String generatedStatusToken = null;
@@ -816,7 +835,11 @@ public class AntiDoSValve extends ValveBase {
 	 * Clears the set of active valves. Primarily used in unit tests.
 	 */
 	public static void clearActiveValves() {
+		for (AntiDoSValve v : activeValves) {
+			v.registrationIndex = 0;
+		}
 		activeValves.clear();
+		registrationSequence.set(0);
 	}
 
 	/**
@@ -1073,16 +1096,132 @@ public class AntiDoSValve extends ValveBase {
 				expected.getBytes(StandardCharsets.UTF_8));
 	}
 
-	Set<AntiDoSValve> getValvesToRender() {
-		if (activeValves.isEmpty()) {
-			Set<AntiDoSValve> fallback = ConcurrentHashMap.newKeySet();
-			fallback.add(this);
-			return fallback;
+	/**
+	 * Returns the 1-based sequential registration index of this valve instance, assigned during startup
+	 * or first access. Used as a fallback ordering key if container pipeline information is unavailable.
+	 *
+	 * @return The registration index of this valve
+	 */
+	public int getRegistrationIndex() {
+		if (registrationIndex == 0) {
+			synchronized (this) {
+				if (registrationIndex == 0) {
+					registrationIndex = registrationSequence.incrementAndGet();
+				}
+			}
 		}
+		return registrationIndex;
+	}
+
+	/**
+	 * Determines the hierarchy tier of the Tomcat container to which this valve is attached.
+	 * In Tomcat, request processing flows down the container hierarchy from Engine (tier 1)
+	 * to Host (tier 2) to Context (tier 3).
+	 *
+	 * @return Numerical tier representing the container hierarchy level (1 for Engine, 2 for Host, 3 for Context)
+	 */
+	private int getContainerTier() {
+		try {
+			Container c = getContainer();
+			if (c instanceof org.apache.catalina.Engine) {
+				return 1;
+			}
+			if (c instanceof org.apache.catalina.Host) {
+				return 2;
+			}
+			if (c instanceof org.apache.catalina.Context) {
+				return 3;
+			}
+		} catch (Throwable t) {
+			// Ignore
+		}
+		return 2;
+	}
+
+	/**
+	 * Returns a {@link Comparator} that orders {@link AntiDoSValve} instances according to their
+	 * actual Tomcat pipeline execution order:
+	 * <ol>
+	 *   <li>Container tier hierarchy ({@code Engine} before {@code Host} before {@code Context})</li>
+	 *   <li>Pipeline index within the same container (from {@link Pipeline#getValves()})</li>
+	 *   <li>Registration/startup sequence index as fallback</li>
+	 * </ol>
+	 *
+	 * @return Comparator ordering valves by execution sequence
+	 */
+	public static Comparator<AntiDoSValve> getPipelineOrderComparator() {
+		return (v1, v2) -> {
+			if (v1 == v2) {
+				return 0;
+			}
+			// 1. Container tier (Engine < Host < Context)
+			int t1 = v1.getContainerTier();
+			int t2 = v2.getContainerTier();
+			if (t1 != t2) {
+				return Integer.compare(t1, t2);
+			}
+			// 2. If same container and pipeline is available
+			if (v1.getContainer() != null && v1.getContainer() == v2.getContainer()) {
+				try {
+					Pipeline p = v1.getContainer().getPipeline();
+					if (p != null) {
+						Valve[] valves = p.getValves();
+						int idx1 = -1;
+						int idx2 = -1;
+						for (int i = 0; i < valves.length; i++) {
+							if (valves[i] == v1) idx1 = i;
+							if (valves[i] == v2) idx2 = i;
+						}
+						if (idx1 != -1 && idx2 != -1) {
+							return Integer.compare(idx1, idx2);
+						}
+					}
+				} catch (Throwable t) {
+					// Fallback
+				}
+			}
+			// 3. Fallback to registrationIndex (order of addition/start)
+			return Integer.compare(v1.getRegistrationIndex(), v2.getRegistrationIndex());
+		};
+	}
+
+	/**
+	 * Returns the 1-based execution order index of this valve among all currently active
+	 * {@link AntiDoSValve} instances in the JVM.
+	 *
+	 * @return 1-based pipeline position (1 for the first valve to execute, 2 for the second, etc.)
+	 */
+	public int getPipelineOrder() {
+		Set<AntiDoSValve> valves = getValvesToRender();
+		int order = 1;
+		for (AntiDoSValve v : valves) {
+			if (v == this) {
+				return order;
+			}
+			order++;
+		}
+		return 1;
+	}
+
+	/**
+	 * Returns the set of all active {@link AntiDoSValve} instances ordered by their Tomcat pipeline
+	 * execution order, suitable for deterministic rendering in HTML status dashboards and JSON APIs.
+	 *
+	 * @return A {@link LinkedHashSet} of active valves sorted by execution order
+	 */
+	Set<AntiDoSValve> getValvesToRender() {
+		getRegistrationIndex();
 		if (!activeValves.contains(this)) {
 			activeValves.add(this);
 		}
-		return activeValves;
+		if (activeValves.size() <= 1) {
+			Set<AntiDoSValve> fallback = new LinkedHashSet<>();
+			fallback.add(this);
+			return fallback;
+		}
+		List<AntiDoSValve> list = new ArrayList<>(activeValves);
+		list.sort(getPipelineOrderComparator());
+		return new LinkedHashSet<>(list);
 	}
 
 	public String buildStatusHtml(String filterValve) {
@@ -1131,6 +1270,9 @@ public class AntiDoSValve extends ValveBase {
 	protected synchronized void startInternal() throws LifecycleException {
 		checkConfiguration();
 		super.startInternal();
+		if (this.registrationIndex == 0) {
+			this.registrationIndex = registrationSequence.incrementAndGet();
+		}
 		activeValves.add(this);
 
 		if (statusUri != null) {

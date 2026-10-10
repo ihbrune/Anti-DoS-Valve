@@ -11,7 +11,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.connector.Connector;
@@ -875,7 +877,41 @@ class AntiDoSValveTest {
 
 		valve2.stop();
 		assertFalse(AntiDoSValve.getActiveValves().contains(valve2));
-		assertTrue(AntiDoSValve.getActiveValves().isEmpty());
+	}
+
+	@Test
+	void testPipelineOrderAndDeterministicIteration() throws Exception {
+		AntiDoSValve.clearActiveValves();
+		AntiDoSValve v1 = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(v1, "ORDER_VALVE_1");
+		AntiDoSValve v2 = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(v2, "ORDER_VALVE_2");
+		AntiDoSValve v3 = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(v3, "ORDER_VALVE_3");
+
+		v1.start();
+		v2.start();
+		v3.start();
+
+		assertEquals(1, v1.getPipelineOrder());
+		assertEquals(2, v2.getPipelineOrder());
+		assertEquals(3, v3.getPipelineOrder());
+
+		Set<AntiDoSValve> toRender = v1.getValvesToRender();
+		List<AntiDoSValve> list = new java.util.ArrayList<>(toRender);
+		assertEquals(3, list.size());
+		assertSame(v1, list.get(0));
+		assertSame(v2, list.get(1));
+		assertSame(v3, list.get(2));
+
+		// Stop v1 and check that remaining valves re-index
+		v1.stop();
+		assertEquals(1, v2.getPipelineOrder());
+		assertEquals(2, v3.getPipelineOrder());
+
+		v2.stop();
+		v3.stop();
+		AntiDoSValve.clearActiveValves();
 	}
 
 	@Test

@@ -138,6 +138,13 @@ class AntiDoSStatusRendererTest {
 		assertTrue(jsonDetails.contains("\"isStatusHost\": true"));
 		assertTrue(jsonDetails.contains("\"isCurrentHost\": true"));
 
+		assertTrue(htmlOverview.contains("#1 IN PIPELINE"));
+		assertTrue(htmlOverview.contains("<th>Pipeline Order</th><td><strong>#1</strong></td>"));
+		assertTrue(htmlDetails.contains("#1 IN PIPELINE"));
+		assertTrue(htmlDetails.contains("<th>Pipeline Order</th><td><strong>#1</strong></td>"));
+		assertTrue(jsonOverview.contains("\"pipelineOrder\": 1"));
+		assertTrue(jsonDetails.contains("\"pipelineOrder\": 1"));
+
 		// With statusAllowedIPs configured
 		valve.setStatusAllowedIPs("192\\.168\\..*");
 		String htmlWithAllowed = renderer.buildStatusHtml(null, "tok");
@@ -185,5 +192,45 @@ class AntiDoSStatusRendererTest {
 		valve.setAlwaysAllowedIPs("192\\.168\\..*");
 		String jsonWithAllowed = renderer.buildStatusJson(null);
 		assertTrue(jsonWithAllowed.contains("\"alwaysAllowedIPs\": \"192\\\\.168\\\\..*\""));
+	}
+
+	@Test
+	void testPipelineOrderMultipleValves() throws Exception {
+		AntiDoSValve.clearActiveValves();
+
+		AntiDoSValve v1 = new AntiDoSValve();
+		v1.setMonitorName("VALVE_FIRST");
+		v1.provideMonitor();
+
+		AntiDoSValve v2 = new AntiDoSValve();
+		v2.setMonitorName("VALVE_SECOND");
+		v2.provideMonitor();
+
+		assertEquals(1, v1.getPipelineOrder());
+		assertEquals(2, v2.getPipelineOrder());
+
+		AntiDoSStatusRenderer r = new AntiDoSStatusRenderer(v1);
+		String html = r.buildStatusHtml(null, null);
+
+		// Assert order in rendered HTML: VALVE_FIRST appears before VALVE_SECOND
+		int idxV1 = html.indexOf("VALVE_FIRST");
+		int idxV2 = html.indexOf("VALVE_SECOND");
+		assertTrue(idxV1 != -1 && idxV2 != -1);
+		assertTrue(idxV1 < idxV2);
+
+		// Assert pipeline badges
+		assertTrue(html.contains("#1 IN PIPELINE"));
+		assertTrue(html.contains("#2 IN PIPELINE"));
+
+		// JSON verification
+		String json = r.buildStatusJson(null);
+		int jsonV1 = json.indexOf("\"monitorName\": \"VALVE_FIRST\"");
+		int jsonV2 = json.indexOf("\"monitorName\": \"VALVE_SECOND\"");
+		assertTrue(jsonV1 != -1 && jsonV2 != -1);
+		assertTrue(jsonV1 < jsonV2);
+		assertTrue(json.contains("\"pipelineOrder\": 1"));
+		assertTrue(json.contains("\"pipelineOrder\": 2"));
+
+		AntiDoSValve.clearActiveValves();
 	}
 }

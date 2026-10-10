@@ -219,7 +219,8 @@ public class AntiDoSStatusRenderer {
 			sb.append("<div class=\"card\">\n")
 					.append("  <div class=\"card-header\">\n")
 					.append("    <div class=\"card-title-group\">\n")
-					.append("      <span class=\"valve-name\">").append(escapeHtml(v.getName4logging())).append("</span>\n");
+					.append("      <span class=\"valve-name\">").append(escapeHtml(v.getName4logging())).append("</span>\n")
+					.append("      <span class=\"badge badge-info\">#").append(v.getPipelineOrder()).append(" IN PIPELINE</span>\n");
 
 			if (v.getStatusUri() != null) {
 				if (v == valve) {
@@ -248,7 +249,8 @@ public class AntiDoSStatusRenderer {
 					.append("      <a class=\"btn\" href=\"").append(buildDashboardUrl(token, v.getMonitorName(), null, "json")).append("\">{ } JSON</a>\n")
 					.append("    </div>\n")
 					.append("  </div>\n")
-					.append("  <table>\n");
+					.append("  <table>\n")
+					.append("    <tr><th>Pipeline Order</th><td><strong>#").append(v.getPipelineOrder()).append("</strong></td></tr>\n");
 
 			// Status Dashboard row
 			if (v.getStatusUri() != null) {
@@ -445,7 +447,8 @@ public class AntiDoSStatusRenderer {
 		sb.append("<div class=\"card\">\n")
 				.append("  <div class=\"card-header\">\n")
 				.append("    <div class=\"card-title-group\">\n")
-				.append("      <span class=\"valve-name\">Configuration &amp; Metrics Summary</span>\n");
+				.append("      <span class=\"valve-name\">Configuration &amp; Metrics Summary</span>\n")
+				.append("      <span class=\"badge badge-info\">#").append(target.getPipelineOrder()).append(" IN PIPELINE</span>\n");
 
 		if (target.getStatusUri() != null) {
 			if (target == valve) {
@@ -469,7 +472,8 @@ public class AntiDoSStatusRenderer {
 
 		sb.append("    </div>\n")
 				.append("  </div>\n")
-				.append("  <table>\n");
+				.append("  <table>\n")
+				.append("    <tr><th>Pipeline Order</th><td><strong>#").append(target.getPipelineOrder()).append("</strong></td></tr>\n");
 
 		// Status Dashboard row
 		if (target.getStatusUri() != null) {
@@ -708,6 +712,7 @@ public class AntiDoSStatusRenderer {
 
 			sb.append("    {\n")
 					.append("      \"monitorName\": \"").append(escapeJson(v.getMonitorName())).append("\",\n")
+					.append("      \"pipelineOrder\": ").append(v.getPipelineOrder()).append(",\n")
 					.append("      \"monitorMode\": \"").append(escapeJson(v.getMonitorMode())).append("\",\n")
 					.append("      \"simulationMode\": ").append(v.isSimulationMode()).append(",\n")
 					.append("      \"serverWideBlocking\": ").append(v.isServerWideBlocking()).append(",\n")
@@ -774,6 +779,7 @@ public class AntiDoSStatusRenderer {
 		sb.append("{\n  \"serverTime\": \"").append(serverTime).append("\",\n");
 		sb.append("  \"valve\": {\n")
 				.append("    \"monitorName\": \"").append(escapeJson(target.getMonitorName())).append("\",\n")
+				.append("    \"pipelineOrder\": ").append(target.getPipelineOrder()).append(",\n")
 				.append("    \"monitorMode\": \"").append(escapeJson(target.getMonitorMode())).append("\",\n")
 				.append("    \"simulationMode\": ").append(target.isSimulationMode()).append(",\n")
 				.append("    \"serverWideBlocking\": ").append(target.isServerWideBlocking()).append(",\n")
