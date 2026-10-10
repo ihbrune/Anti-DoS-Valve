@@ -117,22 +117,38 @@ class AntiDoSStatusRendererTest {
 		assertTrue(htmlOverview.contains("STATUS DASHBOARD (CURRENT HOST): /antidos-status"));
 		assertTrue(htmlOverview.contains("Dashboard Host: <strong>AntiDoSValve [RENDERER_TEST]</strong> (<code>/antidos-status</code>)"));
 		assertTrue(htmlOverview.contains("<th>Status Dashboard</th><td><code>/antidos-status</code>"));
+		assertTrue(htmlOverview.contains("<th>Status Allowed IPs</th><td><em>all (unrestricted)</em></td>"));
 		assertTrue(htmlOverview.contains("Current Host"));
 		assertTrue(htmlOverview.contains("dedicated to Status Dashboard at <code>/antidos-status</code>"));
 
 		String htmlDetails = renderer.buildStatusHtmlDetails("RENDERER_TEST", "tok");
 		assertTrue(htmlDetails.contains("STATUS DASHBOARD (CURRENT HOST): /antidos-status"));
 		assertTrue(htmlDetails.contains("<th>Status Dashboard</th><td><code>/antidos-status</code>"));
+		assertTrue(htmlDetails.contains("<th>Status Allowed IPs</th><td><em>all (unrestricted)</em></td>"));
 
 		String jsonOverview = renderer.buildStatusJson(null);
 		assertTrue(jsonOverview.contains("\"statusUri\": \"/antidos-status\""));
+		assertTrue(jsonOverview.contains("\"statusAllowedIPs\": null"));
 		assertTrue(jsonOverview.contains("\"isStatusHost\": true"));
 		assertTrue(jsonOverview.contains("\"isCurrentHost\": true"));
 
 		String jsonDetails = renderer.buildStatusJsonDetails("RENDERER_TEST");
 		assertTrue(jsonDetails.contains("\"statusUri\": \"/antidos-status\""));
+		assertTrue(jsonDetails.contains("\"statusAllowedIPs\": null"));
 		assertTrue(jsonDetails.contains("\"isStatusHost\": true"));
 		assertTrue(jsonDetails.contains("\"isCurrentHost\": true"));
+
+		// With statusAllowedIPs configured
+		valve.setStatusAllowedIPs("192\\.168\\..*");
+		String htmlWithAllowed = renderer.buildStatusHtml(null, "tok");
+		assertTrue(htmlWithAllowed.contains("<th>Status Allowed IPs</th><td><code>192\\.168\\..*</code></td>"));
+		String htmlDetailsWithAllowed = renderer.buildStatusHtmlDetails("RENDERER_TEST", "tok");
+		assertTrue(htmlDetailsWithAllowed.contains("<th>Status Allowed IPs</th><td><code>192\\.168\\..*</code></td>"));
+
+		String jsonWithAllowed = renderer.buildStatusJson(null);
+		assertTrue(jsonWithAllowed.contains("\"statusAllowedIPs\": \"192\\\\.168\\\\..*\""));
+		String jsonDetailsWithAllowed = renderer.buildStatusJsonDetails("RENDERER_TEST");
+		assertTrue(jsonDetailsWithAllowed.contains("\"statusAllowedIPs\": \"192\\\\.168\\\\..*\""));
 	}
 
 	@Test

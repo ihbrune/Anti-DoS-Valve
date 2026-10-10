@@ -264,6 +264,13 @@ public class AntiDoSStatusRenderer {
 					sb.append(" &bull; <em>Auto-Generated Token</em>");
 				}
 				sb.append("</td></tr>\n");
+				sb.append("    <tr><th>Status Allowed IPs</th><td>");
+				if (v.getStatusAllowedIPs() != null) {
+					sb.append("<code>").append(escapeHtml(v.getStatusAllowedIPs())).append("</code>");
+				} else {
+					sb.append("<em>all (unrestricted)</em>");
+				}
+				sb.append("</td></tr>\n");
 			} else {
 				sb.append("    <tr><th>Status Dashboard</th><td><em>none (disabled on this valve)</em></td></tr>\n");
 			}
@@ -476,6 +483,13 @@ public class AntiDoSStatusRenderer {
 				sb.append(" &bull; <em>Password Protected</em>");
 			} else {
 				sb.append(" &bull; <em>Auto-Generated Token</em>");
+			}
+			sb.append("</td></tr>\n");
+			sb.append("    <tr><th>Status Allowed IPs</th><td>");
+			if (target.getStatusAllowedIPs() != null) {
+				sb.append("<code>").append(escapeHtml(target.getStatusAllowedIPs())).append("</code>");
+			} else {
+				sb.append("<em>all (unrestricted)</em>");
 			}
 			sb.append("</td></tr>\n");
 		} else {
@@ -714,6 +728,7 @@ public class AntiDoSStatusRenderer {
 					.append("      \"totalRequests\": ").append(totalReqs).append(",\n")
 					.append("      \"activeSlots\": ").append(activeSlots).append(",\n")
 					.append("      \"statusUri\": ").append(v.getStatusUri() != null ? "\"" + escapeJson(v.getStatusUri()) + "\"" : "null").append(",\n")
+					.append("      \"statusAllowedIPs\": ").append(v.getStatusAllowedIPs() != null ? "\"" + escapeJson(v.getStatusAllowedIPs()) + "\"" : "null").append(",\n")
 					.append("      \"isStatusHost\": ").append(v.getStatusUri() != null).append(",\n")
 					.append("      \"isCurrentHost\": ").append(v == valve).append(",\n")
 					.append("      \"alwaysForbiddenBlockedRequests\": ").append(v.getAlwaysForbiddenBlockedRequests()).append(",\n")
@@ -779,6 +794,7 @@ public class AntiDoSStatusRenderer {
 				.append("    \"totalRequests\": ").append(totalReqs).append(",\n")
 				.append("    \"activeSlots\": ").append(activeSlots).append(",\n")
 				.append("    \"statusUri\": ").append(target.getStatusUri() != null ? "\"" + escapeJson(target.getStatusUri()) + "\"" : "null").append(",\n")
+				.append("    \"statusAllowedIPs\": ").append(target.getStatusAllowedIPs() != null ? "\"" + escapeJson(target.getStatusAllowedIPs()) + "\"" : "null").append(",\n")
 				.append("    \"isStatusHost\": ").append(target.getStatusUri() != null).append(",\n")
 				.append("    \"isCurrentHost\": ").append(target == valve).append(",\n")
 				.append("    \"alwaysForbiddenBlockedRequests\": ").append(target.getAlwaysForbiddenBlockedRequests()).append(",\n")
