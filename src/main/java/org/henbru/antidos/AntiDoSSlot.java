@@ -6,6 +6,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.juli.logging.Log;
@@ -45,6 +46,7 @@ public class AntiDoSSlot {
 
 	private final long slotKey;
 	private String name4logging;
+	private final LongAdder totalRequests = new LongAdder();
 
 	private final ConcurrentHashMap<String, AntiDoSCounter> activeCounters;
 	private final ConcurrentHashMap<String, AntiDoSCounter> blockedCounters;
@@ -435,6 +437,14 @@ public class AntiDoSSlot {
 
 	public ConcurrentHashMap<String, AntiDoSCounter> getBlockedCounters() {
 		return blockedCounters;
+	}
+
+	public void incrementTotalRequests() {
+		totalRequests.increment();
+	}
+
+	public long getTotalRequests() {
+		return totalRequests.sum();
 	}
 
 	@Override

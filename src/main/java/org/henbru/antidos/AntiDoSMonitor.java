@@ -151,6 +151,7 @@ public class AntiDoSMonitor {
 
 		// Step 1: Provide current slot, create it if necessary:
 		AntiDoSSlot slot = provideCurrentSlot();
+		slot.incrementTotalRequests();
 
 		// Step 2: Get and increment counter
 		AntiDoSCounter counter = slot.getCounter(counterName);

@@ -83,6 +83,7 @@ class AntiDoSStatusRendererTest {
 		assertNotNull(htmlDetails);
 		assertTrue(htmlDetails.contains("AntiDoSValve [RENDERER_TEST] Details"));
 		assertTrue(htmlDetails.contains("Slot Ring Buffer Timeline"));
+		assertTrue(htmlDetails.contains("<th>Requests</th>"));
 		assertTrue(htmlDetails.contains("Top Active Clients (Current Slot)"));
 		assertTrue(htmlDetails.contains("192.168.1.1"));
 		assertTrue(htmlDetails.contains("token=myToken"));
@@ -102,6 +103,7 @@ class AntiDoSStatusRendererTest {
 		assertNotNull(jsonDetails);
 		assertTrue(jsonDetails.contains("\"valve\": {"));
 		assertTrue(jsonDetails.contains("\"slots\": ["));
+		assertTrue(jsonDetails.contains("\"totalRequests\":"));
 		assertTrue(jsonDetails.contains("\"blockedClients\": ["));
 		assertTrue(jsonDetails.contains("\"topActiveClients\": ["));
 	}

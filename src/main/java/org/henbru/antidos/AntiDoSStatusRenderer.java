@@ -534,7 +534,7 @@ public class AntiDoSStatusRenderer {
 				.append("  <div class=\"card-header\"><div class=\"card-title-group\"><span class=\"valve-name\">Slot Ring Buffer Timeline</span>")
 				.append(" <span class=\"subtitle\">(").append(numSlots).append(" slots &bull; ").append(slotLength / 1000).append("s each)</span></div></div>\n")
 				.append("  <table class=\"data-table\">\n")
-				.append("    <thead><tr><th>Slot #</th><th>Slot Key</th><th>Start Time</th><th>Age</th><th>Status</th><th>Active IPs</th><th>Blocked IPs</th></tr></thead>\n")
+				.append("    <thead><tr><th>Slot #</th><th>Slot Key</th><th>Start Time</th><th>Age</th><th>Status</th><th>Requests</th><th>Active IPs</th><th>Blocked IPs</th></tr></thead>\n")
 				.append("    <tbody>\n");
 
 		if (monitor != null) {
@@ -542,7 +542,7 @@ public class AntiDoSStatusRenderer {
 				AntiDoSSlot slot = monitor.getSlot(i);
 				if (slot == null) {
 					sb.append("      <tr><td>#").append(i).append("</td><td>-</td><td>-</td><td>-</td>")
-							.append("<td><span class=\"badge\">EMPTY</span></td><td>0</td><td>0</td></tr>\n");
+							.append("<td><span class=\"badge\">EMPTY</span></td><td>0</td><td>0</td><td>0</td></tr>\n");
 				} else {
 					long slotKey = slot.getSlotKey();
 					boolean isCurrent = (slotKey == currentSlotKey);
@@ -564,6 +564,7 @@ public class AntiDoSStatusRenderer {
 							.append("</td><td>").append(startTime)
 							.append("</td><td>").append(ageStr)
 							.append("</td><td>").append(statusBadge)
+							.append("</td><td>").append(slot.getTotalRequests())
 							.append("</td><td>").append(slot.getActiveCounterCount())
 							.append("</td><td>").append(slot.getBlockedCounterCount())
 							.append("</td></tr>\n");
@@ -788,7 +789,7 @@ public class AntiDoSStatusRenderer {
 				if (!firstSlot) sb.append(",\n");
 				firstSlot = false;
 				if (slot == null) {
-					sb.append("    {\"index\": ").append(i).append(", \"slotKey\": null}");
+					sb.append("    {\"index\": ").append(i).append(", \"slotKey\": null, \"totalRequests\": 0}");
 				} else {
 					long slotKey = slot.getSlotKey();
 					boolean isCurrent = (slotKey == currentSlotKey);
@@ -800,6 +801,7 @@ public class AntiDoSStatusRenderer {
 							.append("      \"isCurrent\": ").append(isCurrent).append(",\n")
 							.append("      \"startTime\": \"").append(startTime).append("\",\n")
 							.append("      \"ageSeconds\": ").append(ageSec).append(",\n")
+							.append("      \"totalRequests\": ").append(slot.getTotalRequests()).append(",\n")
 							.append("      \"activeCounters\": ").append(slot.getActiveCounterCount()).append(",\n")
 							.append("      \"blockedCounters\": ").append(slot.getBlockedCounterCount()).append("\n")
 							.append("    }");

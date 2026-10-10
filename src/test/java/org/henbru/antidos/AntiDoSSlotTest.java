@@ -179,4 +179,15 @@ class AntiDoSSlotTest {
 		c1Retrieved.incrementCount();
 		assertEquals(11, c1Retrieved.getCount());
 	}
+
+	@Test
+	void testSlotTotalRequests() {
+		AntiDoSSlot slot = new AntiDoSSlot("TEST", 1L, 10);
+		assertEquals(0, slot.getTotalRequests());
+
+		slot.incrementTotalRequests();
+		slot.incrementTotalRequests();
+		slot.incrementTotalRequests();
+		assertEquals(3, slot.getTotalRequests());
+	}
 }
