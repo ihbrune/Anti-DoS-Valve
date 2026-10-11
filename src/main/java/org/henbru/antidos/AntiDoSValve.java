@@ -176,7 +176,7 @@ public class AntiDoSValve extends ValveBase {
 	private volatile int numberOfSlots = -1;
 	private volatile int slotLength = -1;
 	private volatile int allowedRequestsPerSlot = -1;
-	private volatile float shareOfRetainedFormerRequests = -1;
+	private volatile float shareOfRetainedFormerRequests = 0;
 	private volatile boolean simulationMode = false;
 	private volatile boolean serverWideBlocking = false;
 	private volatile int httpStatusCode = DEFAULT_HTTP_STATUS_CODE;
