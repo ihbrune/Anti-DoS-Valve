@@ -576,26 +576,41 @@ Exposing internal rate-limiting metrics over HTTP presents security risks (such 
 
 ```xml
 <Valve className="org.henbru.antidos.AntiDoSValve"
-       monitorName="API RATE LIMITER"
+       monitorName="STATUS VALVE"
        statusUri="/antidos-status"
        statusAllowedIPs="127\.0\.0\.1|::1|10\..*"
        statusPassword=""
-       relevantPaths="/api/.*"
-       allowedRequestsPerSlot="100"
-       slotLength="60"
-       numberOfSlots="5"
-       maxIPCacheSize="5000" />
+       allowedRequestsPerSlot="10"
+       slotLength="10"
+       numberOfSlots="1"
+       maxIPCacheSize="50" />
 ```
 
-### Accessing the Dashboard
+## Accessing the Dashboard
 
 * **In the browser:**
   `http://localhost:8080/antidos-status?token=<token>`
 * **Via Bearer Authorization:**
   `curl -H "Authorization: Bearer <token>" http://localhost:8080/antidos-status`
-* **JSON Output:**
+* **JSON Overview (All Valves):**
   `curl -H "Authorization: Bearer <token>" "http://localhost:8080/antidos-status?format=json"`
-* **Filter Specific Valve:**
-  `http://localhost:8080/antidos-status?token=<token>&valve=API+RATE+LIMITER`
+* **JSON Details (Current Slot):**
+  `curl -H "Authorization: Bearer <token>" "http://localhost:8080/antidos-status?view=details&format=json&valve=STATUS+VALVE"`
+* **JSON Details (Last Completed Slot & All Blocked IPs):**
+  `curl -H "Authorization: Bearer <token>" "http://localhost:8080/antidos-status?view=details&format=json&valve=STATUS+VALVE&slot=previous&limit=all"`
+* **Filter Specific Valve (HTML View):**
+  `http://localhost:8080/antidos-status?token=<token>&valve=STATUS+VALVE`
+
+## Monitoring Collector Parameters
+
+When polling the status endpoint from automated monitoring scripts or collectors:
+
+| Parameter | Values | Description |
+|---|---|---|
+| `format` | `json` | Renders machine-readable JSON output (can also be requested via `Accept: application/json` header). |
+| `view` | `details` | Renders full details for a valve, including the ring buffer slots, `selectedSlot`, `blockedClients`, and `topActiveClients`. |
+| `slot` | `current`, `previous`, `<slotKey>` | Selects which slot's blocked/active client list to inspect. Using `slot=previous` returns the fully finished, immutable previous time window. Default: `current`. |
+| `limit` | integer (e.g. `100`), `all`, `-1` | Maximum number of blocked and active clients returned. `all` or `-1` returns all entries without capping. Default: `50`. |
+| `valve` | `<monitorName>` | Filters by monitor name (required for details view if multiple valves are running). |
 
 

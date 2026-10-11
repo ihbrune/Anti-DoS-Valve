@@ -56,10 +56,14 @@ public class AntiDoSStatusRenderer {
 	}
 
 	public static String buildDashboardUrl(String token, String valve, String view, String format) {
-		return buildDashboardUrl(token, valve, view, format, true);
+		return buildDashboardUrl(token, valve, view, format, null, null, true);
 	}
 
 	public static String buildDashboardUrl(String token, String valve, String view, String format, boolean forHtml) {
+		return buildDashboardUrl(token, valve, view, format, null, null, forHtml);
+	}
+
+	public static String buildDashboardUrl(String token, String valve, String view, String format, String slot, String limit, boolean forHtml) {
 		List<String> params = new ArrayList<>();
 		if (token != null && !token.isEmpty()) {
 			params.add("token=" + URLEncoder.encode(token, StandardCharsets.UTF_8));
@@ -73,11 +77,94 @@ public class AntiDoSStatusRenderer {
 		if (format != null && !format.isEmpty()) {
 			params.add("format=" + URLEncoder.encode(format, StandardCharsets.UTF_8));
 		}
+		if (slot != null && !slot.isEmpty()) {
+			params.add("slot=" + URLEncoder.encode(slot, StandardCharsets.UTF_8));
+		}
+		if (limit != null && !limit.isEmpty()) {
+			params.add("limit=" + URLEncoder.encode(limit, StandardCharsets.UTF_8));
+		}
 		if (params.isEmpty()) {
 			return "?";
 		}
 		String separator = forHtml ? "&amp;" : "&";
 		return "?" + String.join(separator, params);
+	}
+
+	/**
+	 * Parses a limit parameter string. Supports positive integers, "all", or "-1" for unlimited.
+	 *
+	 * @param limitParam   The limit string
+	 * @param defaultLimit Default fallback limit
+	 * @return The parsed limit, or {@link Integer#MAX_VALUE} for unlimited
+	 */
+	public static int parseLimit(String limitParam, int defaultLimit) {
+		if (limitParam == null || limitParam.trim().isEmpty()) {
+			return defaultLimit;
+		}
+		String trimmed = limitParam.trim();
+		if ("all".equalsIgnoreCase(trimmed) || "-1".equals(trimmed)) {
+			return Integer.MAX_VALUE;
+		}
+		try {
+			int val = Integer.parseInt(trimmed);
+			return val <= 0 ? Integer.MAX_VALUE : val;
+		} catch (NumberFormatException e) {
+			return defaultLimit;
+		}
+	}
+
+	/**
+	 * Resolves the target slot from an optional slot parameter (e.g. "current", "previous", or numeric slotKey/index).
+	 *
+	 * @param monitor   The monitor instance
+	 * @param slotParam The slot parameter string
+	 * @return The resolved slot, or <code>null</code> if unavailable
+	 */
+	public static AntiDoSSlot resolveTargetSlot(AntiDoSMonitor monitor, String slotParam) {
+		if (monitor == null) {
+			return null;
+		}
+		if (slotParam == null || slotParam.trim().isEmpty() || "current".equalsIgnoreCase(slotParam.trim())) {
+			return monitor.getCurrentSlotIfExists();
+		}
+		String trimmed = slotParam.trim();
+		if ("previous".equalsIgnoreCase(trimmed)) {
+			return monitor.getPreviousSlotIfExists();
+		}
+		try {
+			long keyOrIndex = Long.parseLong(trimmed);
+			AntiDoSSlot slotByKey = monitor.getSlotByKey(keyOrIndex);
+			if (slotByKey != null) {
+				return slotByKey;
+			}
+			if (keyOrIndex >= 0 && keyOrIndex < monitor.getNumberOfSlots()) {
+				AntiDoSSlot slotByIndex = monitor.getSlot((int) keyOrIndex);
+				if (slotByIndex != null) {
+					return slotByIndex;
+				}
+			}
+		} catch (NumberFormatException ignored) {
+		}
+		return monitor.getCurrentSlotIfExists();
+	}
+
+	/**
+	 * Determines a human-readable and machine-readable slot type ("current", "previous", or "historical").
+	 */
+	public static String determineSlotType(AntiDoSMonitor monitor, AntiDoSSlot slot, String slotParam) {
+		if (slot == null) {
+			return slotParam != null ? slotParam : "none";
+		}
+		if (monitor != null && slot.getSlotKey() == monitor.getCurrentSlotKey()) {
+			return "current";
+		}
+		if (monitor != null && slot.getSlotKey() == (monitor.getCurrentSlotKey() - 1)) {
+			return "previous";
+		}
+		if (slotParam != null && "previous".equalsIgnoreCase(slotParam.trim())) {
+			return "previous";
+		}
+		return "historical";
 	}
 
 	/**
@@ -90,11 +177,16 @@ public class AntiDoSStatusRenderer {
 	 * @throws IOException If an I/O error occurs
 	 */
 	public void renderStatusHtml(Response response, String filterValve, String view, String token) throws IOException {
+		renderStatusHtml(response, filterValve, view, token, null, null);
+	}
+
+	public void renderStatusHtml(Response response, String filterValve, String view, String token, String slotParam, String limitParam) throws IOException {
 		response.setContentType("text/html;charset=UTF-8");
 		response.setCharacterEncoding("UTF-8");
 		PrintWriter out = response.getWriter();
 		if ("details".equalsIgnoreCase(view)) {
-			out.write(buildStatusHtmlDetails(filterValve, token));
+			Integer limit = limitParam != null ? parseLimit(limitParam, 50) : null;
+			out.write(buildStatusHtmlDetails(filterValve, token, slotParam, limit));
 		} else {
 			out.write(buildStatusHtml(filterValve, token));
 		}
@@ -110,11 +202,16 @@ public class AntiDoSStatusRenderer {
 	 * @throws IOException If an I/O error occurs
 	 */
 	public void renderStatusJson(Response response, String filterValve, String view) throws IOException {
+		renderStatusJson(response, filterValve, view, null, null);
+	}
+
+	public void renderStatusJson(Response response, String filterValve, String view, String slotParam, String limitParam) throws IOException {
 		response.setContentType("application/json;charset=UTF-8");
 		response.setCharacterEncoding("UTF-8");
 		PrintWriter out = response.getWriter();
 		if ("details".equalsIgnoreCase(view)) {
-			out.write(buildStatusJsonDetails(filterValve));
+			Integer limit = limitParam != null ? parseLimit(limitParam, 50) : null;
+			out.write(buildStatusJsonDetails(filterValve, slotParam, limit));
 		} else {
 			out.write(buildStatusJson(filterValve));
 		}
@@ -342,7 +439,15 @@ public class AntiDoSStatusRenderer {
 		return sb.toString();
 	}
 
+	public String buildStatusHtmlDetails(String valveName) {
+		return buildStatusHtmlDetails(valveName, null, null, null);
+	}
+
 	public String buildStatusHtmlDetails(String valveName, String token) {
+		return buildStatusHtmlDetails(valveName, token, null, null);
+	}
+
+	public String buildStatusHtmlDetails(String valveName, String token, String slotParam, Integer limit) {
 		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 		sdf.setTimeZone(TimeZone.getDefault());
 		String serverTime = sdf.format(new Date(getTimeInMillis()));
@@ -427,6 +532,8 @@ public class AntiDoSStatusRenderer {
 		String activeFillClass = activePercent > 85 ? "high" : (activePercent > 50 ? "med" : "");
 		String blockedFillClass = blockedPercent > 85 ? "high" : (blockedPercent > 50 ? "med" : "");
 
+		String limitStr = limit != null && limit != Integer.MAX_VALUE ? String.valueOf(limit) : null;
+
 		// Header
 		sb.append("<div class=\"header\">\n")
 				.append("  <div class=\"title\"><span>&#9889;</span> Anti-DoS Valve Monitor &bull; <span>").append(escapeHtml(target.getName4logging())).append(" Details</span></div>\n")
@@ -438,8 +545,8 @@ public class AntiDoSStatusRenderer {
 		}
 		sb.append("</span>\n")
 				.append("    <a class=\"btn\" href=\"").append(buildDashboardUrl(token, null, null, null)).append("\">&#8592; Back to Overview</a>\n")
-				.append("    <a class=\"btn\" href=\"").append(buildDashboardUrl(token, target.getMonitorName(), "details", null)).append("\">&#128260; Refresh</a>\n")
-				.append("    <a class=\"btn\" href=\"").append(buildDashboardUrl(token, target.getMonitorName(), "details", "json")).append("\">{ } JSON Details</a>\n")
+				.append("    <a class=\"btn\" href=\"").append(buildDashboardUrl(token, target.getMonitorName(), "details", null, slotParam, limitStr, true)).append("\">&#128260; Refresh</a>\n")
+				.append("    <a class=\"btn\" href=\"").append(buildDashboardUrl(token, target.getMonitorName(), "details", "json", slotParam, limitStr, true)).append("\">{ } JSON Details</a>\n")
 				.append("  </div>\n")
 				.append("</div>\n");
 
@@ -542,6 +649,9 @@ public class AntiDoSStatusRenderer {
 		sb.append("    <tr><th>Total Requests Processed</th><td><strong>").append(totalReqs)
 				.append("</strong> (Active Slots: ").append(activeSlots).append(" / ").append(target.getNumberOfSlots()).append(")</td></tr>\n");
 
+		sb.append("    <tr><th>Slot Timeline Keys</th><td>Current: <code>").append(currentSlotKey)
+				.append("</code> &bull; Last Completed: <code>").append(currentSlotKey > 0 ? (currentSlotKey - 1) : 0).append("</code></td></tr>\n");
+
 		String logThrottling = target.getMaxBlockLogsPerSecond() >= 0 ? target.getMaxBlockLogsPerSecond() + " logs/s" : "disabled";
 		String asyncEvict = target.getAsyncEviction() == null ? "auto" : target.getAsyncEviction().toString();
 		sb.append("    <tr><th>System Settings</th><td>Log Throttling: <code>").append(logThrottling)
@@ -554,7 +664,7 @@ public class AntiDoSStatusRenderer {
 				.append("  <div class=\"card-header\"><div class=\"card-title-group\"><span class=\"valve-name\">Slot Ring Buffer Timeline</span>")
 				.append(" <span class=\"subtitle\">(").append(numSlots).append(" slots &bull; ").append(slotLength / 1000).append("s each)</span></div></div>\n")
 				.append("  <table class=\"data-table\">\n")
-				.append("    <thead><tr><th>Slot #</th><th>Slot Key</th><th>Start Time</th><th>Age</th><th>Status</th><th>Requests</th><th>Active IPs</th><th>Blocked IPs</th></tr></thead>\n")
+				.append("    <thead><tr><th>Slot #</th><th>Slot Key</th><th>Start Time</th><th>Age</th><th>Status</th><th>Requests</th><th>Active IPs</th><th>Blocked IPs</th><th>Action</th></tr></thead>\n")
 				.append("    <tbody>\n");
 
 		if (monitor != null) {
@@ -562,7 +672,7 @@ public class AntiDoSStatusRenderer {
 				AntiDoSSlot slot = monitor.getSlot(i);
 				if (slot == null) {
 					sb.append("      <tr><td>#").append(i).append("</td><td>-</td><td>-</td><td>-</td>")
-							.append("<td><span class=\"badge\">EMPTY</span></td><td>0</td><td>0</td><td>0</td></tr>\n");
+							.append("<td><span class=\"badge\">EMPTY</span></td><td>0</td><td>0</td><td>0</td><td>-</td></tr>\n");
 				} else {
 					long slotKey = slot.getSlotKey();
 					boolean isCurrent = (slotKey == currentSlotKey);
@@ -578,6 +688,7 @@ public class AntiDoSStatusRenderer {
 					}
 					String startTime = sdf.format(new Date(slotKey * slotLength));
 					String rowStyle = isCurrent ? " style=\"background:rgba(56,189,248,0.06);font-weight:600;\"" : "";
+					String inspectUrl = buildDashboardUrl(token, target.getMonitorName(), "details", null, String.valueOf(slotKey), limitStr, true);
 
 					sb.append("      <tr").append(rowStyle).append("><td>#").append(i)
 							.append("</td><td>").append(slotKey)
@@ -587,17 +698,35 @@ public class AntiDoSStatusRenderer {
 							.append("</td><td>").append(slot.getTotalRequests())
 							.append("</td><td>").append(slot.getActiveCounterCount())
 							.append("</td><td>").append(slot.getBlockedCounterCount())
-							.append("</td></tr>\n");
+							.append("</td><td><a class=\"btn\" href=\"").append(inspectUrl).append("\">Inspect</a></td></tr>\n");
 				}
 			}
 		}
 		sb.append("    </tbody>\n  </table>\n</div>\n");
 
+		// Target Slot resolution
+		AntiDoSSlot selectedSlot = resolveTargetSlot(monitor, slotParam);
+		boolean isSelectedCurrent = (selectedSlot != null && monitor != null && selectedSlot.getSlotKey() == currentSlotKey);
+		boolean isSelectedPrev = (selectedSlot != null && monitor != null && selectedSlot.getSlotKey() == (currentSlotKey - 1));
+		String slotLabel;
+		if (selectedSlot == null) {
+			slotLabel = "Slot Not Available";
+		} else if (isSelectedCurrent) {
+			slotLabel = "Current Slot";
+		} else if (isSelectedPrev) {
+			slotLabel = "Previous Slot";
+		} else {
+			slotLabel = "Slot #" + Math.floorMod(selectedSlot.getSlotKey(), numSlots) + ", key " + selectedSlot.getSlotKey();
+		}
+
+		String currentSlotUrl = buildDashboardUrl(token, target.getMonitorName(), "details", null, "current", limitStr, true);
+		String prevSlotUrl = buildDashboardUrl(token, target.getMonitorName(), "details", null, "previous", limitStr, true);
+		String jsonSlotUrl = buildDashboardUrl(token, target.getMonitorName(), "details", "json", slotParam, limitStr, true);
+
 		// Card 3: Blocked Clients
-		AntiDoSSlot currentSlot = monitor != null ? monitor.getCurrentSlotIfExists() : null;
 		List<CounterEntry> blockedList = new ArrayList<>();
-		if (currentSlot != null) {
-			for (Map.Entry<String, AntiDoSCounter> entry : currentSlot.getBlockedCounters().entrySet()) {
+		if (selectedSlot != null) {
+			for (Map.Entry<String, AntiDoSCounter> entry : selectedSlot.getBlockedCounters().entrySet()) {
 				AntiDoSCounter c = entry.getValue();
 				int count = c.getCount();
 				int retained = c.getRetainedCounts();
@@ -606,15 +735,23 @@ public class AntiDoSStatusRenderer {
 			Collections.sort(blockedList);
 		}
 
+		int effectiveLimit = (limit != null && limit > 0) ? limit : (limit != null && limit <= 0 ? Integer.MAX_VALUE : 50);
 		int blockedTotal = blockedList.size();
-		int blockedDisplay = Math.min(blockedTotal, 50);
+		int blockedDisplay = Math.min(blockedTotal, effectiveLimit);
 
 		sb.append("<div class=\"card\">\n")
-				.append("  <div class=\"card-header\"><div class=\"card-title-group\"><span class=\"valve-name\">Blocked Clients (Current Slot)</span>")
-				.append(" <span class=\"subtitle\">(").append(blockedDisplay).append(blockedTotal > 50 ? " of " + blockedTotal : "").append(" entries)</span></div></div>\n");
+				.append("  <div class=\"card-header\">\n")
+				.append("    <div class=\"card-title-group\"><span class=\"valve-name\">Blocked Clients (").append(escapeHtml(slotLabel)).append(")</span>")
+				.append(" <span class=\"subtitle\">(").append(blockedDisplay).append(blockedTotal > blockedDisplay ? " of " + blockedTotal : "").append(" entries)</span></div>\n")
+				.append("    <div class=\"card-actions\">\n")
+				.append("      <a class=\"btn\" href=\"").append(currentSlotUrl).append("\">Current Slot</a>\n")
+				.append("      <a class=\"btn\" href=\"").append(prevSlotUrl).append("\">Previous Slot</a>\n")
+				.append("      <a class=\"btn\" href=\"").append(jsonSlotUrl).append("\">{ } JSON (This Slot)</a>\n")
+				.append("    </div>\n")
+				.append("  </div>\n");
 
 		if (blockedDisplay == 0) {
-			sb.append("  <div style=\"color:var(--muted);padding:4px 0;\">No blocked clients in current slot.</div>\n");
+			sb.append("  <div style=\"color:var(--muted);padding:4px 0;\">No blocked clients in ").append(escapeHtml(slotLabel.toLowerCase())).append(".</div>\n");
 		} else {
 			sb.append("  <table class=\"data-table\">\n")
 					.append("    <thead><tr><th>IP / Subnet Key</th><th>Slot Requests</th><th>Retained</th><th>Effective</th><th>Limit</th><th>Status</th></tr></thead>\n")
@@ -634,8 +771,8 @@ public class AntiDoSStatusRenderer {
 
 		// Card 4: Top Active Clients
 		List<CounterEntry> activeList = new ArrayList<>();
-		if (currentSlot != null) {
-			for (Map.Entry<String, AntiDoSCounter> entry : currentSlot.getActiveCounters().entrySet()) {
+		if (selectedSlot != null) {
+			for (Map.Entry<String, AntiDoSCounter> entry : selectedSlot.getActiveCounters().entrySet()) {
 				AntiDoSCounter c = entry.getValue();
 				int count = c.getCount();
 				int retained = c.getRetainedCounts();
@@ -645,14 +782,14 @@ public class AntiDoSStatusRenderer {
 		}
 
 		int activeTotal = activeList.size();
-		int activeDisplay = Math.min(activeTotal, 50);
+		int activeDisplay = Math.min(activeTotal, effectiveLimit);
 
 		sb.append("<div class=\"card\">\n")
-				.append("  <div class=\"card-header\"><div class=\"card-title-group\"><span class=\"valve-name\">Top Active Clients (Current Slot)</span>")
-				.append(" <span class=\"subtitle\">(").append(activeDisplay).append(activeTotal > 50 ? " of " + activeTotal : "").append(" entries)</span></div></div>\n");
+				.append("  <div class=\"card-header\"><div class=\"card-title-group\"><span class=\"valve-name\">Top Active Clients (").append(escapeHtml(slotLabel)).append(")</span>")
+				.append(" <span class=\"subtitle\">(").append(activeDisplay).append(activeTotal > activeDisplay ? " of " + activeTotal : "").append(" entries)</span></div></div>\n");
 
 		if (activeDisplay == 0) {
-			sb.append("  <div style=\"color:var(--muted);padding:4px 0;\">No active clients in current slot.</div>\n");
+			sb.append("  <div style=\"color:var(--muted);padding:4px 0;\">No active clients in ").append(escapeHtml(slotLabel.toLowerCase())).append(".</div>\n");
 		} else {
 			sb.append("  <table class=\"data-table\">\n")
 					.append("    <thead><tr><th>IP / Subnet Key</th><th>Slot Requests</th><th>Retained</th><th>Effective</th><th>Limit</th><th>Quota Usage</th></tr></thead>\n")
@@ -706,6 +843,8 @@ public class AntiDoSStatusRenderer {
 			int blockedCounters = monitor != null ? monitor.getCurrentBlockedCounterCount() : 0;
 			long totalReqs = monitor != null ? monitor.getTotalrequests() : 0;
 			int activeSlots = monitor != null ? monitor.getNumberOfActiveSlots() : 0;
+			long currentSlotKey = monitor != null ? monitor.getCurrentSlotKey() : 0;
+			AntiDoSSlot prevSlot = monitor != null ? monitor.getPreviousSlotIfExists() : null;
 
 			int maxActive = v.getMaxIPCacheSize();
 			int maxBlocked = v.getMaxBlockedIPCacheSize() > 0 ? v.getMaxBlockedIPCacheSize() : maxActive;
@@ -730,6 +869,11 @@ public class AntiDoSStatusRenderer {
 					.append("      \"maxBlockedIPCacheSize\": ").append(maxBlocked).append(",\n")
 					.append("      \"currentActiveCounters\": ").append(activeCounters).append(",\n")
 					.append("      \"currentBlockedCounters\": ").append(blockedCounters).append(",\n")
+					.append("      \"currentSlotKey\": ").append(currentSlotKey).append(",\n")
+					.append("      \"lastCompletedSlotKey\": ").append(currentSlotKey > 0 ? (currentSlotKey - 1) : 0).append(",\n")
+					.append("      \"previousActiveCounters\": ").append(prevSlot != null ? prevSlot.getActiveCounterCount() : 0).append(",\n")
+					.append("      \"previousBlockedCounters\": ").append(prevSlot != null ? prevSlot.getBlockedCounterCount() : 0).append(",\n")
+					.append("      \"previousTotalRequests\": ").append(prevSlot != null ? prevSlot.getTotalRequests() : 0).append(",\n")
 					.append("      \"totalRequests\": ").append(totalReqs).append(",\n")
 					.append("      \"activeSlots\": ").append(activeSlots).append(",\n")
 					.append("      \"statusUri\": ").append(v.getStatusUri() != null ? "\"" + escapeJson(v.getStatusUri()) + "\"" : "null").append(",\n")
@@ -746,6 +890,10 @@ public class AntiDoSStatusRenderer {
 	}
 
 	public String buildStatusJsonDetails(String filterValve) {
+		return buildStatusJsonDetails(filterValve, null, null);
+	}
+
+	public String buildStatusJsonDetails(String filterValve, String slotParam, Integer limit) {
 		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
 		sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
 		String serverTime = sdf.format(new Date(getTimeInMillis()));
@@ -774,6 +922,7 @@ public class AntiDoSStatusRenderer {
 		int activeSlots = monitor != null ? monitor.getNumberOfActiveSlots() : 0;
 		int maxActive = target.getMaxIPCacheSize();
 		int maxBlocked = target.getMaxBlockedIPCacheSize() > 0 ? target.getMaxBlockedIPCacheSize() : maxActive;
+		long currentSlotKey = monitor != null ? monitor.getCurrentSlotKey() : 0;
 
 		StringBuilder sb = new StringBuilder(4096);
 		sb.append("{\n  \"serverTime\": \"").append(serverTime).append("\",\n");
@@ -797,6 +946,8 @@ public class AntiDoSStatusRenderer {
 				.append("    \"maxBlockedIPCacheSize\": ").append(maxBlocked).append(",\n")
 				.append("    \"currentActiveCounters\": ").append(activeCounters).append(",\n")
 				.append("    \"currentBlockedCounters\": ").append(blockedCounters).append(",\n")
+				.append("    \"currentSlotKey\": ").append(currentSlotKey).append(",\n")
+				.append("    \"lastCompletedSlotKey\": ").append(currentSlotKey > 0 ? (currentSlotKey - 1) : 0).append(",\n")
 				.append("    \"totalRequests\": ").append(totalReqs).append(",\n")
 				.append("    \"activeSlots\": ").append(activeSlots).append(",\n")
 				.append("    \"statusUri\": ").append(target.getStatusUri() != null ? "\"" + escapeJson(target.getStatusUri()) + "\"" : "null").append(",\n")
@@ -809,7 +960,6 @@ public class AntiDoSStatusRenderer {
 
 		// Slots array
 		int numSlots = monitor != null ? monitor.getNumberOfSlots() : target.getNumberOfSlots();
-		long currentSlotKey = monitor != null ? monitor.getCurrentSlotKey() : 0;
 		int slotLength = monitor != null ? monitor.getSlotLength() : target.getSlotLength();
 		sb.append("  \"slots\": [\n");
 		boolean firstSlot = true;
@@ -825,11 +975,13 @@ public class AntiDoSStatusRenderer {
 					boolean isCurrent = (slotKey == currentSlotKey);
 					long ageSec = (currentSlotKey - slotKey) * (slotLength / 1000);
 					String startTime = sdf.format(new Date(slotKey * slotLength));
+					String endTime = sdf.format(new Date((slotKey + 1) * slotLength));
 					sb.append("    {\n")
 							.append("      \"index\": ").append(i).append(",\n")
 							.append("      \"slotKey\": ").append(slotKey).append(",\n")
 							.append("      \"isCurrent\": ").append(isCurrent).append(",\n")
 							.append("      \"startTime\": \"").append(startTime).append("\",\n")
+							.append("      \"endTime\": \"").append(endTime).append("\",\n")
 							.append("      \"ageSeconds\": ").append(ageSec).append(",\n")
 							.append("      \"totalRequests\": ").append(slot.getTotalRequests()).append(",\n")
 							.append("      \"activeCounters\": ").append(slot.getActiveCounterCount()).append(",\n")
@@ -840,11 +992,36 @@ public class AntiDoSStatusRenderer {
 		}
 		sb.append("\n  ],\n");
 
+		// Selected slot metadata
+		AntiDoSSlot selectedSlot = resolveTargetSlot(monitor, slotParam);
+		String selectedSlotType = determineSlotType(monitor, selectedSlot, slotParam);
+		if (selectedSlot == null) {
+			sb.append("  \"selectedSlot\": null,\n");
+		} else {
+			long selKey = selectedSlot.getSlotKey();
+			boolean selIsCurrent = (selKey == currentSlotKey);
+			long selAgeSec = (currentSlotKey - selKey) * (slotLength / 1000);
+			String selStart = sdf.format(new Date(selKey * slotLength));
+			String selEnd = sdf.format(new Date((selKey + 1) * slotLength));
+			int selIndex = (int) Math.floorMod(selKey, numSlots);
+			sb.append("  \"selectedSlot\": {\n")
+					.append("    \"type\": \"").append(escapeJson(selectedSlotType)).append("\",\n")
+					.append("    \"index\": ").append(selIndex).append(",\n")
+					.append("    \"slotKey\": ").append(selKey).append(",\n")
+					.append("    \"isCurrent\": ").append(selIsCurrent).append(",\n")
+					.append("    \"startTime\": \"").append(selStart).append("\",\n")
+					.append("    \"endTime\": \"").append(selEnd).append("\",\n")
+					.append("    \"ageSeconds\": ").append(selAgeSec).append(",\n")
+					.append("    \"totalRequests\": ").append(selectedSlot.getTotalRequests()).append(",\n")
+					.append("    \"activeCounters\": ").append(selectedSlot.getActiveCounterCount()).append(",\n")
+					.append("    \"blockedCounters\": ").append(selectedSlot.getBlockedCounterCount()).append("\n")
+					.append("  },\n");
+		}
+
 		// Blocked clients array
-		AntiDoSSlot currentSlot = monitor != null ? monitor.getCurrentSlotIfExists() : null;
 		List<CounterEntry> blockedList = new ArrayList<>();
-		if (currentSlot != null) {
-			for (Map.Entry<String, AntiDoSCounter> entry : currentSlot.getBlockedCounters().entrySet()) {
+		if (selectedSlot != null) {
+			for (Map.Entry<String, AntiDoSCounter> entry : selectedSlot.getBlockedCounters().entrySet()) {
 				AntiDoSCounter c = entry.getValue();
 				int count = c.getCount();
 				int retained = c.getRetainedCounts();
@@ -852,8 +1029,13 @@ public class AntiDoSStatusRenderer {
 			}
 			Collections.sort(blockedList);
 		}
-		sb.append("  \"blockedClients\": [\n");
-		int bLimit = Math.min(blockedList.size(), 50);
+
+		int effectiveLimit = (limit != null && limit > 0) ? limit : (limit != null && limit <= 0 ? Integer.MAX_VALUE : 50);
+		int bLimit = Math.min(blockedList.size(), effectiveLimit);
+
+		sb.append("  \"blockedLimit\": ").append(effectiveLimit == Integer.MAX_VALUE ? "null" : effectiveLimit).append(",\n")
+				.append("  \"totalBlockedClients\": ").append(blockedList.size()).append(",\n")
+				.append("  \"blockedClients\": [\n");
 		for (int i = 0; i < bLimit; i++) {
 			if (i > 0) sb.append(",\n");
 			CounterEntry e = blockedList.get(i);
@@ -870,8 +1052,8 @@ public class AntiDoSStatusRenderer {
 
 		// Top active clients array
 		List<CounterEntry> activeList = new ArrayList<>();
-		if (currentSlot != null) {
-			for (Map.Entry<String, AntiDoSCounter> entry : currentSlot.getActiveCounters().entrySet()) {
+		if (selectedSlot != null) {
+			for (Map.Entry<String, AntiDoSCounter> entry : selectedSlot.getActiveCounters().entrySet()) {
 				AntiDoSCounter c = entry.getValue();
 				int count = c.getCount();
 				int retained = c.getRetainedCounts();
@@ -879,8 +1061,12 @@ public class AntiDoSStatusRenderer {
 			}
 			Collections.sort(activeList);
 		}
-		sb.append("  \"topActiveClients\": [\n");
-		int aLimit = Math.min(activeList.size(), 50);
+
+		int aLimit = Math.min(activeList.size(), effectiveLimit);
+
+		sb.append("  \"activeLimit\": ").append(effectiveLimit == Integer.MAX_VALUE ? "null" : effectiveLimit).append(",\n")
+				.append("  \"totalActiveClients\": ").append(activeList.size()).append(",\n")
+				.append("  \"topActiveClients\": [\n");
 		for (int i = 0; i < aLimit; i++) {
 			if (i > 0) sb.append(",\n");
 			CounterEntry e = activeList.get(i);

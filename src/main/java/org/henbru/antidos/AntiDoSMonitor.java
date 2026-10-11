@@ -311,6 +311,50 @@ public class AntiDoSMonitor {
 	}
 
 	/**
+	 * Returns the slot matching the specified slot key, if it is currently present in the ring buffer.
+	 *
+	 * @param targetSlotKey The slot key to look up
+	 * @return The slot matching the slot key, or <code>null</code> if not found or evicted
+	 */
+	public AntiDoSSlot getSlotByKey(long targetSlotKey) {
+		int index = (int) Math.floorMod(targetSlotKey, numberOfSlots);
+		AntiDoSSlot slot = slots.get(index);
+		if (slot != null && slot.getSlotKey() == targetSlotKey) {
+			return slot;
+		}
+		return null;
+	}
+
+	/**
+	 * Returns the most recently completed historical slot preceding the current active time slot.
+	 * Checks the immediately preceding slot (key = currentSlotKey - 1) first, falling back to
+	 * the most recent active slot within the retention window if intermediate slots had no requests.
+	 *
+	 * @return The previous completed slot, or <code>null</code> if none exists within the active window
+	 */
+	public AntiDoSSlot getPreviousSlotIfExists() {
+		long currentSlotKey = getCurrentSlotKey();
+		AntiDoSSlot directPrev = getSlotByKey(currentSlotKey - 1);
+		if (directPrev != null) {
+			return directPrev;
+		}
+		AntiDoSSlot mostRecent = null;
+		long mostRecentKey = -1;
+		for (int i = 0; i < numberOfSlots; i++) {
+			AntiDoSSlot slot = slots.get(i);
+			if (slot != null) {
+				long key = slot.getSlotKey();
+				long age = currentSlotKey - key;
+				if (age > 0 && age < numberOfSlots && key > mostRecentKey) {
+					mostRecent = slot;
+					mostRecentKey = key;
+				}
+			}
+		}
+		return mostRecent;
+	}
+
+	/**
 	 * This method calculates the value for
 	 * {@link AntiDoSCounter#getRetainedCounts()} for a newly created counter. For
 	 * this calculation the methods looks for the same counter in all other slots,

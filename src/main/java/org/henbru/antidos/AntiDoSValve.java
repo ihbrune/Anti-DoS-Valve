@@ -1066,11 +1066,13 @@ public class AntiDoSValve extends ValveBase {
 		if (view == null && "true".equalsIgnoreCase(request.getParameter("details"))) {
 			view = "details";
 		}
+		String slot = request.getParameter("slot");
+		String limit = request.getParameter("limit");
 
 		if (isJson) {
-			statusRenderer.renderStatusJson(response, filterValve, view);
+			statusRenderer.renderStatusJson(response, filterValve, view, slot, limit);
 		} else {
-			statusRenderer.renderStatusHtml(response, filterValve, view, token);
+			statusRenderer.renderStatusHtml(response, filterValve, view, token, slot, limit);
 		}
 	}
 
@@ -1236,6 +1238,10 @@ public class AntiDoSValve extends ValveBase {
 		return statusRenderer.buildStatusHtmlDetails(valveName, token);
 	}
 
+	public String buildStatusHtmlDetails(String valveName, String token, String slotParam, Integer limit) {
+		return statusRenderer.buildStatusHtmlDetails(valveName, token, slotParam, limit);
+	}
+
 	public String buildStatusJson(String filterValve) {
 		return statusRenderer.buildStatusJson(filterValve);
 	}
@@ -1244,12 +1250,20 @@ public class AntiDoSValve extends ValveBase {
 		return statusRenderer.buildStatusJsonDetails(filterValve);
 	}
 
+	public String buildStatusJsonDetails(String filterValve, String slotParam, Integer limit) {
+		return statusRenderer.buildStatusJsonDetails(filterValve, slotParam, limit);
+	}
+
 	public static String buildDashboardUrl(String token, String valve, String view, String format) {
 		return AntiDoSStatusRenderer.buildDashboardUrl(token, valve, view, format);
 	}
 
 	public static String buildDashboardUrl(String token, String valve, String view, String format, boolean forHtml) {
 		return AntiDoSStatusRenderer.buildDashboardUrl(token, valve, view, format, forHtml);
+	}
+
+	public static String buildDashboardUrl(String token, String valve, String view, String format, String slot, String limit, boolean forHtml) {
+		return AntiDoSStatusRenderer.buildDashboardUrl(token, valve, view, format, slot, limit, forHtml);
 	}
 
 	public static String escapeHtml(String text) {

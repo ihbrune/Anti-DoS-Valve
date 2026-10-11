@@ -233,4 +233,65 @@ class AntiDoSStatusRendererTest {
 
 		AntiDoSValve.clearActiveValves();
 	}
+
+	@Test
+	void testParseLimit() {
+		assertEquals(10, AntiDoSStatusRenderer.parseLimit("10", 50));
+		assertEquals(Integer.MAX_VALUE, AntiDoSStatusRenderer.parseLimit("all", 50));
+		assertEquals(Integer.MAX_VALUE, AntiDoSStatusRenderer.parseLimit("-1", 50));
+		assertEquals(Integer.MAX_VALUE, AntiDoSStatusRenderer.parseLimit("0", 50));
+		assertEquals(50, AntiDoSStatusRenderer.parseLimit("invalid", 50));
+		assertEquals(50, AntiDoSStatusRenderer.parseLimit(null, 50));
+		assertEquals(50, AntiDoSStatusRenderer.parseLimit("", 50));
+	}
+
+	@Test
+	void testSlotSelectionAndLimitInJsonAndHtml() {
+		// Populate some requests and block an IP
+		for (int i = 0; i < 15; i++) {
+			valve.isIPAddressBlocked("192.168.1.100");
+		}
+		valve.isIPAddressBlocked("192.168.1.200");
+
+		// Test default details JSON (current slot, limit default 50)
+		String jsonCurrent = renderer.buildStatusJsonDetails("RENDERER_TEST", "current", null);
+		assertNotNull(jsonCurrent);
+		assertTrue(jsonCurrent.contains("\"selectedSlot\": {"));
+		assertTrue(jsonCurrent.contains("\"type\": \"current\""));
+		assertTrue(jsonCurrent.contains("\"endTime\":"));
+		assertTrue(jsonCurrent.contains("\"currentSlotKey\":"));
+		assertTrue(jsonCurrent.contains("\"lastCompletedSlotKey\":"));
+		assertTrue(jsonCurrent.contains("\"blockedLimit\": 50"));
+		assertTrue(jsonCurrent.contains("\"totalBlockedClients\": 1"));
+		assertTrue(jsonCurrent.contains("\"192.168.1.100\""));
+
+		// Test slot=previous
+		String jsonPrevious = renderer.buildStatusJsonDetails("RENDERER_TEST", "previous", 10);
+		assertNotNull(jsonPrevious);
+		assertTrue(jsonPrevious.contains("\"blockedLimit\": 10"));
+		assertTrue(jsonPrevious.contains("\"blockedClients\": ["));
+		// When no previous slot exists yet, selectedSlot is null
+		assertTrue(jsonPrevious.contains("\"selectedSlot\": null"));
+
+		String jsonPreviousUnlimited = renderer.buildStatusJsonDetails("RENDERER_TEST", "previous", Integer.MAX_VALUE);
+		assertNotNull(jsonPreviousUnlimited);
+		assertTrue(jsonPreviousUnlimited.contains("\"blockedLimit\": null"));
+
+		// Test Overview JSON slot metrics
+		String jsonOverview = renderer.buildStatusJson(null);
+		assertTrue(jsonOverview.contains("\"currentSlotKey\":"));
+		assertTrue(jsonOverview.contains("\"lastCompletedSlotKey\":"));
+		assertTrue(jsonOverview.contains("\"previousActiveCounters\":"));
+		assertTrue(jsonOverview.contains("\"previousBlockedCounters\":"));
+		assertTrue(jsonOverview.contains("\"previousTotalRequests\":"));
+
+		// Test HTML Details with slot=previous
+		String htmlPrev = renderer.buildStatusHtmlDetails("RENDERER_TEST", "tok", "previous", 25);
+		assertNotNull(htmlPrev);
+		assertTrue(htmlPrev.contains("Action"));
+		assertTrue(htmlPrev.contains("Inspect"));
+		assertTrue(htmlPrev.contains("Current Slot"));
+		assertTrue(htmlPrev.contains("Previous Slot"));
+		assertTrue(htmlPrev.contains("{ } JSON (This Slot)"));
+	}
 }

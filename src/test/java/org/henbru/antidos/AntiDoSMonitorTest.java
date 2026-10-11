@@ -308,5 +308,32 @@ class AntiDoSMonitorTest {
 		assertEquals(0, mon.getCurrentActiveCounterCount());
 		assertEquals(1, mon.getCurrentBlockedCounterCount());
 	}
+
+	@Test
+	void testGetSlotByKeyAndPreviousSlotIfExists() {
+		// slotLength = 10s (10000ms), 5 slots
+		AntiDoSMonitor4Test mon = new AntiDoSMonitor4Test(10, 5, 10, 2, 0.5f);
+		mon.referencetime = 10000; // slotKey = 1
+		mon.registerAndCheckRequest("10.0.0.1");
+
+		assertNull(mon.getPreviousSlotIfExists());
+		assertNotNull(mon.getSlotByKey(1));
+		assertNull(mon.getSlotByKey(2));
+
+		// Advance time to next slot: slotKey = 2
+		mon.referencetime = 20000;
+		mon.registerAndCheckRequest("10.0.0.2");
+
+		AntiDoSSlot prev = mon.getPreviousSlotIfExists();
+		assertNotNull(prev);
+		assertEquals(1, prev.getSlotKey());
+		assertNotNull(prev.getCounterIfExists("10.0.0.1"));
+
+		// Advance time jumping over slot 3: slotKey = 4
+		mon.referencetime = 40000;
+		AntiDoSSlot fallbackPrev = mon.getPreviousSlotIfExists();
+		assertNotNull(fallbackPrev);
+		assertEquals(2, fallbackPrev.getSlotKey());
+	}
 }
 

@@ -1046,6 +1046,17 @@ class AntiDoSValveTest {
 		assertTrue(detailsJson.contains("\"key\": \"10.0.0.2\""));
 		assertTrue(detailsJson.contains("\"key\": \"10.0.0.1\""));
 
+		// JSON Details with slot=current, limit=1
+		String jsonLimit1 = valve.buildStatusJsonDetails("DETAILS_TEST", "current", 1);
+		assertNotNull(jsonLimit1);
+		assertTrue(jsonLimit1.contains("\"blockedLimit\": 1"));
+		assertTrue(jsonLimit1.contains("\"totalBlockedClients\": 1"));
+
+		// JSON Details with slot=previous
+		String jsonPrev = valve.buildStatusJsonDetails("DETAILS_TEST", "previous", null);
+		assertNotNull(jsonPrev);
+		assertTrue(jsonPrev.contains("\"blockedLimit\": 50"));
+
 		// Unknown valve error handling
 		String notFoundHtml = valve.buildStatusHtmlDetails("NON_EXISTENT", token);
 		assertTrue(notFoundHtml.contains("Valve not found: NON_EXISTENT"));

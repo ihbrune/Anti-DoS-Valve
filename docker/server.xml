@@ -66,11 +66,10 @@
                          monitorName="STATUS VALVE"
                          statusUri="/antidos-status"
                          statusAllowedIPs="192\.168\.\d+\.\d+"
-                         maxIPCacheSize="10"
+                         maxIPCacheSize="1000"
                          numberOfSlots="5"
                          slotLength="10"
-                         allowedRequestsPerSlot="5"
-                         shareOfRetainedFormerRequests="0"
+                         allowedRequestsPerSlot="10"
                     />
 
                     <!-- AntiDoSValve demo configuration for testing  -->
