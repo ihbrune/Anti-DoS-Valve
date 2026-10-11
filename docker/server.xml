@@ -53,6 +53,14 @@
                          prefix="localhost_access_log" suffix=".txt"
                          pattern="%h %l %u %t &quot;%r&quot; %s %b" />
 
+                    <!--
+                         NOTE: The Testcontainers integration test (AntiDoSValveDockerIT)
+                         mounts this file and asserts the exact behavior of the Valves configured
+                         below (e.g. /valvetest thresholds, /valvetest/ex exclusion, /advdemo marking,
+                         and /antidos-status IP restrictions). When modifying thresholds or paths here,
+                         please keep AntiDoSValveDockerIT in sync.
+                    -->
+
                     <!-- AntiDoSValve demo configuration for internal status dashboard  -->
                     <Valve className="org.henbru.antidos.AntiDoSValve"
                          monitorName="STATUS VALVE"
