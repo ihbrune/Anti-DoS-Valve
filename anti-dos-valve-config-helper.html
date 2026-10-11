@@ -1341,12 +1341,12 @@
             <div class="field-group">
               <div class="field-header">
                 <label for="shareOfRetainedFormerRequests" class="field-label">shareOfRetainedFormerRequests</label>
-                <span class="badge badge-required">Required</span>
+                <span class="badge badge-optional">Optional</span>
               </div>
               <div class="field-desc">Multiplier for transferring the average request count from previous slots into the
-                new slot (&ge; 0.0). 0 disables retention; &gt; 1 penalizes longer.</div>
+                new slot (&ge; 0.0). Defaults to 0 (no retention); &gt; 1 penalizes longer.</div>
               <input type="number" id="shareOfRetainedFormerRequests" name="shareOfRetainedFormerRequests" min="0"
-                step="any" required>
+                step="any">
             </div>
 
             <!-- 14. monitorMode -->
@@ -1989,7 +1989,7 @@
       { key: 'slotLength', isRequired: true, defaultVal: 30 },
       { key: 'allowedRequestsPerSlot', isRequired: true, defaultVal: 5 },
       { key: 'numberOfSlots', isRequired: true, defaultVal: 10 },
-      { key: 'shareOfRetainedFormerRequests', isRequired: true, defaultVal: 0 },
+      { key: 'shareOfRetainedFormerRequests', isRequired: false, defaultVal: 0 },
       { key: 'monitorMode', isRequired: false, defaultVal: 'BLOCKING' },
       { key: 'simulationMode', isRequired: false, defaultVal: false, isBoolean: true },
       { key: 'httpStatusCode', isRequired: false, defaultVal: 429 },

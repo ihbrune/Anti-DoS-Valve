@@ -90,6 +90,8 @@ public class AntiDoSStatusRenderer {
 		return "?" + String.join(separator, params);
 	}
 
+	public static final int MAX_HTML_LIMIT = 1000;
+
 	/**
 	 * Parses a limit parameter string. Supports positive integers, "all", or "-1" for unlimited.
 	 *
@@ -107,7 +109,7 @@ public class AntiDoSStatusRenderer {
 		}
 		try {
 			int val = Integer.parseInt(trimmed);
-			return val <= 0 ? Integer.MAX_VALUE : val;
+			return val <= 0 ? defaultLimit : val;
 		} catch (NumberFormatException e) {
 			return defaultLimit;
 		}
@@ -140,12 +142,15 @@ public class AntiDoSStatusRenderer {
 			if (keyOrIndex >= 0 && keyOrIndex < monitor.getNumberOfSlots()) {
 				AntiDoSSlot slotByIndex = monitor.getSlot((int) keyOrIndex);
 				if (slotByIndex != null) {
-					return slotByIndex;
+					long age = monitor.getCurrentSlotKey() - slotByIndex.getSlotKey();
+					if (age >= 0 && age < monitor.getNumberOfSlots()) {
+						return slotByIndex;
+					}
 				}
 			}
 		} catch (NumberFormatException ignored) {
 		}
-		return monitor.getCurrentSlotIfExists();
+		return null;
 	}
 
 	/**
@@ -153,15 +158,12 @@ public class AntiDoSStatusRenderer {
 	 */
 	public static String determineSlotType(AntiDoSMonitor monitor, AntiDoSSlot slot, String slotParam) {
 		if (slot == null) {
-			return slotParam != null ? slotParam : "none";
+			return "none";
 		}
 		if (monitor != null && slot.getSlotKey() == monitor.getCurrentSlotKey()) {
 			return "current";
 		}
 		if (monitor != null && slot.getSlotKey() == (monitor.getCurrentSlotKey() - 1)) {
-			return "previous";
-		}
-		if (slotParam != null && "previous".equalsIgnoreCase(slotParam.trim())) {
 			return "previous";
 		}
 		return "historical";
@@ -181,6 +183,11 @@ public class AntiDoSStatusRenderer {
 	}
 
 	public void renderStatusHtml(Response response, String filterValve, String view, String token, String slotParam, String limitParam) throws IOException {
+		response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+		response.setHeader("Pragma", "no-cache");
+		response.setHeader("Referrer-Policy", "no-referrer");
+		response.setHeader("X-Content-Type-Options", "nosniff");
+		response.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'");
 		response.setContentType("text/html;charset=UTF-8");
 		response.setCharacterEncoding("UTF-8");
 		PrintWriter out = response.getWriter();
@@ -206,6 +213,11 @@ public class AntiDoSStatusRenderer {
 	}
 
 	public void renderStatusJson(Response response, String filterValve, String view, String slotParam, String limitParam) throws IOException {
+		response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+		response.setHeader("Pragma", "no-cache");
+		response.setHeader("Referrer-Policy", "no-referrer");
+		response.setHeader("X-Content-Type-Options", "nosniff");
+		response.setHeader("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'");
 		response.setContentType("application/json;charset=UTF-8");
 		response.setCharacterEncoding("UTF-8");
 		PrintWriter out = response.getWriter();
@@ -287,7 +299,9 @@ public class AntiDoSStatusRenderer {
 				.append("</div>\n");
 
 		int renderedCount = 0;
+		int pipelineOrder = 0;
 		for (AntiDoSValve v : valves) {
+			pipelineOrder++;
 			if (filterValve != null && !filterValve.trim().isEmpty()) {
 				if (!v.getMonitorName().equalsIgnoreCase(filterValve.trim())) {
 					continue;
@@ -317,7 +331,7 @@ public class AntiDoSStatusRenderer {
 					.append("  <div class=\"card-header\">\n")
 					.append("    <div class=\"card-title-group\">\n")
 					.append("      <span class=\"valve-name\">").append(escapeHtml(v.getName4logging())).append("</span>\n")
-					.append("      <span class=\"badge badge-info\">#").append(v.getPipelineOrder()).append(" IN PIPELINE</span>\n");
+					.append("      <span class=\"badge badge-info\">#").append(pipelineOrder).append(" IN PIPELINE</span>\n");
 
 			if (v.getStatusUri() != null) {
 				if (v == valve) {
@@ -347,7 +361,7 @@ public class AntiDoSStatusRenderer {
 					.append("    </div>\n")
 					.append("  </div>\n")
 					.append("  <table>\n")
-					.append("    <tr><th>Pipeline Order</th><td><strong>#").append(v.getPipelineOrder()).append("</strong></td></tr>\n");
+					.append("    <tr><th>Pipeline Order</th><td><strong>#").append(pipelineOrder).append("</strong></td></tr>\n");
 
 			// Status Dashboard row
 			if (v.getStatusUri() != null) {
@@ -454,15 +468,20 @@ public class AntiDoSStatusRenderer {
 
 		AntiDoSValve target = null;
 		Set<AntiDoSValve> valves = getValvesToRender();
+		int targetPipelineOrder = 1;
+		int orderCounter = 1;
 		if (valveName != null && !valveName.trim().isEmpty()) {
 			for (AntiDoSValve v : valves) {
 				if (v.getMonitorName().equalsIgnoreCase(valveName.trim())) {
 					target = v;
+					targetPipelineOrder = orderCounter;
 					break;
 				}
+				orderCounter++;
 			}
 		} else if (valves.size() == 1) {
 			target = valves.iterator().next();
+			targetPipelineOrder = 1;
 		}
 
 		StringBuilder sb = new StringBuilder(6144);
@@ -555,7 +574,7 @@ public class AntiDoSStatusRenderer {
 				.append("  <div class=\"card-header\">\n")
 				.append("    <div class=\"card-title-group\">\n")
 				.append("      <span class=\"valve-name\">Configuration &amp; Metrics Summary</span>\n")
-				.append("      <span class=\"badge badge-info\">#").append(target.getPipelineOrder()).append(" IN PIPELINE</span>\n");
+				.append("      <span class=\"badge badge-info\">#").append(targetPipelineOrder).append(" IN PIPELINE</span>\n");
 
 		if (target.getStatusUri() != null) {
 			if (target == valve) {
@@ -580,7 +599,7 @@ public class AntiDoSStatusRenderer {
 		sb.append("    </div>\n")
 				.append("  </div>\n")
 				.append("  <table>\n")
-				.append("    <tr><th>Pipeline Order</th><td><strong>#").append(target.getPipelineOrder()).append("</strong></td></tr>\n");
+				.append("    <tr><th>Pipeline Order</th><td><strong>#").append(targetPipelineOrder).append("</strong></td></tr>\n");
 
 		// Status Dashboard row
 		if (target.getStatusUri() != null) {
@@ -735,7 +754,7 @@ public class AntiDoSStatusRenderer {
 			Collections.sort(blockedList);
 		}
 
-		int effectiveLimit = (limit != null && limit > 0) ? limit : (limit != null && limit <= 0 ? Integer.MAX_VALUE : 50);
+		int effectiveLimit = (limit != null && limit > 0) ? Math.min(limit, MAX_HTML_LIMIT) : 50;
 		int blockedTotal = blockedList.size();
 		int blockedDisplay = Math.min(blockedTotal, effectiveLimit);
 
@@ -827,7 +846,9 @@ public class AntiDoSStatusRenderer {
 		sb.append("  \"valves\": [\n");
 
 		boolean first = true;
+		int pipelineOrder = 0;
 		for (AntiDoSValve v : valves) {
+			pipelineOrder++;
 			if (filterValve != null && !filterValve.trim().isEmpty()) {
 				if (!v.getMonitorName().equalsIgnoreCase(filterValve.trim())) {
 					continue;
@@ -851,7 +872,7 @@ public class AntiDoSStatusRenderer {
 
 			sb.append("    {\n")
 					.append("      \"monitorName\": \"").append(escapeJson(v.getMonitorName())).append("\",\n")
-					.append("      \"pipelineOrder\": ").append(v.getPipelineOrder()).append(",\n")
+					.append("      \"pipelineOrder\": ").append(pipelineOrder).append(",\n")
 					.append("      \"monitorMode\": \"").append(escapeJson(v.getMonitorMode())).append("\",\n")
 					.append("      \"simulationMode\": ").append(v.isSimulationMode()).append(",\n")
 					.append("      \"serverWideBlocking\": ").append(v.isServerWideBlocking()).append(",\n")
@@ -900,15 +921,20 @@ public class AntiDoSStatusRenderer {
 
 		AntiDoSValve target = null;
 		Set<AntiDoSValve> valves = getValvesToRender();
+		int targetPipelineOrder = 1;
+		int orderCounter = 1;
 		if (filterValve != null && !filterValve.trim().isEmpty()) {
 			for (AntiDoSValve v : valves) {
 				if (v.getMonitorName().equalsIgnoreCase(filterValve.trim())) {
 					target = v;
+					targetPipelineOrder = orderCounter;
 					break;
 				}
+				orderCounter++;
 			}
 		} else if (valves.size() == 1) {
 			target = valves.iterator().next();
+			targetPipelineOrder = 1;
 		}
 
 		if (target == null) {
@@ -928,7 +954,7 @@ public class AntiDoSStatusRenderer {
 		sb.append("{\n  \"serverTime\": \"").append(serverTime).append("\",\n");
 		sb.append("  \"valve\": {\n")
 				.append("    \"monitorName\": \"").append(escapeJson(target.getMonitorName())).append("\",\n")
-				.append("    \"pipelineOrder\": ").append(target.getPipelineOrder()).append(",\n")
+				.append("    \"pipelineOrder\": ").append(targetPipelineOrder).append(",\n")
 				.append("    \"monitorMode\": \"").append(escapeJson(target.getMonitorMode())).append("\",\n")
 				.append("    \"simulationMode\": ").append(target.isSimulationMode()).append(",\n")
 				.append("    \"serverWideBlocking\": ").append(target.isServerWideBlocking()).append(",\n")

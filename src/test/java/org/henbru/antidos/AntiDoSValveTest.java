@@ -915,6 +915,37 @@ class AntiDoSValveTest {
 	}
 
 	@Test
+	void testStoppedValveCannotBeResurrected() throws Exception {
+		AntiDoSValve.clearActiveValves();
+		AntiDoSValve v1 = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(v1, "STOPPED_VALVE_1");
+		AntiDoSValve v2 = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(v2, "STOPPED_VALVE_2");
+
+		v1.start();
+		v2.start();
+
+		assertEquals(1, v1.getPipelineOrder());
+		assertEquals(2, v2.getPipelineOrder());
+		assertEquals(2, AntiDoSValve.getActiveValves().size());
+
+		v1.stop();
+		assertTrue(v1.isStopped());
+		assertEquals(-1, v1.getPipelineOrder());
+		assertFalse(AntiDoSValve.getActiveValves().contains(v1));
+		assertEquals(1, AntiDoSValve.getActiveValves().size());
+
+		// Calling getValvesToRender or getPipelineOrder on stopped v1 must not resurrect it
+		Set<AntiDoSValve> toRender = v1.getValvesToRender();
+		assertFalse(toRender.contains(v1));
+		assertFalse(AntiDoSValve.getActiveValves().contains(v1));
+		assertEquals(-1, v1.getPipelineOrder());
+
+		v2.stop();
+		AntiDoSValve.clearActiveValves();
+	}
+
+	@Test
 	void testBuildStatusHtmlAndJson() throws Exception {
 		AntiDoSValve.clearActiveValves();
 		AntiDoSValve valve = new AntiDoSValve();
@@ -1326,6 +1357,42 @@ class AntiDoSValveTest {
 		valve.stop();
 	}
 
+	@Test
+	void testStatusResponseSecurityHeaders() throws Exception {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "SEC_HEADERS_TEST");
+		valve.setStatusUri("/antidos-status");
+		valve.setStatusPassword("secSecret");
+		valve.start();
+
+		// HTML status response
+		TestRequest htmlReq = new TestRequest("/antidos-status", "127.0.0.1");
+		htmlReq.setParameter("token", "secSecret");
+		TestResponse htmlResp = new TestResponse();
+		valve.invoke(htmlReq, htmlResp);
+
+		assertEquals("no-store, no-cache, must-revalidate", htmlResp.getHeader("Cache-Control"));
+		assertEquals("no-cache", htmlResp.getHeader("Pragma"));
+		assertEquals("no-referrer", htmlResp.getHeader("Referrer-Policy"));
+		assertEquals("nosniff", htmlResp.getHeader("X-Content-Type-Options"));
+		assertEquals("default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'", htmlResp.getHeader("Content-Security-Policy"));
+
+		// JSON status response
+		TestRequest jsonReq = new TestRequest("/antidos-status", "127.0.0.1");
+		jsonReq.setParameter("token", "secSecret");
+		jsonReq.setParameter("format", "json");
+		TestResponse jsonResp = new TestResponse();
+		valve.invoke(jsonReq, jsonResp);
+
+		assertEquals("no-store, no-cache, must-revalidate", jsonResp.getHeader("Cache-Control"));
+		assertEquals("no-cache", jsonResp.getHeader("Pragma"));
+		assertEquals("no-referrer", jsonResp.getHeader("Referrer-Policy"));
+		assertEquals("nosniff", jsonResp.getHeader("X-Content-Type-Options"));
+		assertEquals("default-src 'none'; frame-ancestors 'none'", jsonResp.getHeader("Content-Security-Policy"));
+
+		valve.stop();
+	}
+
 	private static class TestRequest extends Request {
 		private final String testUri;
 		private final String testRemoteAddr;
@@ -1371,6 +1438,7 @@ class AntiDoSValveTest {
 		private int errorCode = -1;
 		private final StringWriter sw = new StringWriter();
 		private final PrintWriter pw = new PrintWriter(sw);
+		private final Map<String, String> headers = new HashMap<>();
 
 		TestResponse() {
 			super();
@@ -1391,6 +1459,12 @@ class AntiDoSValveTest {
 
 		@Override
 		public void setHeader(String name, String value) {
+			headers.put(name, value);
+		}
+
+		@Override
+		public String getHeader(String name) {
+			return headers.get(name);
 		}
 
 		@Override
@@ -1408,3 +1482,4 @@ class AntiDoSValveTest {
 		}
 	}
 }
+

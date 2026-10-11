@@ -199,12 +199,22 @@ class AntiDoSStatusRendererTest {
 		AntiDoSValve.clearActiveValves();
 
 		AntiDoSValve v1 = new AntiDoSValve();
+		v1.setContainer(new org.apache.catalina.core.StandardEngine());
 		v1.setMonitorName("VALVE_FIRST");
-		v1.provideMonitor();
+		v1.setAllowedRequestsPerSlot(10);
+		v1.setNumberOfSlots(5);
+		v1.setSlotLength(60);
+		v1.setMaxIPCacheSize(100);
+		v1.start();
 
 		AntiDoSValve v2 = new AntiDoSValve();
+		v2.setContainer(new org.apache.catalina.core.StandardEngine());
 		v2.setMonitorName("VALVE_SECOND");
-		v2.provideMonitor();
+		v2.setAllowedRequestsPerSlot(10);
+		v2.setNumberOfSlots(5);
+		v2.setSlotLength(60);
+		v2.setMaxIPCacheSize(100);
+		v2.start();
 
 		assertEquals(1, v1.getPipelineOrder());
 		assertEquals(2, v2.getPipelineOrder());
@@ -231,6 +241,8 @@ class AntiDoSStatusRendererTest {
 		assertTrue(json.contains("\"pipelineOrder\": 1"));
 		assertTrue(json.contains("\"pipelineOrder\": 2"));
 
+		v1.stop();
+		v2.stop();
 		AntiDoSValve.clearActiveValves();
 	}
 
@@ -239,7 +251,8 @@ class AntiDoSStatusRendererTest {
 		assertEquals(10, AntiDoSStatusRenderer.parseLimit("10", 50));
 		assertEquals(Integer.MAX_VALUE, AntiDoSStatusRenderer.parseLimit("all", 50));
 		assertEquals(Integer.MAX_VALUE, AntiDoSStatusRenderer.parseLimit("-1", 50));
-		assertEquals(Integer.MAX_VALUE, AntiDoSStatusRenderer.parseLimit("0", 50));
+		assertEquals(50, AntiDoSStatusRenderer.parseLimit("0", 50));
+		assertEquals(50, AntiDoSStatusRenderer.parseLimit("-2", 50));
 		assertEquals(50, AntiDoSStatusRenderer.parseLimit("invalid", 50));
 		assertEquals(50, AntiDoSStatusRenderer.parseLimit(null, 50));
 		assertEquals(50, AntiDoSStatusRenderer.parseLimit("", 50));
@@ -294,4 +307,26 @@ class AntiDoSStatusRendererTest {
 		assertTrue(htmlPrev.contains("Previous Slot"));
 		assertTrue(htmlPrev.contains("{ } JSON (This Slot)"));
 	}
+
+	@Test
+	void testUnknownSlotReturnsNullSlot() {
+		String jsonInvalid = renderer.buildStatusJsonDetails("RENDERER_TEST", "invalid_slot_key_999", null);
+		assertNotNull(jsonInvalid);
+		assertTrue(jsonInvalid.contains("\"selectedSlot\": null"));
+		assertTrue(jsonInvalid.contains("\"totalBlockedClients\": 0"));
+
+		String htmlInvalid = renderer.buildStatusHtmlDetails("RENDERER_TEST", "tok", "invalid_slot_key_999", 50);
+		assertNotNull(htmlInvalid);
+		assertTrue(htmlInvalid.contains("Slot Not Available"));
+	}
+
+	@Test
+	void testHtmlLimitCappedToMax() {
+		assertEquals(1000, AntiDoSStatusRenderer.MAX_HTML_LIMIT);
+		String htmlCapped = renderer.buildStatusHtmlDetails("RENDERER_TEST", "tok", "current", 5000);
+		assertNotNull(htmlCapped);
+		// With 0 or few blocked clients, header shows (0 of 0 entries)
+		assertTrue(htmlCapped.contains("entries)"));
+	}
 }
+

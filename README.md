@@ -290,11 +290,13 @@ The number of slots the monitor maintains in memory (must be an integer greater 
 
 This history is used when requests from earlier slots are factored into evaluating an IP address in the current slot (see *shareOfRetainedFormerRequests*).
 
-## shareOfRetainedFormerRequests
+## shareOfRetainedFormerRequests (optional)
 
-Defines the degree to which past requests from an IP address or subnet influence its evaluation in the current slot (must be a floating-point value greater than or equal to 0). The monitor calculates the average request count across previous slots and multiplies it by this factor. A higher value penalizes an IP address longer for past traffic spikes, whereas a low value allows a previously blocked IP to make requests again soon after a new slot begins. Example values:
+Defines the degree to which past requests from an IP address or subnet influence its evaluation in the current slot (must be a floating-point value greater than or equal to 0). Since version 1.7.0, this parameter is optional and defaults to `0`.
 
-* `0`: No historical request counts are carried over. In this case, *numberOfSlots* should be set to 1 to minimize memory usage.
+The monitor calculates the average request count across previous slots and multiplies it by this factor. A higher value penalizes an IP address longer for past traffic spikes, whereas a low value allows a previously blocked IP to make requests again soon after a new slot begins. Example values:
+
+* `0` (Default): No historical request counts are carried over. In this case, *numberOfSlots* should be set to 1 to minimize memory usage.
 * `0.5`: 50% of the average request count from past slots is carried over. A value below 1 gives attackers (as well as inadvertently blocked regular users) a fresh request allowance at the start of each new slot.
 * `1`: The average past request count is carried over in full. During an ongoing attack, an IP address that consistently exceeded limits in previous slots will be blocked right from the start of the new slot.
 * `<numberOfSlots>`: If this factor equals the number of slots, a single past slot with excessive requests is enough to immediately block the IP address in a new slot. Furthermore, several slots where traffic stayed just below the threshold can accumulate and trigger a block. Any value greater than 1 has this effect.
@@ -609,8 +611,8 @@ When polling the status endpoint from automated monitoring scripts or collectors
 |---|---|---|
 | `format` | `json` | Renders machine-readable JSON output (can also be requested via `Accept: application/json` header). |
 | `view` | `details` | Renders full details for a valve, including the ring buffer slots, `selectedSlot`, `blockedClients`, and `topActiveClients`. |
-| `slot` | `current`, `previous`, `<slotKey>` | Selects which slot's blocked/active client list to inspect. Using `slot=previous` returns the fully finished, immutable previous time window. Default: `current`. |
-| `limit` | integer (e.g. `100`), `all`, `-1` | Maximum number of blocked and active clients returned. `all` or `-1` returns all entries without capping. Default: `50`. |
+| `slot` | `current`, `previous`, `<slotKey>` | Selects which slot's blocked/active client list to inspect. Using `slot=previous` returns the completed previous time window (requires `numberOfSlots >= 2`; collectors should deduplicate by `slotKey`). Default: `current`. |
+| `limit` | positive integer (e.g. `100`), `all`, `-1` | Maximum number of blocked and active clients returned. `all` or `-1` returns all entries (HTML tables are capped at 1,000 for browser responsiveness). `0` or omitted defaults to `50`. |
 | `valve` | `<monitorName>` | Filters by monitor name (required for details view if multiple valves are running). |
 
 

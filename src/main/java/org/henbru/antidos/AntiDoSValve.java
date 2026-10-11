@@ -154,6 +154,11 @@ public class AntiDoSValve extends ValveBase {
 	 * 1-based sequential index assigned to this valve instance during startup or registration.
 	 */
 	private volatile int registrationIndex = 0;
+	private volatile boolean stopped = false;
+
+	public boolean isStopped() {
+		return stopped;
+	}
 
 	private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 	private static volatile String generatedStatusToken = null;
@@ -732,11 +737,19 @@ public class AntiDoSValve extends ValveBase {
 	 *                                      <code>allowedRequestsPerSlot</code> per
 	 *                                      slot on average.
 	 */
+	public void setShareOfRetainedFormerRequests(float shareOfRetainedFormerRequests) {
+		this.shareOfRetainedFormerRequests = shareOfRetainedFormerRequests;
+	}
+
 	public void setShareOfRetainedFormerRequests(String shareOfRetainedFormerRequests) {
-		this.shareOfRetainedFormerRequests = -1;
+		if (shareOfRetainedFormerRequests == null || shareOfRetainedFormerRequests.trim().isEmpty()) {
+			this.shareOfRetainedFormerRequests = 0;
+			return;
+		}
 		try {
-			this.shareOfRetainedFormerRequests = Float.parseFloat(shareOfRetainedFormerRequests);
-		} catch (NumberFormatException | NullPointerException ex) {
+			this.shareOfRetainedFormerRequests = Float.parseFloat(shareOfRetainedFormerRequests.trim());
+		} catch (NumberFormatException ex) {
+			this.shareOfRetainedFormerRequests = -1;
 		}
 	}
 
@@ -837,6 +850,7 @@ public class AntiDoSValve extends ValveBase {
 	public static void clearActiveValves() {
 		for (AntiDoSValve v : activeValves) {
 			v.registrationIndex = 0;
+			v.stopped = false;
 		}
 		activeValves.clear();
 		registrationSequence.set(0);
@@ -1106,11 +1120,7 @@ public class AntiDoSValve extends ValveBase {
 	 */
 	public int getRegistrationIndex() {
 		if (registrationIndex == 0) {
-			synchronized (this) {
-				if (registrationIndex == 0) {
-					registrationIndex = registrationSequence.incrementAndGet();
-				}
-			}
+			registrationIndex = registrationSequence.incrementAndGet();
 		}
 		return registrationIndex;
 	}
@@ -1134,7 +1144,7 @@ public class AntiDoSValve extends ValveBase {
 			if (c instanceof org.apache.catalina.Context) {
 				return 3;
 			}
-		} catch (Throwable t) {
+		} catch (Exception e) {
 			// Ignore
 		}
 		return 2;
@@ -1178,7 +1188,7 @@ public class AntiDoSValve extends ValveBase {
 							return Integer.compare(idx1, idx2);
 						}
 					}
-				} catch (Throwable t) {
+				} catch (Exception e) {
 					// Fallback
 				}
 			}
@@ -1191,9 +1201,13 @@ public class AntiDoSValve extends ValveBase {
 	 * Returns the 1-based execution order index of this valve among all currently active
 	 * {@link AntiDoSValve} instances in the JVM.
 	 *
-	 * @return 1-based pipeline position (1 for the first valve to execute, 2 for the second, etc.)
+	 * @return 1-based pipeline position (1 for the first valve to execute, 2 for the second, etc.),
+	 * -1 if not running.
 	 */
 	public int getPipelineOrder() {
+		if (stopped) {
+			return -1;
+		}
 		Set<AntiDoSValve> valves = getValvesToRender();
 		int order = 1;
 		for (AntiDoSValve v : valves) {
@@ -1202,7 +1216,7 @@ public class AntiDoSValve extends ValveBase {
 			}
 			order++;
 		}
-		return 1;
+		return -1;
 	}
 
 	/**
@@ -1212,11 +1226,11 @@ public class AntiDoSValve extends ValveBase {
 	 * @return A {@link LinkedHashSet} of active valves sorted by execution order
 	 */
 	Set<AntiDoSValve> getValvesToRender() {
-		getRegistrationIndex();
-		if (!activeValves.contains(this)) {
-			activeValves.add(this);
+		if (stopped) {
+			return Collections.emptySet();
 		}
-		if (activeValves.size() <= 1) {
+		getRegistrationIndex();
+		if (activeValves.isEmpty()) {
 			Set<AntiDoSValve> fallback = new LinkedHashSet<>();
 			fallback.add(this);
 			return fallback;
@@ -1284,6 +1298,7 @@ public class AntiDoSValve extends ValveBase {
 	protected synchronized void startInternal() throws LifecycleException {
 		checkConfiguration();
 		super.startInternal();
+		this.stopped = false;
 		if (this.registrationIndex == 0) {
 			this.registrationIndex = registrationSequence.incrementAndGet();
 		}
@@ -1305,6 +1320,7 @@ public class AntiDoSValve extends ValveBase {
 
 	@Override
 	protected synchronized void stopInternal() throws LifecycleException {
+		this.stopped = true;
 		activeValves.remove(this);
 		super.stopInternal();
 		AntiDoSMonitor monitor = monitors.get(monitorName);

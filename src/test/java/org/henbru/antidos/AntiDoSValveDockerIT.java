@@ -185,7 +185,8 @@ public class AntiDoSValveDockerIT {
 		}
 		try (var stream = Files.newDirectoryStream(targetDir, path -> {
 			String name = path.getFileName().toString();
-			return name.startsWith("anti-dos-valve-") && name.endsWith(".jar") && !name.contains("-tomcat9");
+			return name.startsWith("anti-dos-valve-") && name.endsWith(".jar") && !name.contains("-tomcat9")
+					&& !name.contains("-sources") && !name.contains("-javadoc");
 		})) {
 			var it = stream.iterator();
 			if (it.hasNext()) {
