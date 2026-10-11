@@ -70,16 +70,23 @@ public class AntiDoSValveDockerIT {
 		Assumptions.assumeTrue(Files.exists(valveJar),
 				"Valve JAR not found at " + valveJar + " - run 'mvn package' first.");
 
+		Path serverXmlPath = Files.exists(Paths.get("docker/server.xml"))
+				? Paths.get("docker/server.xml")
+				: Paths.get("../docker/server.xml");
+		Path advdemoPath = Files.exists(Paths.get("docker/advdemo"))
+				? Paths.get("docker/advdemo")
+				: Paths.get("../docker/advdemo");
+
 		tomcatContainer = new GenericContainer<>(TOMCAT_IMAGE)
 				.withExposedPorts(TOMCAT_HTTP_PORT)
 				.withCopyFileToContainer(
-						MountableFile.forHostPath("docker/server.xml"),
+						MountableFile.forHostPath(serverXmlPath.toAbsolutePath().toString()),
 						"/usr/local/tomcat/conf/server.xml")
 				.withCopyFileToContainer(
 						MountableFile.forHostPath(valveJar.toAbsolutePath().toString()),
 						"/usr/local/tomcat/lib/anti-dos-valve.jar")
 				.withCopyFileToContainer(
-						MountableFile.forHostPath("docker/advdemo"),
+						MountableFile.forHostPath(advdemoPath.toAbsolutePath().toString()),
 						"/usr/local/tomcat/webapps/advdemo")
 				.waitingFor(Wait.forLogMessage(".*Server startup in.*\\n", 1)
 						.withStartupTimeout(Duration.ofSeconds(60)));
@@ -180,6 +187,9 @@ public class AntiDoSValveDockerIT {
 	 */
 	private static Path findBuiltValveJar() {
 		Path targetDir = Paths.get("target");
+		if (!Files.isDirectory(targetDir) && Files.isDirectory(Paths.get("valve/target"))) {
+			targetDir = Paths.get("valve/target");
+		}
 		if (!Files.isDirectory(targetDir)) {
 			return Paths.get("target/anti-dos-valve.jar");
 		}

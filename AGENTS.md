@@ -57,9 +57,9 @@ This document serves as an onboarding and development guide for human developers
 ## 5. Checklist for New Configuration Parameters
 
 Whenever a new configuration parameter is added to the Valve, the following areas must be kept in sync:
-1. **Getters & Setters** in [AntiDoSValve.java](src/main/java/org/henbru/antidos/AntiDoSValve.java).
+1. **Getters & Setters** in [AntiDoSValve.java](valve/src/main/java/org/henbru/antidos/AntiDoSValve.java).
 2. **Defaults & Init Logic** in `initInternal()` / `reloadMonitor()`.
-3. **Status Dashboard:** Display in [AntiDoSStatusRenderer.java](src/main/java/org/henbru/antidos/AntiDoSStatusRenderer.java).
+3. **Status Dashboard:** Display in [AntiDoSStatusRenderer.java](valve/src/main/java/org/henbru/antidos/AntiDoSStatusRenderer.java).
 4. **HTML Configurator:** Form field in [anti-dos-valve-config-helper.html](anti-dos-valve-config-helper.html).
 5. **Documentation:** Parameter reference table in [README.md](README.md) and demo configuration in [docker/server.xml](docker/server.xml).
-6. **Unit Tests:** Parameter binding and behavioral tests in [AntiDoSValveTest.java](src/test/java/org/henbru/antidos/AntiDoSValveTest.java).
+6. **Unit Tests:** Parameter binding and behavioral tests in [AntiDoSValveTest.java](valve/src/test/java/org/henbru/antidos/AntiDoSValveTest.java).
