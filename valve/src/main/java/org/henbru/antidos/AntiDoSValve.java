@@ -199,6 +199,11 @@ public class AntiDoSValve extends ValveBase {
 	private volatile String monitorName = DEFAULT_MONITOR_NAME;
 
 	/**
+	 * Optional description text for this valve instance, displayed in the monitoring status.
+	 */
+	private volatile String description = null;
+
+	/**
 	 * Monitor name for logging
 	 */
 	private volatile String name4logging = provideName4logging(DEFAULT_MONITOR_NAME);
@@ -377,11 +382,23 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
-	 * @see {@link #setMonitorName(String)}
-	 * @return always <code>true</code>
+	 * @return The optional description text for this valve instance, or <code>null</code> if not configured.
 	 */
-	public boolean isMonitorNameValid() {
-		return true;
+	public String getDescription() {
+		return description;
+	}
+
+	/**
+	 * Sets an optional description text for this valve instance.
+	 *
+	 * @param description Description text, or <code>null</code> / empty to clear.
+	 */
+	public void setDescription(String description) {
+		if (description == null || description.trim().isEmpty()) {
+			this.description = null;
+		} else {
+			this.description = description.trim();
+		}
 	}
 
 	/**

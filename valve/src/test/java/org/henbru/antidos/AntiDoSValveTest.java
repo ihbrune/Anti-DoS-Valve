@@ -1393,6 +1393,27 @@ class AntiDoSValveTest {
 		valve.stop();
 	}
 
+	@Test
+	void testDescriptionConfiguration() {
+		AntiDoSValve valve = new AntiDoSValve();
+		assertNull(valve.getDescription());
+
+		valve.setDescription("  Protect public APIs  ");
+		assertEquals("Protect public APIs", valve.getDescription());
+
+		valve.setDescription("Updated description");
+		assertEquals("Updated description", valve.getDescription());
+
+		valve.setDescription("");
+		assertNull(valve.getDescription());
+
+		valve.setDescription("   ");
+		assertNull(valve.getDescription());
+
+		valve.setDescription(null);
+		assertNull(valve.getDescription());
+	}
+
 	private static class TestRequest extends Request {
 		private final String testUri;
 		private final String testRemoteAddr;

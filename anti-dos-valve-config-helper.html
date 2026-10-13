@@ -1181,6 +1181,17 @@
               <input type="text" id="monitorName" name="monitorName" placeholder="e.g. PROD VALVE">
             </div>
 
+            <!-- 1b. description -->
+            <div class="field-group">
+              <div class="field-header">
+                <label for="description" class="field-label">description</label>
+                <span class="badge badge-optional">Optional</span>
+              </div>
+              <div class="field-desc">An optional description text explaining the purpose of this valve instance.
+                Displayed in the monitoring dashboard when present.</div>
+              <input type="text" id="description" name="description" placeholder="e.g. Rate limiter for public API endpoints">
+            </div>
+
             <!-- 2. alwaysForbiddenIPs -->
             <div class="field-group">
               <div class="field-header">
@@ -1880,6 +1891,7 @@
         description: 'From README (/valvetest), 5 requests / 30s',
         values: {
           monitorName: 'TEST VALVE',
+          description: 'Demo test valve for verifying blocking functionality',
           alwaysForbiddenIPs: '',
           alwaysAllowedIPs: '',
           relevantPaths: '/valvetest',
@@ -1904,6 +1916,7 @@
         description: 'Recommended baseline for dynamic web traffic',
         values: {
           monitorName: 'PROD VALVE',
+          description: 'Baseline rate limiting for dynamic application routes',
           alwaysForbiddenIPs: '',
           alwaysAllowedIPs: '127\\.0\\.0\\.1',
           relevantPaths: '.*(jsp|/api/|/app/).*',
@@ -1928,6 +1941,7 @@
         description: 'With IPv4 (/24) and IPv6 (/64) subnet aggregation',
         values: {
           monitorName: 'BOT DEFENSE',
+          description: 'Subnet-aggregated rate limiter countering distributed scraper bots',
           alwaysForbiddenIPs: '',
           alwaysAllowedIPs: '127\\.0\\.0\\.1',
           relevantPaths: '.*',
@@ -1952,6 +1966,7 @@
         description: 'No blocking; sets request attribute for servlets',
         values: {
           monitorName: 'MARKING VALVE',
+          description: 'Non-blocking audit valve tagging requests for downstream inspection',
           alwaysForbiddenIPs: '',
           alwaysAllowedIPs: '',
           relevantPaths: '.*/swa.*',
@@ -1977,6 +1992,7 @@
      */
     const PARAMETERS = [
       { key: 'monitorName', isRequired: false, defaultVal: '' },
+      { key: 'description', isRequired: false, defaultVal: '' },
       { key: 'alwaysForbiddenIPs', isRequired: false, defaultVal: '' },
       { key: 'alwaysAllowedIPs', isRequired: false, defaultVal: '' },
       { key: 'relevantPaths', isRequired: false, defaultVal: '' },

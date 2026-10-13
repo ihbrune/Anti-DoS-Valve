@@ -8,7 +8,7 @@ The valve is highly configurable and also provides options to permanently block 
 
 A key goal during development was comprehensive unit test coverage to ensure the correct functioning of this code at a central point in the Tomcat server.
 
-A simulation tool is also provided as a Google Sheet. Additionally, the valve's status can be monitored and its configuration adjusted at runtime via JMX.
+A configuration helper including a simulation tool is provided in the project, and the valve's status can be monitored and its configuration adjusted at runtime via JMX and a web-based status page.
 
 A Dockerfile is included to run Tomcat with the valve using minimal setup.
 
@@ -107,7 +107,9 @@ Standard Unix command-line tools like `grep`, `awk`, `sort`, `uniq`, and `wc` wi
 
 Besides knowing your normal traffic profile, it is also important to estimate the request rate an attacker would need to cause an overload. The smaller the gap between regular traffic and server capacity, the more precisely the Anti-DoS Valve needs to be tuned.
 
-Once you have identified these values, you can craft your valve configuration using the parameters described below.
+Another way to get some knowledge about the traffic profile of your server is to use the valves simulation mode. In this mode the valve is not blocking any requests, but is logging the requests as it would do in normal operation. You can then analyze the logs to understand the traffic profile of your server.  Use parameter "mode" and set it to "simulation".  Use parameter "relevantPaths" and set it to "all".
+
+Once you have identified the traffic profile values, you can craft your valve configuration using the parameters described below.
 
 ## Interactive Configuration Helper & Traffic Simulator
 
@@ -157,6 +159,10 @@ Understanding how the valve identifies clients is important when subnet aggregat
 ## monitorName
 
 An optional parameter to name the monitor instance (available since version 1.1). If you run more than one instance of the valve/monitor, this parameter is required to distinguish their configurations. It is also included in log messages. See the section on multi-instance configurations below.
+
+## description
+
+An optional parameter providing an explanatory description of the valve instance (e.g. `description="Rate limiter for public API endpoints"`). When configured, this text is displayed in the Monitoring Status dashboard (both overview and detail views) to explain the purpose of the valve.
 
 ## alwaysForbiddenIPs
 

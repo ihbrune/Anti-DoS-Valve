@@ -272,6 +272,7 @@ public class AntiDoSStatusRenderer {
 				.append(".badge-warn{background:#422006;color:#fde047;border:1px solid #713f12}\n")
 				.append(".badge-info{background:#0b1329;color:#7dd3fc;border:1px solid #0369a1}\n")
 				.append(".badge-status{background:#064e3b;color:#6ee7b7;border:1px solid #047857}\n")
+				.append(".valve-desc{color:#cbd5e1;background:#0b1120;border-left:3px solid var(--accent);padding:6px 12px;margin:4px 0 10px 0;border-radius:0 4px 4px 0;font-size:12px;line-height:1.4}\n")
 				.append("table{width:100%;border-collapse:collapse;margin-top:6px}\n")
 				.append("th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--border)}\n")
 				.append("th{color:var(--muted);font-weight:500;width:30%;vertical-align:top}\n")
@@ -359,9 +360,18 @@ public class AntiDoSStatusRenderer {
 					.append("      <a class=\"btn\" href=\"").append(buildDashboardUrl(token, v.getMonitorName(), "details", null)).append("\">&#128269; Details &amp; Caches</a>\n")
 					.append("      <a class=\"btn\" href=\"").append(buildDashboardUrl(token, v.getMonitorName(), null, "json")).append("\">{ } JSON</a>\n")
 					.append("    </div>\n")
-					.append("  </div>\n")
-					.append("  <table>\n")
+					.append("  </div>\n");
+
+			if (v.getDescription() != null) {
+				sb.append("  <div class=\"valve-desc\">").append(escapeHtml(v.getDescription())).append("</div>\n");
+			}
+
+			sb.append("  <table>\n")
 					.append("    <tr><th>Pipeline Order</th><td><strong>#").append(pipelineOrder).append("</strong></td></tr>\n");
+
+			if (v.getDescription() != null) {
+				sb.append("    <tr><th>Description</th><td>").append(escapeHtml(v.getDescription())).append("</td></tr>\n");
+			}
 
 			// Status Dashboard row
 			if (v.getStatusUri() != null) {
@@ -519,6 +529,7 @@ public class AntiDoSStatusRenderer {
 				.append(".metric-fill{height:100%;background:var(--accent)}\n")
 				.append(".metric-fill.high{background:var(--red)}\n")
 				.append(".metric-fill.med{background:var(--yellow)}\n")
+				.append(".valve-desc{color:#cbd5e1;background:#0b1120;border-left:3px solid var(--accent);padding:6px 12px;margin:4px 0 10px 0;border-radius:0 4px 4px 0;font-size:12px;line-height:1.4}\n")
 				.append("</style>\n</head>\n<body>\n");
 
 		if (target == null) {
@@ -597,9 +608,18 @@ public class AntiDoSStatusRenderer {
 		}
 
 		sb.append("    </div>\n")
-				.append("  </div>\n")
-				.append("  <table>\n")
+				.append("  </div>\n");
+
+		if (target.getDescription() != null) {
+			sb.append("  <div class=\"valve-desc\">").append(escapeHtml(target.getDescription())).append("</div>\n");
+		}
+
+		sb.append("  <table>\n")
 				.append("    <tr><th>Pipeline Order</th><td><strong>#").append(targetPipelineOrder).append("</strong></td></tr>\n");
+
+		if (target.getDescription() != null) {
+			sb.append("    <tr><th>Description</th><td>").append(escapeHtml(target.getDescription())).append("</td></tr>\n");
+		}
 
 		// Status Dashboard row
 		if (target.getStatusUri() != null) {
@@ -872,6 +892,7 @@ public class AntiDoSStatusRenderer {
 
 			sb.append("    {\n")
 					.append("      \"monitorName\": \"").append(escapeJson(v.getMonitorName())).append("\",\n")
+					.append("      \"description\": ").append(v.getDescription() != null ? "\"" + escapeJson(v.getDescription()) + "\"" : "null").append(",\n")
 					.append("      \"pipelineOrder\": ").append(pipelineOrder).append(",\n")
 					.append("      \"monitorMode\": \"").append(escapeJson(v.getMonitorMode())).append("\",\n")
 					.append("      \"simulationMode\": ").append(v.isSimulationMode()).append(",\n")
@@ -954,6 +975,7 @@ public class AntiDoSStatusRenderer {
 		sb.append("{\n  \"serverTime\": \"").append(serverTime).append("\",\n");
 		sb.append("  \"valve\": {\n")
 				.append("    \"monitorName\": \"").append(escapeJson(target.getMonitorName())).append("\",\n")
+				.append("    \"description\": ").append(target.getDescription() != null ? "\"" + escapeJson(target.getDescription()) + "\"" : "null").append(",\n")
 				.append("    \"pipelineOrder\": ").append(targetPipelineOrder).append(",\n")
 				.append("    \"monitorMode\": \"").append(escapeJson(target.getMonitorMode())).append("\",\n")
 				.append("    \"simulationMode\": ").append(target.isSimulationMode()).append(",\n")

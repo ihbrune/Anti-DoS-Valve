@@ -3,6 +3,7 @@ package org.henbru.antidos;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.AfterEach;
@@ -327,6 +328,42 @@ class AntiDoSStatusRendererTest {
 		assertNotNull(htmlCapped);
 		// With 0 or few blocked clients, header shows (0 of 0 entries)
 		assertTrue(htmlCapped.contains("entries)"));
+	}
+
+	@Test
+	void testDescriptionRenderingInStatusHtmlAndJson() {
+		// 1. Without description
+		assertNull(valve.getDescription());
+		String htmlNoDesc = renderer.buildStatusHtml(null, "tok");
+		assertFalse(htmlNoDesc.contains("<div class=\"valve-desc\">"));
+		assertFalse(htmlNoDesc.contains("<th>Description</th>"));
+
+		String htmlDetailsNoDesc = renderer.buildStatusHtmlDetails("RENDERER_TEST", "tok");
+		assertFalse(htmlDetailsNoDesc.contains("<div class=\"valve-desc\">"));
+		assertFalse(htmlDetailsNoDesc.contains("<th>Description</th>"));
+
+		String jsonOverviewNoDesc = renderer.buildStatusJson(null);
+		assertTrue(jsonOverviewNoDesc.contains("\"description\": null"));
+
+		String jsonDetailsNoDesc = renderer.buildStatusJsonDetails("RENDERER_TEST");
+		assertTrue(jsonDetailsNoDesc.contains("\"description\": null"));
+
+		// 2. With description
+		valve.setDescription("Rate limiter for public API endpoints & <sensitive> routes");
+
+		String htmlWithDesc = renderer.buildStatusHtml(null, "tok");
+		assertTrue(htmlWithDesc.contains("<div class=\"valve-desc\">Rate limiter for public API endpoints &amp; &lt;sensitive&gt; routes</div>"));
+		assertTrue(htmlWithDesc.contains("<tr><th>Description</th><td>Rate limiter for public API endpoints &amp; &lt;sensitive&gt; routes</td></tr>"));
+
+		String htmlDetailsWithDesc = renderer.buildStatusHtmlDetails("RENDERER_TEST", "tok");
+		assertTrue(htmlDetailsWithDesc.contains("<div class=\"valve-desc\">Rate limiter for public API endpoints &amp; &lt;sensitive&gt; routes</div>"));
+		assertTrue(htmlDetailsWithDesc.contains("<tr><th>Description</th><td>Rate limiter for public API endpoints &amp; &lt;sensitive&gt; routes</td></tr>"));
+
+		String jsonOverviewWithDesc = renderer.buildStatusJson(null);
+		assertTrue(jsonOverviewWithDesc.contains("\"description\": \"Rate limiter for public API endpoints & <sensitive> routes\""));
+
+		String jsonDetailsWithDesc = renderer.buildStatusJsonDetails("RENDERER_TEST");
+		assertTrue(jsonDetailsWithDesc.contains("\"description\": \"Rate limiter for public API endpoints & <sensitive> routes\""));
 	}
 }
 
