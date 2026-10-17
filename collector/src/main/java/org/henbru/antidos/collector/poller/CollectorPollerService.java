@@ -1,5 +1,6 @@
 package org.henbru.antidos.collector.poller;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -135,7 +136,7 @@ public class CollectorPollerService {
 					errorMsg
 			));
 
-		} catch (Exception e) {
+		} catch (IOException | InterruptedException | RuntimeException e) {
 			long duration = System.currentTimeMillis() - start;
 			String errorMsg = ValveStatusClient.formatErrorMessage(e);
 			log.warn("Failed to poll endpoint '{}' ({}): {}", endpoint.getName(), endpoint.getUrl(), errorMsg);
@@ -266,7 +267,7 @@ public class CollectorPollerService {
 
 			return new SlotIngestResult(1, eventsCount, null);
 
-		} catch (Exception e) {
+		} catch (IOException | InterruptedException | RuntimeException e) {
 			String err = "Valve '" + valveName + "' slot '" + slotParam + "' failed: " + ValveStatusClient.formatErrorMessage(e);
 			log.warn("Could not fetch slot '{}' for valve '{}' on '{}': {}",
 					slotParam, valveName, endpoint.getName(), ValveStatusClient.formatErrorMessage(e));
@@ -284,7 +285,7 @@ public class CollectorPollerService {
 				int end = msg.indexOf(' ', 5);
 				String codeStr = end > 5 ? msg.substring(5, end) : msg.substring(5, Math.min(msg.length(), 8));
 				return Integer.parseInt(codeStr.trim());
-			} catch (Exception ignored) {
+			} catch (NumberFormatException ignored) {
 			}
 		}
 		return 0;
