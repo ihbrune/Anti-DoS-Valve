@@ -154,8 +154,13 @@ class DatabaseMigrationAndRepositoryTest {
 		long errCount = pollEventLogRepository.countByStatusSince("ERROR", now.minus(1, ChronoUnit.HOURS));
 		assertTrue(errCount >= 1L);
 
-		// Delete retention older than 1 hour (should keep these new ones)
-		int deletedOld = pollEventLogRepository.deleteOlderThan(now.minus(1, ChronoUnit.HOURS));
-		assertEquals(0, deletedOld);
+		// Delete retention older than 30 days
+		PollEventLog veryOld = new PollEventLog(
+				null, "NODE-OLD", "http://old:8080/antidos-status", now.minus(40, ChronoUnit.DAYS),
+				"SUCCESS", 200, 30L, 1, 1, 0, "Old entry", null
+		);
+		pollEventLogRepository.insert(veryOld);
+		int deletedOld = pollEventLogRepository.deleteOlderThan(now.minus(30, ChronoUnit.DAYS));
+		assertTrue(deletedOld >= 1);
 	}
 }
