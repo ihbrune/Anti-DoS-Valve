@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- Fragment: eventsTable -->
+<div th:fragment="eventsTable" class="table-responsive" id="events-container">
+    <div th:if="${#lists.isEmpty(recentEvents)}" class="empty-state">
+        <p>No recent blocking events logged.</p>
+    </div>
+
+    <table th:unless="${#lists.isEmpty(recentEvents)}">
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Server</th>
+                <th>Valve</th>
+                <th>Client IP</th>
+                <th>Requests</th>
+                <th>Retained</th>
+                <th>Total</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr th:each="event : ${recentEvents}">
+                <td th:text="${#temporals.format(event.slotTime, 'HH:mm:ss')}">10:45:00</td>
+                <td><strong th:text="${event.serverId}">Web-Node-1</strong></td>
+                <td><span class="badge badge-info" th:text="${event.valveName}">API LIMITER</span></td>
+                <td><span class="ip-mono" th:text="${event.clientKey}">203.0.113.42</span></td>
+                <td th:text="${event.requestCount}">120</td>
+                <td th:text="${event.retainedCount}">25</td>
+                <td><strong style="color:var(--color-danger);" th:text="${event.totalEffectiveCount}">145</strong></td>
+                <td>
+                    <span th:if="${event.completed}" class="badge badge-danger">LOCKED</span>
+                    <span th:unless="${event.completed}" class="badge badge-warning">IN PROGRESS</span>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+</body>
+</html>

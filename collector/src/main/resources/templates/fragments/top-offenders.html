@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- Fragment: offenderTable -->
+<div th:fragment="offenderTable" class="table-responsive" id="offender-container">
+    <div th:if="${#lists.isEmpty(topOffenders)}" class="empty-state">
+        <p>No blocked clients recorded in the selected time window.</p>
+    </div>
+
+    <table th:unless="${#lists.isEmpty(topOffenders)}">
+        <thead>
+            <tr>
+                <th>Client IP / Subnet</th>
+                <th>Total Block Incidents</th>
+                <th>Total Requests Attempted</th>
+                <th>Targeted Servers</th>
+                <th>First Seen</th>
+                <th>Last Seen</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr th:each="offender : ${topOffenders}">
+                <td>
+                    <span class="ip-mono" th:text="${offender.clientKey}">192.168.1.100</span>
+                </td>
+                <td>
+                    <span class="badge badge-danger" th:text="${offender.totalBlockIncidents}">12</span>
+                </td>
+                <td>
+                    <strong th:text="${#numbers.formatInteger(offender.totalBlockedRequests, 1, 'POINT')}">1,450</strong>
+                </td>
+                <td>
+                    <span class="badge badge-info" th:text="${offender.distinctServersTargeted} + ' Nodes'">1 Nodes</span>
+                </td>
+                <td th:text="${#temporals.format(offender.firstSeen, 'dd.MM HH:mm')}">11.10 08:30</td>
+                <td th:text="${#temporals.format(offender.lastSeen, 'dd.MM HH:mm')}">11.10 09:45</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+</body>
+</html>

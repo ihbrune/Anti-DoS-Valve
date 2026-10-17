@@ -9,6 +9,13 @@ target/
 
 # Editor
 *~
-
-
 .DS_Store
+
+# Collector local data & secrets
+collector-config.yaml
+collector-config.yml
+collector/collector-config.yaml
+collector/collector-config.yml
+*.db
+*.db-journal
+

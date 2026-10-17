@@ -1,0 +1,58 @@
+# Anti-DoS Collector - Fleet Endpoint Configuration
+# Copy this file to 'collector-config.yaml' (which is git-ignored) and add your actual server credentials.
+
+# -----------------------------------------------------------------------------
+# Optional: Database Storage Location / Engine
+# -----------------------------------------------------------------------------
+# By default, SQLite stores data in 'antidos-collector.db' in the current working directory.
+# To keep your database in a fixed location regardless of where you start the process,
+# you can define an absolute path or use the user home directory:
+#
+# spring:
+#   datasource:
+#     url: "jdbc:sqlite:${user.home}/.antidos/antidos-collector.db"
+#     # Or a fixed server path:
+#     # url: "jdbc:sqlite:/var/lib/antidos/antidos-collector.db"
+#
+# Or switch to PostgreSQL for high-volume enterprise deployments:
+# spring:
+#   datasource:
+#     url: "jdbc:postgresql://localhost:5432/antidos_collector"
+#     username: "postgres"
+#     password: "secretpassword"
+#     driver-class-name: "org.postgresql.Driver"
+
+collector:
+  # Global default poll interval in seconds
+  poll-interval-seconds: 15
+
+  # Historical retention period for completed slots and client events
+  retention-days: 30
+
+  # List of monitored Tomcat servers running AntiDoSValve
+  endpoints:
+    # Example 1: Local Tomcat instance - polls all valves by default
+    - name: "Local-Tomcat"
+      url: "http://localhost:8080/antidos-status"
+      token: "secretToken1"
+      poll-intermediate-slots: false
+      enabled: true
+
+    # Example 2: Remote Production Node with specific valve filtering
+    # Only the listed valves are polled. If 'valves' is omitted or empty, all valves are polled.
+    # Useful to ignore pure monitoring-only valves (e.g. "STATUS VALVE").
+    - name: "Prod-Web-01"
+      url: "https://web01.internal.example.com/antidos-status"
+      token: "productionStatusToken123"
+      poll-intermediate-slots: true
+      enabled: false
+      valves:
+        - "IP-Aggregator"
+        - "Subnet-24-Limiter"
+
+    # Example 3: Additional cluster node
+    - name: "Prod-Web-02"
+      url: "https://web02.internal.example.com/antidos-status"
+      token: "productionStatusToken456"
+      poll-intermediate-slots: true
+      enabled: false

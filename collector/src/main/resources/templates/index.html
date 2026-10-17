@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anti-DoS Fleet Dashboard</title>
+    <link rel="stylesheet" th:href="@{/css/collector.css}">
+    <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
+    <script th:src="@{/js/htmx-lite.js}" defer></script>
+</head>
+<body>
+
+<div class="app-container">
+    <!-- Navbar -->
+    <header class="navbar">
+        <a href="/" class="brand">
+            <div class="brand-icon">&#x1F6E1;</div>
+            <div>
+                <div class="brand-title">Anti-DoS Fleet Manager</div>
+                <div class="brand-subtitle">Distributed Monitoring &amp; Telemetry</div>
+            </div>
+        </a>
+        <div class="nav-actions">
+            <div class="pulse-indicator">
+                <span class="pulse-dot"></span>
+                <span>Auto-Refresh Active</span>
+            </div>
+            <a href="/api/v1/reputation/blocked-ips?format=text" target="_blank" class="btn" title="Export raw blocked IP list for firewalls">
+                Export Blocklist (TXT)
+            </a>
+            <a href="/api/v1/fleet" target="_blank" class="btn" title="Raw fleet JSON API">
+                JSON API
+            </a>
+        </div>
+    </header>
+
+    <!-- Top Stats Overview -->
+    <section class="stats-grid" id="stats-overview">
+        <div class="stat-card">
+            <div class="stat-label">Monitored Servers</div>
+            <div class="stat-value primary">
+                <span th:text="${fleetSummary.onlineEndpoints}">0</span>
+                <span style="font-size:16px; color:var(--text-muted);" th:text="' / ' + ${fleetSummary.totalEndpoints}"> / 0</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Active Valves</div>
+            <div class="stat-value success" th:text="${fleetSummary.totalValvesMonitored}">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Total Requests (24h)</div>
+            <div class="stat-value" th:text="${#numbers.formatInteger(fleetSummary.totalRequests24h, 1, 'POINT')}">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Blocked Requests (24h)</div>
+            <div class="stat-value danger" th:text="${#numbers.formatInteger(fleetSummary.totalBlockedRequests24h, 1, 'POINT')}">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Unique Blocked IPs (24h)</div>
+            <div class="stat-value warning" th:text="${fleetSummary.distinctBlockedClients24h}">0</div>
+        </div>
+    </section>
+
+    <!-- Fleet Status Section -->
+    <section>
+        <div class="section-header">
+            <div class="section-title">
+                <span>&#x1F5A5;</span> Monitored Server Nodes
+            </div>
+            <span style="font-size: 12px; color: var(--text-muted);">Auto-refreshes every 10s</span>
+        </div>
+
+        <!-- HTMX Polling for Fleet Nodes -->
+        <div hx-get="/fragments/fleet" hx-trigger="every 10s" hx-target="#fleet-container">
+            <div th:replace="~{fragments/fleet :: fleetList}"></div>
+        </div>
+    </section>
+
+    <!-- Top Offending IPs Across Fleet -->
+    <section>
+        <div class="section-header">
+            <div class="section-title">
+                <span>&#x26A0;</span> Top Offending Clients (Fleet-wide)
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button class="btn" hx-get="/fragments/top-offenders?hours=1" hx-target="#offender-container">1h</button>
+                <button class="btn" hx-get="/fragments/top-offenders?hours=24" hx-target="#offender-container">24h</button>
+                <button class="btn" hx-get="/fragments/top-offenders?hours=168" hx-target="#offender-container">7d</button>
+            </div>
+        </div>
+
+        <div class="table-card">
+            <div th:replace="~{fragments/top-offenders :: offenderTable}"></div>
+        </div>
+    </section>
+
+    <!-- Recent Incident Events -->
+    <section>
+        <div class="section-header">
+            <div class="section-title">
+                <span>&#x1F4CB;</span> Recent Blocking Incidents
+            </div>
+            <button class="btn" hx-get="/fragments/recent-events" hx-target="#events-container">
+                Refresh Log
+            </button>
+        </div>
+
+        <div class="table-card">
+            <div th:replace="~{fragments/recent-events :: eventsTable}"></div>
+        </div>
+    </section>
+</div>
+
+</body>
+</html>

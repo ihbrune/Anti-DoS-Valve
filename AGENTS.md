@@ -4,31 +4,47 @@ This document serves as an onboarding and development guide for human developers
 
 ---
 
-## 1. Project Overview & Architecture
+## 1. Project Overview & Multi-Module Architecture
 
-**Anti-DoS-Valve** is a high-performance Apache Tomcat Valve designed to protect web applications against Denial-of-Service (DoS) attacks and abusive request rates (rate-limiting).
+**Anti-DoS-Valve Project** is a Maven multi-module project consisting of:
+1. **`valve/` (`anti-dos-valve`):** High-performance Apache Tomcat Valve protecting web applications against Denial-of-Service (DoS) and abusive request rates.
+2. **`collector/` (`anti-dos-collector`):** Standalone Spring Boot 3 & HTMX monitoring aggregator and analytics service collecting status from multiple Valve instances.
+3. **`docker/`:** Standalone demo Tomcat environment and integration test assets.
 
-### Core Architectural Components:
+### Core Architectural Components in `valve/`:
 * **`AntiDoSValve`:** The central Catalina valve (`ValveBase`). Intercepts incoming HTTP requests in Tomcat's request processing pipeline, extracts client IP addresses (handling proxies / headers), checks thresholds, and either forwards or blocks requests (HTTP 429).
 * **`AntiDoSMonitor`:** Manages the sliding time window of request slots and runs a dedicated background thread for automated counter maintenance and eviction of expired IP entries.
 * **`AntiDoSSlot` & `AntiDoSCounter`:** High-concurrency data structures counting requests per IP or subnet partition.
 * **`AntiDoSStatusRenderer`:** Generates the internal HTML monitoring dashboard (`/antidos-status`), secured via IP filtering and path rules.
 * **`AntiDoSLogThrottler`:** Prevents log-flooding during severe DoS incidents by rate-limiting log emission.
 
+### Core Architectural Components in `collector/`:
+* For dedicated Collector guidelines, data models, and commands, refer to [collector/AGENTS.md](collector/AGENTS.md) and [collector/README.md](collector/README.md).
+
 ---
 
 ## 2. Core Development Constraints
 
+### Constraints for `valve/` (Strict Minimal Runtime):
 1. **Zero Runtime Dependencies:**
-   * **No** additional runtime libraries may be introduced in `pom.xml`.
+   * **No** additional runtime libraries may be introduced in `valve/pom.xml`.
    * The only compile/provided dependency is `org.apache.tomcat:tomcat-catalina` (`provided`).
 2. **Tomcat 10 (Jakarta) & Tomcat 9 (Javax) Dual Compatibility:**
    * Source code is written against `jakarta.servlet.*` (Tomcat 10+).
    * Maven Shade Plugin produces a shaded secondary artifact (`*-tomcat9.jar`) during `package` by relocating `jakarta.servlet` packages to `javax.servlet`.
 3. **Thread-Safety & Concurrency:**
-   * The valve executes directly within the high-throughput request processing path of Tomcat.
+   * Executes directly within the high-throughput request processing path of Tomcat.
    * Never use coarse-grained locks (`synchronized`) inside the request processing pipeline (`invoke()`).
    * Rely strictly on concurrency primitives such as `ConcurrentHashMap`, `LongAdder`, and atomic operations.
+
+### Constraints for `collector/` (Modern Spring Boot Ecosystem):
+1. **Java 21 & Virtual Threads:**
+   * Runs as an independent service with `spring.threads.virtual.enabled=true`.
+2. **Database Support:**
+   * SQLite (default zero-ops file db) and PostgreSQL (production multi-server).
+   * All schema migrations managed via versioned Flyway SQL scripts.
+3. **No Heavy Frontend Frameworks:**
+   * Uses server-side Thymeleaf templates with HTMX for real-time reactivity without Node.js/npm dependencies.
 
 ---
 
@@ -36,10 +52,11 @@ This document serves as an onboarding and development guide for human developers
 
 | Command | Purpose |
 |---|---|
-| `mvn test` | Runs all fast unit and concurrency tests (~1-2 seconds). |
-| `mvn test -Dtest=AntiDoSConcurrencyTest` | Runs dedicated concurrency and race-condition tests. |
-| `mvn package` | Compiles and packages both the standard Valve JAR and the tomcat9-shaded JAR in `target/`. |
-| `mvn verify` | Runs unit tests, packaging, and the full Docker integration test (`AntiDoSValveDockerIT`). |
+| `mvn test` | Runs all unit and concurrency tests across all modules. |
+| `mvn test -pl valve` | Runs only valve unit & concurrency tests (~1-2 seconds). |
+| `mvn test -pl collector` | Runs only collector unit & integration tests. |
+| `mvn package` | Compiles and packages both `valve` (including tomcat9 jar) and `collector` executable JAR. |
+| `mvn verify` | Runs all tests, packaging, and Docker integration tests (`AntiDoSValveDockerIT`). |
 
 ---
 

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- Fragment: fleetList -->
+<div th:fragment="fleetList" class="endpoint-grid" id="fleet-container">
+    <div th:if="${#lists.isEmpty(heartbeats)}" class="empty-state" style="grid-column: 1 / -1;">
+        <h3>No Valve Endpoints Monitored Yet</h3>
+        <p>Configure monitored endpoints in <code>collector-config.yaml</code> or run the CLI helper:</p>
+        <code style="display:inline-block; margin-top:8px; padding:6px 12px; background:rgba(0,0,0,0.4); border-radius:4px;">
+            java -jar anti-dos-collector-*.jar test-endpoint --url "http://localhost:8080/antidos-status" --token "secret"
+        </code>
+    </div>
+
+    <div th:each="hb : ${heartbeats}" class="endpoint-card">
+        <div>
+            <div class="endpoint-header">
+                <div>
+                    <div class="endpoint-name" th:text="${hb.serverId}">Web-Node-1</div>
+                    <div class="endpoint-url" th:text="${hb.url}">http://localhost:8080/antidos-status</div>
+                </div>
+                <span th:if="${hb.online}" class="badge badge-success">
+                    <span class="pulse-dot" style="width:6px; height:6px;"></span> ONLINE
+                </span>
+                <span th:unless="${hb.online}" class="badge badge-danger">OFFLINE</span>
+            </div>
+
+            <div class="endpoint-stats-row">
+                <div>
+                    <div class="endpoint-stat-label">Active Valves</div>
+                    <div class="endpoint-stat-val" th:text="${hb.valvesCount} + ' Valves'">1 Valves</div>
+                </div>
+                <div>
+                    <div class="endpoint-stat-label">Latency</div>
+                    <div class="endpoint-stat-val" th:text="${hb.responseTimeMs} + ' ms'">12 ms</div>
+                </div>
+            </div>
+
+            <div th:if="${hb.lastError}" style="color: var(--color-danger); font-size: 11px; margin-top: 6px; word-break: break-all;">
+                <strong>Error:</strong> <span th:text="${hb.lastError}">Connection refused</span>
+            </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; border-top: 1px solid var(--border-color); padding-top: 10px;">
+            <span style="font-size: 11px; color: var(--text-muted);"
+                  th:text="${hb.lastPollAt != null ? 'Synced: ' + #temporals.format(hb.lastPollAt, 'HH:mm:ss') : 'Never'}">
+                Synced: 12:45:00
+            </span>
+            <a th:href="@{'/server/' + ${hb.serverId}}" class="btn" style="font-size: 11px; padding: 4px 10px;">Inspect</a>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

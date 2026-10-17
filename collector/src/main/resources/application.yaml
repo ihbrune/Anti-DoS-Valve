@@ -1,0 +1,42 @@
+server:
+  port: 8090
+
+spring:
+  application:
+    name: anti-dos-collector
+  threads:
+    virtual:
+      enabled: true
+  config:
+    import:
+      - "optional:classpath:collector-config.yaml"
+      - "optional:file:collector-config.yaml"
+      - "optional:file:../collector-config.yaml"
+      - "optional:file:config/collector-config.yaml"
+      - "optional:file:src/main/resources/collector-config.yaml"
+      - "optional:file:collector/src/main/resources/collector-config.yaml"
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:sqlite:antidos-collector.db}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.sqlite.JDBC}
+    username: ${SPRING_DATASOURCE_USERNAME:}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 30000
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration/sqlite
+
+  thymeleaf:
+    cache: false
+    mode: HTML
+    encoding: UTF-8
+
+collector:
+  config-file: ${COLLECTOR_CONFIG_FILE:collector-config.yaml}
+  poll-interval-seconds: 15
+  retention-days: 30
