@@ -40,3 +40,5 @@ collector:
   config-file: ${COLLECTOR_CONFIG_FILE:collector-config.yaml}
   poll-interval-seconds: 15
   retention-days: 30
+  poll-log-retention-days: 1
+  slow-poll-threshold-ms: 1000

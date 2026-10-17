@@ -98,3 +98,23 @@ java -jar collector/target/anti-dos-collector-1.7.0.jar
 ```
 Flyway will automatically initialize the PostgreSQL schema upon startup.
 
+---
+
+## Polling Event Log & Audit Diagnostics
+
+The collector records every polling cycle against each monitored endpoint in a dedicated audit log table (`poll_event_log`):
+* **Status tracking:** Distinguishes between `SUCCESS`, `WARNING` (e.g. slow response or partial valve errors), and `ERROR` (connection refused, timeout, 401/404).
+* **Latency Monitoring:** Automatically flags polling cycles that take longer than `slow-poll-threshold-ms` (default: 1000 ms).
+* **Configurable Retention:** Keeps the database lean by purging log entries older than `poll-log-retention-days` (default: 1 day).
+* **Dedicated UI with Infinite Scrolling:** Available under `/poll-log` with quick status filtering (All / Errors Only / Warnings & Errors) and server selection.
+
+### Configuration Reference
+
+```yaml
+collector:
+  poll-interval-seconds: 15     # Interval between collector poll runs (default: 15s)
+  retention-days: 30            # Retention for slot telemetry and client incident events (default: 30 days)
+  poll-log-retention-days: 1    # Retention for polling event audit log entries (default: 1 day)
+  slow-poll-threshold-ms: 1000  # Latency threshold before marking poll status as WARNING (default: 1000 ms)
+```
+

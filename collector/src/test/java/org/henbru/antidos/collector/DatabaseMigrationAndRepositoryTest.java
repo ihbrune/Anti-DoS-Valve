@@ -6,10 +6,12 @@ import java.util.List;
 import java.util.Optional;
 import org.henbru.antidos.collector.model.BlockedClientEvent;
 import org.henbru.antidos.collector.model.EndpointHeartbeat;
+import org.henbru.antidos.collector.model.PollEventLog;
 import org.henbru.antidos.collector.model.SlotSnapshot;
 import org.henbru.antidos.collector.model.TopOffenderSummary;
 import org.henbru.antidos.collector.storage.ClientEventRepository;
 import org.henbru.antidos.collector.storage.HeartbeatRepository;
+import org.henbru.antidos.collector.storage.PollEventLogRepository;
 import org.henbru.antidos.collector.storage.SlotSnapshotRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +30,9 @@ class DatabaseMigrationAndRepositoryTest {
 
 	@Autowired
 	private ClientEventRepository clientEventRepository;
+
+	@Autowired
+	private PollEventLogRepository pollEventLogRepository;
 
 	@Test
 	void testHeartbeatRepositoryUpsertAndFind() {
@@ -105,5 +110,52 @@ class DatabaseMigrationAndRepositoryTest {
 		// Count distinct clients
 		long distinct = clientEventRepository.countDistinctBlockedClientsSince(Instant.now().minus(1, ChronoUnit.HOURS));
 		assertTrue(distinct >= 2L);
+	}
+
+	@Test
+	void testPollEventLogRepositoryOperations() {
+		Instant now = Instant.now();
+		PollEventLog log1 = new PollEventLog(
+				null, "NODE-A", "http://node-a:8080/antidos-status", now.minus(10, ChronoUnit.MINUTES),
+				"SUCCESS", 200, 35L, 2, 2, 0, "Polled 2 valves", null
+		);
+		PollEventLog log2 = new PollEventLog(
+				null, "NODE-B", "http://node-b:8080/antidos-status", now.minus(5, ChronoUnit.MINUTES),
+				"ERROR", 0, 5002L, 0, 0, 0, "Connection refused", "Connection refused"
+		);
+		PollEventLog log3 = new PollEventLog(
+				null, "NODE-A", "http://node-a:8080/antidos-status", now,
+				"WARNING", 200, 1400L, 2, 2, 0, "Slow response: 1400 ms", null
+		);
+
+		pollEventLogRepository.insert(log1);
+		pollEventLogRepository.insert(log2);
+		pollEventLogRepository.insert(log3);
+
+		// Query all recent
+		List<PollEventLog> all = pollEventLogRepository.findRecent(null, "ALL", null, 10);
+		assertTrue(all.size() >= 3);
+
+		// Filter by ERROR
+		List<PollEventLog> errors = pollEventLogRepository.findRecent(null, "ERROR", null, 10);
+		assertTrue(errors.stream().anyMatch(e -> "NODE-B".equals(e.serverId()) && "ERROR".equals(e.status())));
+
+		// Filter by server
+		List<PollEventLog> nodeA = pollEventLogRepository.findRecent(null, "ALL", "NODE-A", 10);
+		assertTrue(nodeA.stream().allMatch(e -> "NODE-A".equals(e.serverId())));
+
+		// Cursor pagination using beforeId
+		Long topId = all.getFirst().id();
+		List<PollEventLog> paged = pollEventLogRepository.findRecent(topId, "ALL", null, 2);
+		assertFalse(paged.isEmpty());
+		assertTrue(paged.getFirst().id() < topId);
+
+		// Count stats
+		long errCount = pollEventLogRepository.countByStatusSince("ERROR", now.minus(1, ChronoUnit.HOURS));
+		assertTrue(errCount >= 1L);
+
+		// Delete retention older than 1 hour (should keep these new ones)
+		int deletedOld = pollEventLogRepository.deleteOlderThan(now.minus(1, ChronoUnit.HOURS));
+		assertEquals(0, deletedOld);
 	}
 }

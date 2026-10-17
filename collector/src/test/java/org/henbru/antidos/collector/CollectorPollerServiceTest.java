@@ -10,6 +10,7 @@ import org.henbru.antidos.collector.poller.CollectorPollerService;
 import org.henbru.antidos.collector.poller.ValveStatusClient;
 import org.henbru.antidos.collector.storage.ClientEventRepository;
 import org.henbru.antidos.collector.storage.HeartbeatRepository;
+import org.henbru.antidos.collector.storage.PollEventLogRepository;
 import org.henbru.antidos.collector.storage.SlotSnapshotRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +38,9 @@ class CollectorPollerServiceTest {
 
 	@Autowired
 	private ClientEventRepository clientEventRepository;
+
+	@Autowired
+	private PollEventLogRepository pollEventLogRepository;
 
 	@Test
 	void testPollEndpointNormalFlow() throws Exception {
@@ -77,6 +81,27 @@ class CollectorPollerServiceTest {
 		assertFalse(events.isEmpty());
 		assertEquals("192.0.2.1", events.getFirst().clientKey());
 		assertEquals(60, events.getFirst().requestCount());
+
+		// Verify poll event log entry
+		var pollLogs = pollEventLogRepository.findRecent(null, "ALL", "POLL-TEST-NODE", 10);
+		assertFalse(pollLogs.isEmpty());
+		assertEquals("SUCCESS", pollLogs.getFirst().status());
+		assertEquals(200, pollLogs.getFirst().httpStatusCode());
+		assertEquals(1, pollLogs.getFirst().valvesPolled());
+		assertEquals(1, pollLogs.getFirst().slotsIngested());
+	}
+
+	@Test
+	void testPollEndpointFailureLogging() throws Exception {
+		EndpointConfig endpoint = new EndpointConfig("FAIL-TEST-NODE", "http://localhost:8080/antidos-status", null, false, true);
+		when(statusClient.fetchOverview(any())).thenThrow(new java.io.IOException("Connection refused"));
+
+		pollerService.pollEndpoint(endpoint);
+
+		var failLogs = pollEventLogRepository.findRecent(null, "ERROR", "FAIL-TEST-NODE", 10);
+		assertFalse(failLogs.isEmpty());
+		assertEquals("ERROR", failLogs.getFirst().status());
+		assertTrue(failLogs.getFirst().errorMessage().contains("Connection refused"));
 	}
 
 	@Test

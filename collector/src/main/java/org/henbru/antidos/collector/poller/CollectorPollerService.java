@@ -9,11 +9,13 @@ import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.config.EndpointConfig;
 import org.henbru.antidos.collector.model.BlockedClientEvent;
 import org.henbru.antidos.collector.model.EndpointHeartbeat;
+import org.henbru.antidos.collector.model.PollEventLog;
 import org.henbru.antidos.collector.model.SlotSnapshot;
 import org.henbru.antidos.collector.model.ValveDetailsDto;
 import org.henbru.antidos.collector.model.ValveOverviewDto;
 import org.henbru.antidos.collector.storage.ClientEventRepository;
 import org.henbru.antidos.collector.storage.HeartbeatRepository;
+import org.henbru.antidos.collector.storage.PollEventLogRepository;
 import org.henbru.antidos.collector.storage.SlotSnapshotRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,18 +34,21 @@ public class CollectorPollerService {
 	private final HeartbeatRepository heartbeatRepository;
 	private final SlotSnapshotRepository slotSnapshotRepository;
 	private final ClientEventRepository clientEventRepository;
+	private final PollEventLogRepository pollEventLogRepository;
 
 	public CollectorPollerService(
 			CollectorProperties properties,
 			ValveStatusClient statusClient,
 			HeartbeatRepository heartbeatRepository,
 			SlotSnapshotRepository slotSnapshotRepository,
-			ClientEventRepository clientEventRepository) {
+			ClientEventRepository clientEventRepository,
+			PollEventLogRepository pollEventLogRepository) {
 		this.properties = properties;
 		this.statusClient = statusClient;
 		this.heartbeatRepository = heartbeatRepository;
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
+		this.pollEventLogRepository = pollEventLogRepository;
 	}
 
 	public void pollFleet() {
@@ -64,6 +69,11 @@ public class CollectorPollerService {
 	public void pollEndpoint(EndpointConfig endpoint) {
 		long start = System.currentTimeMillis();
 		Instant now = Instant.now();
+		int valvesPolled = 0;
+		int slotsIngested = 0;
+		int eventsIngested = 0;
+		List<String> warnings = new ArrayList<>();
+
 		try {
 			ValveOverviewDto overview = statusClient.fetchOverview(endpoint);
 			long duration = System.currentTimeMillis() - start;
@@ -82,19 +92,50 @@ public class CollectorPollerService {
 					valveCount
 			));
 
-			if (overview.valves() == null || overview.valves().isEmpty()) {
-				return;
-			}
-
-			for (ValveOverviewDto.ValveSummaryDto v : overview.valves()) {
-				if (!endpoint.isValveIncluded(v.monitorName())) {
-					log.debug("Skipping valve '{}' on '{}' (excluded by endpoint configuration)", v.monitorName(), endpoint.getName());
-					continue;
+			if (overview.valves() != null && !overview.valves().isEmpty()) {
+				for (ValveOverviewDto.ValveSummaryDto v : overview.valves()) {
+					if (!endpoint.isValveIncluded(v.monitorName())) {
+						log.debug("Skipping valve '{}' on '{}' (excluded by endpoint configuration)", v.monitorName(), endpoint.getName());
+						continue;
+					}
+					valvesPolled++;
+					IngestResult result = ingestValve(endpoint, v, now);
+					slotsIngested += result.slotsIngested();
+					eventsIngested += result.eventsIngested();
+					warnings.addAll(result.warnings());
 				}
-				ingestValve(endpoint, v, now);
 			}
 
-		} catch (java.io.IOException | InterruptedException | RuntimeException e) {
+			long totalDuration = System.currentTimeMillis() - start;
+			String status = "SUCCESS";
+			String details = "Polled " + valvesPolled + " valve(s), " + slotsIngested + " slot(s), " + eventsIngested + " event(s)";
+			String errorMsg = null;
+
+			if (!warnings.isEmpty()) {
+				status = "WARNING";
+				details = "Partial success (" + warnings.size() + " issue(s)): " + String.join("; ", warnings);
+				errorMsg = String.join("; ", warnings);
+			} else if (totalDuration > properties.getSlowPollThresholdMs()) {
+				status = "WARNING";
+				details = "Slow response: " + totalDuration + " ms (threshold: " + properties.getSlowPollThresholdMs() + " ms)";
+			}
+
+			pollEventLogRepository.insert(new PollEventLog(
+					null,
+					endpoint.getName(),
+					endpoint.getUrl(),
+					now,
+					status,
+					200,
+					totalDuration,
+					valvesPolled,
+					slotsIngested,
+					eventsIngested,
+					details,
+					errorMsg
+			));
+
+		} catch (Exception e) {
 			long duration = System.currentTimeMillis() - start;
 			String errorMsg = ValveStatusClient.formatErrorMessage(e);
 			log.warn("Failed to poll endpoint '{}' ({}): {}", endpoint.getName(), endpoint.getUrl(), errorMsg);
@@ -108,12 +149,31 @@ public class CollectorPollerService {
 					duration,
 					0
 			));
+
+			int httpStatus = extractStatusCode(e);
+			pollEventLogRepository.insert(new PollEventLog(
+					null,
+					endpoint.getName(),
+					endpoint.getUrl(),
+					now,
+					"ERROR",
+					httpStatus,
+					duration,
+					0,
+					0,
+					0,
+					"Connection failed: " + errorMsg,
+					errorMsg
+			));
 		}
 	}
 
-	private void ingestValve(EndpointConfig endpoint, ValveOverviewDto.ValveSummaryDto summary, Instant pollTime) {
+	private IngestResult ingestValve(EndpointConfig endpoint, ValveOverviewDto.ValveSummaryDto summary, Instant pollTime) {
 		String valveName = summary.monitorName();
 		long lastCompletedKey = summary.lastCompletedSlotKey();
+		int slots = 0;
+		int events = 0;
+		List<String> warnings = new ArrayList<>();
 
 		// 1. Check for missed slots (catch-up recovery)
 		Optional<Long> latestKnownKey = slotSnapshotRepository.findLatestSlotKey(endpoint.getName(), valveName);
@@ -124,26 +184,43 @@ public class CollectorPollerService {
 
 			long catchUpStart = Math.max(lastStored + 1, earliestRetrievableKey);
 			for (long k = catchUpStart; k < lastCompletedKey; k++) {
-				fetchAndStoreSlot(endpoint, valveName, String.valueOf(k), true, pollTime);
+				SlotIngestResult r = fetchAndStoreSlot(endpoint, valveName, String.valueOf(k), true, pollTime);
+				slots += r.slotsCount();
+				events += r.eventsCount();
+				if (r.warning() != null) {
+					warnings.add(r.warning());
+				}
 			}
 		}
 
 		// 2. Poll the finalized previous slot (normal flow)
 		if (lastCompletedKey > 0) {
-			fetchAndStoreSlot(endpoint, valveName, "previous", true, pollTime);
+			SlotIngestResult r = fetchAndStoreSlot(endpoint, valveName, "previous", true, pollTime);
+			slots += r.slotsCount();
+			events += r.eventsCount();
+			if (r.warning() != null) {
+				warnings.add(r.warning());
+			}
 		}
 
 		// 3. Optional: Poll intermediate snapshot of current in-progress slot
 		if (endpoint.isPollIntermediateSlots()) {
-			fetchAndStoreSlot(endpoint, valveName, "current", false, pollTime);
+			SlotIngestResult r = fetchAndStoreSlot(endpoint, valveName, "current", false, pollTime);
+			slots += r.slotsCount();
+			events += r.eventsCount();
+			if (r.warning() != null) {
+				warnings.add(r.warning());
+			}
 		}
+
+		return new IngestResult(slots, events, warnings);
 	}
 
-	private void fetchAndStoreSlot(EndpointConfig endpoint, String valveName, String slotParam, boolean completed, Instant pollTime) {
+	private SlotIngestResult fetchAndStoreSlot(EndpointConfig endpoint, String valveName, String slotParam, boolean completed, Instant pollTime) {
 		try {
 			ValveDetailsDto details = statusClient.fetchSlotDetails(endpoint, valveName, slotParam, "all");
 			if (details.selectedSlot() == null) {
-				return;
+				return new SlotIngestResult(0, 0, null);
 			}
 
 			ValveDetailsDto.SelectedSlotDto slot = details.selectedSlot();
@@ -165,6 +242,7 @@ public class CollectorPollerService {
 			);
 			slotSnapshotRepository.upsert(snapshot);
 
+			int eventsCount = 0;
 			if (details.blockedClients() != null && !details.blockedClients().isEmpty()) {
 				List<BlockedClientEvent> events = new ArrayList<>();
 				for (ValveDetailsDto.BlockedClientDto c : details.blockedClients()) {
@@ -183,13 +261,37 @@ public class CollectorPollerService {
 					));
 				}
 				clientEventRepository.batchUpsert(events);
+				eventsCount = events.size();
 			}
 
-		} catch (java.io.IOException | InterruptedException | RuntimeException e) {
+			return new SlotIngestResult(1, eventsCount, null);
+
+		} catch (Exception e) {
+			String err = "Valve '" + valveName + "' slot '" + slotParam + "' failed: " + ValveStatusClient.formatErrorMessage(e);
 			log.warn("Could not fetch slot '{}' for valve '{}' on '{}': {}",
 					slotParam, valveName, endpoint.getName(), ValveStatusClient.formatErrorMessage(e));
+			return new SlotIngestResult(0, 0, err);
 		}
 	}
+
+	private static int extractStatusCode(Throwable t) {
+		if (t == null) {
+			return 0;
+		}
+		String msg = t.getMessage();
+		if (msg != null && msg.startsWith("HTTP ")) {
+			try {
+				int end = msg.indexOf(' ', 5);
+				String codeStr = end > 5 ? msg.substring(5, end) : msg.substring(5, Math.min(msg.length(), 8));
+				return Integer.parseInt(codeStr.trim());
+			} catch (Exception ignored) {
+			}
+		}
+		return 0;
+	}
+
+	private record SlotIngestResult(int slotsCount, int eventsCount, String warning) {}
+	private record IngestResult(int slotsIngested, int eventsIngested, List<String> warnings) {}
 
 	private static Instant parseInstantOrFallback(String str, Instant fallback) {
 		if (str == null || str.trim().isEmpty()) {

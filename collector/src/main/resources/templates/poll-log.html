@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poll Event Log - Anti-DoS Collector</title>
+    <link rel="stylesheet" th:href="@{/css/collector.css}">
+    <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
+    <script th:src="@{/js/htmx-lite.js}" defer></script>
+</head>
+<body>
+
+<div class="app-container">
+    <!-- Navbar -->
+    <header class="navbar">
+        <a href="/" class="brand">
+            <div class="brand-icon">&#x1F6E1;</div>
+            <div>
+                <div class="brand-title">Anti-DoS Fleet Manager</div>
+                <div class="brand-subtitle">Data Collection &amp; Telemetry Audit Log</div>
+            </div>
+        </a>
+        <div class="nav-actions">
+            <a href="/" class="btn">
+                <span>&#x2190;</span> Dashboard
+            </a>
+            <a href="/api/v1/poll-log" target="_blank" class="btn" title="Raw Poll Event Log JSON API">
+                JSON API
+            </a>
+        </div>
+    </header>
+
+    <!-- Top Summary Stats -->
+    <section class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom: 28px;">
+        <div class="stat-card">
+            <div class="stat-label">Poll Errors (24h)</div>
+            <div class="stat-value danger" th:text="${errorCount24h}">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Poll Warnings (24h)</div>
+            <div class="stat-value warning" th:text="${warningCount24h}">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Monitored Endpoints</div>
+            <div class="stat-value primary" th:text="${#lists.size(heartbeats)}">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">History Scroll Mode</div>
+            <div class="stat-value" style="font-size: 18px; color: var(--color-primary); margin-top: 6px;">
+                Infinite Scroll Active
+            </div>
+        </div>
+    </section>
+
+    <!-- Event Log Section with Filters -->
+    <section>
+        <div class="section-header" style="flex-wrap: wrap; gap: 14px;">
+            <div class="section-title">
+                <span>&#x1F4DC;</span> Collector Polling Events
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <!-- Status Filter Group -->
+                <div class="filter-btn-group">
+                    <button type="button"
+                            class="filter-btn"
+                            th:classappend="${selectedStatus == 'ALL' or selectedStatus == '' ? 'active' : ''}"
+                            hx-get="/fragments/poll-log?status=ALL"
+                            hx-include="#server-filter-select"
+                            hx-target="#poll-log-body"
+                            hx-swap="innerHTML"
+                            onclick="document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active')); this.classList.add('active');">
+                        All Events
+                    </button>
+                    <button type="button"
+                            class="filter-btn"
+                            th:classappend="${selectedStatus == 'ERROR' ? 'active' : ''}"
+                            hx-get="/fragments/poll-log?status=ERROR"
+                            hx-include="#server-filter-select"
+                            hx-target="#poll-log-body"
+                            hx-swap="innerHTML"
+                            onclick="document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active')); this.classList.add('active');">
+                        &#x26A0; Errors Only
+                    </button>
+                    <button type="button"
+                            class="filter-btn"
+                            th:classappend="${selectedStatus == 'WARNING' ? 'active' : ''}"
+                            hx-get="/fragments/poll-log?status=WARNING"
+                            hx-include="#server-filter-select"
+                            hx-target="#poll-log-body"
+                            hx-swap="innerHTML"
+                            onclick="document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active')); this.classList.add('active');">
+                        Warnings &amp; Errors
+                    </button>
+                </div>
+
+                <!-- Server Dropdown Filter -->
+                <select id="server-filter-select"
+                        name="serverId"
+                        class="btn"
+                        style="padding: 6px 12px; font-size: 12px; background: var(--bg-surface); color: var(--text-primary); border: 1px solid var(--border-color); cursor: pointer;"
+                        hx-get="/fragments/poll-log"
+                        hx-include=".filter-btn.active"
+                        hx-target="#poll-log-body"
+                        hx-swap="innerHTML">
+                    <option value="" th:selected="${selectedServer == ''}">All Monitored Servers</option>
+                    <option th:each="hb : ${heartbeats}"
+                            th:value="${hb.serverId}"
+                            th:text="${hb.serverId}"
+                            th:selected="${selectedServer == hb.serverId}">
+                        Node-A
+                    </option>
+                </select>
+
+                <!-- Refresh Button -->
+                <button class="btn"
+                        hx-get="/fragments/poll-log"
+                        hx-include="#server-filter-select"
+                        hx-target="#poll-log-body"
+                        hx-swap="innerHTML"
+                        title="Reload latest events at the top">
+                    <span>&#x21BB;</span> Refresh
+                </button>
+            </div>
+        </div>
+
+        <div class="table-card">
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                    <tr>
+                        <th style="width: 170px;">Poll Timestamp</th>
+                        <th style="width: 220px;">Server Node</th>
+                        <th style="width: 150px;">Status</th>
+                        <th style="width: 120px;">Latency</th>
+                        <th style="width: 170px;">Telemetry Ingested</th>
+                        <th>Details &amp; Diagnostics</th>
+                    </tr>
+                    </thead>
+                    <tbody id="poll-log-body">
+                    <th:block th:replace="~{fragments/poll-log :: logRows}"></th:block>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+</div>
+
+</body>
+</html>

@@ -6,10 +6,12 @@ import java.util.List;
 import org.henbru.antidos.collector.model.BlockedClientEvent;
 import org.henbru.antidos.collector.model.EndpointHeartbeat;
 import org.henbru.antidos.collector.model.FleetSummary;
+import org.henbru.antidos.collector.model.PollEventLog;
 import org.henbru.antidos.collector.model.SlotSnapshot;
 import org.henbru.antidos.collector.model.TopOffenderSummary;
 import org.henbru.antidos.collector.storage.ClientEventRepository;
 import org.henbru.antidos.collector.storage.HeartbeatRepository;
+import org.henbru.antidos.collector.storage.PollEventLogRepository;
 import org.henbru.antidos.collector.storage.SlotSnapshotRepository;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -26,14 +28,17 @@ public class DashboardController {
 	private final HeartbeatRepository heartbeatRepository;
 	private final SlotSnapshotRepository slotSnapshotRepository;
 	private final ClientEventRepository clientEventRepository;
+	private final PollEventLogRepository pollEventLogRepository;
 
 	public DashboardController(
 			HeartbeatRepository heartbeatRepository,
 			SlotSnapshotRepository slotSnapshotRepository,
-			ClientEventRepository clientEventRepository) {
+			ClientEventRepository clientEventRepository,
+			PollEventLogRepository pollEventLogRepository) {
 		this.heartbeatRepository = heartbeatRepository;
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
+		this.pollEventLogRepository = pollEventLogRepository;
 	}
 
 	@GetMapping("/")
@@ -86,6 +91,51 @@ public class DashboardController {
 		model.addAttribute("recentSlots", recentSlots);
 		model.addAttribute("recentEvents", recentEvents);
 		return "server-details";
+	}
+
+	@GetMapping("/poll-log")
+	public String pollLog(
+			@RequestParam(name = "status", required = false, defaultValue = "ALL") String status,
+			@RequestParam(name = "serverId", required = false) String serverId,
+			Model model) {
+		int limit = 30;
+		List<PollEventLog> entries = pollEventLogRepository.findRecent(null, status, serverId, limit);
+		boolean hasMore = entries.size() >= limit;
+		Long nextBeforeId = hasMore && !entries.isEmpty() ? entries.getLast().id() : null;
+
+		Instant since24h = Instant.now().minus(24, ChronoUnit.HOURS);
+		long errorCount24h = pollEventLogRepository.countByStatusSince("ERROR", since24h);
+		long warningCount24h = pollEventLogRepository.countByStatusSince("WARNING", since24h);
+		List<EndpointHeartbeat> heartbeats = heartbeatRepository.findAll();
+
+		model.addAttribute("entries", entries);
+		model.addAttribute("hasMore", hasMore);
+		model.addAttribute("nextBeforeId", nextBeforeId);
+		model.addAttribute("selectedStatus", status);
+		model.addAttribute("selectedServer", serverId != null ? serverId : "");
+		model.addAttribute("heartbeats", heartbeats);
+		model.addAttribute("errorCount24h", errorCount24h);
+		model.addAttribute("warningCount24h", warningCount24h);
+		return "poll-log";
+	}
+
+	@GetMapping("/fragments/poll-log")
+	public String pollLogFragment(
+			@RequestParam(name = "beforeId", required = false) Long beforeId,
+			@RequestParam(name = "status", required = false, defaultValue = "ALL") String status,
+			@RequestParam(name = "serverId", required = false) String serverId,
+			@RequestParam(name = "limit", defaultValue = "30") int limit,
+			Model model) {
+		List<PollEventLog> entries = pollEventLogRepository.findRecent(beforeId, status, serverId, limit);
+		boolean hasMore = entries.size() >= limit;
+		Long nextBeforeId = hasMore && !entries.isEmpty() ? entries.getLast().id() : null;
+
+		model.addAttribute("entries", entries);
+		model.addAttribute("hasMore", hasMore);
+		model.addAttribute("nextBeforeId", nextBeforeId);
+		model.addAttribute("selectedStatus", status);
+		model.addAttribute("selectedServer", serverId != null ? serverId : "");
+		return "fragments/poll-log :: logRows";
 	}
 
 	private void populateDashboardModel(Model model) {

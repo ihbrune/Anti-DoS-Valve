@@ -6,9 +6,11 @@ import java.util.List;
 import java.util.Map;
 import org.henbru.antidos.collector.model.EndpointHeartbeat;
 import org.henbru.antidos.collector.model.FleetSummary;
+import org.henbru.antidos.collector.model.PollEventLog;
 import org.henbru.antidos.collector.model.TopOffenderSummary;
 import org.henbru.antidos.collector.storage.ClientEventRepository;
 import org.henbru.antidos.collector.storage.HeartbeatRepository;
+import org.henbru.antidos.collector.storage.PollEventLogRepository;
 import org.henbru.antidos.collector.storage.SlotSnapshotRepository;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -28,14 +30,17 @@ public class ApiController {
 	private final HeartbeatRepository heartbeatRepository;
 	private final SlotSnapshotRepository slotSnapshotRepository;
 	private final ClientEventRepository clientEventRepository;
+	private final PollEventLogRepository pollEventLogRepository;
 
 	public ApiController(
 			HeartbeatRepository heartbeatRepository,
 			SlotSnapshotRepository slotSnapshotRepository,
-			ClientEventRepository clientEventRepository) {
+			ClientEventRepository clientEventRepository,
+			PollEventLogRepository pollEventLogRepository) {
 		this.heartbeatRepository = heartbeatRepository;
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
+		this.pollEventLogRepository = pollEventLogRepository;
 	}
 
 	@GetMapping("/fleet")
@@ -104,5 +109,14 @@ public class ApiController {
 				"count", ipList.size(),
 				"blockedIps", ipList
 		));
+	}
+
+	@GetMapping("/poll-log")
+	public List<PollEventLog> pollLog(
+			@RequestParam(name = "beforeId", required = false) Long beforeId,
+			@RequestParam(name = "status", required = false) String status,
+			@RequestParam(name = "serverId", required = false) String serverId,
+			@RequestParam(name = "limit", defaultValue = "50") int limit) {
+		return pollEventLogRepository.findRecent(beforeId, status, serverId, limit);
 	}
 }

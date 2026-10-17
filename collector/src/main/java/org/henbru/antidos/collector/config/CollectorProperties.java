@@ -13,6 +13,8 @@ public class CollectorProperties {
 	private String configFile = "collector-config.yaml";
 	private int pollIntervalSeconds = 15;
 	private int retentionDays = 30;
+	private int pollLogRetentionDays = 1;
+	private int slowPollThresholdMs = 1000;
 	private List<EndpointConfig> endpoints = new ArrayList<>();
 
 	public String getConfigFile() {
@@ -37,6 +39,22 @@ public class CollectorProperties {
 
 	public void setRetentionDays(int retentionDays) {
 		this.retentionDays = retentionDays;
+	}
+
+	public int getPollLogRetentionDays() {
+		return pollLogRetentionDays;
+	}
+
+	public void setPollLogRetentionDays(int pollLogRetentionDays) {
+		this.pollLogRetentionDays = pollLogRetentionDays;
+	}
+
+	public int getSlowPollThresholdMs() {
+		return slowPollThresholdMs;
+	}
+
+	public void setSlowPollThresholdMs(int slowPollThresholdMs) {
+		this.slowPollThresholdMs = slowPollThresholdMs;
 	}
 
 	public List<EndpointConfig> getEndpoints() {

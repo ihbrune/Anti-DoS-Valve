@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<th:block th:fragment="logRows">
+    <tr th:each="e : ${entries}">
+        <td style="white-space: nowrap; font-family: ui-monospace, monospace; font-size: 12px; color: var(--text-secondary);"
+            th:text="${#temporals.format(e.pollTime, 'yyyy-MM-dd HH:mm:ss')}">
+            2026-10-17 15:30:00
+        </td>
+
+        <td>
+            <a th:href="@{'/server/' + ${e.serverId}}"
+               style="font-weight: 700; color: var(--text-primary); text-decoration: none;"
+               th:text="${e.serverId}">Node-A</a>
+            <div style="font-size: 11px; color: var(--text-muted); font-family: ui-monospace, monospace;"
+                 th:text="${e.url}">http://localhost:8080/antidos-status</div>
+        </td>
+
+        <td>
+            <span th:if="${e.status == 'SUCCESS'}" class="badge badge-success">&#x2714; SUCCESS</span>
+            <span th:if="${e.status == 'WARNING'}" class="badge badge-warning">&#x26A0; WARNING</span>
+            <span th:if="${e.status == 'ERROR'}" class="badge badge-danger">&#x2716; ERROR</span>
+            <span th:if="${e.httpStatusCode > 0}"
+                  style="font-size: 11px; color: var(--text-muted); margin-left: 4px;"
+                  th:text="'HTTP ' + ${e.httpStatusCode}">HTTP 200</span>
+        </td>
+
+        <td style="white-space: nowrap;">
+            <span th:classappend="${e.responseTimeMs > 1000 ? 'badge badge-warning' : ''}"
+                  style="font-family: ui-monospace, monospace; font-weight: 600;"
+                  th:text="${e.responseTimeMs} + ' ms'">
+                45 ms
+            </span>
+        </td>
+
+        <td style="white-space: nowrap; font-size: 12px; color: var(--text-secondary);">
+            <span th:text="${e.valvesPolled} + ' valves'">1 valves</span> /
+            <span th:text="${e.slotsIngested} + ' slots'">1 slots</span>
+            <span th:if="${e.eventsIngested > 0}"
+                  class="badge badge-danger"
+                  style="font-size: 10px; margin-left: 4px;"
+                  th:text="${e.eventsIngested} + ' blocked'">1 blocked</span>
+        </td>
+
+        <td style="font-size: 12px;">
+            <div th:text="${e.details}" style="color: var(--text-secondary); word-break: break-word;">
+                Polled 1 valve(s), 1 slot(s), 0 event(s)
+            </div>
+            <div th:if="${e.errorMessage != null}"
+                 class="log-err-text"
+                 th:text="${e.errorMessage}">
+                Connection refused
+            </div>
+        </td>
+    </tr>
+
+    <!-- Cursor-based Infinite Scroll Trigger Row -->
+    <tr th:if="${hasMore}"
+        id="infinite-scroll-trigger"
+        th:attr="hx-get=@{/fragments/poll-log(beforeId=${nextBeforeId}, status=${selectedStatus}, serverId=${selectedServer})}"
+        hx-trigger="revealed"
+        hx-swap="outerHTML">
+        <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 16px; background: rgba(15, 23, 42, 0.4);">
+            <span style="display: inline-block; animation: pulse 1.5s infinite;">&#x21E3;</span>
+            Loading earlier events...
+        </td>
+    </tr>
+
+    <tr th:if="${!hasMore and #lists.isEmpty(entries)}">
+        <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 28px;">
+            No polling events found matching the selected filter criteria.
+        </td>
+    </tr>
+
+    <tr th:if="${!hasMore and not #lists.isEmpty(entries)}">
+        <td colspan="6" style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 16px; border-top: 1px dashed var(--border-color);">
+            &#x2714; Reached end of recorded event history.
+        </td>
+    </tr>
+</th:block>
+
+</body>
+</html>

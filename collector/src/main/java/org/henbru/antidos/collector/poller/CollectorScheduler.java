@@ -21,16 +21,19 @@ public class CollectorScheduler {
 	private final CollectorPollerService pollerService;
 	private final SlotSnapshotRepository slotSnapshotRepository;
 	private final ClientEventRepository clientEventRepository;
+	private final org.henbru.antidos.collector.storage.PollEventLogRepository pollEventLogRepository;
 	private final CollectorProperties properties;
 
 	public CollectorScheduler(
 			CollectorPollerService pollerService,
 			SlotSnapshotRepository slotSnapshotRepository,
 			ClientEventRepository clientEventRepository,
+			org.henbru.antidos.collector.storage.PollEventLogRepository pollEventLogRepository,
 			CollectorProperties properties) {
 		this.pollerService = pollerService;
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
+		this.pollEventLogRepository = pollEventLogRepository;
 		this.properties = properties;
 	}
 
@@ -57,7 +60,7 @@ public class CollectorScheduler {
 	}
 
 	/**
-	 * Daily retention cleanup: deletes snapshots and client events older than configured retentionDays.
+	 * Daily retention cleanup: deletes snapshots, client events, and poll event logs older than configured retention days.
 	 */
 	@Scheduled(cron = "0 0 3 * * *") // Daily at 03:00 AM
 	public void runRetentionCleanup() {
@@ -67,6 +70,12 @@ public class CollectorScheduler {
 
 		int deletedSlots = slotSnapshotRepository.deleteOlderThan(cutoff);
 		int deletedEvents = clientEventRepository.deleteOlderThan(cutoff);
-		log.info("Retention cleanup completed: purged {} slot snapshots and {} client events", deletedSlots, deletedEvents);
+
+		int logDays = properties.getPollLogRetentionDays() > 0 ? properties.getPollLogRetentionDays() : 1;
+		Instant logCutoff = Instant.now().minus(logDays, ChronoUnit.DAYS);
+		int deletedLogs = pollEventLogRepository.deleteOlderThan(logCutoff);
+
+		log.info("Retention cleanup completed: purged {} slot snapshots, {} client events, and {} poll event logs",
+				deletedSlots, deletedEvents, deletedLogs);
 	}
 }

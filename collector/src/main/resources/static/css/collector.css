@@ -301,6 +301,59 @@ body {
     border: 1px solid rgba(56, 189, 248, 0.3);
 }
 
+.badge-warning {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.log-err-text {
+    font-size: 11px;
+    color: var(--color-danger);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    word-break: break-all;
+    margin-top: 4px;
+}
+
+.log-warn-text {
+    font-size: 11px;
+    color: var(--color-warning);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    word-break: break-all;
+    margin-top: 4px;
+}
+
+.filter-btn-group {
+    display: inline-flex;
+    background: rgba(15, 23, 42, 0.7);
+    padding: 3px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    gap: 4px;
+}
+
+.filter-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.filter-btn:hover {
+    color: var(--text-primary);
+}
+
+.filter-btn.active {
+    background: var(--bg-card-hover);
+    color: var(--color-primary);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
 /* Tables */
 .table-card {
     background: var(--bg-card);

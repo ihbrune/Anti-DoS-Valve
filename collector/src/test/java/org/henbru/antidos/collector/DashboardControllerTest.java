@@ -65,4 +65,25 @@ class DashboardControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.blockedIps").isArray());
 	}
+
+	@Test
+	void testPollLogPageLoads() throws Exception {
+		mockMvc.perform(get("/poll-log"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Collector Polling Events")))
+				.andExpect(content().string(containsString("Poll Timestamp")));
+	}
+
+	@Test
+	void testPollLogFragmentLoads() throws Exception {
+		mockMvc.perform(get("/fragments/poll-log").param("status", "ALL"))
+				.andExpect(status().isOk());
+	}
+
+	@Test
+	void testPollLogJsonApi() throws Exception {
+		mockMvc.perform(get("/api/v1/poll-log"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$").isArray());
+	}
 }
