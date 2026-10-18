@@ -1375,7 +1375,7 @@ class AntiDoSValveTest {
 		assertEquals("no-cache", htmlResp.getHeader("Pragma"));
 		assertEquals("no-referrer", htmlResp.getHeader("Referrer-Policy"));
 		assertEquals("nosniff", htmlResp.getHeader("X-Content-Type-Options"));
-		assertEquals("default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'", htmlResp.getHeader("Content-Security-Policy"));
+		assertEquals("default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; frame-ancestors 'none'", htmlResp.getHeader("Content-Security-Policy"));
 
 		// JSON status response
 		TestRequest jsonReq = new TestRequest("/antidos-status", "127.0.0.1");

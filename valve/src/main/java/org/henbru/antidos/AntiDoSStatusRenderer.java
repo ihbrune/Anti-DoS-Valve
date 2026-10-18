@@ -298,7 +298,7 @@ public class AntiDoSStatusRenderer {
 		response.setHeader("Pragma", "no-cache");
 		response.setHeader("Referrer-Policy", "no-referrer");
 		response.setHeader("X-Content-Type-Options", "nosniff");
-		response.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'");
+		response.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; frame-ancestors 'none'");
 		response.setContentType("text/html;charset=UTF-8");
 		response.setCharacterEncoding("UTF-8");
 		PrintWriter out = response.getWriter();
