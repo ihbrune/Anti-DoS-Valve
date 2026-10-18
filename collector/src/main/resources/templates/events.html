@@ -108,14 +108,14 @@
                     <button type="button" class="filter-btn" onclick="applyPreset(168)">7d</button>
                     <button type="button" class="filter-btn" onclick="applyPreset(720)">30d</button>
                 </div>
-                <div style="display: flex; gap: 8px;">
-                    <div style="flex: 1;">
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <div>
                         <span style="font-size: 10px; color: var(--text-muted);">From:</span>
-                        <input type="datetime-local" id="fromInput" name="from" class="input-control" style="font-size: 11px; padding: 4px 6px;" th:value="${fromTime}">
+                        <input type="datetime-local" id="fromInput" name="from" class="input-control" style="font-size: 12px; padding: 6px 8px;" th:value="${fromTime}">
                     </div>
-                    <div style="flex: 1;">
+                    <div>
                         <span style="font-size: 10px; color: var(--text-muted);">To:</span>
-                        <input type="datetime-local" id="toInput" name="to" class="input-control" style="font-size: 11px; padding: 4px 6px;" th:value="${toTime}">
+                        <input type="datetime-local" id="toInput" name="to" class="input-control" style="font-size: 12px; padding: 6px 8px;" th:value="${toTime}">
                     </div>
                 </div>
             </div>
