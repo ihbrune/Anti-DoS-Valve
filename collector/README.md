@@ -372,3 +372,56 @@ export COLLECTOR_ENRICHMENT_COUNTRY_DATABASE_PATH="/var/data/dbip-country-lite.m
   * Trigger immediate manual syncs per feed or globally via the HTMX buttons in the `/crawlers` dashboard.
   * Pruning: Removed feed configurations automatically trigger an orphan purge from the database.
 
+### 4. Automated Daily Updates via Cron Job or Systemd Timer
+
+To keep ASN mappings and Country geolocation accurate without manual administrator intervention, automate the download every 24 hours.
+
+#### Option A: DB-IP Lite (Free, CC BY 4.0, No Registration Required)
+
+The repository provides a production-ready update script in [`collector/scripts/update-antidos-mmdb.sh`](file:///Users/hbrune/Antigravity/Anti-DoS-Valve/collector/scripts/update-antidos-mmdb.sh). It downloads the latest monthly ASN and Country databases, verifies integrity, replaces the files atomically in `/var/lib/antidos/`, applies file ownership, and restarts the service if active.
+
+1. **Install the script:**
+   ```bash
+   sudo cp collector/scripts/update-antidos-mmdb.sh /usr/local/bin/update-antidos-mmdb.sh
+   sudo chmod +x /usr/local/bin/update-antidos-mmdb.sh
+   ```
+
+2. **Test manual execution:**
+   ```bash
+   sudo /usr/local/bin/update-antidos-mmdb.sh /var/lib/antidos antidos antidos
+   ```
+
+3. **Schedule daily execution via Cron (`/etc/cron.d/antidos-mmdb-update`):**
+   ```cron
+   # /etc/cron.d/antidos-mmdb-update
+   # Update DB-IP Lite databases every night at 03:30 AM
+   30 3 * * * root /usr/local/bin/update-antidos-mmdb.sh /var/lib/antidos antidos antidos >> /var/log/antidos-mmdb-update.log 2>&1
+   ```
+   *(Alternatively, place the script or a symlink into `/etc/cron.daily/`)*
+
+#### Option B: MaxMind GeoLite2 via `geoipupdate`
+
+If using MaxMind GeoLite2, use the official `geoipupdate` tool:
+
+1. **Install `geoipupdate`:**
+   ```bash
+   sudo apt install geoipupdate   # Debian/Ubuntu
+   # or: sudo dnf install geoipupdate # Fedora/RHEL
+   ```
+
+2. **Configure `/etc/GeoIP.conf`:**
+   ```ini
+   AccountID <Your-Account-ID>
+   LicenseKey <Your-License-Key>
+   EditionIDs GeoLite2-ASN GeoLite2-Country
+   ```
+
+3. **Schedule daily update via Cron (`/etc/cron.d/geoipupdate`):**
+   ```cron
+   # /etc/cron.d/geoipupdate
+   # Update MaxMind databases every night at 03:30 AM and reload collector
+   30 3 * * * root /usr/bin/geoipupdate && (systemctl is-active --quiet antidos-collector && systemctl restart antidos-collector || true)
+   ```
+   *(Or enable the systemd timer: `sudo systemctl enable --now geoipupdate.timer`)*
+
+
