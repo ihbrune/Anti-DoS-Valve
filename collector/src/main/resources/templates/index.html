@@ -37,6 +37,15 @@
         </div>
     </header>
 
+    <!-- Demo Mode Notice Banner -->
+    <div th:if="${demoMode}" class="demo-banner">
+        <div class="demo-badge">DEMO MODE ACTIVE</div>
+        <div class="demo-text">
+            Operating with simulated Anti-DoS Valve endpoints (Edge EU, API Gateway US, Staging Node)
+            and an isolated database (<code>antidos-collector-demo.db</code>). Existing production databases remain completely untouched.
+        </div>
+    </div>
+
     <!-- Top Stats Overview -->
     <section class="stats-grid" id="stats-overview">
         <div class="stat-card">

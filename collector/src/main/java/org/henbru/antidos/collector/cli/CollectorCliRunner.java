@@ -123,12 +123,17 @@ public class CollectorCliRunner {
 
 	private static void printUsage() {
 		System.out.println("""
-				Anti-DoS Collector CLI Helper
-				
-				Usage:
+				Anti-DoS Collector CLI Helper & Runner
+
+				Commands:
+				  java -jar anti-dos-collector-*.jar demo
+				      Starts the collector with simulated AntiDoSValve endpoints (Edge EU, API Gateway US, Staging Node)
+				      enabling an immediate out-of-the-box exploration experience.
+
 				  java -jar anti-dos-collector-*.jar test-endpoint --url <url> [--token <token>] [--name <name>]
-				
-				Options:
+				      Tests connectivity to an AntiDoSValve endpoint and prints a ready-to-use YAML configuration block.
+
+				Options for test-endpoint:
 				  --url     Full HTTP/HTTPS URL to the Valve status endpoint (e.g. http://localhost:8080/antidos-status)
 				  --token   Bearer authentication token (optional, if statusToken is configured on the Valve)
 				  --name    Friendly display name for the server (default: 'Monitored-Server')

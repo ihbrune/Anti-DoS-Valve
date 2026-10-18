@@ -20,6 +20,22 @@ public class AntiDoSCollectorApplication {
 			System.exit(exitCode);
 			return;
 		}
-		SpringApplication.run(AntiDoSCollectorApplication.class, args);
+
+		java.util.List<String> effectiveList = new java.util.ArrayList<>(args != null ? java.util.Arrays.asList(args) : java.util.List.of());
+		boolean isDemo = effectiveList.stream().anyMatch(a ->
+				"demo".equalsIgnoreCase(a)
+				|| "--demo".equalsIgnoreCase(a)
+				|| a.contains("demo-mode=true")
+		) || "true".equalsIgnoreCase(System.getenv("COLLECTOR_DEMO_MODE"));
+
+		if (isDemo) {
+			effectiveList.removeIf(a -> "demo".equalsIgnoreCase(a) || "--demo".equalsIgnoreCase(a));
+			if (effectiveList.stream().noneMatch(a -> a.startsWith("--spring.profiles.active="))) {
+				effectiveList.add("--spring.profiles.active=demo");
+			}
+			effectiveList.add("--collector.demo-mode=true");
+		}
+
+		SpringApplication.run(AntiDoSCollectorApplication.class, effectiveList.toArray(String[]::new));
 	}
 }

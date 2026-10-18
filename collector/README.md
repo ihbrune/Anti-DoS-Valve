@@ -19,7 +19,34 @@ The **Anti-DoS Collector** is a standalone management and analytics service desi
   * Real-time fleet overview showing all connected servers and valves.
   * Top offending IP addresses and subnets correlated across servers.
   * Interactive incident timeline and filtering without client-side Node.js/npm dependencies.
+* **Built-in Demo Mode (Out-of-the-Box Exploration):** Launch the collector with zero configuration against simulated multi-node Valve endpoints (Edge EU, API Gateway under active attack, Staging Node with telemetry diagnostics).
 * **CLI Onboarding Tool:** Built-in command to test connectivity, verify tokens, and generate ready-to-use configuration blocks.
+
+---
+
+## Zero-Configuration Demo Mode
+
+To explore the dashboard and telemetry engine without configuring or connecting any live Tomcat servers, launch the collector in **Demo Mode**:
+
+```bash
+# Using the Fat-JAR:
+java -jar collector/target/anti-dos-collector-1.7.0.jar demo
+
+# Or using Maven:
+mvn spring-boot:run -pl collector -Dspring-boot.run.arguments="demo"
+# or:
+mvn spring-boot:run -pl collector -Dspring-boot.run.profiles=demo
+```
+
+### What happens in Demo Mode?
+* **Strict Database Isolation:** Uses a dedicated, separate SQLite database file (`antidos-collector-demo.db`). Any existing production databases (`antidos-collector.db` or PostgreSQL) are completely untouched and protected from test data pollution. To reset the demo, simply delete `antidos-collector-demo.db`.
+* **Zero External Dependencies:** Runs 100% locally with embedded SQLite.
+* **Simulated Multi-Server Fleet:**
+  1. `Demo-Edge-EU`: Production web cluster with 2 valves (`Primary-Rate-Limiter` blocking crawlers and `Subnet-Guard` in marking mode).
+  2. `Demo-API-Gateway`: Public API under active distributed DoS attack, demonstrating real-time mitigation and top offending IPs.
+  3. `Demo-Staging-Node`: Host with simulated latency spikes and transient errors, demonstrating the Polling Event Audit Log and automatic recovery.
+* **100% Real Pipeline:** The scheduled poller, HTTP client, JSON deserialization, Flyway database persistence, and reactive HTMX dashboard all run exactly as in production.
+* Open **`http://localhost:8090`** to view the live dashboard.
 
 ---
 

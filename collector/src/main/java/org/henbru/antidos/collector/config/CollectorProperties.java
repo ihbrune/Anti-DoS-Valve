@@ -15,6 +15,7 @@ public class CollectorProperties {
 	private int retentionDays = 30;
 	private int pollLogRetentionDays = 1;
 	private int slowPollThresholdMs = 1000;
+	private boolean demoMode = false;
 	private List<EndpointConfig> endpoints = new ArrayList<>();
 
 	public String getConfigFile() {
@@ -55,6 +56,14 @@ public class CollectorProperties {
 
 	public void setSlowPollThresholdMs(int slowPollThresholdMs) {
 		this.slowPollThresholdMs = slowPollThresholdMs;
+	}
+
+	public boolean isDemoMode() {
+		return demoMode;
+	}
+
+	public void setDemoMode(boolean demoMode) {
+		this.demoMode = demoMode;
 	}
 
 	public List<EndpointConfig> getEndpoints() {

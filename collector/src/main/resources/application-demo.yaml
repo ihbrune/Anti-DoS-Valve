@@ -1,0 +1,15 @@
+# Spring Profile: demo
+# Activates the in-app mock Valve simulation endpoints and registers the demo fleet automatically.
+# Uses a strictly isolated SQLite database (antidos-collector-demo.db) to ensure existing production data is never touched.
+
+spring:
+  datasource:
+    url: ${DEMO_DATASOURCE_URL:jdbc:sqlite:antidos-collector-demo.db}
+    driver-class-name: org.sqlite.JDBC
+    username: ""
+    password: ""
+  flyway:
+    locations: classpath:db/migration/sqlite
+
+collector:
+  demo-mode: true

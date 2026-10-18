@@ -29,16 +29,24 @@ public class DashboardController {
 	private final SlotSnapshotRepository slotSnapshotRepository;
 	private final ClientEventRepository clientEventRepository;
 	private final PollEventLogRepository pollEventLogRepository;
+	private final org.henbru.antidos.collector.config.CollectorProperties properties;
 
 	public DashboardController(
 			HeartbeatRepository heartbeatRepository,
 			SlotSnapshotRepository slotSnapshotRepository,
 			ClientEventRepository clientEventRepository,
-			PollEventLogRepository pollEventLogRepository) {
+			PollEventLogRepository pollEventLogRepository,
+			org.henbru.antidos.collector.config.CollectorProperties properties) {
 		this.heartbeatRepository = heartbeatRepository;
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
 		this.pollEventLogRepository = pollEventLogRepository;
+		this.properties = properties;
+	}
+
+	@org.springframework.web.bind.annotation.ModelAttribute("demoMode")
+	public boolean demoMode() {
+		return properties.isDemoMode();
 	}
 
 	@GetMapping("/")
