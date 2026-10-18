@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- Fragment: offenderTable -->
+<div th:fragment="offenderTable" id="offenders-table-container">
+    <div th:if="${#lists.isEmpty(topOffenders)}" class="empty-state">
+        <p>No offending clients or subnets recorded in the selected filter window.</p>
+    </div>
+
+    <div th:unless="${#lists.isEmpty(topOffenders)}" class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th th:if="${groupBy == 'SUBNET'}">Targeted Subnet (/24 or /64)</th>
+                    <th th:unless="${groupBy == 'SUBNET'}">Client IP / Subnet</th>
+                    <th>Total Block Incidents</th>
+                    <th>Total Requests Attempted</th>
+                    <th>Targeted Servers</th>
+                    <th>First Seen</th>
+                    <th>Last Seen</th>
+                    <th style="text-align: right;">Forensic Investigation</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr th:each="offender : ${topOffenders}">
+                    <td>
+                        <span class="ip-mono"
+                              th:classappend="${groupBy == 'SUBNET' ? 'badge badge-warning' : ''}"
+                              th:text="${offender.clientKey}">198.51.100.42</span>
+                    </td>
+                    <td>
+                        <span class="badge badge-danger" th:text="${offender.totalBlockIncidents}">12</span>
+                    </td>
+                    <td>
+                        <strong th:text="${#numbers.formatInteger(offender.totalBlockedRequests, 1, 'POINT')}">1,450</strong>
+                    </td>
+                    <td>
+                        <span class="badge badge-info" th:text="${offender.distinctServersTargeted} + ' Nodes'">1 Nodes</span>
+                    </td>
+                    <td th:text="${#temporals.format(offender.firstSeen, 'dd.MM HH:mm')}">11.10 08:30</td>
+                    <td th:text="${#temporals.format(offender.lastSeen, 'dd.MM HH:mm')}">11.10 09:45</td>
+                    <td style="text-align: right;">
+                        <a th:href="@{/events(clientQuery=${offender.clientKey})}"
+                           class="btn"
+                           style="padding: 2px 8px; font-size: 11px;"
+                           title="Inspect all individual blocking events for this client or subnet">
+                            View Incidents &rarr;
+                        </a>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <div style="padding: 12px 18px; font-size: 12px; color: var(--text-muted); background: rgba(15, 23, 42, 0.5); border-top: 1px solid var(--border-color);">
+            Showing top <span th:text="${#lists.size(topOffenders)}">25</span> entries aggregated by 
+            <strong th:text="${groupBy == 'SUBNET' ? 'Subnet Rollup (/24 & /64)' : 'Individual Client Key'}">Single Host</strong>.
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- Fragment: eventsTable -->
+<div th:fragment="eventsTable" id="events-table-container">
+    <div th:if="${#lists.isEmpty(events)}" class="empty-state">
+        <p>No blocking incidents match the selected filter criteria.</p>
+    </div>
+
+    <div th:unless="${#lists.isEmpty(events)}" class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 130px;">Timestamp</th>
+                    <th>Server</th>
+                    <th>Valve</th>
+                    <th>Client Key (IP / Host)</th>
+                    <th>Subnet Group (/24 / /64)</th>
+                    <th>Requests</th>
+                    <th>Retained</th>
+                    <th>Effective Total</th>
+                    <th>Status</th>
+                    <th style="text-align: right;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr th:each="event : ${events}">
+                    <td th:text="${#temporals.format(event.slotTime, 'dd.MM HH:mm:ss')}">18.10 12:30:00</td>
+                    <td><strong th:text="${event.serverId}">Web-01</strong></td>
+                    <td><span class="badge badge-info" th:text="${event.valveName}">API-LIMITER</span></td>
+                    <td>
+                        <span class="ip-mono" th:text="${event.clientKey}">198.51.100.42</span>
+                    </td>
+                    <td>
+                        <span class="badge badge-warning ip-mono" th:text="${event.subnetGroup}">198.51.100.0/24</span>
+                    </td>
+                    <td th:text="${#numbers.formatInteger(event.requestCount, 1, 'POINT')}">120</td>
+                    <td th:text="${event.retainedCount}">15</td>
+                    <td>
+                        <strong style="color: var(--color-danger);" th:text="${#numbers.formatInteger(event.totalEffectiveCount, 1, 'POINT')}">135</strong>
+                    </td>
+                    <td>
+                        <span th:if="${event.completed}" class="badge badge-danger">LOCKED</span>
+                        <span th:unless="${event.completed}" class="badge badge-warning">IN PROGRESS</span>
+                    </td>
+                    <td style="text-align: right;">
+                        <a th:href="@{/events(clientQuery=${event.subnetGroup})}"
+                           class="btn"
+                           style="padding: 2px 8px; font-size: 11px;"
+                           title="Filter all events matching this subnet">
+                            Filter Subnet &rarr;
+                        </a>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Pagination / Footer Info -->
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; background: rgba(15, 23, 42, 0.5); border-top: 1px solid var(--border-color);">
+            <div style="font-size: 12px; color: var(--text-muted);">
+                Showing <span th:text="${#lists.size(events)}">50</span> incidents (Total matching: <strong th:text="${totalCount}">120</strong>)
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button th:if="${hasMore}"
+                        class="btn"
+                        th:hx-get="@{/fragments/events-table(offset=${nextOffset}, limit=${limit})}"
+                        hx-include="#events-filter-form"
+                        hx-target="#events-table-container"
+                        hx-swap="outerHTML">
+                    Load Next Page &rarr;
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

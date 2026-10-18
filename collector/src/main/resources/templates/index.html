@@ -25,8 +25,11 @@
                 <span class="pulse-dot"></span>
                 <span>Auto-Refresh Active</span>
             </div>
-            <a href="/api/v1/reputation/blocked-ips?format=text" target="_blank" class="btn" title="Export raw blocked IP list for firewalls">
-                Export Blocklist (TXT)
+            <a href="/offenders" class="btn" title="Detailed Top Offender & Subnet Rollup Analytics">
+                <span>&#x26A0;</span> Top Offenders
+            </a>
+            <a href="/events" class="btn" title="Multi-Server Incident Explorer with advanced filtering">
+                <span>&#x1F4CB;</span> Incident Explorer
             </a>
             <a href="/poll-log" class="btn" title="View data collection event log and diagnostics">
                 <span>&#x1F4DC;</span> Event Log
@@ -94,10 +97,13 @@
             <div class="section-title">
                 <span>&#x26A0;</span> Top Offending Clients (Fleet-wide)
             </div>
-            <div style="display:flex; gap:8px;">
+            <div style="display:flex; align-items:center; gap:8px;">
                 <button class="btn" hx-get="/fragments/top-offenders?hours=1" hx-target="#offender-container" hx-swap="outerHTML">1h</button>
                 <button class="btn" hx-get="/fragments/top-offenders?hours=24" hx-target="#offender-container" hx-swap="outerHTML">24h</button>
                 <button class="btn" hx-get="/fragments/top-offenders?hours=168" hx-target="#offender-container" hx-swap="outerHTML">7d</button>
+                <a href="/offenders" class="btn" style="border-color: var(--border-accent); color: var(--color-primary);" title="Open deep-dive forensics with Subnet Rollup">
+                    Subnet Rollup &amp; Analytics &rarr;
+                </a>
             </div>
         </div>
 
@@ -112,9 +118,14 @@
             <div class="section-title">
                 <span>&#x1F4CB;</span> Recent Blocking Incidents
             </div>
-            <button class="btn" hx-get="/fragments/recent-events" hx-target="#events-container" hx-swap="outerHTML">
-                Refresh Log
-            </button>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <button class="btn" hx-get="/fragments/recent-events" hx-target="#events-container" hx-swap="outerHTML">
+                    Refresh Log
+                </button>
+                <a href="/events" class="btn" style="border-color: var(--border-accent); color: var(--color-primary);" title="Open full multi-server Incident Explorer">
+                    Incident Explorer &rarr;
+                </a>
+            </div>
         </div>
 
         <div class="table-card">

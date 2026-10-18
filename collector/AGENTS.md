@@ -31,6 +31,12 @@ This document serves as the architectural reference and development guide for hu
 3. **Frontend Aesthetics & Reactivity:**
    * Follow the rich aesthetics guidelines: modern dark/light mode palette, glassmorphism, responsive cards, crisp typography.
    * Use HTMX attributes (`hx-get`, `hx-trigger`, `hx-swap`) for dynamic updates rather than heavy external JavaScript frameworks.
+4. **IP Storage & Subnet Forensics Architecture:**
+   * **IPv4 Range Storage:** Stored as 32-bit unsigned `BIGINT` (`ip_v4_start`, `ip_v4_end`).
+   * **IPv6 Upper-64-Bit Prefix Storage:** Stored as 16-character lowercase hex strings (`ip_v6_start`, `ip_v6_end`). Intentionally limited to the upper 64-bit routing prefix because individual host bits (/65-/128) are ephemeral due to IPv6 Privacy Extensions (RFC 4941).
+   * **Canonical `subnet_group`:** Contains the canonical `/24` (IPv4) or `/64` (IPv6) representation for high-speed Subnet Rollup aggregation (correlating distributed residential proxy botnets).
+   * **Search & Containment Queries:** Never use SQL `LIKE` for IP ranges! Always use the mathematical interval overlap condition (`ip_start <= :searchEnd AND ip_end >= :searchStart`) via `IpNetworkUtil.parseSearchQuery()`.
+   * **View Separation:** The root dashboard (`/`) is an executive overview. Advanced filtering (multi-server, multi-valve, custom time windows, CIDR search) belongs in `/events` (Incident Explorer) and `/offenders` (Top Offender Analytics).
 
 ---
 

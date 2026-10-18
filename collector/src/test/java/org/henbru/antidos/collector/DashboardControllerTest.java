@@ -87,4 +87,32 @@ class DashboardControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$").isArray());
 	}
+
+	@Test
+	void testEventsPageAndFragment() throws Exception {
+		mockMvc.perform(get("/events"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Multi-Server Incident Explorer")))
+				.andExpect(content().string(containsString("events-filter-form")));
+
+		mockMvc.perform(get("/fragments/events-table")
+						.param("clientQuery", "198.51.100.")
+						.param("limit", "25"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("events-table-container")));
+	}
+
+	@Test
+	void testOffendersPageAndFragment() throws Exception {
+		mockMvc.perform(get("/offenders"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Top Offender Analytics &amp; Subnet Rollup")))
+				.andExpect(content().string(containsString("Subnet Rollup (/24 &amp; /64)")));
+
+		mockMvc.perform(get("/fragments/offenders-table")
+						.param("groupBy", "SUBNET")
+						.param("limit", "25"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("offenders-table-container")));
+	}
 }

@@ -16,10 +16,11 @@ The **Anti-DoS Collector** is a standalone management and analytics service desi
   * **SQLite (Default):** Runs immediately out-of-the-box with zero configuration (`antidos-collector.db`).
   * **PostgreSQL:** Switchable via JDBC connection string in `application.yaml` or environment variables for high-volume enterprise deployments.
   * Versioned schema migrations managed automatically via **Flyway**.
-* **Modern HTMX Dashboard:**
+* **Modern HTMX Dashboard & Specialized Forensics:**
   * Real-time fleet overview showing all connected servers and valves.
-  * Top offending IP addresses and subnets correlated across servers.
-  * Interactive incident timeline and filtering without client-side Node.js/npm dependencies.
+  * **Incident Explorer (`/events`):** Dedicated deep-dive view with multi-server and multi-valve selection, relative or exact custom date-time windows, and CIDR range search matching both individual IPs and enclosing subnets.
+  * **Top Offender Analytics (`/offenders`):** Aggregation ranking with optional **Subnet Rollup mode** (`/24` IPv4 and `/64` IPv6) to immediately reveal residential proxy botnets across rotating IPs.
+  * Cross-navigation drill-down from Top Offenders directly into filtered incident logs.
 * **Built-in Demo Mode (Out-of-the-Box Exploration):** Launch the collector with zero configuration against simulated multi-node Valve endpoints (Edge EU, API Gateway under active attack, Staging Node with telemetry diagnostics).
 * **CLI Onboarding Tool:** Built-in command to test connectivity, verify tokens, and generate ready-to-use configuration blocks.
 

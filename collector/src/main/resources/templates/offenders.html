@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Top Offender Analytics - Anti-DoS Collector</title>
+    <link rel="stylesheet" th:href="@{/css/collector.css}">
+    <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
+    <script th:src="@{/js/htmx-lite.js}" defer></script>
+</head>
+<body>
+
+<div class="app-container">
+    <!-- Navbar -->
+    <header class="navbar">
+        <a href="/" class="brand">
+            <div class="brand-icon">&#x1F6E1;</div>
+            <div>
+                <div class="brand-title">Anti-DoS Fleet Manager</div>
+                <div class="brand-subtitle">Top Offender Analytics &amp; Subnet Forensics</div>
+            </div>
+        </a>
+        <div class="nav-actions">
+            <a href="/" class="btn">
+                <span>&#x2190;</span> Dashboard
+            </a>
+            <a href="/events" class="btn" title="View individual incident events log">
+                <span>&#x1F4CB;</span> Incident Explorer
+            </a>
+            <a href="/poll-log" class="btn" title="View polling event audit log">
+                <span>&#x1F4DC;</span> Event Log
+            </a>
+        </div>
+    </header>
+
+    <!-- Header & Title -->
+    <div class="section-header" style="margin-bottom: 20px;">
+        <div class="section-title">
+            <span>&#x26A0;</span> Top Offender Analytics &amp; Subnet Rollup
+        </div>
+        <div style="font-size: 13px; color: var(--text-muted);">
+            Analyze high-volume attackers, distributed botnets, and residential proxy clusters
+        </div>
+    </div>
+
+    <!-- Filter Panel -->
+    <form id="offenders-filter-form"
+          hx-get="/fragments/offenders-table"
+          hx-target="#offenders-table-container"
+          hx-swap="outerHTML"
+          hx-push-url="true"
+          class="filter-panel">
+
+        <div class="filter-grid">
+            <!-- 1. Group-By Mode (Killer Feature for Residential Proxies!) -->
+            <div class="filter-field">
+                <div class="filter-label">Aggregation &amp; Forensics Mode</div>
+                <div class="filter-btn-group" style="margin-top: 4px;">
+                    <label class="filter-btn" style="cursor: pointer;" th:classappend="${groupBy != 'SUBNET' ? 'active' : ''}">
+                        <input type="radio" name="groupBy" value="CLIENT" th:checked="${groupBy != 'SUBNET'}" style="display:none;" onchange="updateRadioActive(this); htmx.trigger('#offenders-filter-form', 'submit');">
+                        Individual Clients / IPs
+                    </label>
+                    <label class="filter-btn" style="cursor: pointer;" th:classappend="${groupBy == 'SUBNET' ? 'active' : ''}">
+                        <input type="radio" name="groupBy" value="SUBNET" th:checked="${groupBy == 'SUBNET'}" style="display:none;" onchange="updateRadioActive(this); htmx.trigger('#offenders-filter-form', 'submit');">
+                        Subnet Rollup (/24 &amp; /64)
+                    </label>
+                </div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+                    Subnet Rollup correlates distributed rotating IPs into their common /24 (IPv4) or /64 (IPv6) subnet.
+                </div>
+            </div>
+
+            <!-- 2. Target Servers -->
+            <div class="filter-field">
+                <div class="filter-label" style="display: flex; justify-content: space-between;">
+                    <span>Target Servers</span>
+                    <a href="javascript:void(0);" onclick="toggleCheckboxes('server-cb', true)" style="color: var(--color-primary); text-decoration: none; font-size: 10px;">Select All</a>
+                </div>
+                <div class="pills-group">
+                    <label th:each="srv : ${availableServers}" class="pill-label">
+                        <input type="checkbox" name="servers" th:value="${srv}"
+                               class="server-cb"
+                               th:checked="${selectedServers != null and #lists.contains(selectedServers, srv)}">
+                        <span th:text="${srv}">Node-1</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 3. Target Valves -->
+            <div class="filter-field">
+                <div class="filter-label" style="display: flex; justify-content: space-between;">
+                    <span>Valves</span>
+                    <a href="javascript:void(0);" onclick="toggleCheckboxes('valve-cb', true)" style="color: var(--color-primary); text-decoration: none; font-size: 10px;">Select All</a>
+                </div>
+                <div class="pills-group">
+                    <label th:each="v : ${availableValves}" class="pill-label">
+                        <input type="checkbox" name="valves" th:value="${v}"
+                               class="valve-cb"
+                               th:checked="${selectedValves != null and #lists.contains(selectedValves, v)}">
+                        <span th:text="${v}">API-LIMITER</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 4. Subnet / IP Search -->
+            <div class="filter-field">
+                <label class="filter-label" for="clientQueryInput">Client IP / Subnet Filter</label>
+                <input type="text"
+                       id="clientQueryInput"
+                       name="clientQuery"
+                       class="input-control"
+                       placeholder="e.g. 198.51.100.0/24 or 198.51.100."
+                       th:value="${clientQuery}">
+            </div>
+
+            <!-- 5. Time Window -->
+            <div class="filter-field">
+                <div class="filter-label">Time Window</div>
+                <div class="filter-btn-group" style="margin-bottom: 8px;">
+                    <button type="button" class="filter-btn" onclick="applyPreset(1)">1h</button>
+                    <button type="button" class="filter-btn" onclick="applyPreset(6)">6h</button>
+                    <button type="button" class="filter-btn" onclick="applyPreset(24)">24h</button>
+                    <button type="button" class="filter-btn" onclick="applyPreset(168)">7d</button>
+                    <button type="button" class="filter-btn" onclick="applyPreset(720)">30d</button>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <div style="flex: 1;">
+                        <span style="font-size: 10px; color: var(--text-muted);">From:</span>
+                        <input type="datetime-local" id="fromInput" name="from" class="input-control" style="font-size: 11px; padding: 4px 6px;" th:value="${fromTime}">
+                    </div>
+                    <div style="flex: 1;">
+                        <span style="font-size: 10px; color: var(--text-muted);">To:</span>
+                        <input type="datetime-local" id="toInput" name="to" class="input-control" style="font-size: 11px; padding: 4px 6px;" th:value="${toTime}">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter Actions Bar -->
+        <div class="filter-actions">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button type="submit" class="btn btn-primary">
+                    <span>&#x1F50E;</span> Apply Analytics Filter
+                </button>
+                <a href="/offenders" class="btn">
+                    Reset
+                </a>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <label style="font-size: 12px; color: var(--text-muted);">
+                    Top:
+                    <select name="limit" class="btn" style="padding: 4px 8px; font-size: 12px;">
+                        <option value="25" th:selected="${limit == 25}">25</option>
+                        <option value="50" th:selected="${limit == 50}">50</option>
+                        <option value="100" th:selected="${limit == 100}">100</option>
+                    </select>
+                </label>
+                <a th:href="@{/api/v1/reputation/blocked-ips(format='text')}" target="_blank" class="btn" title="Export top offenders as firewall-compatible blocklist">
+                    Export Blocklist (TXT)
+                </a>
+            </div>
+        </div>
+    </form>
+
+    <!-- Offenders Table Card -->
+    <div class="table-card">
+        <th:block th:replace="~{fragments/offenders-table :: offenderTable}"></th:block>
+    </div>
+</div>
+
+<script>
+    function toggleCheckboxes(className, check) {
+        document.querySelectorAll('.' + className).forEach(cb => cb.checked = check);
+    }
+
+    function updateRadioActive(radio) {
+        radio.closest('.filter-btn-group').querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+        radio.closest('.filter-btn').classList.add('active');
+    }
+
+    function applyPreset(hours) {
+        const now = new Date();
+        const past = new Date(now.getTime() - (hours * 3600 * 1000));
+        
+        const formatLocal = (d) => {
+            const pad = (n) => String(n).padStart(2, '0');
+            return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+        };
+
+        document.getElementById('toInput').value = formatLocal(now);
+        document.getElementById('fromInput').value = formatLocal(past);
+
+        htmx.trigger('#offenders-filter-form', 'submit');
+    }
+</script>
+
+</body>
+</html>

@@ -3,10 +3,13 @@ package org.henbru.antidos.collector.storage;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.sql.Types;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import org.henbru.antidos.collector.model.BlockedClientEvent;
 import org.henbru.antidos.collector.model.TopOffenderSummary;
+import org.henbru.antidos.collector.util.IpNetworkUtil;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -17,6 +20,7 @@ import org.springframework.stereotype.Repository;
  * JDBC repository for storing individual blocked IP/subnet client events and running analytics.
  */
 @Repository
+@SuppressWarnings("null")
 public class ClientEventRepository {
 
 	private final JdbcTemplate jdbcTemplate;
@@ -26,19 +30,30 @@ public class ClientEventRepository {
 	}
 
 	@NonNull
-	private static final RowMapper<BlockedClientEvent> ROW_MAPPER = (rs, rowNum) -> new BlockedClientEvent(
-			rs.getLong("id"),
-			rs.getString("server_id"),
-			rs.getString("valve_name"),
-			rs.getLong("slot_key"),
-			rs.getTimestamp("slot_time").toInstant(),
-			rs.getString("client_key"),
-			rs.getInt("request_count"),
-			rs.getInt("retained_count"),
-			rs.getBoolean("is_locked"),
-			rs.getBoolean("is_completed"),
-			rs.getTimestamp("last_updated_at").toInstant()
-	);
+	private static final RowMapper<BlockedClientEvent> ROW_MAPPER = (rs, rowNum) -> {
+		Long v4Start = rs.getObject("ip_v4_start") != null ? rs.getLong("ip_v4_start") : null;
+		Long v4End = rs.getObject("ip_v4_end") != null ? rs.getLong("ip_v4_end") : null;
+		return new BlockedClientEvent(
+				rs.getLong("id"),
+				rs.getString("server_id"),
+				rs.getString("valve_name"),
+				rs.getLong("slot_key"),
+				rs.getTimestamp("slot_time").toInstant(),
+				rs.getString("client_key"),
+				rs.getInt("ip_version"),
+				rs.getInt("cidr_prefix"),
+				v4Start,
+				v4End,
+				rs.getString("ip_v6_start"),
+				rs.getString("ip_v6_end"),
+				rs.getString("subnet_group"),
+				rs.getInt("request_count"),
+				rs.getInt("retained_count"),
+				rs.getBoolean("is_locked"),
+				rs.getBoolean("is_completed"),
+				rs.getTimestamp("last_updated_at").toInstant()
+		);
+	};
 
 	public void batchUpsert(List<BlockedClientEvent> events) {
 		if (events == null || events.isEmpty()) {
@@ -46,10 +61,21 @@ public class ClientEventRepository {
 		}
 
 		String sql = """
-				INSERT INTO blocked_client_events (server_id, valve_name, slot_key, slot_time, client_key, request_count, retained_count, is_locked, is_completed, last_updated_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				INSERT INTO blocked_client_events (
+				    server_id, valve_name, slot_key, slot_time, client_key,
+				    ip_version, cidr_prefix, ip_v4_start, ip_v4_end, ip_v6_start, ip_v6_end, subnet_group,
+				    request_count, retained_count, is_locked, is_completed, last_updated_at
+				)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (server_id, valve_name, slot_key, client_key) DO UPDATE SET
 				    slot_time = EXCLUDED.slot_time,
+				    ip_version = EXCLUDED.ip_version,
+				    cidr_prefix = EXCLUDED.cidr_prefix,
+				    ip_v4_start = EXCLUDED.ip_v4_start,
+				    ip_v4_end = EXCLUDED.ip_v4_end,
+				    ip_v6_start = EXCLUDED.ip_v6_start,
+				    ip_v6_end = EXCLUDED.ip_v6_end,
+				    subnet_group = EXCLUDED.subnet_group,
 				    request_count = EXCLUDED.request_count,
 				    retained_count = EXCLUDED.retained_count,
 				    is_locked = EXCLUDED.is_locked,
@@ -66,11 +92,26 @@ public class ClientEventRepository {
 				ps.setLong(3, e.slotKey());
 				ps.setTimestamp(4, Timestamp.from(e.slotTime()));
 				ps.setString(5, e.clientKey());
-				ps.setInt(6, e.requestCount());
-				ps.setInt(7, e.retainedCount());
-				ps.setBoolean(8, e.locked());
-				ps.setBoolean(9, e.completed());
-				ps.setTimestamp(10, Timestamp.from(e.lastUpdatedAt()));
+				ps.setInt(6, e.ipVersion());
+				ps.setInt(7, e.cidrPrefix());
+				if (e.ipV4Start() != null) {
+					ps.setLong(8, e.ipV4Start());
+				} else {
+					ps.setNull(8, Types.BIGINT);
+				}
+				if (e.ipV4End() != null) {
+					ps.setLong(9, e.ipV4End());
+				} else {
+					ps.setNull(9, Types.BIGINT);
+				}
+				ps.setString(10, e.ipV6Start());
+				ps.setString(11, e.ipV6End());
+				ps.setString(12, e.subnetGroup());
+				ps.setInt(13, e.requestCount());
+				ps.setInt(14, e.retainedCount());
+				ps.setBoolean(15, e.locked());
+				ps.setBoolean(16, e.completed());
+				ps.setTimestamp(17, Timestamp.from(e.lastUpdatedAt()));
 			}
 
 			@Override
@@ -81,44 +122,177 @@ public class ClientEventRepository {
 	}
 
 	public List<TopOffenderSummary> findTopOffenders(Instant since, int limit) {
-		String sql = """
-				SELECT
-				    client_key,
-				    COUNT(*) AS total_incidents,
-				    SUM(request_count + retained_count) AS total_requests,
-				    COUNT(DISTINCT server_id) AS distinct_servers,
-				    MIN(slot_time) AS first_seen,
-				    MAX(slot_time) AS last_seen
-				FROM blocked_client_events
-				WHERE slot_time >= ?
-				GROUP BY client_key
-				ORDER BY total_requests DESC
-				LIMIT ?
-				""";
+		return findTopOffendersFiltered(null, null, since, null, null, "CLIENT", limit);
+	}
 
-		return jdbcTemplate.query(sql, (rs, rowNum) -> new TopOffenderSummary(
-				rs.getString("client_key"),
+	public List<BlockedClientEvent> findRecentEvents(String serverId, String filterIp, int limit) {
+		List<String> servers = (serverId != null && !serverId.trim().isEmpty()) ? List.of(serverId) : null;
+		return findRecentEventsFiltered(servers, null, null, null, filterIp, limit, 0);
+	}
+
+	/**
+	 * Core query builder for filtering recent blocking events with multi-server, multi-valve, time range,
+	 * and CIDR/subnet criteria.
+	 */
+	public List<BlockedClientEvent> findRecentEventsFiltered(
+			List<String> serverIds,
+			List<String> valveNames,
+			Instant fromTime,
+			Instant toTime,
+			String clientQuery,
+			int limit,
+			int offset
+	) {
+		StringBuilder sql = new StringBuilder("SELECT * FROM blocked_client_events WHERE 1=1 ");
+		List<Object> params = new ArrayList<>();
+
+		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery);
+
+		sql.append("ORDER BY slot_time DESC LIMIT ? OFFSET ?");
+		params.add(Math.max(1, Math.min(limit, 500)));
+		params.add(Math.max(0, offset));
+
+		return jdbcTemplate.query(sql.toString(), ROW_MAPPER, params.toArray());
+	}
+
+	public long countRecentEventsFiltered(
+			List<String> serverIds,
+			List<String> valveNames,
+			Instant fromTime,
+			Instant toTime,
+			String clientQuery
+	) {
+		StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM blocked_client_events WHERE 1=1 ");
+		List<Object> params = new ArrayList<>();
+
+		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery);
+
+		Long count = jdbcTemplate.queryForObject(sql.toString(), Long.class, params.toArray());
+		return count != null ? count : 0L;
+	}
+
+	/**
+	 * Aggregates top offenders either by single client IP/key ("CLIENT") or by canonical subnet ("SUBNET").
+	 */
+	public List<TopOffenderSummary> findTopOffendersFiltered(
+			List<String> serverIds,
+			List<String> valveNames,
+			Instant fromTime,
+			Instant toTime,
+			String clientQuery,
+			String groupBy,
+			int limit
+	) {
+		boolean isSubnetGroup = "SUBNET".equalsIgnoreCase(groupBy);
+		String groupCol = isSubnetGroup ? "subnet_group" : "client_key";
+
+		StringBuilder sql = new StringBuilder();
+		sql.append("SELECT ")
+				.append(groupCol).append(" AS client_key, ")
+				.append("COUNT(*) AS total_incidents, ")
+				.append("SUM(request_count + retained_count) AS total_requests, ")
+				.append("COUNT(DISTINCT server_id) AS distinct_servers, ")
+				.append("MIN(slot_time) AS first_seen, ")
+				.append("MAX(slot_time) AS last_seen ")
+				.append("FROM blocked_client_events ")
+				.append("WHERE 1=1 ");
+
+		List<Object> params = new ArrayList<>();
+		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery);
+
+		sql.append("GROUP BY ").append(groupCol).append(" ");
+		sql.append("ORDER BY total_requests DESC LIMIT ?");
+		params.add(Math.max(1, Math.min(limit, 500)));
+
+		return jdbcTemplate.query(sql.toString(), (rs, rowNum) -> new TopOffenderSummary(
+				rs.getString("client_key") != null ? rs.getString("client_key") : "unknown",
 				rs.getLong("total_incidents"),
 				rs.getLong("total_requests"),
 				rs.getInt("distinct_servers"),
-				"", // server list can be empty or populated via group_concat if needed
+				"",
 				rs.getTimestamp("first_seen").toInstant(),
 				rs.getTimestamp("last_seen").toInstant()
-		), Timestamp.from(since), limit);
+		), params.toArray());
 	}
 
-	@SuppressWarnings("null")
-	public List<BlockedClientEvent> findRecentEvents(String serverId, String filterIp, int limit) {
-		StringBuilder sql = new StringBuilder("SELECT * FROM blocked_client_events WHERE 1=1 ");
-		if (serverId != null && !serverId.trim().isEmpty()) {
-			sql.append("AND server_id = '").append(serverId.replace("'", "''")).append("' ");
+	private void appendFilterCriteria(
+			StringBuilder sql,
+			List<Object> params,
+			List<String> serverIds,
+			List<String> valveNames,
+			Instant fromTime,
+			Instant toTime,
+			String clientQuery
+	) {
+		if (serverIds != null && !serverIds.isEmpty()) {
+			sql.append("AND server_id IN (");
+			for (int i = 0; i < serverIds.size(); i++) {
+				sql.append(i > 0 ? ",?" : "?");
+				params.add(serverIds.get(i));
+			}
+			sql.append(") ");
 		}
-		if (filterIp != null && !filterIp.trim().isEmpty()) {
-			sql.append("AND client_key LIKE '%").append(filterIp.replace("'", "''")).append("%' ");
-		}
-		sql.append("ORDER BY slot_time DESC LIMIT ").append(Math.min(limit, 500));
 
-		return jdbcTemplate.query(sql.toString(), ROW_MAPPER);
+		if (valveNames != null && !valveNames.isEmpty()) {
+			sql.append("AND valve_name IN (");
+			for (int i = 0; i < valveNames.size(); i++) {
+				sql.append(i > 0 ? ",?" : "?");
+				params.add(valveNames.get(i));
+			}
+			sql.append(") ");
+		}
+
+		if (fromTime != null) {
+			sql.append("AND slot_time >= ? ");
+			params.add(Timestamp.from(fromTime));
+		}
+
+		if (toTime != null) {
+			sql.append("AND slot_time <= ? ");
+			params.add(Timestamp.from(toTime));
+		}
+
+		if (clientQuery != null && !clientQuery.trim().isEmpty()) {
+			IpNetworkUtil.SearchCriteria criteria = IpNetworkUtil.parseSearchQuery(clientQuery);
+			if (criteria.isIpSearch()) {
+				if (criteria.ipVersion() == 4) {
+					sql.append("AND (ip_version = 4 AND ip_v4_start <= ? AND ip_v4_end >= ?) ");
+					params.add(criteria.v4End());
+					params.add(criteria.v4Start());
+				} else if (criteria.ipVersion() == 6) {
+					sql.append("AND (ip_version = 6 AND ip_v6_start <= ? AND ip_v6_end >= ?) ");
+					params.add(criteria.v6End());
+					params.add(criteria.v6Start());
+				}
+			} else if (criteria.hasFilter()) {
+				sql.append("AND (client_key LIKE ? OR subnet_group LIKE ?) ");
+				String likePattern = "%" + criteria.rawQuery() + "%";
+				params.add(likePattern);
+				params.add(likePattern);
+			}
+		}
+	}
+
+	public List<String> findDistinctServerIds() {
+		return jdbcTemplate.query(
+				"SELECT DISTINCT server_id FROM blocked_client_events ORDER BY server_id ASC",
+				(rs, rowNum) -> rs.getString(1)
+		);
+	}
+
+	public List<String> findDistinctValveNames(List<String> serverIds) {
+		if (serverIds == null || serverIds.isEmpty()) {
+			return jdbcTemplate.query(
+					"SELECT DISTINCT valve_name FROM blocked_client_events ORDER BY valve_name ASC",
+					(rs, rowNum) -> rs.getString(1)
+			);
+		}
+		StringBuilder sql = new StringBuilder("SELECT DISTINCT valve_name FROM blocked_client_events WHERE server_id IN (");
+		for (int i = 0; i < serverIds.size(); i++) {
+			sql.append(i > 0 ? ",?" : "?");
+		}
+		sql.append(") ORDER BY valve_name ASC");
+		return jdbcTemplate.query(sql.toString(), (rs, rowNum) -> rs.getString(1), serverIds.toArray());
 	}
 
 	public long countDistinctBlockedClientsSince(Instant since) {

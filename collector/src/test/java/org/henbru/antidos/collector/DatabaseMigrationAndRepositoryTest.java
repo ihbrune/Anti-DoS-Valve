@@ -113,6 +113,70 @@ class DatabaseMigrationAndRepositoryTest {
 	}
 
 	@Test
+	void testClientEventRepositoryAdvancedFilteringAndSubnetRollup() {
+		Instant now = Instant.now();
+		BlockedClientEvent e1 = new BlockedClientEvent(
+				null, "SERVER-PROD-1", "VALVE-API", 200L, now.minus(30, ChronoUnit.MINUTES), "198.51.100.10", 30, 0, true, true, now);
+		BlockedClientEvent e2 = new BlockedClientEvent(
+				null, "SERVER-PROD-2", "VALVE-API", 200L, now.minus(25, ChronoUnit.MINUTES), "198.51.100.25", 50, 0, true, true, now);
+		BlockedClientEvent e3 = new BlockedClientEvent(
+				null, "SERVER-STAGE", "VALVE-API", 200L, now.minus(20, ChronoUnit.MINUTES), "198.51.100.99", 100, 0, true, true, now);
+		BlockedClientEvent e4 = new BlockedClientEvent(
+				null, "SERVER-PROD-1", "VALVE-ADMIN", 200L, now.minus(15, ChronoUnit.MINUTES), "198.51.100.10", 40, 0, true, true, now);
+		BlockedClientEvent e5 = new BlockedClientEvent(
+				null, "SERVER-PROD-1", "VALVE-API", 200L, now.minus(10, ChronoUnit.MINUTES), "203.0.113.5", 80, 0, true, true, now);
+
+		clientEventRepository.batchUpsert(List.of(e1, e2, e3, e4, e5));
+
+		// 1. Multi-server + multi-valve filter: Only PROD-1 and PROD-2, only VALVE-API
+		List<BlockedClientEvent> filtered = clientEventRepository.findRecentEventsFiltered(
+				List.of("SERVER-PROD-1", "SERVER-PROD-2"),
+				List.of("VALVE-API"),
+				now.minus(1, ChronoUnit.HOURS),
+				now,
+				(String) null,
+				50,
+				0
+		);
+		// Should include e1, e2, e5 (e3 is SERVER-STAGE, e4 is VALVE-ADMIN)
+		assertEquals(3, filtered.size());
+
+		// 2. Subnet range search: search for "198.51.100.0/24" (or "198.51.100.")
+		List<BlockedClientEvent> subnetHits = clientEventRepository.findRecentEventsFiltered(
+				List.of("SERVER-PROD-1", "SERVER-PROD-2"),
+				List.of("VALVE-API"),
+				(Instant) null,
+				(Instant) null,
+				"198.51.100.",
+				50,
+				0
+		);
+		// Should match e1 (198.51.100.10) and e2 (198.51.100.25), but NOT e5 (203.0.113.5)
+		assertEquals(2, subnetHits.size());
+
+		// 3. Subnet Rollup in Top Offenders: Group by "SUBNET"
+		List<TopOffenderSummary> subnetRollup = clientEventRepository.findTopOffendersFiltered(
+				List.of("SERVER-PROD-1", "SERVER-PROD-2"),
+				List.of("VALVE-API"),
+				now.minus(1, ChronoUnit.HOURS),
+				now,
+				(String) null,
+				"SUBNET",
+				10
+		);
+		assertFalse(subnetRollup.isEmpty());
+		// e1 (30 reqs) and e2 (50 reqs) are in same subnet 198.51.100.0/24 -> 80 reqs!
+		// e5 (80 reqs) in 203.0.113.0/24
+		TopOffenderSummary topSubnet = subnetRollup.stream()
+				.filter(s -> "198.51.100.0/24".equals(s.clientKey()))
+				.findFirst()
+				.orElse(null);
+		assertNotNull(topSubnet);
+		assertEquals(80L, topSubnet.totalBlockedRequests());
+		assertEquals(2, topSubnet.distinctServersTargeted()); // Targeted both PROD-1 and PROD-2!
+	}
+
+	@Test
 	void testPollEventLogRepositoryOperations() {
 		Instant now = Instant.now();
 		PollEventLog log1 = new PollEventLog(
