@@ -177,9 +177,9 @@ public class CollectorPollerService {
 		List<String> warnings = new ArrayList<>();
 
 		// 1. Check for missed slots (catch-up recovery)
-		Optional<Long> latestKnownKey = slotSnapshotRepository.findLatestSlotKey(endpoint.getName(), valveName);
-		if (latestKnownKey.isPresent() && lastCompletedKey > 0) {
-			long lastStored = latestKnownKey.get();
+		Optional<Long> latestCompletedKey = slotSnapshotRepository.findLatestCompletedSlotKey(endpoint.getName(), valveName);
+		if (latestCompletedKey.isPresent() && lastCompletedKey > 0) {
+			long lastStored = latestCompletedKey.get();
 			int ringBufferCapacity = summary.numberOfSlots() > 0 ? summary.numberOfSlots() : 5;
 			long earliestRetrievableKey = Math.max(0, summary.currentSlotKey() - ringBufferCapacity);
 
@@ -195,7 +195,8 @@ public class CollectorPollerService {
 		}
 
 		// 2. Poll the finalized previous slot (normal flow)
-		if (lastCompletedKey > 0) {
+		// Completed slots are immutable; only fetch if this finalized slot has not been ingested yet
+		if (lastCompletedKey > 0 && (latestCompletedKey.isEmpty() || latestCompletedKey.get() < lastCompletedKey)) {
 			SlotIngestResult r = fetchAndStoreSlot(endpoint, valveName, "previous", true, pollTime);
 			slots += r.slotsCount();
 			events += r.eventsCount();
@@ -219,7 +220,9 @@ public class CollectorPollerService {
 
 	private SlotIngestResult fetchAndStoreSlot(EndpointConfig endpoint, String valveName, String slotParam, boolean completed, Instant pollTime) {
 		try {
-			ValveDetailsDto details = statusClient.fetchSlotDetails(endpoint, valveName, slotParam, "all");
+			// Request blockedLimit=all and activeLimit=0 to avoid serialization overhead for non-blocked clients on the Valve.
+			// limit=all is retained as backward-compatible fallback for older Valve versions.
+			ValveDetailsDto details = statusClient.fetchSlotDetails(endpoint, valveName, slotParam, "all", "all", "0");
 			if (details.selectedSlot() == null) {
 				return new SlotIngestResult(0, 0, null);
 			}

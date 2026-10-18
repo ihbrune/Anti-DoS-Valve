@@ -30,6 +30,7 @@ class AntiDoSStatusRendererTest {
 		valve.setShareOfRetainedFormerRequests("0.5");
 		valve.setMaxIPCacheSize(100);
 		valve.start();
+		valve.reloadMonitor();
 		renderer = valve.getStatusRenderer();
 	}
 
@@ -364,6 +365,50 @@ class AntiDoSStatusRendererTest {
 
 		String jsonDetailsWithDesc = renderer.buildStatusJsonDetails("RENDERER_TEST");
 		assertTrue(jsonDetailsWithDesc.contains("\"description\": \"Rate limiter for public API endpoints & <sensitive> routes\""));
+	}
+
+	@Test
+	void testBlockedAndActiveLimits() {
+		// Populate blocked IP and active IP
+		for (int i = 0; i < 15; i++) {
+			valve.isIPAddressBlocked("10.10.10.1");
+		}
+		valve.isIPAddressBlocked("10.10.10.2");
+
+		// 1. parseLimit with allowZero
+		assertEquals(0, AntiDoSStatusRenderer.parseLimit("0", 50, true));
+		assertEquals(50, AntiDoSStatusRenderer.parseLimit("0", 50, false));
+		assertEquals(50, AntiDoSStatusRenderer.parseLimit("0", 50));
+		assertEquals(Integer.MAX_VALUE, AntiDoSStatusRenderer.parseLimit("all", 50, true));
+
+		// 2. resolveEffectiveLimit
+		assertEquals(0, AntiDoSStatusRenderer.resolveEffectiveLimit(0, 50, 50));
+		assertEquals(25, AntiDoSStatusRenderer.resolveEffectiveLimit(null, 25, 50));
+		assertEquals(50, AntiDoSStatusRenderer.resolveEffectiveLimit(null, null, 50));
+		assertEquals(Integer.MAX_VALUE, AntiDoSStatusRenderer.resolveEffectiveLimit(-1, null, 50));
+
+		// 3. Details JSON with blockedLimit=all and activeLimit=0
+		String jsonBlockedOnly = renderer.buildStatusJsonDetails("RENDERER_TEST", "current", Integer.MAX_VALUE, 0);
+		assertTrue(jsonBlockedOnly.contains("\"blockedLimit\": null"));
+		assertTrue(jsonBlockedOnly.contains("\"activeLimit\": 0"));
+		assertTrue(jsonBlockedOnly.contains("\"totalBlockedClients\": 1"));
+		assertTrue(jsonBlockedOnly.contains("\"10.10.10.1\""));
+		assertFalse(jsonBlockedOnly.contains("\"10.10.10.2\"")); // 10.10.10.2 is active, must be excluded when activeLimit=0
+		assertTrue(jsonBlockedOnly.contains("\"totalActiveClients\": 1"));
+
+		// 4. Details JSON with blockedLimit=0 and activeLimit=5
+		String jsonActiveOnly = renderer.buildStatusJsonDetails("RENDERER_TEST", "current", 0, 5);
+		assertTrue(jsonActiveOnly.contains("\"blockedLimit\": 0"));
+		assertTrue(jsonActiveOnly.contains("\"activeLimit\": 5"));
+		assertFalse(jsonActiveOnly.contains("\"10.10.10.1\"")); // 10.10.10.1 is blocked, must be excluded when blockedLimit=0
+		assertTrue(jsonActiveOnly.contains("\"topActiveClients\": ["));
+		assertTrue(jsonActiveOnly.contains("\"10.10.10.2\""));
+
+		// 5. HTML Details with blockedLimit=all and activeLimit=0
+		String htmlBlockedOnly = renderer.buildStatusHtmlDetails("RENDERER_TEST", "tok", "current", Integer.MAX_VALUE, 0);
+		assertTrue(htmlBlockedOnly.contains("Blocked Clients"));
+		assertTrue(htmlBlockedOnly.contains("Top Active Clients"));
+		assertTrue(htmlBlockedOnly.contains("No active clients in current slot."));
 	}
 }
 

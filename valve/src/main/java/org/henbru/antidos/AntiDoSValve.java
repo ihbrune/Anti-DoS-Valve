@@ -1099,11 +1099,13 @@ public class AntiDoSValve extends ValveBase {
 		}
 		String slot = request.getParameter("slot");
 		String limit = request.getParameter("limit");
+		String blockedLimit = request.getParameter("blockedLimit");
+		String activeLimit = request.getParameter("activeLimit");
 
 		if (isJson) {
-			statusRenderer.renderStatusJson(response, filterValve, view, slot, limit);
+			statusRenderer.renderStatusJson(response, filterValve, view, slot, limit, blockedLimit, activeLimit);
 		} else {
-			statusRenderer.renderStatusHtml(response, filterValve, view, token, slot, limit);
+			statusRenderer.renderStatusHtml(response, filterValve, view, token, slot, limit, blockedLimit, activeLimit);
 		}
 	}
 
@@ -1273,6 +1275,10 @@ public class AntiDoSValve extends ValveBase {
 		return statusRenderer.buildStatusHtmlDetails(valveName, token, slotParam, limit);
 	}
 
+	public String buildStatusHtmlDetails(String valveName, String token, String slotParam, Integer blockedLimit, Integer activeLimit) {
+		return statusRenderer.buildStatusHtmlDetails(valveName, token, slotParam, blockedLimit, activeLimit);
+	}
+
 	public String buildStatusJson(String filterValve) {
 		return statusRenderer.buildStatusJson(filterValve);
 	}
@@ -1285,6 +1291,10 @@ public class AntiDoSValve extends ValveBase {
 		return statusRenderer.buildStatusJsonDetails(filterValve, slotParam, limit);
 	}
 
+	public String buildStatusJsonDetails(String filterValve, String slotParam, Integer blockedLimit, Integer activeLimit) {
+		return statusRenderer.buildStatusJsonDetails(filterValve, slotParam, blockedLimit, activeLimit);
+	}
+
 	public static String buildDashboardUrl(String token, String valve, String view, String format) {
 		return AntiDoSStatusRenderer.buildDashboardUrl(token, valve, view, format);
 	}
@@ -1295,6 +1305,11 @@ public class AntiDoSValve extends ValveBase {
 
 	public static String buildDashboardUrl(String token, String valve, String view, String format, String slot, String limit, boolean forHtml) {
 		return AntiDoSStatusRenderer.buildDashboardUrl(token, valve, view, format, slot, limit, forHtml);
+	}
+
+	public static String buildDashboardUrl(String token, String valve, String view, String format, String slot, String limit,
+			String blockedLimit, String activeLimit, boolean forHtml) {
+		return AntiDoSStatusRenderer.buildDashboardUrl(token, valve, view, format, slot, limit, blockedLimit, activeLimit, forHtml);
 	}
 
 	public static String escapeHtml(String text) {

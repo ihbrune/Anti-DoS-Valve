@@ -8,7 +8,8 @@ The **Anti-DoS Collector** is a standalone management and analytics service desi
 
 * **Multi-Server & Multi-Valve Telemetry:** Periodically polls configured `/antidos-status` JSON endpoints across one or more servers.
 * **Smart Slot Polling & Recovery:**
-  * Automatically retrieves finalized previous slots (`slot=previous&limit=all`).
+  * Automatically retrieves finalized previous slots (`slot=previous&blockedLimit=all&activeLimit=0&limit=all`).
+  * Immutable completed slots are fetched only once upon completion, avoiding redundant polling cycles during long slot intervals.
   * Supports intermediate polling for long-window valves (e.g. 15-minute subnet aggregators) via in-progress slot upserts.
   * Recovers missed slots automatically using `slot=<slotKey>` if network connectivity was temporarily interrupted.
 * **Flexible Storage (Zero-Ops to Enterprise Scale):**

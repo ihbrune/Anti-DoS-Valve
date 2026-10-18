@@ -12,10 +12,12 @@ import org.henbru.antidos.collector.storage.ClientEventRepository;
 import org.henbru.antidos.collector.storage.HeartbeatRepository;
 import org.henbru.antidos.collector.storage.PollEventLogRepository;
 import org.henbru.antidos.collector.storage.SlotSnapshotRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -42,6 +44,17 @@ class CollectorPollerServiceTest {
 	@Autowired
 	private PollEventLogRepository pollEventLogRepository;
 
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
+
+	@BeforeEach
+	void setUp() {
+		jdbcTemplate.update("DELETE FROM blocked_client_events");
+		jdbcTemplate.update("DELETE FROM slot_snapshots");
+		jdbcTemplate.update("DELETE FROM poll_event_log");
+		jdbcTemplate.update("DELETE FROM endpoint_heartbeats");
+	}
+
 	@Test
 	void testPollEndpointNormalFlow() throws Exception {
 		EndpointConfig endpoint = new EndpointConfig("POLL-TEST-NODE", "http://localhost:8080/antidos-status", "tok", false, true);
@@ -61,7 +74,7 @@ class CollectorPollerServiceTest {
 		ValveDetailsDto details = new ValveDetailsDto(
 				"2026-10-17T10:00:00Z", null, slotDto, 1, "all", List.of(blockedClient), null
 		);
-		when(statusClient.fetchSlotDetails(any(), eq("POLL_VALVE"), eq("previous"), eq("all"))).thenReturn(details);
+		when(statusClient.fetchSlotDetails(any(), eq("POLL_VALVE"), eq("previous"), eq("all"), eq("all"), eq("0"))).thenReturn(details);
 
 		pollerService.pollEndpoint(endpoint);
 
@@ -89,6 +102,35 @@ class CollectorPollerServiceTest {
 		assertEquals(200, pollLogs.getFirst().httpStatusCode());
 		assertEquals(1, pollLogs.getFirst().valvesPolled());
 		assertEquals(1, pollLogs.getFirst().slotsIngested());
+	}
+
+	@Test
+	void testPollEndpointSkipsAlreadyCompletedSlot() throws Exception {
+		EndpointConfig endpoint = new EndpointConfig("DEDUP-TEST-NODE", "http://localhost:8080/antidos-status", "tok", false, true);
+
+		ValveOverviewDto.ValveSummaryDto summary = new ValveOverviewDto.ValveSummaryDto(
+				"DEDUP_VALVE", 1, "BLOCKING", false, false, 50, 60, 5, 5, 0, 500L, 499L, 2000L, 200L, 10, 0
+		);
+		ValveOverviewDto overview = new ValveOverviewDto("2026-10-17T10:00:00Z", List.of(summary), null);
+		when(statusClient.fetchOverview(any())).thenReturn(overview);
+
+		ValveDetailsDto.SelectedSlotDto slotDto = new ValveDetailsDto.SelectedSlotDto(
+				"previous", 4, 499L, false, "2026-10-17T09:59:00Z", "2026-10-17T10:00:00Z", 200L, 10, 0
+		);
+		ValveDetailsDto details = new ValveDetailsDto(
+				"2026-10-17T10:00:00Z", null, slotDto, 0, "all", List.of(), null
+		);
+		when(statusClient.fetchSlotDetails(any(), eq("DEDUP_VALVE"), eq("previous"), eq("all"), eq("all"), eq("0"))).thenReturn(details);
+
+		// First poll: ingests slot 499L
+		pollerService.pollEndpoint(endpoint);
+		verify(statusClient, times(1)).fetchSlotDetails(any(), eq("DEDUP_VALVE"), eq("previous"), eq("all"), eq("all"), eq("0"));
+
+		// Second poll in same slot interval: lastCompletedSlotKey is still 499L
+		pollerService.pollEndpoint(endpoint);
+
+		// fetchSlotDetails must NOT have been called a second time
+		verify(statusClient, times(1)).fetchSlotDetails(any(), eq("DEDUP_VALVE"), eq("previous"), eq("all"), eq("all"), eq("0"));
 	}
 
 	@Test
@@ -121,7 +163,7 @@ class CollectorPollerServiceTest {
 				"previous", 4, 499L, false, "2026-10-17T09:59:00Z", "2026-10-17T10:00:00Z", 100L, 5, 0
 		);
 		ValveDetailsDto details = new ValveDetailsDto("2026-10-17T10:00:00Z", null, slotDto, 0, "all", List.of(), null);
-		when(statusClient.fetchSlotDetails(any(), eq("VALVE-WANTED"), eq("previous"), eq("all"))).thenReturn(details);
+		when(statusClient.fetchSlotDetails(any(), eq("VALVE-WANTED"), eq("previous"), eq("all"), eq("all"), eq("0"))).thenReturn(details);
 
 		pollerService.pollEndpoint(endpoint);
 
@@ -131,8 +173,8 @@ class CollectorPollerServiceTest {
 		assertEquals(1, hb.get().valvesCount());
 
 		// Wanted valve polled
-		verify(statusClient, times(1)).fetchSlotDetails(any(), eq("VALVE-WANTED"), eq("previous"), eq("all"));
+		verify(statusClient, times(1)).fetchSlotDetails(any(), eq("VALVE-WANTED"), eq("previous"), eq("all"), eq("all"), eq("0"));
 		// Ignored valve was never polled
-		verify(statusClient, never()).fetchSlotDetails(any(), eq("VALVE-IGNORED"), any(), any());
+		verify(statusClient, never()).fetchSlotDetails(any(), eq("VALVE-IGNORED"), any(), any(), any(), any());
 	}
 }

@@ -117,6 +117,19 @@ public class SlotSnapshotRepository {
 		return Optional.of(keys.getFirst());
 	}
 
+	public Optional<Long> findLatestCompletedSlotKey(String serverId, String valveName) {
+		List<Long> keys = jdbcTemplate.query(
+				"SELECT MAX(slot_key) FROM slot_snapshots WHERE server_id = ? AND valve_name = ? AND is_completed = ?",
+				(rs, rowNum) -> {
+					long val = rs.getLong(1);
+					return rs.wasNull() ? null : val;
+				}, serverId, valveName, true);
+		if (keys.isEmpty() || keys.getFirst() == null) {
+			return Optional.empty();
+		}
+		return Optional.of(keys.getFirst());
+	}
+
 	public List<SlotSnapshot> findRecent(String serverId, String valveName, int limit) {
 		return jdbcTemplate.query(
 				"SELECT * FROM slot_snapshots WHERE server_id = ? AND valve_name = ? ORDER BY slot_key DESC LIMIT ?",

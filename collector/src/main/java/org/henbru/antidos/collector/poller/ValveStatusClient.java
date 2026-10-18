@@ -39,6 +39,12 @@ public class ValveStatusClient {
 
 	public ValveDetailsDto fetchSlotDetails(EndpointConfig endpoint, String valveName, String slotParam, String limitParam)
 			throws IOException, InterruptedException {
+		return fetchSlotDetails(endpoint, valveName, slotParam, limitParam, null, null);
+	}
+
+	public ValveDetailsDto fetchSlotDetails(EndpointConfig endpoint, String valveName, String slotParam,
+			String limitParam, String blockedLimitParam, String activeLimitParam)
+			throws IOException, InterruptedException {
 		String base = cleanBaseUrl(endpoint.getUrl());
 		StringBuilder sb = new StringBuilder(base);
 		sb.append("?view=details&format=json");
@@ -50,6 +56,12 @@ public class ValveStatusClient {
 		}
 		if (limitParam != null && !limitParam.trim().isEmpty()) {
 			sb.append("&limit=").append(URLEncoder.encode(limitParam.trim(), StandardCharsets.UTF_8));
+		}
+		if (blockedLimitParam != null && !blockedLimitParam.trim().isEmpty()) {
+			sb.append("&blockedLimit=").append(URLEncoder.encode(blockedLimitParam.trim(), StandardCharsets.UTF_8));
+		}
+		if (activeLimitParam != null && !activeLimitParam.trim().isEmpty()) {
+			sb.append("&activeLimit=").append(URLEncoder.encode(activeLimitParam.trim(), StandardCharsets.UTF_8));
 		}
 
 		return executeGet(endpoint, sb.toString(), ValveDetailsDto.class);

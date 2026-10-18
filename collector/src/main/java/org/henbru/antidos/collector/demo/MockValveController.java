@@ -41,6 +41,8 @@ public class MockValveController {
 			@RequestParam(value = "valve", required = false) String valve,
 			@RequestParam(value = "slot", required = false) String slot,
 			@RequestParam(value = "limit", required = false) String limit,
+			@RequestParam(value = "blockedLimit", required = false) String blockedLimit,
+			@RequestParam(value = "activeLimit", required = false) String activeLimit,
 			@RequestParam(value = "format", required = false) String format,
 			@RequestHeader(value = "Authorization", required = false) String authHeader
 	) {
@@ -77,7 +79,7 @@ public class MockValveController {
 
 		// 3. Dispatch to details or overview payload
 		if ("details".equalsIgnoreCase(view)) {
-			ValveDetailsDto details = simulator.buildDetails(nodeId, valve, slot, limit);
+			ValveDetailsDto details = simulator.buildDetails(nodeId, valve, slot, limit, blockedLimit, activeLimit);
 			return ResponseEntity.ok(details);
 		}
 

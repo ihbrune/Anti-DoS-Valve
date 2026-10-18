@@ -65,6 +65,11 @@ public class MockValveSimulator {
 	}
 
 	public ValveDetailsDto buildDetails(String nodeId, String valveName, String slotParam, String limitParam) {
+		return buildDetails(nodeId, valveName, slotParam, limitParam, null, null);
+	}
+
+	public ValveDetailsDto buildDetails(String nodeId, String valveName, String slotParam, String limitParam,
+			String blockedLimitParam, String activeLimitParam) {
 		long now = System.currentTimeMillis();
 		long currentSlotKey = now / SLOT_LENGTH_MILLIS;
 		long lastCompletedSlotKey = currentSlotKey - 1;
@@ -105,13 +110,21 @@ public class MockValveSimulator {
 				metrics.blockedCounters()
 		);
 
+		List<ValveDetailsDto.BlockedClientDto> blockedList = ("0".equals(blockedLimitParam))
+				? List.of()
+				: metrics.blockedClients();
+
+		String effectiveBlockedLimit = (blockedLimitParam != null && !blockedLimitParam.isBlank())
+				? blockedLimitParam
+				: (limitParam != null && !limitParam.isBlank() ? limitParam : "all");
+
 		return new ValveDetailsDto(
 				serverTime,
 				header,
 				selectedSlot,
 				metrics.blockedClients().size(),
-				"all",
-				metrics.blockedClients(),
+				effectiveBlockedLimit,
+				blockedList,
 				null
 		);
 	}

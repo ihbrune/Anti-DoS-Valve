@@ -605,7 +605,7 @@ Exposing internal rate-limiting metrics over HTTP presents security risks (such 
 * **JSON Details (Current Slot):**
   `curl -H "Authorization: Bearer <token>" "http://localhost:8080/antidos-status?view=details&format=json&valve=STATUS+VALVE"`
 * **JSON Details (Last Completed Slot & All Blocked IPs):**
-  `curl -H "Authorization: Bearer <token>" "http://localhost:8080/antidos-status?view=details&format=json&valve=STATUS+VALVE&slot=previous&limit=all"`
+  `curl -H "Authorization: Bearer <token>" "http://localhost:8080/antidos-status?view=details&format=json&valve=STATUS+VALVE&slot=previous&blockedLimit=all&activeLimit=0"`
 * **Filter Specific Valve (HTML View):**
   `http://localhost:8080/antidos-status?token=<token>&valve=STATUS+VALVE`
 
@@ -618,7 +618,9 @@ When polling the status endpoint from automated monitoring scripts or collectors
 | `format` | `json` | Renders machine-readable JSON output (can also be requested via `Accept: application/json` header). |
 | `view` | `details` | Renders full details for a valve, including the ring buffer slots, `selectedSlot`, `blockedClients`, and `topActiveClients`. |
 | `slot` | `current`, `previous`, `<slotKey>` | Selects which slot's blocked/active client list to inspect. Using `slot=previous` returns the completed previous time window (requires `numberOfSlots >= 2`; collectors should deduplicate by `slotKey`). Default: `current`. |
-| `limit` | positive integer (e.g. `100`), `all`, `-1` | Maximum number of blocked and active clients returned. `all` or `-1` returns all entries (HTML tables are capped at 1,000 for browser responsiveness). `0` or omitted defaults to `50`. |
+| `limit` | positive integer (e.g. `100`), `all`, `-1` | Maximum number of clients returned (applies to both blocked and active lists as fallback). `all` or `-1` returns all entries (HTML tables capped at 1,000 for browser responsiveness). `0` or omitted defaults to `50`. |
+| `blockedLimit` | positive integer, `0`, `all`, `-1` | Specific limit for the `blockedClients` list. Falls back to `limit` if omitted. Specifying `0` suppresses blocked clients entirely. |
+| `activeLimit` | positive integer, `0`, `all`, `-1` | Specific limit for the `topActiveClients` list. Falls back to `limit` if omitted. Specifying `0` suppresses active clients entirely (recommended for telemetry collectors to avoid serializing unblocked IPs). |
 | `valve` | `<monitorName>` | Filters by monitor name (required for details view if multiple valves are running). |
 
 
