@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- Fragment: crawlersTable -->
+<div th:fragment="crawlersTable" id="crawlers-table-container">
+    <div th:if="${#lists.isEmpty(feeds)}" class="empty-state">
+        <p>No crawler or bot feeds configured in collector-config.yaml.</p>
+    </div>
+
+    <div th:unless="${#lists.isEmpty(feeds)}" class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>Crawler / Bot Name</th>
+                    <th>Category</th>
+                    <th>Source JSON URL</th>
+                    <th>Status</th>
+                    <th>Active IP Prefixes</th>
+                    <th>Last Synchronized</th>
+                    <th style="text-align: right;">Manual Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr th:each="feed : ${feeds}">
+                    <td>
+                        <strong style="color: var(--text-primary); font-size: 13px;" th:text="${feed.name}">Googlebot</strong>
+                        <div style="font-size: 10px; color: var(--text-muted); font-family: monospace;" th:text="${feed.feedKey}">googlebot</div>
+                    </td>
+                    <td>
+                        <span th:if="${feed.category == 'SEARCH_ENGINE'}" class="badge badge-success">&#x1F50D; Search Engine</span>
+                        <span th:if="${feed.category == 'AI_CRAWLER'}" class="badge badge-purple">&#x1F916; AI Crawler</span>
+                        <span th:if="${feed.category != 'SEARCH_ENGINE' and feed.category != 'AI_CRAWLER'}" class="badge badge-secondary" th:text="${feed.category}">OTHER</span>
+                    </td>
+                    <td>
+                        <a th:href="${feed.url}" target="_blank" rel="noopener noreferrer"
+                           style="color: var(--color-primary); font-family: monospace; font-size: 11px; text-decoration: underline; word-break: break-all;"
+                           th:text="${feed.url}">https://developers.google.com/search/apis/ipranges/googlebot.json</a>
+                    </td>
+                    <td>
+                        <span th:if="${feed.status == 'SUCCESS'}" class="badge badge-success">&#x2713; SYNCHRONIZED</span>
+                        <span th:if="${feed.status == 'FAILED'}" class="badge badge-danger">&#x2717; FAILED</span>
+                        <span th:if="${feed.status == 'SYNCING'}" class="badge badge-warning">&#x23F3; SYNCING</span>
+                        <span th:if="${feed.status == 'PENDING'}" class="badge badge-secondary">PENDING</span>
+                        <div th:if="${feed.lastError != null}" class="log-err-text" th:text="${feed.lastError}">HTTP 404</div>
+                    </td>
+                    <td>
+                        <strong th:text="${#numbers.formatInteger(feed.prefixCount, 1, 'POINT')}">240</strong>
+                        <span style="font-size: 11px; color: var(--text-muted);">CIDRs</span>
+                    </td>
+                    <td>
+                        <span th:if="${feed.lastSyncedAt != null}" th:text="${#temporals.format(feed.lastSyncedAt, 'dd.MM HH:mm:ss')}">18.10 04:00:15</span>
+                        <span th:if="${feed.lastSyncedAt == null}" style="color: var(--text-muted); font-size: 11px;">Never</span>
+                    </td>
+                    <td style="text-align: right;">
+                        <button class="btn"
+                                style="padding: 4px 10px; font-size: 11px;"
+                                th:hx-post="@{'/crawlers/' + ${feed.feedKey} + '/sync'}"
+                                hx-target="#crawlers-table-container"
+                                hx-swap="outerHTML">
+                            &#x21BB; Sync Now
+                        </button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+</body>
+</html>

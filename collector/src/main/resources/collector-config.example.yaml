@@ -62,3 +62,19 @@ collector:
       token: "productionStatusToken456"
       poll-intermediate-slots: true
       enabled: false
+
+  # ---------------------------------------------------------------------------
+  # Optional: IP Enrichment, ASN/Country Lookups & Bot Classification
+  # ---------------------------------------------------------------------------
+  enrichment:
+    enabled: true
+    # Paths to offline binary MMDB databases (DB-IP Lite or MaxMind GeoLite2):
+    # asn-database-path: "/var/data/dbip-asn-lite.mmdb"
+    # country-database-path: "/var/data/dbip-country-lite.mmdb"
+
+    # Custom hosting ASN overlay file (add with +12345, exclude with -24940):
+    custom-hosting-asns-file: "custom-hosting-asns.txt"
+
+    # Automated daily sync of verified Search Engine & AI crawler IP ranges:
+    crawler-sync-enabled: true
+    crawler-sync-cron: "0 0 4 * * *"

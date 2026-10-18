@@ -307,6 +307,18 @@ body {
     border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
+.badge-secondary {
+    background: rgba(148, 163, 184, 0.15);
+    color: #cbd5e1;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.badge-purple {
+    background: rgba(168, 85, 247, 0.15);
+    color: #c084fc;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
 .log-err-text {
     font-size: 11px;
     color: var(--color-danger);

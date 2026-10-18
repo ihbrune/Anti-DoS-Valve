@@ -11,6 +11,7 @@ This document serves as the architectural reference and development guide for hu
 ### Core Architectural Layers:
 * **`config/`:** Configuration management for endpoints, database connection, retention policies, and application settings.
 * **`poller/`:** Scheduled polling engine utilizing Java 21 `HttpClient` and Virtual Threads. Handles endpoint polling, intermediate in-progress slot updates, and recovery of missed slots via `slotKey`.
+* **`enrichment/`:** Asynchronous IP metadata enrichment engine. Includes `MmdbEnrichmentProvider` (DB-IP / MaxMind MMDB), `AsnClassifierService` (layered defaults + custom overlay), `CrawlerSyncService` (dynamic JSON feed synchronizer with orphan cleanup), and `BackgroundEnrichmentWorker`.
 * **`storage/`:** Data access layer backed by Spring Data / `JdbcTemplate` with Flyway migrations supporting both **SQLite** (default zero-ops) and **PostgreSQL** (production fleet scale).
 * **`web/`:** Web dashboard driven by Spring MVC, Thymeleaf, and **HTMX** for real-time reactivity without client-side JavaScript build tooling.
 * **`cli/`:** Command-line utilities (e.g. `test-endpoint`, `add-endpoint`) for operators to verify connectivity and generate configuration blocks.
@@ -21,7 +22,7 @@ This document serves as the architectural reference and development guide for hu
 ## 2. Core Constraints & Conventions
 
 1. **Virtual Threads Enabled:**
-   * All polling and web request execution run on Java 21 Virtual Threads (`spring.threads.virtual.enabled=true`).
+   * All polling, enrichment workers, and web request execution run on Java 21 Virtual Threads (`spring.threads.virtual.enabled=true`).
 2. **Flyway Migrations:**
    * Never modify an existing, committed Flyway migration script!
    * Always provide migrations for both dialects:
@@ -30,13 +31,17 @@ This document serves as the architectural reference and development guide for hu
    * Schema tables must remain idempotent and compatible with batch upserts (`ON CONFLICT (...) DO UPDATE`).
 3. **Frontend Aesthetics & Reactivity:**
    * Follow the rich aesthetics guidelines: modern dark/light mode palette, glassmorphism, responsive cards, crisp typography.
-   * Use HTMX attributes (`hx-get`, `hx-trigger`, `hx-swap`) for dynamic updates rather than heavy external JavaScript frameworks.
-4. **IP Storage & Subnet Forensics Architecture:**
+   * Use HTMX attributes (`hx-get`, `hx-post`, `hx-trigger`, `hx-swap`) for dynamic updates rather than heavy external JavaScript frameworks.
+4. **IP Storage, Forensics & Enrichment Architecture:**
+   * **Decoupled Ingestion:** Polling threads write events with `enrichment_status = 'PENDING'` immediately. `BackgroundEnrichmentWorker` resolves ASN, Geo, and Client Classification asynchronously to guarantee sub-millisecond polling cycles.
    * **IPv4 Range Storage:** Stored as 32-bit unsigned `BIGINT` (`ip_v4_start`, `ip_v4_end`).
    * **IPv6 Upper-64-Bit Prefix Storage:** Stored as 16-character lowercase hex strings (`ip_v6_start`, `ip_v6_end`). Intentionally limited to the upper 64-bit routing prefix because individual host bits (/65-/128) are ephemeral due to IPv6 Privacy Extensions (RFC 4941).
-   * **Canonical `subnet_group`:** Contains the canonical `/24` (IPv4) or `/64` (IPv6) representation for high-speed Subnet Rollup aggregation (correlating distributed residential proxy botnets).
+   * **Subnet & ASN Rollup:** Supports `/24` & `/64` Subnet Rollup and **ASN Rollup** (`groupBy=ASN`) to aggregate rotating residential proxy botnets across multiple networks.
    * **Search & Containment Queries:** Never use SQL `LIKE` for IP ranges! Always use the mathematical interval overlap condition (`ip_start <= :searchEnd AND ip_end >= :searchStart`) via `IpNetworkUtil.parseSearchQuery()`.
-   * **View Separation:** The root dashboard (`/`) is an executive overview. Advanced filtering (multi-server, multi-valve, custom time windows, CIDR search) belongs in `/events` (Incident Explorer) and `/offenders` (Top Offender Analytics).
+   * **Layered Configuration:** Default hosting ASNs packaged in `classpath:asns/default-hosting-asns.txt`. Operators customize via `custom-hosting-asns.txt` (`+12345` to add, `-24940` to exclude) without Git checkout conflicts.
+   * **Client Classifications:** Enriched into categories: `DATACENTER` (Cloud/VPS/Hoster), `RESIDENTIAL` (ISP/End-user), `SEARCH_ENGINE` (Verified Googlebot/Bingbot), `AI_CRAWLER` (Verified OpenAI/ChatGPT), `MOBILE` (Cellular/CGNAT), and `PRIVATE_NETWORK` (RFC 1918, RFC 4193 ULA, loopback, link-local).
+   * **Crawler/Bot Management:** Verified search engine and AI crawler IP ranges periodically updated from remote feeds with automatic orphan cleanup upon configuration changes, manageable via `/crawlers`.
+   * **View Separation:** The root dashboard (`/`) is an executive overview. Advanced filtering belongs in `/events` (Incident Explorer), `/offenders` (Top Offender Analytics), and `/crawlers` (Bot Feeds).
 
 ---
 

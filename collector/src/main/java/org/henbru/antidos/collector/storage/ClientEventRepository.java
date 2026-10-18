@@ -8,6 +8,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import org.henbru.antidos.collector.model.BlockedClientEvent;
+import org.henbru.antidos.collector.model.ClientType;
+import org.henbru.antidos.collector.model.EnrichmentStatus;
 import org.henbru.antidos.collector.model.TopOffenderSummary;
 import org.henbru.antidos.collector.util.IpNetworkUtil;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
@@ -33,6 +35,14 @@ public class ClientEventRepository {
 	private static final RowMapper<BlockedClientEvent> ROW_MAPPER = (rs, rowNum) -> {
 		Long v4Start = rs.getObject("ip_v4_start") != null ? rs.getLong("ip_v4_start") : null;
 		Long v4End = rs.getObject("ip_v4_end") != null ? rs.getLong("ip_v4_end") : null;
+		Long asn = rs.getObject("asn") != null ? rs.getLong("asn") : null;
+		String asOrg = rs.getString("as_org");
+		String countryCode = rs.getString("country_code");
+		String rawClientType = rs.getString("client_type");
+		ClientType clientType = rawClientType != null ? ClientType.valueOf(rawClientType) : ClientType.UNKNOWN;
+		String rawStatus = rs.getString("enrichment_status");
+		EnrichmentStatus enrichmentStatus = rawStatus != null ? EnrichmentStatus.valueOf(rawStatus) : EnrichmentStatus.PENDING;
+
 		return new BlockedClientEvent(
 				rs.getLong("id"),
 				rs.getString("server_id"),
@@ -51,7 +61,12 @@ public class ClientEventRepository {
 				rs.getInt("retained_count"),
 				rs.getBoolean("is_locked"),
 				rs.getBoolean("is_completed"),
-				rs.getTimestamp("last_updated_at").toInstant()
+				rs.getTimestamp("last_updated_at").toInstant(),
+				asn,
+				asOrg,
+				countryCode,
+				clientType,
+				enrichmentStatus
 		);
 	};
 
@@ -64,9 +79,10 @@ public class ClientEventRepository {
 				INSERT INTO blocked_client_events (
 				    server_id, valve_name, slot_key, slot_time, client_key,
 				    ip_version, cidr_prefix, ip_v4_start, ip_v4_end, ip_v6_start, ip_v6_end, subnet_group,
-				    request_count, retained_count, is_locked, is_completed, last_updated_at
+				    request_count, retained_count, is_locked, is_completed, last_updated_at,
+				    asn, as_org, country_code, client_type, enrichment_status
 				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (server_id, valve_name, slot_key, client_key) DO UPDATE SET
 				    slot_time = EXCLUDED.slot_time,
 				    ip_version = EXCLUDED.ip_version,
@@ -112,6 +128,16 @@ public class ClientEventRepository {
 				ps.setBoolean(15, e.locked());
 				ps.setBoolean(16, e.completed());
 				ps.setTimestamp(17, Timestamp.from(e.lastUpdatedAt()));
+
+				if (e.asn() != null) {
+					ps.setLong(18, e.asn());
+				} else {
+					ps.setNull(18, Types.BIGINT);
+				}
+				ps.setString(19, e.asOrg());
+				ps.setString(20, e.countryCode());
+				ps.setString(21, e.clientType() != null ? e.clientType().name() : ClientType.UNKNOWN.name());
+				ps.setString(22, e.enrichmentStatus() != null ? e.enrichmentStatus().name() : EnrichmentStatus.PENDING.name());
 			}
 
 			@Override
@@ -183,12 +209,23 @@ public class ClientEventRepository {
 			String groupBy,
 			int limit
 	) {
-		boolean isSubnetGroup = "SUBNET".equalsIgnoreCase(groupBy);
-		String groupCol = isSubnetGroup ? "subnet_group" : "client_key";
+		String groupCol;
+		if ("ASN".equalsIgnoreCase(groupBy)) {
+			groupCol = "COALESCE('AS' || asn, 'AS-UNKNOWN')";
+		} else if ("SUBNET".equalsIgnoreCase(groupBy)) {
+			groupCol = "subnet_group";
+		} else {
+			groupCol = "client_key";
+		}
 
 		StringBuilder sql = new StringBuilder();
 		sql.append("SELECT ")
 				.append(groupCol).append(" AS client_key, ")
+				.append("MAX(asn) AS asn, ")
+				.append("MAX(as_org) AS as_org, ")
+				.append("MAX(country_code) AS country_code, ")
+				.append("MAX(client_type) AS client_type, ")
+				.append("COUNT(DISTINCT client_key) AS distinct_clients, ")
 				.append("COUNT(*) AS total_incidents, ")
 				.append("SUM(request_count + retained_count) AS total_requests, ")
 				.append("COUNT(DISTINCT server_id) AS distinct_servers, ")
@@ -204,15 +241,26 @@ public class ClientEventRepository {
 		sql.append("ORDER BY total_requests DESC LIMIT ?");
 		params.add(Math.max(1, Math.min(limit, 500)));
 
-		return jdbcTemplate.query(sql.toString(), (rs, rowNum) -> new TopOffenderSummary(
-				rs.getString("client_key") != null ? rs.getString("client_key") : "unknown",
-				rs.getLong("total_incidents"),
-				rs.getLong("total_requests"),
-				rs.getInt("distinct_servers"),
-				"",
-				rs.getTimestamp("first_seen").toInstant(),
-				rs.getTimestamp("last_seen").toInstant()
-		), params.toArray());
+		return jdbcTemplate.query(sql.toString(), (rs, rowNum) -> {
+			Long asn = rs.getObject("asn") != null ? rs.getLong("asn") : null;
+			String rawType = rs.getString("client_type");
+			ClientType clientType = rawType != null ? ClientType.valueOf(rawType) : ClientType.UNKNOWN;
+
+			return new TopOffenderSummary(
+					rs.getString("client_key") != null ? rs.getString("client_key") : "unknown",
+					rs.getLong("total_incidents"),
+					rs.getLong("total_requests"),
+					rs.getInt("distinct_servers"),
+					"",
+					rs.getTimestamp("first_seen").toInstant(),
+					rs.getTimestamp("last_seen").toInstant(),
+					asn,
+					rs.getString("as_org"),
+					rs.getString("country_code"),
+					clientType,
+					rs.getInt("distinct_clients")
+			);
+		}, params.toArray());
 	}
 
 	private void appendFilterCriteria(
@@ -306,5 +354,48 @@ public class ClientEventRepository {
 		return jdbcTemplate.update(
 				"DELETE FROM blocked_client_events WHERE slot_time < ?",
 				Timestamp.from(cutoff));
+	}
+
+	public List<BlockedClientEvent> findPendingEnrichment(int limit) {
+		String sql = "SELECT * FROM blocked_client_events WHERE enrichment_status = 'PENDING' ORDER BY id ASC LIMIT ?";
+		return jdbcTemplate.query(sql, ROW_MAPPER, limit);
+	}
+
+	public void batchUpdateEnrichment(List<BlockedClientEvent> events) {
+		if (events == null || events.isEmpty()) {
+			return;
+		}
+
+		String sql = """
+				UPDATE blocked_client_events SET
+				    asn = ?,
+				    as_org = ?,
+				    country_code = ?,
+				    client_type = ?,
+				    enrichment_status = ?
+				WHERE id = ?
+				""";
+
+		jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
+			@Override
+			public void setValues(@NonNull PreparedStatement ps, int i) throws SQLException {
+				BlockedClientEvent e = events.get(i);
+				if (e.asn() != null) {
+					ps.setLong(1, e.asn());
+				} else {
+					ps.setNull(1, Types.BIGINT);
+				}
+				ps.setString(2, e.asOrg());
+				ps.setString(3, e.countryCode());
+				ps.setString(4, e.clientType() != null ? e.clientType().name() : ClientType.UNKNOWN.name());
+				ps.setString(5, e.enrichmentStatus() != null ? e.enrichmentStatus().name() : EnrichmentStatus.ENRICHED.name());
+				ps.setLong(6, e.id());
+			}
+
+			@Override
+			public int getBatchSize() {
+				return events.size();
+			}
+		});
 	}
 }

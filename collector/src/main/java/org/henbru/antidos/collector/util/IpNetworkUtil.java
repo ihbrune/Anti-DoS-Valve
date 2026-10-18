@@ -242,4 +242,106 @@ public final class IpNetworkUtil {
 		// Fallback: simple text match
 		return new SearchCriteria(true, false, null, null, null, null, null, query.trim());
 	}
+
+	/**
+	 * Checks whether the given clientKey, IP address, or CIDR network belongs to a private,
+	 * loopback, link-local, or unique-local (ULA) address range.
+	 */
+	public static boolean isPrivateOrLocal(String clientKey) {
+		return getPrivateNetworkDescription(clientKey) != null;
+	}
+
+	/**
+	 * Returns a human-readable description for private/local IP ranges (e.g. "Private Network (RFC 1918)",
+	 * "Loopback / Localhost", "Unique Local Address (RFC 4193)", "Link-Local"), or null if public/routable.
+	 */
+	public static String getPrivateNetworkDescription(String clientKey) {
+		if (clientKey == null || clientKey.trim().isEmpty()) {
+			return null;
+		}
+		String s = clientKey.trim();
+		int slashIdx = s.indexOf('/');
+		if (slashIdx >= 0) {
+			s = s.substring(0, slashIdx);
+		}
+		if (s.startsWith("[") && s.endsWith("]")) {
+			s = s.substring(1, s.length() - 1);
+		}
+
+		if (isPossibleIPv4(s)) {
+			try {
+				long ipNum = ipv4ToLong(s);
+				long firstOctet = (ipNum >>> 24) & 0xFF;
+				long secondOctet = (ipNum >>> 16) & 0xFF;
+
+				// 10.0.0.0/8 (RFC 1918)
+				if (firstOctet == 10) {
+					return "Private Network (RFC 1918)";
+				}
+				// 172.16.0.0/12 (RFC 1918: 172.16.0.0 - 172.31.255.255)
+				if (firstOctet == 172 && secondOctet >= 16 && secondOctet <= 31) {
+					return "Private Network (RFC 1918)";
+				}
+				// 192.168.0.0/16 (RFC 1918)
+				if (firstOctet == 192 && secondOctet == 168) {
+					return "Private Network (RFC 1918)";
+				}
+				// 127.0.0.0/8 (Loopback RFC 1122)
+				if (firstOctet == 127) {
+					return "Loopback / Localhost";
+				}
+				// 169.254.0.0/16 (Link-Local RFC 3927)
+				if (firstOctet == 169 && secondOctet == 254) {
+					return "Link-Local";
+				}
+				// 100.64.0.0/10 (CGNAT / Shared Address Space RFC 6598: 100.64.0.0 - 100.127.255.255)
+				if (firstOctet == 100 && (secondOctet & 0xC0) == 64) {
+					return "Shared Address Space (RFC 6598)";
+				}
+				// 0.0.0.0/8 (Current / Unspecified)
+				if (firstOctet == 0) {
+					return "Local Network";
+				}
+				return null;
+			} catch (NumberFormatException | IndexOutOfBoundsException ignored) {
+				return null;
+			}
+		}
+
+		if (s.indexOf(':') >= 0) {
+			try {
+				InetAddress addr = InetAddress.getByName(s);
+				if (!(addr instanceof Inet6Address)) {
+					return null;
+				}
+				if (addr.isLoopbackAddress()) {
+					return "Loopback / Localhost";
+				}
+				if (addr.isAnyLocalAddress()) {
+					return "Local Network";
+				}
+				if (addr.isLinkLocalAddress()) {
+					return "Link-Local";
+				}
+				byte[] bytes = addr.getAddress();
+				if (bytes != null && bytes.length == 16) {
+					int b0 = bytes[0] & 0xFF;
+					// fc00::/7 (RFC 4193 Unique Local Address - ULA, covers fc00::/8 and fd00::/8)
+					if (b0 >= 0xFC && b0 <= 0xFD) {
+						return "Unique Local Address (RFC 4193)";
+					}
+					// Deprecated IPv6 site-local fec0::/10
+					int b1 = bytes[1] & 0xFF;
+					if (b0 == 0xFE && (b1 & 0xC0) == 0xC0) {
+						return "Private Network (Site-Local)";
+					}
+				}
+				return null;
+			} catch (java.net.UnknownHostException | IllegalArgumentException | SecurityException ignored) {
+				return null;
+			}
+		}
+
+		return null;
+	}
 }

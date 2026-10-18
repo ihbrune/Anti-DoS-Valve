@@ -17,6 +17,7 @@ public class CollectorProperties {
 	private int slowPollThresholdMs = 1000;
 	private boolean demoMode = false;
 	private List<EndpointConfig> endpoints = new ArrayList<>();
+	private EnrichmentConfig enrichment = new EnrichmentConfig();
 
 	public String getConfigFile() {
 		return configFile;
@@ -72,5 +73,13 @@ public class CollectorProperties {
 
 	public void setEndpoints(List<EndpointConfig> endpoints) {
 		this.endpoints = endpoints != null ? endpoints : new ArrayList<>();
+	}
+
+	public EnrichmentConfig getEnrichment() {
+		return enrichment;
+	}
+
+	public void setEnrichment(EnrichmentConfig enrichment) {
+		this.enrichment = enrichment != null ? enrichment : new EnrichmentConfig();
 	}
 }

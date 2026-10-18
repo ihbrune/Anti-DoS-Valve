@@ -12,10 +12,13 @@
         <table>
             <thead>
                 <tr>
+                    <th th:if="${groupBy == 'ASN'}">Targeted Autonomous System (ASN)</th>
                     <th th:if="${groupBy == 'SUBNET'}">Targeted Subnet (/24 or /64)</th>
-                    <th th:unless="${groupBy == 'SUBNET'}">Client IP / Subnet</th>
-                    <th>Total Block Incidents</th>
-                    <th>Total Requests Attempted</th>
+                    <th th:if="${groupBy != 'SUBNET' and groupBy != 'ASN'}">Client IP / Host</th>
+                    <th>Classification</th>
+                    <th>Total Incidents</th>
+                    <th>Requests Attempted</th>
+                    <th th:if="${groupBy == 'SUBNET' or groupBy == 'ASN'}">Rotating IPs</th>
                     <th>Targeted Servers</th>
                     <th>First Seen</th>
                     <th>Last Seen</th>
@@ -25,18 +28,41 @@
             <tbody>
                 <tr th:each="offender : ${topOffenders}">
                     <td>
-                        <a th:href="@{/events(clientQuery=${offender.clientKey})}"
-                           class="ip-mono"
-                           style="text-decoration: none; color: inherit;"
-                           th:classappend="${groupBy == 'SUBNET' ? 'badge badge-warning' : ''}"
-                           title="Inspect all individual blocking events for this client or subnet"
-                           th:text="${offender.clientKey}">198.51.100.42</a>
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <a th:href="@{/events(clientQuery=${offender.clientKey})}"
+                                   class="ip-mono"
+                                   style="text-decoration: underline; color: inherit; font-weight: 600;"
+                                   th:classappend="${groupBy == 'SUBNET' ? 'badge badge-warning' : (groupBy == 'ASN' ? 'badge badge-info' : '')}"
+                                   title="Inspect all individual blocking events for this client, subnet, or ASN"
+                                   th:text="${offender.clientKey}">198.51.100.42</a>
+                                <span th:if="${offender.countryCode != null}" class="badge badge-secondary" style="padding: 1px 5px; font-size: 10px;" th:text="${offender.countryCode}">DE</span>
+                            </div>
+                            <span th:if="${offender.asOrg != null}" style="font-size: 11px; color: var(--text-muted);" th:text="${offender.asOrg}">Hetzner Online GmbH</span>
+                        </div>
+                    </td>
+                    <td>
+                        <span th:if="${offender.clientType != null and offender.clientType.name() == 'DATACENTER'}" class="badge badge-warning" title="Hosting / Datacenter / Cloud">&#x1F3E2; Datacenter</span>
+                        <span th:if="${offender.clientType != null and offender.clientType.name() == 'SEARCH_ENGINE'}" class="badge badge-success" title="Verified Search Engine Crawler">&#x1F50D; Search Engine</span>
+                        <span th:if="${offender.clientType != null and offender.clientType.name() == 'AI_CRAWLER'}" class="badge badge-purple" title="Verified AI Bot / LLM Crawler">&#x1F916; AI Bot</span>
+                        <span th:if="${offender.clientType != null and offender.clientType.name() == 'RESIDENTIAL'}" class="badge badge-secondary" title="Consumer / Residential ISP">&#x1F3E0; Residential</span>
+                        <span th:if="${offender.clientType != null and offender.clientType.name() == 'MOBILE'}" class="badge badge-info" title="Mobile Carrier / CGNAT">&#x1F4F1; Mobile</span>
+                        <span th:if="${offender.clientType != null and offender.clientType.name() == 'PRIVATE_NETWORK'}" class="badge badge-info" title="Private Intranet / RFC 1918 / Local Network">&#x1F512; Private Net</span>
+                        <span th:if="${offender.clientType == null or offender.clientType.name() == 'UNKNOWN'}" class="badge badge-secondary" title="Unknown classification">-</span>
                     </td>
                     <td>
                         <span class="badge badge-danger" th:text="${offender.totalBlockIncidents}">12</span>
                     </td>
                     <td>
                         <strong th:text="${#numbers.formatInteger(offender.totalBlockedRequests, 1, 'POINT')}">1,450</strong>
+                    </td>
+                    <td th:if="${groupBy == 'SUBNET' or groupBy == 'ASN'}">
+                        <span th:if="${offender.isRotatingProxyCluster()}" class="badge badge-danger" style="animation: pulse 2s infinite;" th:title="'High IP diversity: ' + ${offender.distinctClientsCount} + ' distinct IPs used with ~' + ${#numbers.formatDecimal(offender.requestsPerClient(), 1, 1)} + ' requests/IP'">
+                            &#x26A0;&#xFE0F; <strong th:text="${offender.distinctClientsCount}">45</strong> IPs (Rotating)
+                        </span>
+                        <span th:unless="${offender.isRotatingProxyCluster()}" class="badge badge-secondary" th:text="${offender.distinctClientsCount} + ' IPs'">
+                            1 IPs
+                        </span>
                     </td>
                     <td>
                         <span class="badge badge-info" th:text="${offender.distinctServersTargeted} + ' Nodes'">1 Nodes</span>
@@ -57,7 +83,7 @@
         
         <div style="padding: 12px 18px; font-size: 12px; color: var(--text-muted); background: rgba(15, 23, 42, 0.5); border-top: 1px solid var(--border-color);">
             Showing top <span th:text="${#lists.size(topOffenders)}">25</span> entries aggregated by 
-            <strong th:text="${groupBy == 'SUBNET' ? 'Subnet Rollup (/24 & /64)' : 'Individual Client Key'}">Single Host</strong>.
+            <strong th:text="${groupBy == 'ASN' ? 'Autonomous System (ASN Rollup)' : (groupBy == 'SUBNET' ? 'Subnet Rollup (/24 & /64)' : 'Individual Client Key')}">Single Host</strong>.
         </div>
     </div>
 </div>

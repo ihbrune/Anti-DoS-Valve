@@ -34,31 +34,50 @@ public class DemoDataSeeder {
 
 	private static final long SLOT_LENGTH_MILLIS = 10_000L; // 10s slot length
 
-	// Mixed IPv4 and IPv6 attackers for API Gateway
-	private static final String[] ATTACKER_IPS = {
-			"45.154.255.12", "185.220.101.5", "194.26.29.110", "91.240.118.77",
-			"2a03:2880:f12f:83:face:b00c:0:25de", // IPv6 attacker
-			"185.246.221.84", "103.149.28.19", "193.106.191.66", "195.123.245.9",
-			"2600:1f18:43b6:6100:9981:ef71:47d2:81a2", // IPv6 attacker
-			"178.62.204.14", "167.99.165.88", "146.190.112.51", "159.65.130.22",
-			"2a01:4f8:c010:d56::1", // IPv6 attacker
-			"89.248.163.74", "194.38.20.141", "45.148.10.66", "193.32.162.201"
+	private record DemoIpProfile(
+			String ip,
+			Long asn,
+			String asOrg,
+			String country,
+			org.henbru.antidos.collector.model.ClientType type
+	) {}
+
+	private static final DemoIpProfile[] DEMO_PROFILES = {
+			new DemoIpProfile("2a01:4f8:c010:d56::1", 24940L, "Hetzner Online GmbH", "DE", org.henbru.antidos.collector.model.ClientType.DATACENTER),
+			new DemoIpProfile("178.62.204.14", 14061L, "DigitalOcean, LLC", "NL", org.henbru.antidos.collector.model.ClientType.DATACENTER),
+			new DemoIpProfile("167.99.165.88", 14061L, "DigitalOcean, LLC", "DE", org.henbru.antidos.collector.model.ClientType.DATACENTER),
+			new DemoIpProfile("194.26.29.110", 16276L, "OVH SAS", "FR", org.henbru.antidos.collector.model.ClientType.DATACENTER),
+			new DemoIpProfile("45.154.255.12", 45102L, "Alibaba Cloud", "SG", org.henbru.antidos.collector.model.ClientType.DATACENTER),
+			new DemoIpProfile("185.220.101.5", 208294L, "Zwiebelfreunde (Tor Exit)", "DE", org.henbru.antidos.collector.model.ClientType.DATACENTER),
+			new DemoIpProfile("185.246.221.84", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL),
+			new DemoIpProfile("185.246.221.85", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL),
+			new DemoIpProfile("185.246.221.86", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL),
+			new DemoIpProfile("91.240.118.77", 3209L, "Vodafone Deutschland GmbH", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL),
+			new DemoIpProfile("103.149.28.19", 133480L, "VNPT Residential Fiber", "VN", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL),
+			new DemoIpProfile("66.249.66.1", 15169L, "Google LLC", "US", org.henbru.antidos.collector.model.ClientType.SEARCH_ENGINE),
+			new DemoIpProfile("20.15.240.65", 8075L, "OpenAI / Microsoft", "US", org.henbru.antidos.collector.model.ClientType.AI_CRAWLER),
+			new DemoIpProfile("157.55.39.12", 8075L, "Microsoft Corporation", "US", org.henbru.antidos.collector.model.ClientType.SEARCH_ENGINE),
+			new DemoIpProfile("10.68.42.15", null, "Private Network (RFC 1918)", null, org.henbru.antidos.collector.model.ClientType.PRIVATE_NETWORK),
+			new DemoIpProfile("fd00:10:68::42", null, "Unique Local Address (RFC 4193)", null, org.henbru.antidos.collector.model.ClientType.PRIVATE_NETWORK)
 	};
 
 	private final SlotSnapshotRepository slotSnapshotRepository;
 	private final ClientEventRepository clientEventRepository;
 	private final HeartbeatRepository heartbeatRepository;
 	private final PollEventLogRepository pollEventLogRepository;
+	private final org.henbru.antidos.collector.storage.CrawlerFeedRepository crawlerFeedRepository;
 
 	public DemoDataSeeder(
 			SlotSnapshotRepository slotSnapshotRepository,
 			ClientEventRepository clientEventRepository,
 			HeartbeatRepository heartbeatRepository,
-			PollEventLogRepository pollEventLogRepository) {
+			PollEventLogRepository pollEventLogRepository,
+			org.henbru.antidos.collector.storage.CrawlerFeedRepository crawlerFeedRepository) {
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
 		this.heartbeatRepository = heartbeatRepository;
 		this.pollEventLogRepository = pollEventLogRepository;
+		this.crawlerFeedRepository = crawlerFeedRepository;
 	}
 
 	@EventListener(ApplicationReadyEvent.class)
@@ -220,30 +239,45 @@ public class DemoDataSeeder {
 				apiReqs = 6500L + rnd.nextInt(3000);
 				apiActive = 1100 + rnd.nextInt(300);
 				apiBlocked = 12 + rnd.nextInt(4);
-				for (int i = 0; i < apiBlocked && i < ATTACKER_IPS.length; i++) {
+				for (int i = 0; i < apiBlocked && i < DEMO_PROFILES.length; i++) {
+					DemoIpProfile p = DEMO_PROFILES[i % DEMO_PROFILES.length];
+					org.henbru.antidos.collector.model.IpNetworkInfo net = org.henbru.antidos.collector.util.IpNetworkUtil.parse(p.ip());
 					events.add(new BlockedClientEvent(
 							null, "Demo-API-Gateway", "API-DoS-Shield", slotKey, startTime,
-							ATTACKER_IPS[i], 180 + rnd.nextInt(750), 10 + rnd.nextInt(25), true, true, endTime
+							p.ip(), net.version(), net.prefix(), net.v4Start(), net.v4End(),
+							net.v6Start(), net.v6End(), net.subnetGroup(),
+							180 + rnd.nextInt(750), 10 + rnd.nextInt(25), true, true, endTime,
+							p.asn(), p.asOrg(), p.country(), p.type(), org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
 					));
 				}
 			} else if (isAttackWave2) {
 				apiReqs = 4800L + rnd.nextInt(2200);
 				apiActive = 850 + rnd.nextInt(200);
 				apiBlocked = 8 + rnd.nextInt(4);
-				for (int i = 0; i < apiBlocked && i < ATTACKER_IPS.length; i++) {
+				for (int i = 0; i < apiBlocked && i < DEMO_PROFILES.length; i++) {
+					DemoIpProfile p = DEMO_PROFILES[(i + 4) % DEMO_PROFILES.length];
+					org.henbru.antidos.collector.model.IpNetworkInfo net = org.henbru.antidos.collector.util.IpNetworkUtil.parse(p.ip());
 					events.add(new BlockedClientEvent(
 							null, "Demo-API-Gateway", "API-DoS-Shield", slotKey, startTime,
-							ATTACKER_IPS[(i + 4) % ATTACKER_IPS.length], 140 + rnd.nextInt(500), 5 + rnd.nextInt(15), true, true, endTime
+							p.ip(), net.version(), net.prefix(), net.v4Start(), net.v4End(),
+							net.v6Start(), net.v6End(), net.subnetGroup(),
+							140 + rnd.nextInt(500), 5 + rnd.nextInt(15), true, true, endTime,
+							p.asn(), p.asOrg(), p.country(), p.type(), org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
 					));
 				}
 			} else if (isRecentAttack) {
 				apiReqs = 5200L + rnd.nextInt(2500);
 				apiActive = 980 + rnd.nextInt(250);
 				apiBlocked = 10 + rnd.nextInt(5);
-				for (int i = 0; i < apiBlocked && i < ATTACKER_IPS.length; i++) {
+				for (int i = 0; i < apiBlocked && i < DEMO_PROFILES.length; i++) {
+					DemoIpProfile p = DEMO_PROFILES[i % DEMO_PROFILES.length];
+					org.henbru.antidos.collector.model.IpNetworkInfo net = org.henbru.antidos.collector.util.IpNetworkUtil.parse(p.ip());
 					events.add(new BlockedClientEvent(
 							null, "Demo-API-Gateway", "API-DoS-Shield", slotKey, startTime,
-							ATTACKER_IPS[i], 150 + rnd.nextInt(600), 8 + rnd.nextInt(20), rnd.nextBoolean(), true, endTime
+							p.ip(), net.version(), net.prefix(), net.v4Start(), net.v4End(),
+							net.v6Start(), net.v6End(), net.subnetGroup(),
+							150 + rnd.nextInt(600), 8 + rnd.nextInt(20), rnd.nextBoolean(), true, endTime,
+							p.asn(), p.asOrg(), p.country(), p.type(), org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
 					));
 				}
 			} else {
@@ -333,6 +367,28 @@ public class DemoDataSeeder {
 		}
 
 		pollEventLogRepository.batchInsert(logs);
+
+		// 4. Pre-populate verified Crawler Feeds
+		crawlerFeedRepository.upsert(new org.henbru.antidos.collector.model.CrawlerFeed(
+				"googlebot", "Googlebot", "SEARCH_ENGINE",
+				"https://developers.google.com/search/apis/ipranges/googlebot.json",
+				now.minus(2, ChronoUnit.HOURS), "SUCCESS", 284, null
+		));
+		crawlerFeedRepository.upsert(new org.henbru.antidos.collector.model.CrawlerFeed(
+				"bingbot", "Bingbot", "SEARCH_ENGINE",
+				"https://www.bing.com/toolbox/bingbot.json",
+				now.minus(3, ChronoUnit.HOURS), "SUCCESS", 312, null
+		));
+		crawlerFeedRepository.upsert(new org.henbru.antidos.collector.model.CrawlerFeed(
+				"openai-gptbot", "OpenAI GPTBot", "AI_CRAWLER",
+				"https://openai.com/gptbot.json",
+				now.minus(1, ChronoUnit.HOURS), "SUCCESS", 86, null
+		));
+		crawlerFeedRepository.upsert(new org.henbru.antidos.collector.model.CrawlerFeed(
+				"openai-chatgpt-user", "ChatGPT User", "AI_CRAWLER",
+				"https://openai.com/chatgpt-user.json",
+				now.minus(1, ChronoUnit.HOURS), "SUCCESS", 42, null
+		));
 
 		long elapsed = System.currentTimeMillis() - start;
 		log.info("Historical demo seed complete in {} ms: Ingested {} slot snapshots, {} client block events, and {} poll audit logs.",

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verified Crawlers &amp; Bot Feeds - Anti-DoS Collector</title>
+    <link rel="stylesheet" th:href="@{/css/collector.css}">
+    <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
+    <script th:src="@{/js/htmx-lite.js}" defer></script>
+</head>
+<body>
+
+<div class="app-container">
+    <!-- Navbar -->
+    <header class="navbar">
+        <a href="/" class="brand">
+            <div class="brand-icon">&#x1F6E1;</div>
+            <div>
+                <div class="brand-title">Anti-DoS Fleet Manager</div>
+                <div class="brand-subtitle">Crawler &amp; Bot Verification Feeds</div>
+            </div>
+        </a>
+        <div class="nav-actions">
+            <a href="/" class="btn">
+                <span>&#x2190;</span> Dashboard
+            </a>
+            <a href="/events" class="btn" title="View individual incident events log">
+                <span>&#x1F4CB;</span> Incident Explorer
+            </a>
+            <a href="/offenders" class="btn" title="View aggregated high-volume offenders and ASN rollup">
+                <span>&#x26A0;</span> Top Offenders
+            </a>
+            <a href="/poll-log" class="btn" title="View polling event audit log">
+                <span>&#x1F4DC;</span> Event Log
+            </a>
+        </div>
+    </header>
+
+    <!-- Header & Action -->
+    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 24px;">
+        <div>
+            <div class="section-title">
+                <span>&#x1F916;</span> Verified Search Engine &amp; AI Crawler Feeds
+            </div>
+            <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+                Dynamic IP range synchronization and classification for legitimate search crawlers and AI bots
+            </div>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button class="btn"
+                    style="background: var(--color-primary); color: white; border: none; font-weight: 600;"
+                    hx-post="/crawlers/sync-all"
+                    hx-target="#crawlers-table-container"
+                    hx-swap="outerHTML">
+                &#x21BB; Synchronize All Feeds Now
+            </button>
+        </div>
+    </div>
+
+    <!-- Info Card -->
+    <div style="background: rgba(15, 23, 42, 0.4); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px 20px; margin-bottom: 24px; font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
+        <strong style="color: var(--text-primary);">&#x2139;&#xFE0F; Feed Lifecycle &amp; Automatic Cleanup:</strong>
+        Ranges are fetched periodically via cron (<code th:text="${syncCron}">0 0 4 * * *</code>) and matched using fast mathematical interval search.
+        When a feed is removed from your <code style="color: var(--color-primary);">collector-config.yaml</code>, its associated IP ranges are automatically pruned from the database during synchronization to prevent orphaned data.
+    </div>
+
+    <!-- Crawlers Table -->
+    <div th:replace="~{fragments/crawlers-table :: crawlersTable}"></div>
+</div>
+
+</body>
+</html>

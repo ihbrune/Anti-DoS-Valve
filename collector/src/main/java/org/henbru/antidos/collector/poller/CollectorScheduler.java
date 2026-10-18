@@ -22,6 +22,7 @@ public class CollectorScheduler {
 	private final SlotSnapshotRepository slotSnapshotRepository;
 	private final ClientEventRepository clientEventRepository;
 	private final org.henbru.antidos.collector.storage.PollEventLogRepository pollEventLogRepository;
+	private final org.henbru.antidos.collector.enrichment.CrawlerSyncService crawlerSyncService;
 	private final CollectorProperties properties;
 
 	public CollectorScheduler(
@@ -29,11 +30,13 @@ public class CollectorScheduler {
 			SlotSnapshotRepository slotSnapshotRepository,
 			ClientEventRepository clientEventRepository,
 			org.henbru.antidos.collector.storage.PollEventLogRepository pollEventLogRepository,
+			org.henbru.antidos.collector.enrichment.CrawlerSyncService crawlerSyncService,
 			CollectorProperties properties) {
 		this.pollerService = pollerService;
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
 		this.pollEventLogRepository = pollEventLogRepository;
+		this.crawlerSyncService = crawlerSyncService;
 		this.properties = properties;
 	}
 
@@ -77,5 +80,17 @@ public class CollectorScheduler {
 
 		log.info("Retention cleanup completed: purged {} slot snapshots, {} client events, and {} poll event logs",
 				deletedSlots, deletedEvents, deletedLogs);
+	}
+
+	/**
+	 * Daily synchronization of verified search engine and AI crawler IP ranges.
+	 */
+	@Scheduled(cron = "${collector.enrichment.crawler-sync-cron:0 0 4 * * *}")
+	public void runScheduledCrawlerSync() {
+		try {
+			crawlerSyncService.syncAll();
+		} catch (Exception e) {
+			log.error("Unexpected error in scheduled crawler synchronization: {}", e.getMessage(), e);
+		}
 	}
 }

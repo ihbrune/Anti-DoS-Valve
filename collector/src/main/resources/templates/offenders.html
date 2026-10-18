@@ -30,6 +30,9 @@
             <a href="/poll-log" class="btn" title="View polling event audit log">
                 <span>&#x1F4DC;</span> Event Log
             </a>
+            <a href="/crawlers" class="btn" title="Verified Search Engine & AI Crawler IP Range Feeds">
+                <span>&#x1F916;</span> Crawlers &amp; Bots
+            </a>
         </div>
     </header>
 
@@ -52,21 +55,25 @@
           class="filter-panel">
 
         <div class="filter-grid">
-            <!-- 1. Group-By Mode (Killer Feature for Residential Proxies!) -->
+            <!-- 1. Group-By Mode (Killer Feature for Residential Proxies & Distributed Attacks!) -->
             <div class="filter-field">
                 <div class="filter-label">Aggregation &amp; Forensics Mode</div>
                 <div class="filter-btn-group" style="margin-top: 4px;">
-                    <label class="filter-btn" style="cursor: pointer;" th:classappend="${groupBy != 'SUBNET' ? 'active' : ''}">
-                        <input type="radio" name="groupBy" value="CLIENT" th:checked="${groupBy != 'SUBNET'}" style="display:none;" onchange="updateRadioActive(this); htmx.trigger('#offenders-filter-form', 'submit');">
+                    <label class="filter-btn" style="cursor: pointer;" th:classappend="${groupBy != 'SUBNET' and groupBy != 'ASN' ? 'active' : ''}">
+                        <input type="radio" name="groupBy" value="CLIENT" th:checked="${groupBy != 'SUBNET' and groupBy != 'ASN'}" style="display:none;" onchange="updateRadioActive(this); htmx.trigger('#offenders-filter-form', 'submit');">
                         Individual Clients / IPs
                     </label>
                     <label class="filter-btn" style="cursor: pointer;" th:classappend="${groupBy == 'SUBNET' ? 'active' : ''}">
                         <input type="radio" name="groupBy" value="SUBNET" th:checked="${groupBy == 'SUBNET'}" style="display:none;" onchange="updateRadioActive(this); htmx.trigger('#offenders-filter-form', 'submit');">
                         Subnet Rollup (/24 &amp; /64)
                     </label>
+                    <label class="filter-btn" style="cursor: pointer;" th:classappend="${groupBy == 'ASN' ? 'active' : ''}">
+                        <input type="radio" name="groupBy" value="ASN" th:checked="${groupBy == 'ASN'}" style="display:none;" onchange="updateRadioActive(this); htmx.trigger('#offenders-filter-form', 'submit');">
+                        ASN Rollup (Fleet Autonomous System)
+                    </label>
                 </div>
                 <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
-                    Subnet Rollup correlates distributed rotating IPs into their common /24 (IPv4) or /64 (IPv6) subnet.
+                    Correlate distributed rotating IPs into their common /24 (IPv4) or /64 (IPv6) subnet, or group by full ISP/Cloud Autonomous System.
                 </div>
             </div>
 

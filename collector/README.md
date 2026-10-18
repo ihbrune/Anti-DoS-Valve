@@ -18,10 +18,11 @@ The **Anti-DoS Collector** is a standalone management and analytics service desi
   * Versioned schema migrations managed automatically via **Flyway**.
 * **Modern HTMX Dashboard & Specialized Forensics:**
   * Real-time fleet overview showing all connected servers and valves.
-  * **Incident Explorer (`/events`):** Dedicated deep-dive view with multi-server and multi-valve selection, relative or exact custom date-time windows, and CIDR range search matching both individual IPs and enclosing subnets.
-  * **Top Offender Analytics (`/offenders`):** Aggregation ranking with optional **Subnet Rollup mode** (`/24` IPv4 and `/64` IPv6) to immediately reveal residential proxy botnets across rotating IPs.
+  * **Incident Explorer (`/events`):** Dedicated deep-dive view with multi-server and multi-valve selection, relative or exact custom date-time windows, CIDR range search matching both individual IPs and enclosing subnets, and rich ASN/Country/Bot classification badges (Datacenter, Residential, Search Engine, AI Bot, Mobile, Private Network).
+  * **Top Offender Analytics (`/offenders`):** Aggregation ranking with **Subnet Rollup mode** (`/24` & `/64`) and **ASN Rollup mode** (`groupBy=ASN`) with automated **Rotating Proxy Cluster detection** to unmask distributed residential proxy botnets across rotating IPs.
+  * **Verified Crawler & Bot Feed Manager (`/crawlers`):** Real-time status, automatic daily synchronization, and manual triggers for official search engine (Googlebot, Bingbot) and AI crawler (OpenAI GPTBot, Claude) IP ranges with automatic orphan pruning.
   * Cross-navigation drill-down from Top Offenders directly into filtered incident logs.
-* **Built-in Demo Mode (Out-of-the-Box Exploration):** Launch the collector with zero configuration against simulated multi-node Valve endpoints (Edge EU, API Gateway under active attack, Staging Node with telemetry diagnostics).
+* **Built-in Demo Mode (Out-of-the-Box Exploration):** Launch the collector with zero configuration against simulated multi-node Valve endpoints (Edge EU, API Gateway under active attack, Staging Node with telemetry diagnostics, and realistic ASN/Country profiles).
 * **CLI Onboarding Tool:** Built-in command to test connectivity, verify tokens, and generate ready-to-use configuration blocks.
 
 ---
@@ -147,4 +148,55 @@ collector:
   poll-log-retention-days: 1    # Retention for polling event audit log entries (default: 1 day)
   slow-poll-threshold-ms: 1000  # Latency threshold before marking poll status as WARNING (default: 1000 ms)
 ```
+
+---
+
+## IP Enrichment: ASN, Geo-Location & Verified Bots
+
+The collector enriches blocked client IPs with Autonomous System Numbers (ASN), Organizations, Country codes, and classified client categories (`DATACENTER`, `RESIDENTIAL`, `SEARCH_ENGINE`, `AI_CRAWLER`, `MOBILE`, `PRIVATE_NETWORK`).
+
+### 1. Acquiring Offline MMDB Databases
+
+The collector directly queries binary `.mmdb` files using memory-mapped Bit-Trees ($O(\log n)$ lookup speed, zero relational database overhead). Two popular free data sources:
+
+* **DB-IP Lite (Free, CC BY 4.0, No Registration Required):**
+  * **ASN Database:** [dbip-asn-lite.mmdb.gz](https://db-ip.com/db/download/ip-to-asn-lite)
+  * **Country Database:** [dbip-country-lite.mmdb.gz](https://db-ip.com/db/download/ip-to-country-lite)
+  * Download and extract: `gunzip dbip-asn-lite.mmdb.gz dbip-country-lite.mmdb.gz`
+* **MaxMind GeoLite2 (Free, Registration Required):**
+  * GeoLite2-ASN and GeoLite2-Country
+  * Automatically kept up-to-date via the official `geoipupdate` tool (typically stored in `/usr/share/GeoIP/`).
+
+### 2. Configuration
+
+Add the database paths to your `collector-config.yaml` or set environment variables:
+
+```yaml
+collector:
+  enrichment:
+    enabled: true
+    asn-database-path: "/var/data/dbip-asn-lite.mmdb"         # or /usr/share/GeoIP/GeoLite2-ASN.mmdb
+    country-database-path: "/var/data/dbip-country-lite.mmdb" # or /usr/share/GeoIP/GeoLite2-Country.mmdb
+    custom-hosting-asns-file: "custom-hosting-asns.txt"      # optional custom ASN overlay
+    crawler-sync-enabled: true                               # automated search engine & AI bot feed sync
+    crawler-sync-cron: "0 0 4 * * *"                         # daily at 04:00 AM
+```
+
+Or via environment variables:
+```bash
+export COLLECTOR_ENRICHMENT_ASN_DATABASE_PATH="/var/data/dbip-asn-lite.mmdb"
+export COLLECTOR_ENRICHMENT_COUNTRY_DATABASE_PATH="/var/data/dbip-country-lite.mmdb"
+```
+
+### 3. How Enrichment Operates
+
+* **Zero-Ops Fallback:** If no MMDB database paths are configured, the collector boots immediately without errors. Verified Search Engine/AI Bot detection and Private Network (`10.68.*.*`, `192.168.*.*`, IPv6 ULA) classification still operate out-of-the-box.
+* **Asynchronous Background Processing:** Poller threads write incident events with status `PENDING` without blocking or polling latency. The `BackgroundEnrichmentWorker` resolves ASNs, Geolocation, and Client Types asynchronously in small batches on Java 21 Virtual Threads.
+* **Layered Hosting ASN Overlay:** Shipped defaults (`classpath:asns/default-hosting-asns.txt`) can be customized via `custom-hosting-asns.txt` without Git checkout conflicts:
+  * `+12345` (force ASN 12345 to be classified as Datacenter/Hosting)
+  * `-24940` (remove Hetzner from Datacenter list, classifying it as Residential)
+* **Crawler Feed Sync & Management UI (`/crawlers`):**
+  * Automated periodic sync fetches official JSON IP ranges for Googlebot, Bingbot, OpenAI GPTBot, ChatGPT-User, etc.
+  * Trigger immediate manual syncs per feed or globally via the HTMX buttons in the `/crawlers` dashboard.
+  * Pruning: Removed feed configurations automatically trigger an orphan purge from the database.
 

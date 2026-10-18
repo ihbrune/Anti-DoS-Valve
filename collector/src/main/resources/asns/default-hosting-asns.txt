@@ -1,0 +1,46 @@
+# ==============================================================================
+# Anti-DoS Collector: Default Known Hosting, Cloud & Datacenter ASNs
+# ==============================================================================
+# This built-in baseline list identifies traffic originating from data centers,
+# virtual private servers (VPS), and cloud hosting providers.
+#
+# Custom ASNs can be added or excluded via 'custom-hosting-asns.txt'
+# or 'collector-config.yaml' without modifying this file.
+# ==============================================================================
+
+# Hyperscalers & Cloud Providers
+16509  # Amazon.com / AWS
+14618  # Amazon.com / AWS
+8075   # Microsoft Corporation (Azure)
+396982 # Google Cloud Platform (GCP)
+31898  # Oracle Corporation (OCI)
+45102  # Alibaba Cloud
+37963  # Alibaba Cloud
+54113  # Fastly
+13335  # Cloudflare
+
+# Major European & Global VPS / Dedicated Server Hosters
+24940  # Hetzner Online GmbH
+16276  # OVH SAS
+14061  # DigitalOcean, LLC
+63949  # Linode / Akamai Connected Cloud
+20473  # Vultr / The Constant Company / Choopa
+60781  # LeaseWeb Netherlands B.V.
+28753  # LeaseWeb Deutschland GmbH
+51167  # Contabo GmbH
+197540 # netcup GmbH
+42473  # ANEXIA Internetdienstleistungs GmbH
+8560   # IONOS SE (1&1)
+20773  # Host Europe GmbH
+34011  # Host Europe Group
+6724   # Strato AG
+12876  # Scaleway / Online SAS
+54888  # Equinix / Packet Host
+35816  # Kamatera
+200130 # Hostinger
+202425 # IP-Projects GmbH & Co. KG
+31400  # myLoc managed IT AG
+49981  # WorldStream B.V.
+42708  # GHOSTnet GmbH
+39351  # 31173 Services AB (Mullvad / VPN Infrastructure)
+206238 # DataCamp Limited (CDN77)
