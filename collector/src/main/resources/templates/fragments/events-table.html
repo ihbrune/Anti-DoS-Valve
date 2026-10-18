@@ -27,10 +27,20 @@
             <tbody>
                 <tr th:each="event : ${events}">
                     <td th:text="${#temporals.format(event.slotTime, 'dd.MM HH:mm:ss')}">18.10 12:30:00</td>
-                    <td><strong th:text="${event.serverId}">Web-01</strong></td>
+                    <td>
+                        <a th:href="@{'/server/' + ${event.serverId}}"
+                           style="text-decoration: none; color: inherit;"
+                           title="View server node details">
+                            <strong th:text="${event.serverId}">Web-01</strong>
+                        </a>
+                    </td>
                     <td><span class="badge badge-info" th:text="${event.valveName}">API-LIMITER</span></td>
                     <td>
-                        <span class="ip-mono" th:text="${event.clientKey}">198.51.100.42</span>
+                        <a th:href="@{/events(clientQuery=${event.clientKey})}"
+                           class="ip-mono"
+                           style="text-decoration: underline; color: inherit;"
+                           title="Filter for this exact client IP"
+                           th:text="${event.clientKey}">198.51.100.42</a>
                     </td>
                     <td>
                         <span class="badge badge-warning ip-mono" th:text="${event.subnetGroup}">198.51.100.0/24</span>

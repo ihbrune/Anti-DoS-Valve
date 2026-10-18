@@ -25,9 +25,12 @@
             <tbody>
                 <tr th:each="offender : ${topOffenders}">
                     <td>
-                        <span class="ip-mono"
-                              th:classappend="${groupBy == 'SUBNET' ? 'badge badge-warning' : ''}"
-                              th:text="${offender.clientKey}">198.51.100.42</span>
+                        <a th:href="@{/events(clientQuery=${offender.clientKey})}"
+                           class="ip-mono"
+                           style="text-decoration: none; color: inherit;"
+                           th:classappend="${groupBy == 'SUBNET' ? 'badge badge-warning' : ''}"
+                           title="Inspect all individual blocking events for this client or subnet"
+                           th:text="${offender.clientKey}">198.51.100.42</a>
                     </td>
                     <td>
                         <span class="badge badge-danger" th:text="${offender.totalBlockIncidents}">12</span>

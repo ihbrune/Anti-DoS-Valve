@@ -17,12 +17,17 @@
                 <th>Targeted Servers</th>
                 <th>First Seen</th>
                 <th>Last Seen</th>
+                <th style="text-align: right;">Forensics</th>
             </tr>
         </thead>
         <tbody>
             <tr th:each="offender : ${topOffenders}">
                 <td>
-                    <span class="ip-mono" th:text="${offender.clientKey}">192.168.1.100</span>
+                    <a th:href="@{/events(clientQuery=${offender.clientKey})}"
+                       class="ip-mono"
+                       style="text-decoration: none; color: inherit;"
+                       title="View all incidents for this client or subnet"
+                       th:text="${offender.clientKey}">192.168.1.100</a>
                 </td>
                 <td>
                     <span class="badge badge-danger" th:text="${offender.totalBlockIncidents}">12</span>
@@ -35,6 +40,14 @@
                 </td>
                 <td th:text="${#temporals.format(offender.firstSeen, 'dd.MM HH:mm')}">11.10 08:30</td>
                 <td th:text="${#temporals.format(offender.lastSeen, 'dd.MM HH:mm')}">11.10 09:45</td>
+                <td style="text-align: right;">
+                    <a th:href="@{/events(clientQuery=${offender.clientKey})}"
+                       class="btn"
+                       style="padding: 2px 8px; font-size: 11px;"
+                       title="View all incidents for this client or subnet">
+                        View Incidents &rarr;
+                    </a>
+                </td>
             </tr>
         </tbody>
     </table>

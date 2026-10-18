@@ -115,4 +115,13 @@ class DashboardControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("offenders-table-container")));
 	}
+
+	@Test
+	void testServerDetailsPageLoads() throws Exception {
+		mockMvc.perform(get("/server/Demo-Server"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Demo-Server")))
+				.andExpect(content().string(containsString("Node Incidents")))
+				.andExpect(content().string(containsString("Blocked Client Incidents on this Server")));
+	}
 }
