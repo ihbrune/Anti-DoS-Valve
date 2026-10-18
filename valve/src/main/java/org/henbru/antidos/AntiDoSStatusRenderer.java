@@ -364,19 +364,10 @@ public class AntiDoSStatusRenderer {
 		return buildStatusHtml(filterValve, null);
 	}
 
-	public String buildStatusHtml(String filterValve, String token) {
-		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-		sdf.setTimeZone(TimeZone.getDefault());
-		String serverTime = sdf.format(new Date(getTimeInMillis()));
-
-		Set<AntiDoSValve> valves = getValvesToRender();
-
-		StringBuilder sb = new StringBuilder(4096);
-		sb.append("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n")
-				.append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n")
-				.append("<title>Anti-DoS Valve Monitor</title>\n")
-				.append("<style>\n")
+	private static void appendCommonHeadStyles(StringBuilder sb) {
+		sb.append("<style>\n")
 				.append(":root{--bg:#0f172a;--card:#1e293b;--text:#e2e8f0;--muted:#94a3b8;--border:#334155;--accent:#38bdf8;--green:#22c55e;--red:#ef4444;--yellow:#eab308}\n")
+				.append(":root[data-theme=\"light\"]{--bg:#f8fafc;--card:#ffffff;--text:#0f172a;--muted:#64748b;--border:#cbd5e1;--accent:#0284c7;--green:#16a34a;--red:#dc2626;--yellow:#d97706}\n")
 				.append("body{font-family:ui-monospace,\"SF Mono\",Menlo,Consolas,\"Liberation Mono\",monospace;background:var(--bg);color:var(--text);margin:0;padding:24px;font-size:13px;line-height:1.5}\n")
 				.append(".header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:24px;flex-wrap:wrap;gap:8px}\n")
 				.append(".title{font-size:16px;font-weight:700;color:var(--accent);display:flex;align-items:center;gap:8px}\n")
@@ -388,26 +379,60 @@ public class AntiDoSStatusRenderer {
 				.append(".valve-name{font-size:15px;font-weight:700}\n")
 				.append(".btn{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;text-decoration:none;cursor:pointer;border:1px solid var(--border);color:var(--text);background:#0b1120}\n")
 				.append(".btn:hover{background:#1e293b;border-color:var(--accent);color:var(--accent)}\n")
+				.append("[data-theme=\"light\"] .btn{background:#ffffff;border-color:#cbd5e1;color:#0f172a}\n")
+				.append("[data-theme=\"light\"] .btn:hover{background:#f1f5f9;border-color:var(--accent);color:var(--accent)}\n")
 				.append(".badge{padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:0.5px}\n")
 				.append(".badge-blocking{background:#450a0a;color:#fca5a5;border:1px solid #7f1d1d}\n")
 				.append(".badge-marking{background:#172554;color:#93c5fd;border:1px solid #1e40af}\n")
 				.append(".badge-warn{background:#422006;color:#fde047;border:1px solid #713f12}\n")
 				.append(".badge-info{background:#0b1329;color:#7dd3fc;border:1px solid #0369a1}\n")
 				.append(".badge-status{background:#064e3b;color:#6ee7b7;border:1px solid #047857}\n")
+				.append("[data-theme=\"light\"] .badge-blocking{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}\n")
+				.append("[data-theme=\"light\"] .badge-marking{background:#dbeafe;color:#1e40af;border:1px solid #93c5fd}\n")
+				.append("[data-theme=\"light\"] .badge-warn{background:#fef3c7;color:#92400e;border:1px solid #fde047}\n")
+				.append("[data-theme=\"light\"] .badge-info{background:#e0f2fe;color:#0369a1;border:1px solid #7dd3fc}\n")
+				.append("[data-theme=\"light\"] .badge-status{background:#d1fae5;color:#065f46;border:1px solid #6ee7b7}\n")
 				.append(".valve-desc{color:#cbd5e1;background:#0b1120;border-left:3px solid var(--accent);padding:6px 12px;margin:4px 0 10px 0;border-radius:0 4px 4px 0;font-size:12px;line-height:1.4}\n")
+				.append("[data-theme=\"light\"] .valve-desc{color:#334155;background:#f8fafc;border-left:3px solid var(--accent)}\n")
 				.append("table{width:100%;border-collapse:collapse;margin-top:6px}\n")
 				.append("th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--border)}\n")
 				.append("th{color:var(--muted);font-weight:500;width:30%;vertical-align:top}\n")
 				.append("td{color:var(--text)}\n")
 				.append(".data-table{width:100%;border-collapse:collapse;margin-top:6px}\n")
 				.append(".data-table th{background:#0b1120;color:var(--muted);font-weight:600;padding:6px 10px;border-bottom:1px solid var(--border);width:auto;text-align:left}\n")
+				.append("[data-theme=\"light\"] .data-table th{background:#f1f5f9;border-bottom:1px solid var(--border)}\n")
 				.append(".data-table td{padding:6px 10px;border-bottom:1px solid var(--border)}\n")
 				.append("code{background:#0b1120;padding:2px 6px;border-radius:4px;color:#cbd5e1;border:1px solid #1e293b}\n")
+				.append("[data-theme=\"light\"] code{background:#f1f5f9;color:#0f172a;border:1px solid #cbd5e1}\n")
 				.append(".metric-bar{background:#0b1120;border-radius:3px;height:8px;width:120px;display:inline-block;vertical-align:middle;overflow:hidden;margin-left:8px;border:1px solid var(--border)}\n")
+				.append("[data-theme=\"light\"] .metric-bar{background:#e2e8f0}\n")
 				.append(".metric-fill{height:100%;background:var(--accent)}\n")
 				.append(".metric-fill.high{background:var(--red)}\n")
 				.append(".metric-fill.med{background:var(--yellow)}\n")
-				.append("</style>\n</head>\n<body>\n")
+				.append("html:not([data-theme=\"light\"]) .theme-moon{display:none}\n")
+				.append("html:not([data-theme=\"light\"]) .theme-sun{display:inline}\n")
+				.append("html[data-theme=\"light\"] .theme-sun{display:none}\n")
+				.append("html[data-theme=\"light\"] .theme-moon{display:inline}\n")
+				.append("</style>\n")
+				.append("<script>\n")
+				.append("(function(){try{var t=localStorage.getItem('theme');if(!t){var m=document.cookie.match(/(?:^|; )theme=([^;]*)/);t=m?decodeURIComponent(m[1]):null}if(t==='light'||(!t&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)){document.documentElement.setAttribute('data-theme','light')}else{document.documentElement.setAttribute('data-theme','dark')}}catch(e){}})();\n")
+				.append("function toggleTheme(){try{var c=document.documentElement.getAttribute('data-theme')==='light'?'dark':'light';document.documentElement.setAttribute('data-theme',c);localStorage.setItem('theme',c);document.cookie='theme='+c+';path=/;max-age=31536000;SameSite=Lax'}catch(e){}}\n")
+				.append("</script>\n");
+	}
+
+	public String buildStatusHtml(String filterValve, String token) {
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+		sdf.setTimeZone(TimeZone.getDefault());
+		String serverTime = sdf.format(new Date(getTimeInMillis()));
+
+		Set<AntiDoSValve> valves = getValvesToRender();
+
+		StringBuilder sb = new StringBuilder(4096);
+		sb.append("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n")
+				.append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n")
+				.append("<title>Anti-DoS Valve Monitor</title>\n");
+		appendCommonHeadStyles(sb);
+		sb.append("</head>\n<body>\n")
 				.append("<div class=\"header\">\n")
 				.append("  <div class=\"title\"><span>&#9889;</span> Anti-DoS Valve Monitor</div>\n")
 				.append("  <div class=\"subtitle\"><span>Server Time: ").append(serverTime)
@@ -418,6 +443,7 @@ public class AntiDoSStatusRenderer {
 		}
 		sb.append("</span>")
 				.append("<a class=\"btn\" href=\"").append(buildDashboardUrl(token, null, null, "json")).append("\">{ } JSON (All)</a>")
+				.append("<button type=\"button\" class=\"btn\" onclick=\"toggleTheme()\" title=\"Toggle Light/Dark Theme\"><span class=\"theme-sun\">&#9728;&#65039;</span><span class=\"theme-moon\">&#127769;</span> Theme</button>")
 				.append("</div>\n")
 				.append("</div>\n");
 
@@ -623,40 +649,9 @@ public class AntiDoSStatusRenderer {
 		StringBuilder sb = new StringBuilder(6144);
 		sb.append("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n")
 				.append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n")
-				.append("<title>Anti-DoS Valve Monitor - ").append(target != null ? escapeHtml(target.getMonitorName()) : "Details").append("</title>\n")
-				.append("<style>\n")
-				.append(":root{--bg:#0f172a;--card:#1e293b;--text:#e2e8f0;--muted:#94a3b8;--border:#334155;--accent:#38bdf8;--green:#22c55e;--red:#ef4444;--yellow:#eab308}\n")
-				.append("body{font-family:ui-monospace,\"SF Mono\",Menlo,Consolas,\"Liberation Mono\",monospace;background:var(--bg);color:var(--text);margin:0;padding:24px;font-size:13px;line-height:1.5}\n")
-				.append(".header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:24px;flex-wrap:wrap;gap:8px}\n")
-				.append(".title{font-size:16px;font-weight:700;color:var(--accent);display:flex;align-items:center;gap:8px}\n")
-				.append(".subtitle{color:var(--muted);font-size:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}\n")
-				.append(".card{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:16px 20px;margin-bottom:20px}\n")
-				.append(".card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px}\n")
-				.append(".card-title-group{display:flex;align-items:center;gap:10px;flex-wrap:wrap}\n")
-				.append(".card-actions{display:flex;align-items:center;gap:8px}\n")
-				.append(".valve-name{font-size:15px;font-weight:700}\n")
-				.append(".btn{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;text-decoration:none;cursor:pointer;border:1px solid var(--border);color:var(--text);background:#0b1120}\n")
-				.append(".btn:hover{background:#1e293b;border-color:var(--accent);color:var(--accent)}\n")
-				.append(".badge{padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:0.5px}\n")
-				.append(".badge-blocking{background:#450a0a;color:#fca5a5;border:1px solid #7f1d1d}\n")
-				.append(".badge-marking{background:#172554;color:#93c5fd;border:1px solid #1e40af}\n")
-				.append(".badge-warn{background:#422006;color:#fde047;border:1px solid #713f12}\n")
-				.append(".badge-info{background:#0b1329;color:#7dd3fc;border:1px solid #0369a1}\n")
-				.append(".badge-status{background:#064e3b;color:#6ee7b7;border:1px solid #047857}\n")
-				.append("table{width:100%;border-collapse:collapse;margin-top:6px}\n")
-				.append("th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--border)}\n")
-				.append("th{color:var(--muted);font-weight:500;width:30%;vertical-align:top}\n")
-				.append("td{color:var(--text)}\n")
-				.append(".data-table{width:100%;border-collapse:collapse;margin-top:6px}\n")
-				.append(".data-table th{background:#0b1120;color:var(--muted);font-weight:600;padding:6px 10px;border-bottom:1px solid var(--border);width:auto;text-align:left}\n")
-				.append(".data-table td{padding:6px 10px;border-bottom:1px solid var(--border)}\n")
-				.append("code{background:#0b1120;padding:2px 6px;border-radius:4px;color:#cbd5e1;border:1px solid #1e293b}\n")
-				.append(".metric-bar{background:#0b1120;border-radius:3px;height:8px;width:120px;display:inline-block;vertical-align:middle;overflow:hidden;margin-left:8px;border:1px solid var(--border)}\n")
-				.append(".metric-fill{height:100%;background:var(--accent)}\n")
-				.append(".metric-fill.high{background:var(--red)}\n")
-				.append(".metric-fill.med{background:var(--yellow)}\n")
-				.append(".valve-desc{color:#cbd5e1;background:#0b1120;border-left:3px solid var(--accent);padding:6px 12px;margin:4px 0 10px 0;border-radius:0 4px 4px 0;font-size:12px;line-height:1.4}\n")
-				.append("</style>\n</head>\n<body>\n");
+				.append("<title>Anti-DoS Valve Monitor - ").append(target != null ? escapeHtml(target.getMonitorName()) : "Details").append("</title>\n");
+		appendCommonHeadStyles(sb);
+		sb.append("</head>\n<body>\n");
 
 		if (target == null) {
 			sb.append("<div class=\"header\">\n")
@@ -718,6 +713,7 @@ public class AntiDoSStatusRenderer {
 				.append("    <a class=\"btn\" href=\"").append(buildDashboardUrl(token, null, null, null)).append("\">&#8592; Back to Overview</a>\n")
 				.append("    <a class=\"btn\" href=\"").append(buildDashboardUrl(token, target.getMonitorName(), "details", null, slotParam, limitStr, blockedLimitStr, activeLimitStr, true)).append("\">&#128260; Refresh</a>\n")
 				.append("    <a class=\"btn\" href=\"").append(buildDashboardUrl(token, target.getMonitorName(), "details", "json", slotParam, limitStr, blockedLimitStr, activeLimitStr, true)).append("\">{ } JSON Details</a>\n")
+				.append("    <button type=\"button\" class=\"btn\" onclick=\"toggleTheme()\" title=\"Toggle Light/Dark Theme\"><span class=\"theme-sun\">&#9728;&#65039;</span><span class=\"theme-moon\">&#127769;</span> Theme</button>\n")
 				.append("  </div>\n")
 				.append("</div>\n");
 

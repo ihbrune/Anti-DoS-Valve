@@ -586,4 +586,195 @@ tr:hover td {
     gap: 12px;
 }
 
+/* ==========================================================================
+   Light Mode Design System
+   ========================================================================== */
+
+:root[data-theme="light"] {
+    --bg-base: #f8fafc;
+    --bg-surface: #ffffff;
+    --bg-card: rgba(255, 255, 255, 0.88);
+    --bg-card-hover: rgba(241, 245, 249, 0.98);
+    --border-color: rgba(0, 0, 0, 0.08);
+    --border-accent: rgba(2, 132, 199, 0.35);
+
+    --text-primary: #0f172a;
+    --text-secondary: #334155;
+    --text-muted: #64748b;
+
+    --color-primary: #0284c7;
+    --color-primary-glow: rgba(2, 132, 199, 0.2);
+    --color-success: #059669;
+    --color-success-glow: rgba(5, 150, 105, 0.2);
+    --color-danger: #e11d48;
+    --color-danger-glow: rgba(225, 29, 72, 0.2);
+    --color-warning: #d97706;
+    --color-warning-glow: rgba(217, 119, 6, 0.2);
+
+    --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.06), 0 0 1px 1px rgba(0, 0, 0, 0.04);
+    --shadow-glow: 0 0 25px -5px var(--color-primary-glow);
+}
+
+[data-theme="light"] body {
+    background-color: var(--bg-base);
+    background-image:
+        radial-gradient(at 10% 20%, rgba(2, 132, 199, 0.07) 0px, transparent 50%),
+        radial-gradient(at 90% 80%, rgba(225, 29, 72, 0.04) 0px, transparent 50%);
+    color: var(--text-primary);
+}
+
+/* Light Mode Overrides for Specific Components */
+[data-theme="light"] .btn {
+    background: rgba(255, 255, 255, 0.9);
+    border-color: rgba(0, 0, 0, 0.12);
+    color: var(--text-primary);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .btn:hover {
+    background: #f1f5f9;
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+[data-theme="light"] .btn-primary {
+    background: #0284c7;
+    border-color: #0369a1;
+    color: #ffffff;
+}
+
+[data-theme="light"] .btn-primary:hover {
+    background: #0369a1;
+    color: #ffffff;
+}
+
+[data-theme="light"] th {
+    background: rgba(241, 245, 249, 0.95);
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+[data-theme="light"] td {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    color: var(--text-secondary);
+}
+
+[data-theme="light"] tr:hover td {
+    background: rgba(241, 245, 249, 0.85);
+    color: var(--text-primary);
+}
+
+[data-theme="light"] .ip-mono {
+    color: #0f172a;
+}
+
+[data-theme="light"] .badge-success {
+    color: #047857;
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.35);
+}
+
+[data-theme="light"] .badge-danger {
+    color: #be123c;
+    background: rgba(244, 63, 94, 0.12);
+    border-color: rgba(244, 63, 94, 0.35);
+}
+
+[data-theme="light"] .badge-info {
+    color: #0369a1;
+    background: rgba(56, 189, 248, 0.18);
+    border-color: rgba(56, 189, 248, 0.35);
+}
+
+[data-theme="light"] .badge-warning {
+    color: #b45309;
+    background: rgba(245, 158, 11, 0.18);
+    border-color: rgba(245, 158, 11, 0.35);
+}
+
+[data-theme="light"] .badge-secondary {
+    color: #475569;
+    background: rgba(148, 163, 184, 0.18);
+    border-color: rgba(148, 163, 184, 0.35);
+}
+
+[data-theme="light"] .badge-purple {
+    color: #6d28d9;
+    background: rgba(168, 85, 247, 0.15);
+    border-color: rgba(168, 85, 247, 0.35);
+}
+
+[data-theme="light"] .endpoint-stats-row {
+    background: rgba(241, 245, 249, 0.9);
+}
+
+[data-theme="light"] .input-control {
+    background: #ffffff;
+    border-color: rgba(0, 0, 0, 0.15);
+    color: var(--text-primary);
+}
+
+[data-theme="light"] .filter-btn-group {
+    background: rgba(241, 245, 249, 0.9);
+    border-color: var(--border-color);
+}
+
+[data-theme="light"] .filter-btn.active {
+    background: #ffffff;
+    color: var(--color-primary);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .pills-group {
+    background: rgba(241, 245, 249, 0.85);
+    border-color: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .pill-label {
+    background: #ffffff;
+    border-color: rgba(0, 0, 0, 0.1);
+    color: var(--text-secondary);
+}
+
+[data-theme="light"] .pill-label:hover {
+    color: var(--text-primary);
+    border-color: var(--color-primary);
+}
+
+[data-theme="light"] code {
+    background: rgba(241, 245, 249, 0.95);
+    color: #0f172a;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* ==========================================================================
+   Theme Toggle Button & Icon Rules
+   ========================================================================== */
+.btn-theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    font-size: 13px;
+    line-height: 1;
+    min-width: 36px;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    user-select: none;
+}
+
+html:not([data-theme="light"]) .theme-icon-moon {
+    display: none;
+}
+html:not([data-theme="light"]) .theme-icon-sun {
+    display: inline-block;
+}
+html[data-theme="light"] .theme-icon-sun {
+    display: none;
+}
+html[data-theme="light"] .theme-icon-moon {
+    display: inline-block;
+}
+
+
 

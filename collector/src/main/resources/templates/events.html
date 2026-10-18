@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Incident Explorer - Anti-DoS Collector</title>
     <link rel="stylesheet" th:href="@{/css/collector.css}">
+    <script th:src="@{/js/theme.js}"></script>
     <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
     <script th:src="@{/js/htmx-lite.js}" defer></script>
 </head>
@@ -33,6 +34,10 @@
             <a href="/crawlers" class="btn" title="Verified Search Engine & AI Crawler IP Range Feeds">
                 <span>&#x1F916;</span> Crawlers &amp; Bots
             </a>
+            <button type="button" class="btn btn-theme-toggle" onclick="toggleTheme()" title="Switch Light / Dark Theme" aria-label="Toggle theme">
+                <span class="theme-icon-sun">&#x2600;&#xFE0F;</span>
+                <span class="theme-icon-moon">&#x1F319;</span>
+            </button>
         </div>
     </header>
 

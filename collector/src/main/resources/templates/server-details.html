@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title th:text="'Server Node: ' + ${serverId}">Server Node Details</title>
     <link rel="stylesheet" th:href="@{/css/collector.css}">
+    <script th:src="@{/js/theme.js}"></script>
 </head>
 <body>
 
@@ -25,6 +26,10 @@
                 <span>&#x1F4DC;</span> Node Poll Log
             </a>
             <a href="/" class="btn">&larr; Back to Fleet Overview</a>
+            <button type="button" class="btn btn-theme-toggle" onclick="toggleTheme()" title="Switch Light / Dark Theme" aria-label="Toggle theme">
+                <span class="theme-icon-sun">&#x2600;&#xFE0F;</span>
+                <span class="theme-icon-moon">&#x1F319;</span>
+            </button>
         </div>
     </header>
 
