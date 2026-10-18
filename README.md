@@ -1,3 +1,8 @@
+> [!IMPORTANT]
+> **Active Development Notice:**
+> This project is currently in active development and undergoing substantial changes.
+> For production deployments, please use the stable GitHub Release **[v1.7.0](https://github.com/ihbrune/Anti-DoS-Valve/releases/tag/v.1.7.0)** rather than the current `master` branch.
+
 # What is the Anti-DoS Valve?
 
 This project implements a Tomcat valve that enforces dynamic access rate limits on requests from individual IP addresses or subnets. This helps prevent Tomcat servers from becoming overloaded by DoS attacks or aggressive web crawlers, or at least mitigates their impact.
