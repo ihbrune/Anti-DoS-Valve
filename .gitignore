@@ -16,6 +16,8 @@ collector-config.yaml
 collector-config.yml
 collector/collector-config.yaml
 collector/collector-config.yml
+custom-hosting-asns.txt
 *.db
 *.db-journal
+*.mmdb
 

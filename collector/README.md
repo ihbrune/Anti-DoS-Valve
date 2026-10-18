@@ -96,6 +96,177 @@ Open your browser at **`http://localhost:8090`** to access the Fleet Dashboard.
 
 ---
 
+## Production Setup & Zero-Friction Update Guide
+
+To run the Collector as a robust, 24/7 background service in production—and ensure that future updates via `git pull` from GitHub will **never** overwrite your configuration, delete your database, or cause git merge conflicts—follow this recommended deployment architecture.
+
+### Decoupling Architecture: Code vs. Configuration vs. Data
+
+In a production environment, keep the three domains strictly separated:
+
+| Component | Recommended Location | Purpose |
+|---|---|---|
+| **Source & Git Repo** | `/opt/anti-dos-valve` or `~/build/Anti-DoS-Valve` | Repository where `git pull` and `mvn package` are executed. Contains **no** runtime credentials or databases. |
+| **Service Binary** | `/opt/antidos-collector/anti-dos-collector.jar` | Production Fat-JAR executed by systemd. |
+| **Configuration** | `/etc/antidos/collector-config.yaml` | System configuration with server URLs, tokens, and thresholds. **Outside Git**, automatically imported on startup. |
+| **Persistent Data** | `/var/lib/antidos/` | SQLite database (`antidos-collector.db`), GeoIP MMDB files, and custom ASN overlays. |
+
+---
+
+### Step-by-Step Production Deployment (Linux & systemd)
+
+#### Step 1: Create Dedicated System User & Directories
+Create an unprivileged system user and the standard production directories:
+```bash
+# Create dedicated system user
+sudo useradd -r -s /bin/false -d /var/lib/antidos -c "Anti-DoS Collector Service" antidos || true
+
+# Create configuration, data, and binary directories
+sudo mkdir -p /etc/antidos /var/lib/antidos /opt/antidos-collector
+sudo chown -R antidos:antidos /var/lib/antidos /etc/antidos /opt/antidos-collector
+```
+
+#### Step 2: Initialize Configuration (`/etc/antidos/collector-config.yaml`)
+Copy the template configuration into `/etc/antidos/`:
+```bash
+sudo cp collector/src/main/resources/collector-config.example.yaml /etc/antidos/collector-config.yaml
+sudo chown antidos:antidos /etc/antidos/collector-config.yaml
+sudo chmod 600 /etc/antidos/collector-config.yaml
+```
+
+Edit `/etc/antidos/collector-config.yaml` to configure your persistent database path, fleet endpoints, and security tokens:
+```yaml
+spring:
+  datasource:
+    # Dedicated persistent SQLite database path
+    url: "jdbc:sqlite:/var/lib/antidos/antidos-collector.db?busy_timeout=10000"
+
+collector:
+  poll-interval-seconds: 15
+  retention-days: 30
+  poll-log-retention-days: 1
+  slow-poll-threshold-ms: 1000
+  parallel-fleet-polling: true
+
+  # Monitored Tomcat server endpoints
+  endpoints:
+    - name: "Prod-Web-01"
+      url: "https://web01.internal.example.com/antidos-status"
+      token: "yourSecureStatusToken1"
+      poll-intermediate-slots: false
+      enabled: true
+
+    - name: "Prod-Web-02"
+      url: "https://web02.internal.example.com/antidos-status"
+      token: "yourSecureStatusToken2"
+      poll-intermediate-slots: false
+      enabled: true
+
+  enrichment:
+    enabled: true
+    asn-database-path: "/var/lib/antidos/dbip-asn-lite.mmdb"
+    country-database-path: "/var/lib/antidos/dbip-country-lite.mmdb"
+    custom-hosting-asns-file: "/etc/antidos/custom-hosting-asns.txt"
+```
+
+> **Note on Auto-Discovery:** The Collector automatically looks for `/etc/antidos/collector-config.yaml` and `${user.home}/.antidos/collector-config.yaml` upon startup. No extra `--spring.config.additional-location` flag is required.
+
+#### Step 3: Test Endpoint Connectivity via CLI
+Before starting the background service, verify network connectivity and token authentication against your live Tomcat nodes:
+```bash
+java -jar collector/target/anti-dos-collector-1.7.0.jar test-endpoint \
+  --url "https://web01.internal.example.com/antidos-status" \
+  --token "yourSecureStatusToken1" \
+  --name "Prod-Web-01"
+```
+
+#### Step 4: Deploy the Fat-JAR & Install systemd Service
+Deploy the packaged Fat-JAR:
+```bash
+sudo cp collector/target/anti-dos-collector-1.7.0.jar /opt/antidos-collector/anti-dos-collector.jar
+sudo chown antidos:antidos /opt/antidos-collector/anti-dos-collector.jar
+```
+
+Create the systemd unit file `/etc/systemd/system/antidos-collector.service`:
+```ini
+[Unit]
+Description=Anti-DoS Fleet Collector & Analytics Service
+After=network.target
+
+[Service]
+Type=simple
+User=antidos
+Group=antidos
+WorkingDirectory=/var/lib/antidos
+ExecStart=/usr/bin/java -jar /opt/antidos-collector/anti-dos-collector.jar
+Restart=always
+RestartSec=10
+SuccessExitStatus=143
+
+# Security Sandboxing
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/antidos
+ReadOnlyPaths=/etc/antidos
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Reload systemd, enable the service on boot, and start it:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now antidos-collector
+sudo systemctl status antidos-collector
+```
+
+Access the dashboard at **`http://<server-ip>:8090`**.
+
+---
+
+### Frictionless GitHub Updates (`git pull` Workflow)
+
+Whenever a new version, performance improvement, or bug fix is published on GitHub, you can upgrade your production system in seconds without touching your configuration or backing up database files:
+
+```bash
+# 1. Pull latest source code from GitHub
+cd /opt/anti-dos-valve
+git pull
+
+# 2. Build the updated executable JAR
+mvn package -pl collector -DskipTests
+
+# 3. Replace the active binary
+sudo cp collector/target/anti-dos-collector-*.jar /opt/antidos-collector/anti-dos-collector.jar
+sudo chown antidos:antidos /opt/antidos-collector/anti-dos-collector.jar
+
+# 4. Restart the collector service
+sudo systemctl restart antidos-collector
+```
+
+#### Why is this update workflow 100% safe?
+1. **Zero Git Merge Conflicts:** Because `/etc/antidos/collector-config.yaml` and `/var/lib/antidos/antidos-collector.db` live outside the repository, your git working tree stays completely pristine. `git pull` will always succeed cleanly.
+2. **Configuration Protection:** Your server endpoints, credentials, and custom thresholds are never modified or reset during repository updates.
+3. **Automated Database Schema Migrations:** All database changes across versions are managed via **Flyway**. When the newly built JAR boots up, it automatically checks the database schema and applies any pending migrations safely in a single transaction.
+4. **Log Inspection:** Monitor the service startup after an update at any time with:
+   ```bash
+   journalctl -u antidos-collector -f
+   ```
+
+---
+
+### Alternative: User-Home Standalone Setup (`~/.antidos/`)
+
+For smaller server environments or environments where you do not have root/systemd privileges, you can achieve the exact same decoupling in your user account:
+
+1. Create directory `~/.antidos/`
+2. Place your configuration in `~/.antidos/collector-config.yaml`
+3. Point your database URL to `jdbc:sqlite:${user.home}/.antidos/antidos-collector.db?busy_timeout=10000`
+4. The collector will automatically detect `~/.antidos/collector-config.yaml` on startup.
+5. In the git repository, `git pull` and `mvn package` can be run anytime without touching `~/.antidos/`.
+
+---
+
 ## Database Configuration
 
 ### SQLite (Default)
@@ -144,6 +315,7 @@ The collector records every polling cycle against each monitored endpoint in a d
 ```yaml
 collector:
   poll-interval-seconds: 15     # Interval between collector poll runs (default: 15s)
+  parallel-fleet-polling: true  # Concurrently poll different servers via Virtual Threads (valves on same server remain sequential)
   retention-days: 30            # Retention for slot telemetry and client incident events (default: 30 days)
   poll-log-retention-days: 1    # Retention for polling event audit log entries (default: 1 day)
   slow-poll-threshold-ms: 1000  # Latency threshold before marking poll status as WARNING (default: 1000 ms)

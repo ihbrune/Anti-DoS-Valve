@@ -623,4 +623,15 @@ When polling the status endpoint from automated monitoring scripts or collectors
 | `activeLimit` | positive integer, `0`, `all`, `-1` | Specific limit for the `topActiveClients` list. Falls back to `limit` if omitted. Specifying `0` suppresses active clients entirely (recommended for telemetry collectors to avoid serializing unblocked IPs). |
 | `valve` | `<monitorName>` | Filters by monitor name (required for details view if multiple valves are running). |
 
+---
+
+# Anti-DoS Collector & Dashboard
+
+For multi-server fleet monitoring and advanced analytics across multiple Tomcat nodes, check out the standalone **[Anti-DoS Collector](collector/README.md)**:
+* Aggregates telemetry across multiple servers and valves.
+* Real-time HTMX fleet dashboard with Incident Explorer, Subnet/ASN Rollup, and Bot categorization.
+* Built-in Demo Mode (`java -jar anti-dos-collector-*.jar demo`) for instant exploration.
+* **[Production Setup & Zero-Friction Update Guide](collector/README.md#production-setup--zero-friction-update-guide)** for configuring automated 24/7 systemd operation with conflict-free GitHub updates.
+
+
 
