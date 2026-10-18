@@ -68,7 +68,7 @@
                             <th>Time Window</th>
                             <th>Total Requests</th>
                             <th>Active Clients</th>
-                            <th>Blocked Clients</th>
+                            <th>Blocked Clients &amp; Forensics</th>
                             <th>State</th>
                             <th style="text-align: right;">Forensics</th>
                         </tr>
@@ -81,7 +81,35 @@
                             <td th:text="${#numbers.formatInteger(slot.totalRequests, 1, 'POINT')}">1,250</td>
                             <td th:text="${slot.activeCounters}">45</td>
                             <td>
-                                <span th:if="${slot.blockedCounters > 0}" class="badge badge-danger" th:text="${slot.blockedCounters}">2</span>
+                                <div th:if="${slot.blockedCounters > 0}" style="display: flex; flex-direction: column; gap: 4px;">
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <span class="badge badge-danger" th:text="${slot.blockedCounters} + ' Blocked'">2 Blocked</span>
+                                    </div>
+                                    <div th:if="${slotEventsMap != null and slotEventsMap[slot.valveName + '_' + slot.slotKey] != null}"
+                                         style="display: flex; flex-direction: column; gap: 4px; margin-top: 2px;">
+                                        <div th:each="ev, stat : ${slotEventsMap[slot.valveName + '_' + slot.slotKey]}"
+                                             th:if="${stat.index < 3}"
+                                             style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+                                            <a th:href="@{/events(clientQuery=${ev.clientKey})}"
+                                               class="ip-mono"
+                                               style="font-size: 11px; text-decoration: underline; color: inherit; font-weight: 600;"
+                                               title="Filter incidents for this client"
+                                               th:text="${ev.clientKey}">198.51.100.42</a>
+                                            <span th:if="${ev.countryCode != null}" class="badge badge-secondary" style="padding: 1px 4px; font-size: 9px;" th:text="${ev.countryCode}">DE</span>
+                                            <span th:if="${ev.clientType != null and ev.clientType.name() == 'DATACENTER'}" class="badge badge-warning" style="padding: 1px 5px; font-size: 9px;" title="Hosting / Datacenter / Cloud">&#x1F3E2; Datacenter</span>
+                                            <span th:if="${ev.clientType != null and ev.clientType.name() == 'SEARCH_ENGINE'}" class="badge badge-success" style="padding: 1px 5px; font-size: 9px;" title="Verified Search Engine Crawler">&#x1F50D; Search Engine</span>
+                                            <span th:if="${ev.clientType != null and ev.clientType.name() == 'AI_CRAWLER'}" class="badge badge-purple" style="padding: 1px 5px; font-size: 9px;" title="Verified AI Bot / LLM Crawler">&#x1F916; AI Bot</span>
+                                            <span th:if="${ev.clientType != null and ev.clientType.name() == 'RESIDENTIAL'}" class="badge badge-secondary" style="padding: 1px 5px; font-size: 9px;" title="Consumer / Residential ISP">&#x1F3E0; Residential</span>
+                                            <span th:if="${ev.clientType != null and ev.clientType.name() == 'MOBILE'}" class="badge badge-info" style="padding: 1px 5px; font-size: 9px;" title="Mobile Carrier / CGNAT">&#x1F4F1; Mobile</span>
+                                            <span th:if="${ev.clientType != null and ev.clientType.name() == 'PRIVATE_NETWORK'}" class="badge badge-info" style="padding: 1px 5px; font-size: 9px;" title="Private Intranet / RFC 1918 / Local Network">&#x1F512; Private Net</span>
+                                            <span th:if="${ev.clientType != null and ev.clientType.name() == 'UNKNOWN'}" class="badge badge-secondary" style="padding: 1px 5px; font-size: 9px; opacity: 0.75;" title="Unclassified">Unclassified</span>
+                                            <span th:if="${ev.asn != null}" class="badge badge-info" style="padding: 1px 5px; font-size: 9px;" th:title="${ev.asOrg}" th:text="'AS' + ${ev.asn}">AS24940</span>
+                                        </div>
+                                        <span th:if="${slotEventsMap[slot.valveName + '_' + slot.slotKey].size() > 3}"
+                                              style="font-size: 10px; color: var(--text-muted);"
+                                              th:text="'+ ' + (${slotEventsMap[slot.valveName + '_' + slot.slotKey].size()} - 3) + ' more clients'">+ 2 more clients</span>
+                                    </div>
+                                </div>
                                 <span th:if="${slot.blockedCounters == 0}" style="color:var(--text-muted);">0</span>
                             </td>
                             <td>
@@ -152,6 +180,7 @@
                                         <span th:if="${event.clientType != null and event.clientType.name() == 'RESIDENTIAL'}" class="badge badge-secondary" style="padding: 1px 6px; font-size: 9px;" title="Consumer / Residential ISP">&#x1F3E0; Residential</span>
                                         <span th:if="${event.clientType != null and event.clientType.name() == 'MOBILE'}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px;" title="Mobile Carrier / CGNAT">&#x1F4F1; Mobile</span>
                                         <span th:if="${event.clientType != null and event.clientType.name() == 'PRIVATE_NETWORK'}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px;" title="Private Intranet / RFC 1918 / Local Network">&#x1F512; Private Net</span>
+                                        <span th:if="${event.clientType != null and event.clientType.name() == 'UNKNOWN'}" class="badge badge-secondary" style="padding: 1px 6px; font-size: 9px; opacity: 0.75;" title="Unclassified">Unclassified</span>
                                         <span th:if="${event.asn != null}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px;" th:title="${event.asOrg}" th:text="'AS' + ${event.asn}">AS24940</span>
                                         <span th:if="${event.asn == null and event.asOrg != null}" style="font-size: 10px; color: var(--text-muted);" th:text="${event.asOrg}">Private Network</span>
                                     </div>

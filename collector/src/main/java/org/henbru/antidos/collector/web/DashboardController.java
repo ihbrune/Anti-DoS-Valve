@@ -6,7 +6,9 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.henbru.antidos.collector.model.BlockedClientEvent;
 import org.henbru.antidos.collector.model.EndpointHeartbeat;
@@ -160,11 +162,30 @@ public class DashboardController {
 		List<SlotSnapshot> recentSlots = slotSnapshotRepository.findRecent(serverId, valve, 50);
 		List<BlockedClientEvent> recentEvents = clientEventRepository.findRecentEvents(serverId, null, 100);
 
+		Instant minStartTime = recentSlots.isEmpty() ? null : recentSlots.get(recentSlots.size() - 1).startTime();
+		List<BlockedClientEvent> slotEvents = (minStartTime != null)
+				? clientEventRepository.findRecentEventsFiltered(
+						List.of(serverId),
+						valve != null ? List.of(valve) : null,
+						minStartTime,
+						null,
+						null,
+						500,
+						0)
+				: recentEvents;
+
+		Map<String, List<BlockedClientEvent>> slotEventsMap = new HashMap<>();
+		for (BlockedClientEvent event : slotEvents) {
+			String key = event.valveName() + "_" + event.slotKey();
+			slotEventsMap.computeIfAbsent(key, k -> new ArrayList<>()).add(event);
+		}
+
 		model.addAttribute("server", hb);
 		model.addAttribute("serverId", serverId);
 		model.addAttribute("selectedValve", valve);
 		model.addAttribute("recentSlots", recentSlots);
 		model.addAttribute("recentEvents", recentEvents);
+		model.addAttribute("slotEventsMap", slotEventsMap);
 		return "server-details";
 	}
 

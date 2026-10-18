@@ -50,6 +50,7 @@
                             <span th:if="${event.clientType != null and event.clientType.name() == 'RESIDENTIAL'}" class="badge badge-secondary" style="padding: 1px 6px; font-size: 9px;" title="Consumer / Residential ISP">&#x1F3E0; Residential</span>
                             <span th:if="${event.clientType != null and event.clientType.name() == 'MOBILE'}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px;" title="Mobile Carrier / CGNAT">&#x1F4F1; Mobile</span>
                             <span th:if="${event.clientType != null and event.clientType.name() == 'PRIVATE_NETWORK'}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px;" title="Private Intranet / RFC 1918 / Local Network">&#x1F512; Private Net</span>
+                            <span th:if="${event.clientType != null and event.clientType.name() == 'UNKNOWN'}" class="badge badge-secondary" style="padding: 1px 6px; font-size: 9px; opacity: 0.75;" title="Unclassified / No ASN match">Unclassified</span>
                             <span th:if="${event.asn != null}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px;" th:title="${event.asOrg}" th:text="'AS' + ${event.asn}">AS24940</span>
                             <span th:if="${event.asn == null and event.asOrg != null}" style="font-size: 10px; color: var(--text-muted);" th:text="${event.asOrg}">Private Network</span>
                         </div>

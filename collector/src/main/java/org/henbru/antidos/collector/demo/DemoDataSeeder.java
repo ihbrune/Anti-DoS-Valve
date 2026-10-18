@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
@@ -66,18 +67,21 @@ public class DemoDataSeeder {
 	private final HeartbeatRepository heartbeatRepository;
 	private final PollEventLogRepository pollEventLogRepository;
 	private final org.henbru.antidos.collector.storage.CrawlerFeedRepository crawlerFeedRepository;
+	private final JdbcTemplate jdbcTemplate;
 
 	public DemoDataSeeder(
 			SlotSnapshotRepository slotSnapshotRepository,
 			ClientEventRepository clientEventRepository,
 			HeartbeatRepository heartbeatRepository,
 			PollEventLogRepository pollEventLogRepository,
-			org.henbru.antidos.collector.storage.CrawlerFeedRepository crawlerFeedRepository) {
+			org.henbru.antidos.collector.storage.CrawlerFeedRepository crawlerFeedRepository,
+			JdbcTemplate jdbcTemplate) {
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
 		this.heartbeatRepository = heartbeatRepository;
 		this.pollEventLogRepository = pollEventLogRepository;
 		this.crawlerFeedRepository = crawlerFeedRepository;
+		this.jdbcTemplate = jdbcTemplate;
 	}
 
 	@EventListener(ApplicationReadyEvent.class)
@@ -88,7 +92,8 @@ public class DemoDataSeeder {
 	@org.springframework.transaction.annotation.Transactional
 	public synchronized void seedIfEmpty() {
 		if (!slotSnapshotRepository.findRecentFleet(1).isEmpty()) {
-			log.info("Demo database already contains historical telemetry. Skipping seed.");
+			log.info("Demo database already contains historical telemetry. Updating any legacy un-enriched demo events...");
+			enrichLegacyDemoEventsIfAny();
 			return;
 		}
 
@@ -141,16 +146,18 @@ public class DemoDataSeeder {
 			// Occasional crawlers exceeding rate limit
 			if (slotKey % 67 == 0) {
 				edgePrimaryBlocked = 1;
-				events.add(new BlockedClientEvent(
-						null, "Demo-Edge-EU", "Primary-Rate-Limiter", slotKey, startTime,
-						"198.51.100.42", 142 + rnd.nextInt(30), 0, false, true, endTime
+				events.add(createEnrichedEvent(
+						"Demo-Edge-EU", "Primary-Rate-Limiter", slotKey, startTime,
+						"20.15.240.65", 8075L, "OpenAI / Microsoft", "US", org.henbru.antidos.collector.model.ClientType.AI_CRAWLER,
+						142 + rnd.nextInt(30), 0, false, true, endTime
 				));
 			}
 			if (slotKey % 131 == 0) {
 				edgePrimaryBlocked++;
-				events.add(new BlockedClientEvent(
-						null, "Demo-Edge-EU", "Primary-Rate-Limiter", slotKey, startTime,
-						"203.0.113.88", 129 + rnd.nextInt(25), 0, false, true, endTime
+				events.add(createEnrichedEvent(
+						"Demo-Edge-EU", "Primary-Rate-Limiter", slotKey, startTime,
+						"66.249.66.1", 15169L, "Google LLC", "US", org.henbru.antidos.collector.model.ClientType.SEARCH_ENGINE,
+						129 + rnd.nextInt(25), 0, false, true, endTime
 				));
 			}
 
@@ -166,23 +173,26 @@ public class DemoDataSeeder {
 
 			if (slotKey % 19 == 0) {
 				edgeSubnetBlocked++;
-				events.add(new BlockedClientEvent(
-						null, "Demo-Edge-EU", "Subnet-Guard", slotKey, startTime,
-						"198.51.100.0/24", 290 + rnd.nextInt(120), 0, true, true, endTime
+				events.add(createEnrichedEvent(
+						"Demo-Edge-EU", "Subnet-Guard", slotKey, startTime,
+						"45.154.255.0/24", 45102L, "Alibaba Cloud", "SG", org.henbru.antidos.collector.model.ClientType.DATACENTER,
+						290 + rnd.nextInt(120), 0, true, true, endTime
 				));
 			}
 			if (slotKey % 43 == 0) {
 				edgeSubnetBlocked++;
-				events.add(new BlockedClientEvent(
-						null, "Demo-Edge-EU", "Subnet-Guard", slotKey, startTime,
-						"203.0.113.0/24", 260 + rnd.nextInt(90), 0, true, true, endTime
+				events.add(createEnrichedEvent(
+						"Demo-Edge-EU", "Subnet-Guard", slotKey, startTime,
+						"185.246.221.0/24", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
+						260 + rnd.nextInt(90), 0, true, true, endTime
 				));
 			}
 			if (slotKey % 89 == 0) {
 				edgeSubnetBlocked++;
-				events.add(new BlockedClientEvent(
-						null, "Demo-Edge-EU", "Subnet-Guard", slotKey, startTime,
-						"45.154.255.0/24", 310 + rnd.nextInt(110), 0, true, true, endTime
+				events.add(createEnrichedEvent(
+						"Demo-Edge-EU", "Subnet-Guard", slotKey, startTime,
+						"10.68.42.0/24", null, "Private Network (RFC 1918)", null, org.henbru.antidos.collector.model.ClientType.PRIVATE_NETWORK,
+						310 + rnd.nextInt(110), 0, true, true, endTime
 				));
 			}
 
@@ -198,24 +208,27 @@ public class DemoDataSeeder {
 
 			if (slotKey % 23 == 0) {
 				edgeIpv6Blocked++;
-				events.add(new BlockedClientEvent(
-						null, "Demo-Edge-EU", "IPv6-Rate-Limiter", slotKey, startTime,
-						"2a02:1205:502c:3b00:1c44:98ff:fe22:1011", 165 + rnd.nextInt(40), 0, true, true, endTime
+				events.add(createEnrichedEvent(
+						"Demo-Edge-EU", "IPv6-Rate-Limiter", slotKey, startTime,
+						"2a02:1205:502c:3b00:1c44:98ff:fe22:1011", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
+						165 + rnd.nextInt(40), 0, true, true, endTime
 				));
 			}
 			if (slotKey % 47 == 0) {
 				// Second rotating client from the exact same residential /64 prefix
 				edgeIpv6Blocked++;
-				events.add(new BlockedClientEvent(
-						null, "Demo-Edge-EU", "IPv6-Rate-Limiter", slotKey, startTime,
-						"2a02:1205:502c:3b00:2d55:77aa:1122:3344", 152 + rnd.nextInt(35), 0, true, true, endTime
+				events.add(createEnrichedEvent(
+						"Demo-Edge-EU", "IPv6-Rate-Limiter", slotKey, startTime,
+						"2a02:1205:502c:3b00:2d55:77aa:1122:3344", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
+						152 + rnd.nextInt(35), 0, true, true, endTime
 				));
 			}
 			if (slotKey % 79 == 0) {
 				edgeIpv6Blocked++;
-				events.add(new BlockedClientEvent(
-						null, "Demo-Edge-EU", "IPv6-Rate-Limiter", slotKey, startTime,
-						"2001:db8:85a3::8a2e:370:7334", 140 + rnd.nextInt(30), 0, true, true, endTime
+				events.add(createEnrichedEvent(
+						"Demo-Edge-EU", "IPv6-Rate-Limiter", slotKey, startTime,
+						"fd00:10:68::42", null, "Unique Local Address (RFC 4193)", null, org.henbru.antidos.collector.model.ClientType.PRIVATE_NETWORK,
+						140 + rnd.nextInt(30), 0, true, true, endTime
 				));
 			}
 
@@ -241,13 +254,10 @@ public class DemoDataSeeder {
 				apiBlocked = 12 + rnd.nextInt(4);
 				for (int i = 0; i < apiBlocked && i < DEMO_PROFILES.length; i++) {
 					DemoIpProfile p = DEMO_PROFILES[i % DEMO_PROFILES.length];
-					org.henbru.antidos.collector.model.IpNetworkInfo net = org.henbru.antidos.collector.util.IpNetworkUtil.parse(p.ip());
-					events.add(new BlockedClientEvent(
-							null, "Demo-API-Gateway", "API-DoS-Shield", slotKey, startTime,
-							p.ip(), net.version(), net.prefix(), net.v4Start(), net.v4End(),
-							net.v6Start(), net.v6End(), net.subnetGroup(),
-							180 + rnd.nextInt(750), 10 + rnd.nextInt(25), true, true, endTime,
-							p.asn(), p.asOrg(), p.country(), p.type(), org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+					events.add(createEnrichedEvent(
+							"Demo-API-Gateway", "API-DoS-Shield", slotKey, startTime,
+							p.ip(), p.asn(), p.asOrg(), p.country(), p.type(),
+							180 + rnd.nextInt(750), 10 + rnd.nextInt(25), true, true, endTime
 					));
 				}
 			} else if (isAttackWave2) {
@@ -256,13 +266,10 @@ public class DemoDataSeeder {
 				apiBlocked = 8 + rnd.nextInt(4);
 				for (int i = 0; i < apiBlocked && i < DEMO_PROFILES.length; i++) {
 					DemoIpProfile p = DEMO_PROFILES[(i + 4) % DEMO_PROFILES.length];
-					org.henbru.antidos.collector.model.IpNetworkInfo net = org.henbru.antidos.collector.util.IpNetworkUtil.parse(p.ip());
-					events.add(new BlockedClientEvent(
-							null, "Demo-API-Gateway", "API-DoS-Shield", slotKey, startTime,
-							p.ip(), net.version(), net.prefix(), net.v4Start(), net.v4End(),
-							net.v6Start(), net.v6End(), net.subnetGroup(),
-							140 + rnd.nextInt(500), 5 + rnd.nextInt(15), true, true, endTime,
-							p.asn(), p.asOrg(), p.country(), p.type(), org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+					events.add(createEnrichedEvent(
+							"Demo-API-Gateway", "API-DoS-Shield", slotKey, startTime,
+							p.ip(), p.asn(), p.asOrg(), p.country(), p.type(),
+							140 + rnd.nextInt(500), 5 + rnd.nextInt(15), true, true, endTime
 					));
 				}
 			} else if (isRecentAttack) {
@@ -271,13 +278,10 @@ public class DemoDataSeeder {
 				apiBlocked = 10 + rnd.nextInt(5);
 				for (int i = 0; i < apiBlocked && i < DEMO_PROFILES.length; i++) {
 					DemoIpProfile p = DEMO_PROFILES[i % DEMO_PROFILES.length];
-					org.henbru.antidos.collector.model.IpNetworkInfo net = org.henbru.antidos.collector.util.IpNetworkUtil.parse(p.ip());
-					events.add(new BlockedClientEvent(
-							null, "Demo-API-Gateway", "API-DoS-Shield", slotKey, startTime,
-							p.ip(), net.version(), net.prefix(), net.v4Start(), net.v4End(),
-							net.v6Start(), net.v6End(), net.subnetGroup(),
-							150 + rnd.nextInt(600), 8 + rnd.nextInt(20), rnd.nextBoolean(), true, endTime,
-							p.asn(), p.asOrg(), p.country(), p.type(), org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+					events.add(createEnrichedEvent(
+							"Demo-API-Gateway", "API-DoS-Shield", slotKey, startTime,
+							p.ip(), p.asn(), p.asOrg(), p.country(), p.type(),
+							150 + rnd.nextInt(600), 8 + rnd.nextInt(20), rnd.nextBoolean(), true, endTime
 					));
 				}
 			} else {
@@ -393,5 +397,70 @@ public class DemoDataSeeder {
 		long elapsed = System.currentTimeMillis() - start;
 		log.info("Historical demo seed complete in {} ms: Ingested {} slot snapshots, {} client block events, and {} poll audit logs.",
 				elapsed, snapshots.size(), events.size(), logs.size());
+	}
+
+	private BlockedClientEvent createEnrichedEvent(
+			String serverId,
+			String valveName,
+			long slotKey,
+			Instant slotTime,
+			String ip,
+			Long asn,
+			String asOrg,
+			String country,
+			org.henbru.antidos.collector.model.ClientType type,
+			int requestCount,
+			int retainedCount,
+			boolean locked,
+			boolean completed,
+			Instant lastUpdatedAt
+	) {
+		org.henbru.antidos.collector.model.IpNetworkInfo net = org.henbru.antidos.collector.util.IpNetworkUtil.parse(ip);
+		return new BlockedClientEvent(
+				null, serverId, valveName, slotKey, slotTime,
+				ip, net.version(), net.prefix(), net.v4Start(), net.v4End(),
+				net.v6Start(), net.v6End(), net.subnetGroup(),
+				requestCount, retainedCount, locked, completed, lastUpdatedAt,
+				asn, asOrg, country, type, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+		);
+	}
+
+	private void enrichLegacyDemoEventsIfAny() {
+		try {
+			jdbcTemplate.update("""
+					UPDATE blocked_client_events
+					SET asn = 8075, as_org = 'OpenAI / Microsoft', country_code = 'US', client_type = 'AI_CRAWLER', enrichment_status = 'ENRICHED'
+					WHERE client_key = '198.51.100.42' OR client_key = '20.15.240.65'
+					""");
+			jdbcTemplate.update("""
+					UPDATE blocked_client_events
+					SET asn = 15169, as_org = 'Google LLC', country_code = 'US', client_type = 'SEARCH_ENGINE', enrichment_status = 'ENRICHED'
+					WHERE client_key = '203.0.113.88' OR client_key = '66.249.66.1'
+					""");
+			jdbcTemplate.update("""
+					UPDATE blocked_client_events
+					SET asn = 45102, as_org = 'Alibaba Cloud', country_code = 'SG', client_type = 'DATACENTER', enrichment_status = 'ENRICHED'
+					WHERE client_key = '198.51.100.0/24' OR client_key = '45.154.255.0/24'
+					""");
+			jdbcTemplate.update("""
+					UPDATE blocked_client_events
+					SET asn = 3320, as_org = 'Deutsche Telekom AG', country_code = 'DE', client_type = 'RESIDENTIAL', enrichment_status = 'ENRICHED'
+					WHERE client_key = '203.0.113.0/24' OR client_key = '185.246.221.0/24'
+					   OR client_key = '2a02:1205:502c:3b00:1c44:98ff:fe22:1011'
+					   OR client_key = '2a02:1205:502c:3b00:2d55:77aa:1122:3344'
+					""");
+			jdbcTemplate.update("""
+					UPDATE blocked_client_events
+					SET as_org = 'Private Network (RFC 1918)', client_type = 'PRIVATE_NETWORK', enrichment_status = 'ENRICHED'
+					WHERE client_key = '10.68.42.15' OR client_key = '10.68.42.0/24'
+					""");
+			jdbcTemplate.update("""
+					UPDATE blocked_client_events
+					SET as_org = 'Unique Local Address (RFC 4193)', client_type = 'PRIVATE_NETWORK', enrichment_status = 'ENRICHED'
+					WHERE client_key = '2001:db8:85a3::8a2e:370:7334' OR client_key = 'fd00:10:68::42'
+					""");
+		} catch (Exception e) {
+			log.warn("Could not backfill legacy demo events: {}", e.getMessage());
+		}
 	}
 }

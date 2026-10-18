@@ -49,7 +49,7 @@
                         <span th:if="${offender.clientType != null and offender.clientType.name() == 'RESIDENTIAL'}" class="badge badge-secondary" title="Consumer / Residential ISP">&#x1F3E0; Residential</span>
                         <span th:if="${offender.clientType != null and offender.clientType.name() == 'MOBILE'}" class="badge badge-info" title="Mobile Carrier / CGNAT">&#x1F4F1; Mobile</span>
                         <span th:if="${offender.clientType != null and offender.clientType.name() == 'PRIVATE_NETWORK'}" class="badge badge-info" title="Private Intranet / RFC 1918 / Local Network">&#x1F512; Private Net</span>
-                        <span th:if="${offender.clientType == null or offender.clientType.name() == 'UNKNOWN'}" class="badge badge-secondary" title="Unknown classification">-</span>
+                        <span th:if="${offender.clientType == null or offender.clientType.name() == 'UNKNOWN'}" class="badge badge-secondary" style="padding: 1px 6px; font-size: 9px; opacity: 0.75;" title="Unclassified / No ASN match">Unclassified</span>
                     </td>
                     <td>
                         <span class="badge badge-danger" th:text="${offender.totalBlockIncidents}">12</span>

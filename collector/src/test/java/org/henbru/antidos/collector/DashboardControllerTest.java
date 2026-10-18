@@ -1,5 +1,6 @@
 package org.henbru.antidos.collector;
 
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -20,6 +21,9 @@ class DashboardControllerTest {
 
 	@Autowired
 	private org.henbru.antidos.collector.storage.SlotSnapshotRepository slotSnapshotRepository;
+
+	@Autowired
+	private org.henbru.antidos.collector.storage.ClientEventRepository clientEventRepository;
 
 	@Test
 	void testIndexPageLoads() throws Exception {
@@ -127,6 +131,16 @@ class DashboardControllerTest {
 				now.minusSeconds(60), now, 1250L, 10, 2, true, now
 		));
 
+		clientEventRepository.batchUpsert(List.of(new org.henbru.antidos.collector.model.BlockedClientEvent(
+				null, "Demo-Server", "TEST-VALVE", 55555L,
+				now.minusSeconds(60), "198.51.100.42",
+				4, 32, null, null, null, null, "198.51.100.0/24",
+				15, 0, false, true, now,
+				8075L, "OpenAI / Microsoft", "US",
+				org.henbru.antidos.collector.model.ClientType.AI_CRAWLER,
+				org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+		)));
+
 		mockMvc.perform(get("/server/Demo-Server"))
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("Demo-Server")))
@@ -134,6 +148,8 @@ class DashboardControllerTest {
 				.andExpect(content().string(containsString("Blocked Client Incidents on this Server")))
 				.andExpect(content().string(containsString("55555")))
 				.andExpect(content().string(containsString("TEST-VALVE")))
+				.andExpect(content().string(containsString("AI Bot")))
+				.andExpect(content().string(containsString("AS8075")))
 				.andExpect(content().string(containsString("View Incidents &rarr;")));
 	}
 }
