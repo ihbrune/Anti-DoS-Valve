@@ -246,27 +246,27 @@ public class DemoDataSeeder {
 					"Polled 1 valve(s), 1 slot(s), " + evs + " event(s)", null
 			));
 
-			// Staging Node with occasional warnings and a simulated error
-			if (h == 9) {
-				// Simulated temporary outage
-				logs.add(new PollEventLog(
-						null, "Demo-Staging-Node", "http://localhost:8090/mock-valve/staging-node/antidos-status",
-						pollTime.plusSeconds(5), "ERROR", 503, 42L, 0, 0, 0,
-						"Connection failed: HTTP 503 Service Unavailable", "HTTP 503 response from Demo-Staging-Node"
-				));
-			} else if (h == 17 || h == 5) {
-				// Simulated slow response warning
-				logs.add(new PollEventLog(
-						null, "Demo-Staging-Node", "http://localhost:8090/mock-valve/staging-node/antidos-status",
-						pollTime.plusSeconds(5), "WARNING", 200, 1140L + rnd.nextInt(80), 1, 1, 0,
-						"Slow response: 1140 ms (threshold: 1000 ms)", null
-				));
-			} else {
-				logs.add(new PollEventLog(
-						null, "Demo-Staging-Node", "http://localhost:8090/mock-valve/staging-node/antidos-status",
-						pollTime.plusSeconds(5), "SUCCESS", 200, 20L + rnd.nextInt(15), 1, 1, 0,
-						"Polled 1 valve(s), 1 slot(s), 0 event(s)", null
-				));
+			switch (h) {
+				case 9 ->
+					// Simulated temporary outage
+					logs.add(new PollEventLog(
+							null, "Demo-Staging-Node", "http://localhost:8090/mock-valve/staging-node/antidos-status",
+							pollTime.plusSeconds(5), "ERROR", 503, 42L, 0, 0, 0,
+							"Connection failed: HTTP 503 Service Unavailable", "HTTP 503 response from Demo-Staging-Node"
+					));
+				case 17, 5 ->
+					// Simulated slow response warning
+					logs.add(new PollEventLog(
+							null, "Demo-Staging-Node", "http://localhost:8090/mock-valve/staging-node/antidos-status",
+							pollTime.plusSeconds(5), "WARNING", 200, 1140L + rnd.nextInt(80), 1, 1, 0,
+							"Slow response: 1140 ms (threshold: 1000 ms)", null
+					));
+				default ->
+					logs.add(new PollEventLog(
+							null, "Demo-Staging-Node", "http://localhost:8090/mock-valve/staging-node/antidos-status",
+							pollTime.plusSeconds(5), "SUCCESS", 200, 20L + rnd.nextInt(15), 1, 1, 0,
+							"Polled 1 valve(s), 1 slot(s), 0 event(s)", null
+					));
 			}
 		}
 
