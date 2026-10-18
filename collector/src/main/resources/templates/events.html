@@ -122,6 +122,68 @@
                     </div>
                 </div>
             </div>
+
+            <!-- 5. Classification Filter -->
+            <div class="filter-field">
+                <div class="filter-label" style="display: flex; justify-content: space-between;">
+                    <span>Classification</span>
+                    <div>
+                        <a href="javascript:void(0);" onclick="toggleCheckboxes('type-cb', true)" style="color: var(--color-primary); text-decoration: none; font-size: 10px; margin-right: 6px;">All</a>
+                        <a href="javascript:void(0);" onclick="toggleCheckboxes('type-cb', false)" style="color: var(--text-muted); text-decoration: none; font-size: 10px;">Clear</a>
+                    </div>
+                </div>
+                <div class="pills-group">
+                    <label class="pill-label">
+                        <input type="checkbox" name="clientTypes" value="DATACENTER" class="type-cb"
+                               th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'DATACENTER')}">
+                        <span>&#x1F3E2; Datacenter</span>
+                    </label>
+                    <label class="pill-label">
+                        <input type="checkbox" name="clientTypes" value="RESIDENTIAL" class="type-cb"
+                               th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'RESIDENTIAL')}">
+                        <span>&#x1F3E0; Residential</span>
+                    </label>
+                    <label class="pill-label">
+                        <input type="checkbox" name="clientTypes" value="SEARCH_ENGINE" class="type-cb"
+                               th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'SEARCH_ENGINE')}">
+                        <span>&#x1F50D; Search Engine</span>
+                    </label>
+                    <label class="pill-label">
+                        <input type="checkbox" name="clientTypes" value="AI_CRAWLER" class="type-cb"
+                               th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'AI_CRAWLER')}">
+                        <span>&#x1F916; AI Bot</span>
+                    </label>
+                    <label class="pill-label">
+                        <input type="checkbox" name="clientTypes" value="MOBILE" class="type-cb"
+                               th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'MOBILE')}">
+                        <span>&#x1F4F1; Mobile</span>
+                    </label>
+                    <label class="pill-label">
+                        <input type="checkbox" name="clientTypes" value="PRIVATE_NETWORK" class="type-cb"
+                               th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'PRIVATE_NETWORK')}">
+                        <span>&#x1F512; Private Net</span>
+                    </label>
+                    <label class="pill-label">
+                        <input type="checkbox" name="clientTypes" value="UNKNOWN" class="type-cb"
+                               th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'UNKNOWN')}">
+                        <span>Unclassified</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 6. Autonomous System (ASN) Filter -->
+            <div class="filter-field">
+                <label class="filter-label" for="asnInput">Autonomous System (ASN)</label>
+                <input type="text"
+                       id="asnInput"
+                       name="asn"
+                       class="input-control"
+                       placeholder="e.g. 3320 or AS15169"
+                       th:value="${selectedAsn}">
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                    Filter events matching this numeric ASN (optional 'AS' prefix accepted).
+                </div>
+            </div>
         </div>
 
         <!-- Filter Actions Bar -->

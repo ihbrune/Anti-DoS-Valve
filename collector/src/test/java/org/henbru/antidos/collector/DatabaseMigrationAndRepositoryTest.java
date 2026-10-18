@@ -5,6 +5,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import org.henbru.antidos.collector.model.BlockedClientEvent;
+import org.henbru.antidos.collector.model.ClientType;
 import org.henbru.antidos.collector.model.EndpointHeartbeat;
 import org.henbru.antidos.collector.model.PollEventLog;
 import org.henbru.antidos.collector.model.SlotSnapshot;
@@ -182,6 +183,77 @@ class DatabaseMigrationAndRepositoryTest {
 		assertNotNull(topSubnet);
 		assertEquals(80L, topSubnet.totalBlockedRequests());
 		assertEquals(2, topSubnet.distinctServersTargeted()); // Targeted both PROD-1 and PROD-2!
+	}
+
+	@Test
+	void testClientEventRepositoryClassificationAndAsnFilteringAndAsnRollup() {
+		Instant now = Instant.now();
+		BlockedClientEvent e1 = new BlockedClientEvent(
+				null, "SERVER-PROD-1", "VALVE-API", 300L, now.minus(30, ChronoUnit.MINUTES), "198.51.100.1",
+				4, 32, null, null, null, null, "198.51.100.0/24",
+				50, 0, false, true, now,
+				3320L, "Deutsche Telekom AG", "DE", ClientType.RESIDENTIAL, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+		);
+		BlockedClientEvent e2 = new BlockedClientEvent(
+				null, "SERVER-PROD-2", "VALVE-API", 300L, now.minus(25, ChronoUnit.MINUTES), "198.51.100.2",
+				4, 32, null, null, null, null, "198.51.100.0/24",
+				70, 0, false, true, now,
+				3320L, "Deutsche Telekom AG", "DE", ClientType.RESIDENTIAL, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+		);
+		BlockedClientEvent e3 = new BlockedClientEvent(
+				null, "SERVER-PROD-1", "VALVE-API", 300L, now.minus(20, ChronoUnit.MINUTES), "203.0.113.10",
+				4, 32, null, null, null, null, "203.0.113.0/24",
+				100, 0, false, true, now,
+				8075L, "Microsoft Corporation", "US", ClientType.DATACENTER, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+		);
+		BlockedClientEvent e4 = new BlockedClientEvent(
+				null, "SERVER-PROD-1", "VALVE-API", 300L, now.minus(15, ChronoUnit.MINUTES), "10.68.1.1",
+				4, 32, null, null, null, null, "10.68.1.0/24",
+				20, 0, false, true, now,
+				null, "Private Network", null, ClientType.PRIVATE_NETWORK, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+		);
+
+		clientEventRepository.batchUpsert(List.of(e1, e2, e3, e4));
+
+		// 1. Filter by clientTypes = PRIVATE_NETWORK
+		List<BlockedClientEvent> privateEvents = clientEventRepository.findRecentEventsFiltered(
+				null, null, now.minus(1, ChronoUnit.HOURS), now, null,
+				List.of("PRIVATE_NETWORK"), null, 50, 0
+		);
+		assertTrue(privateEvents.stream().anyMatch(e -> "10.68.1.1".equals(e.clientKey())));
+		assertTrue(privateEvents.stream().allMatch(e -> e.clientType() == ClientType.PRIVATE_NETWORK));
+
+		// 2. Filter by numeric ASN = 3320
+		List<BlockedClientEvent> telekomEvents = clientEventRepository.findRecentEventsFiltered(
+				null, null, now.minus(1, ChronoUnit.HOURS), now, null,
+				null, 3320L, 50, 0
+		);
+		assertEquals(2, telekomEvents.size());
+		assertTrue(telekomEvents.stream().allMatch(e -> Long.valueOf(3320L).equals(e.asn())));
+
+		// 3. Filter by query string "AS8075" (clientQuery automatic ASN parsing)
+		List<BlockedClientEvent> msEvents = clientEventRepository.findRecentEventsFiltered(
+				null, null, now.minus(1, ChronoUnit.HOURS), now, "AS8075",
+				null, null, 50, 0
+		);
+		assertEquals(1, msEvents.size());
+		assertEquals("203.0.113.10", msEvents.getFirst().clientKey());
+
+		// 4. Top Offenders Rollup by ASN
+		List<TopOffenderSummary> asnRollup = clientEventRepository.findTopOffendersFiltered(
+				null, null, now.minus(1, ChronoUnit.HOURS), now, null,
+				null, null, "ASN", 10
+		);
+		assertFalse(asnRollup.isEmpty());
+
+		TopOffenderSummary as3320 = asnRollup.stream()
+				.filter(o -> "AS3320".equals(o.clientKey()))
+				.findFirst()
+				.orElse(null);
+		assertNotNull(as3320, "Should have grouped entries under AS3320");
+		assertEquals(120L, as3320.totalBlockedRequests(), "Should sum 50 + 70 requests from e1 and e2");
+		assertEquals(2, as3320.distinctClientsCount(), "Should have 2 distinct IPs in AS3320");
+		assertEquals(2, as3320.distinctServersTargeted(), "Should span 2 servers (PROD-1, PROD-2)");
 	}
 
 	@Test

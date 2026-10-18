@@ -158,8 +158,31 @@ public class ClientEventRepository {
 
 	/**
 	 * Core query builder for filtering recent blocking events with multi-server, multi-valve, time range,
-	 * and CIDR/subnet criteria.
+	 * CIDR/subnet, classification, and ASN criteria.
 	 */
+	public List<BlockedClientEvent> findRecentEventsFiltered(
+			List<String> serverIds,
+			List<String> valveNames,
+			Instant fromTime,
+			Instant toTime,
+			String clientQuery,
+			List<String> clientTypes,
+			Long asn,
+			int limit,
+			int offset
+	) {
+		StringBuilder sql = new StringBuilder("SELECT * FROM blocked_client_events WHERE 1=1 ");
+		List<Object> params = new ArrayList<>();
+
+		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn);
+
+		sql.append("ORDER BY slot_time DESC LIMIT ? OFFSET ?");
+		params.add(Math.max(1, Math.min(limit, 500)));
+		params.add(Math.max(0, offset));
+
+		return jdbcTemplate.query(sql.toString(), ROW_MAPPER, params.toArray());
+	}
+
 	public List<BlockedClientEvent> findRecentEventsFiltered(
 			List<String> serverIds,
 			List<String> valveNames,
@@ -169,16 +192,25 @@ public class ClientEventRepository {
 			int limit,
 			int offset
 	) {
-		StringBuilder sql = new StringBuilder("SELECT * FROM blocked_client_events WHERE 1=1 ");
+		return findRecentEventsFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, null, null, limit, offset);
+	}
+
+	public long countRecentEventsFiltered(
+			List<String> serverIds,
+			List<String> valveNames,
+			Instant fromTime,
+			Instant toTime,
+			String clientQuery,
+			List<String> clientTypes,
+			Long asn
+	) {
+		StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM blocked_client_events WHERE 1=1 ");
 		List<Object> params = new ArrayList<>();
 
-		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery);
+		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn);
 
-		sql.append("ORDER BY slot_time DESC LIMIT ? OFFSET ?");
-		params.add(Math.max(1, Math.min(limit, 500)));
-		params.add(Math.max(0, offset));
-
-		return jdbcTemplate.query(sql.toString(), ROW_MAPPER, params.toArray());
+		Long count = jdbcTemplate.queryForObject(sql.toString(), Long.class, params.toArray());
+		return count != null ? count : 0L;
 	}
 
 	public long countRecentEventsFiltered(
@@ -188,17 +220,12 @@ public class ClientEventRepository {
 			Instant toTime,
 			String clientQuery
 	) {
-		StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM blocked_client_events WHERE 1=1 ");
-		List<Object> params = new ArrayList<>();
-
-		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery);
-
-		Long count = jdbcTemplate.queryForObject(sql.toString(), Long.class, params.toArray());
-		return count != null ? count : 0L;
+		return countRecentEventsFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, null, null);
 	}
 
 	/**
-	 * Aggregates top offenders either by single client IP/key ("CLIENT") or by canonical subnet ("SUBNET").
+	 * Aggregates top offenders either by single client IP/key ("CLIENT"), by canonical subnet ("SUBNET"),
+	 * or by full Autonomous System ("ASN"), supporting classification and ASN filtering.
 	 */
 	public List<TopOffenderSummary> findTopOffendersFiltered(
 			List<String> serverIds,
@@ -206,6 +233,8 @@ public class ClientEventRepository {
 			Instant fromTime,
 			Instant toTime,
 			String clientQuery,
+			List<String> clientTypes,
+			Long asn,
 			String groupBy,
 			int limit
 	) {
@@ -235,14 +264,14 @@ public class ClientEventRepository {
 				.append("WHERE 1=1 ");
 
 		List<Object> params = new ArrayList<>();
-		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery);
+		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn);
 
 		sql.append("GROUP BY ").append(groupCol).append(" ");
 		sql.append("ORDER BY total_requests DESC LIMIT ?");
 		params.add(Math.max(1, Math.min(limit, 500)));
 
 		return jdbcTemplate.query(sql.toString(), (rs, rowNum) -> {
-			Long asn = rs.getObject("asn") != null ? rs.getLong("asn") : null;
+			Long rowAsn = rs.getObject("asn") != null ? rs.getLong("asn") : null;
 			String rawType = rs.getString("client_type");
 			ClientType clientType = rawType != null ? ClientType.valueOf(rawType) : ClientType.UNKNOWN;
 
@@ -254,13 +283,25 @@ public class ClientEventRepository {
 					"",
 					rs.getTimestamp("first_seen").toInstant(),
 					rs.getTimestamp("last_seen").toInstant(),
-					asn,
+					rowAsn,
 					rs.getString("as_org"),
 					rs.getString("country_code"),
 					clientType,
 					rs.getInt("distinct_clients")
 			);
 		}, params.toArray());
+	}
+
+	public List<TopOffenderSummary> findTopOffendersFiltered(
+			List<String> serverIds,
+			List<String> valveNames,
+			Instant fromTime,
+			Instant toTime,
+			String clientQuery,
+			String groupBy,
+			int limit
+	) {
+		return findTopOffendersFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, null, null, groupBy, limit);
 	}
 
 	private void appendFilterCriteria(
@@ -271,6 +312,20 @@ public class ClientEventRepository {
 			Instant fromTime,
 			Instant toTime,
 			String clientQuery
+	) {
+		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery, null, null);
+	}
+
+	private void appendFilterCriteria(
+			StringBuilder sql,
+			List<Object> params,
+			List<String> serverIds,
+			List<String> valveNames,
+			Instant fromTime,
+			Instant toTime,
+			String clientQuery,
+			List<String> clientTypes,
+			Long asn
 	) {
 		if (serverIds != null && !serverIds.isEmpty()) {
 			sql.append("AND server_id IN (");
@@ -300,25 +355,68 @@ public class ClientEventRepository {
 			params.add(Timestamp.from(toTime));
 		}
 
-		if (clientQuery != null && !clientQuery.trim().isEmpty()) {
-			IpNetworkUtil.SearchCriteria criteria = IpNetworkUtil.parseSearchQuery(clientQuery);
-			if (criteria.isIpSearch()) {
-				if (criteria.ipVersion() == 4) {
-					sql.append("AND (ip_version = 4 AND ip_v4_start <= ? AND ip_v4_end >= ?) ");
-					params.add(criteria.v4End());
-					params.add(criteria.v4Start());
-				} else if (criteria.ipVersion() == 6) {
-					sql.append("AND (ip_version = 6 AND ip_v6_start <= ? AND ip_v6_end >= ?) ");
-					params.add(criteria.v6End());
-					params.add(criteria.v6Start());
+		if (asn != null) {
+			sql.append("AND asn = ? ");
+			params.add(asn);
+		}
+
+		if (clientTypes != null && !clientTypes.isEmpty()) {
+			List<String> validTypes = clientTypes.stream()
+					.filter(t -> t != null && !t.isBlank() && !"ALL".equalsIgnoreCase(t.trim()))
+					.map(t -> t.trim().toUpperCase())
+					.toList();
+			if (!validTypes.isEmpty()) {
+				sql.append("AND client_type IN (");
+				for (int i = 0; i < validTypes.size(); i++) {
+					sql.append(i > 0 ? ",?" : "?");
+					params.add(validTypes.get(i));
 				}
-			} else if (criteria.hasFilter()) {
-				sql.append("AND (client_key LIKE ? OR subnet_group LIKE ?) ");
-				String likePattern = "%" + criteria.rawQuery() + "%";
-				params.add(likePattern);
-				params.add(likePattern);
+				sql.append(") ");
 			}
 		}
+
+		if (clientQuery != null && !clientQuery.trim().isEmpty()) {
+			String trimmedQuery = clientQuery.trim();
+			Long parsedAsn = parseAsnQuery(trimmedQuery);
+			if (parsedAsn != null && asn == null) {
+				sql.append("AND asn = ? ");
+				params.add(parsedAsn);
+			} else {
+				IpNetworkUtil.SearchCriteria criteria = IpNetworkUtil.parseSearchQuery(trimmedQuery);
+				if (criteria.isIpSearch()) {
+					if (criteria.ipVersion() == 4) {
+						sql.append("AND (ip_version = 4 AND ip_v4_start <= ? AND ip_v4_end >= ?) ");
+						params.add(criteria.v4End());
+						params.add(criteria.v4Start());
+					} else if (criteria.ipVersion() == 6) {
+						sql.append("AND (ip_version = 6 AND ip_v6_start <= ? AND ip_v6_end >= ?) ");
+						params.add(criteria.v6End());
+						params.add(criteria.v6Start());
+					}
+				} else if (criteria.hasFilter()) {
+					sql.append("AND (client_key LIKE ? OR subnet_group LIKE ? OR as_org LIKE ?) ");
+					String likePattern = "%" + criteria.rawQuery() + "%";
+					params.add(likePattern);
+					params.add(likePattern);
+					params.add(likePattern);
+				}
+			}
+		}
+	}
+
+	private static Long parseAsnQuery(String input) {
+		if (input == null) {
+			return null;
+		}
+		String s = input.trim();
+		if (s.regionMatches(true, 0, "AS", 0, 2)) {
+			String numPart = s.substring(2).trim();
+			try {
+				return Long.parseLong(numPart);
+			} catch (NumberFormatException ignored) {
+			}
+		}
+		return null;
 	}
 
 	public List<String> findDistinctServerIds() {

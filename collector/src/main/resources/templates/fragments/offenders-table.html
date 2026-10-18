@@ -37,19 +37,19 @@
                                    title="Inspect all individual blocking events for this client, subnet, or ASN"
                                    th:text="${offender.clientKey}">198.51.100.42</a>
                                 <span th:if="${offender.countryCode != null}" class="badge badge-secondary" style="padding: 1px 5px; font-size: 10px;" th:text="${offender.countryCode}">DE</span>
-                                <span th:if="${offender.asn != null and groupBy != 'ASN'}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px;" th:title="${offender.asOrg}" th:text="'AS' + ${offender.asn}">AS24940</span>
+                                <a th:if="${offender.asn != null and groupBy != 'ASN'}" th:href="@{/events(asn=${offender.asn})}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px; text-decoration: none;" th:title="${offender.asOrg + ' - Click to view incidents'}" th:text="'AS' + ${offender.asn}">AS24940</a>
                             </div>
                             <span th:if="${offender.asOrg != null}" style="font-size: 11px; color: var(--text-muted);" th:text="${offender.asOrg}">Hetzner Online GmbH</span>
                         </div>
                     </td>
                     <td>
-                        <span th:if="${offender.clientType != null and offender.clientType.name() == 'DATACENTER'}" class="badge badge-warning" title="Hosting / Datacenter / Cloud">&#x1F3E2; Datacenter</span>
-                        <span th:if="${offender.clientType != null and offender.clientType.name() == 'SEARCH_ENGINE'}" class="badge badge-success" title="Verified Search Engine Crawler">&#x1F50D; Search Engine</span>
-                        <span th:if="${offender.clientType != null and offender.clientType.name() == 'AI_CRAWLER'}" class="badge badge-purple" title="Verified AI Bot / LLM Crawler">&#x1F916; AI Bot</span>
-                        <span th:if="${offender.clientType != null and offender.clientType.name() == 'RESIDENTIAL'}" class="badge badge-secondary" title="Consumer / Residential ISP">&#x1F3E0; Residential</span>
-                        <span th:if="${offender.clientType != null and offender.clientType.name() == 'MOBILE'}" class="badge badge-info" title="Mobile Carrier / CGNAT">&#x1F4F1; Mobile</span>
-                        <span th:if="${offender.clientType != null and offender.clientType.name() == 'PRIVATE_NETWORK'}" class="badge badge-info" title="Private Intranet / RFC 1918 / Local Network">&#x1F512; Private Net</span>
-                        <span th:if="${offender.clientType == null or offender.clientType.name() == 'UNKNOWN'}" class="badge badge-secondary" style="padding: 1px 6px; font-size: 9px; opacity: 0.75;" title="Unclassified / No ASN match">Unclassified</span>
+                        <a th:if="${offender.clientType != null and offender.clientType.name() == 'DATACENTER'}" th:href="@{/events(clientTypes='DATACENTER')}" class="badge badge-warning" style="text-decoration: none;" title="Hosting / Datacenter / Cloud - Click to view incidents">&#x1F3E2; Datacenter</a>
+                        <a th:if="${offender.clientType != null and offender.clientType.name() == 'SEARCH_ENGINE'}" th:href="@{/events(clientTypes='SEARCH_ENGINE')}" class="badge badge-success" style="text-decoration: none;" title="Verified Search Engine Crawler - Click to view incidents">&#x1F50D; Search Engine</a>
+                        <a th:if="${offender.clientType != null and offender.clientType.name() == 'AI_CRAWLER'}" th:href="@{/events(clientTypes='AI_CRAWLER')}" class="badge badge-purple" style="text-decoration: none;" title="Verified AI Bot / LLM Crawler - Click to view incidents">&#x1F916; AI Bot</a>
+                        <a th:if="${offender.clientType != null and offender.clientType.name() == 'RESIDENTIAL'}" th:href="@{/events(clientTypes='RESIDENTIAL')}" class="badge badge-secondary" style="text-decoration: none;" title="Consumer / Residential ISP - Click to view incidents">&#x1F3E0; Residential</a>
+                        <a th:if="${offender.clientType != null and offender.clientType.name() == 'MOBILE'}" th:href="@{/events(clientTypes='MOBILE')}" class="badge badge-info" style="text-decoration: none;" title="Mobile Carrier / CGNAT - Click to view incidents">&#x1F4F1; Mobile</a>
+                        <a th:if="${offender.clientType != null and offender.clientType.name() == 'PRIVATE_NETWORK'}" th:href="@{/events(clientTypes='PRIVATE_NETWORK')}" class="badge badge-info" style="text-decoration: none;" title="Private Intranet / RFC 1918 / Local Network - Click to view incidents">&#x1F512; Private Net</a>
+                        <a th:if="${offender.clientType == null or offender.clientType.name() == 'UNKNOWN'}" th:href="@{/events(clientTypes='UNKNOWN')}" class="badge badge-secondary" style="padding: 1px 6px; font-size: 9px; opacity: 0.75; text-decoration: none;" title="Unclassified / No ASN match - Click to view incidents">Unclassified</a>
                     </td>
                     <td>
                         <span class="badge badge-danger" th:text="${offender.totalBlockIncidents}">12</span>

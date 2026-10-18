@@ -105,9 +105,11 @@ public class DashboardController {
 			@RequestParam(name = "from", required = false) String fromStr,
 			@RequestParam(name = "to", required = false) String toStr,
 			@RequestParam(name = "clientQuery", required = false) String clientQuery,
+			@RequestParam(name = "clientTypes", required = false) List<String> clientTypes,
+			@RequestParam(name = "asn", required = false) String asn,
 			@RequestParam(name = "limit", defaultValue = "50") int limit,
 			Model model) {
-		populateEventsModel(servers, valves, fromStr, toStr, clientQuery, limit, 0, model);
+		populateEventsModel(servers, valves, fromStr, toStr, clientQuery, clientTypes, asn, limit, 0, model);
 		return "events";
 	}
 
@@ -118,10 +120,12 @@ public class DashboardController {
 			@RequestParam(name = "from", required = false) String fromStr,
 			@RequestParam(name = "to", required = false) String toStr,
 			@RequestParam(name = "clientQuery", required = false) String clientQuery,
+			@RequestParam(name = "clientTypes", required = false) List<String> clientTypes,
+			@RequestParam(name = "asn", required = false) String asn,
 			@RequestParam(name = "limit", defaultValue = "50") int limit,
 			@RequestParam(name = "offset", defaultValue = "0") int offset,
 			Model model) {
-		populateEventsModel(servers, valves, fromStr, toStr, clientQuery, limit, offset, model);
+		populateEventsModel(servers, valves, fromStr, toStr, clientQuery, clientTypes, asn, limit, offset, model);
 		return "fragments/events-table :: eventsTable";
 	}
 
@@ -132,10 +136,12 @@ public class DashboardController {
 			@RequestParam(name = "from", required = false) String fromStr,
 			@RequestParam(name = "to", required = false) String toStr,
 			@RequestParam(name = "clientQuery", required = false) String clientQuery,
+			@RequestParam(name = "clientTypes", required = false) List<String> clientTypes,
+			@RequestParam(name = "asn", required = false) String asn,
 			@RequestParam(name = "groupBy", defaultValue = "CLIENT") String groupBy,
 			@RequestParam(name = "limit", defaultValue = "25") int limit,
 			Model model) {
-		populateOffendersModel(servers, valves, fromStr, toStr, clientQuery, groupBy, limit, model);
+		populateOffendersModel(servers, valves, fromStr, toStr, clientQuery, clientTypes, asn, groupBy, limit, model);
 		return "offenders";
 	}
 
@@ -146,10 +152,12 @@ public class DashboardController {
 			@RequestParam(name = "from", required = false) String fromStr,
 			@RequestParam(name = "to", required = false) String toStr,
 			@RequestParam(name = "clientQuery", required = false) String clientQuery,
+			@RequestParam(name = "clientTypes", required = false) List<String> clientTypes,
+			@RequestParam(name = "asn", required = false) String asn,
 			@RequestParam(name = "groupBy", defaultValue = "CLIENT") String groupBy,
 			@RequestParam(name = "limit", defaultValue = "25") int limit,
 			Model model) {
-		populateOffendersModel(servers, valves, fromStr, toStr, clientQuery, groupBy, limit, model);
+		populateOffendersModel(servers, valves, fromStr, toStr, clientQuery, clientTypes, asn, groupBy, limit, model);
 		return "fragments/offenders-table :: offenderTable";
 	}
 
@@ -255,6 +263,8 @@ public class DashboardController {
 			String fromStr,
 			String toStr,
 			String clientQuery,
+			List<String> clientTypes,
+			String asnStr,
 			int limit,
 			int offset,
 			Model model) {
@@ -268,10 +278,11 @@ public class DashboardController {
 			toTime = now;
 		}
 
+		Long parsedAsn = parseAsn(asnStr);
 		List<BlockedClientEvent> events = clientEventRepository.findRecentEventsFiltered(
-				servers, valves, fromTime, toTime, clientQuery, limit, offset);
+				servers, valves, fromTime, toTime, clientQuery, clientTypes, parsedAsn, limit, offset);
 		long totalCount = clientEventRepository.countRecentEventsFiltered(
-				servers, valves, fromTime, toTime, clientQuery);
+				servers, valves, fromTime, toTime, clientQuery, clientTypes, parsedAsn);
 
 		boolean hasMore = (offset + events.size()) < totalCount;
 		int nextOffset = offset + limit;
@@ -289,6 +300,8 @@ public class DashboardController {
 		model.addAttribute("fromTime", formatDateTimeLocal(fromTime));
 		model.addAttribute("toTime", formatDateTimeLocal(toTime));
 		model.addAttribute("clientQuery", clientQuery != null ? clientQuery : "");
+		model.addAttribute("selectedTypes", clientTypes != null ? clientTypes : List.of());
+		model.addAttribute("selectedAsn", asnStr != null ? asnStr : "");
 	}
 
 	private void populateOffendersModel(
@@ -297,6 +310,8 @@ public class DashboardController {
 			String fromStr,
 			String toStr,
 			String clientQuery,
+			List<String> clientTypes,
+			String asnStr,
 			String groupBy,
 			int limit,
 			Model model) {
@@ -310,9 +325,10 @@ public class DashboardController {
 			toTime = now;
 		}
 
-		String effectiveGroupBy = "SUBNET".equalsIgnoreCase(groupBy) ? "SUBNET" : "CLIENT";
+		Long parsedAsn = parseAsn(asnStr);
+		String effectiveGroupBy = "ASN".equalsIgnoreCase(groupBy) ? "ASN" : ("SUBNET".equalsIgnoreCase(groupBy) ? "SUBNET" : "CLIENT");
 		List<TopOffenderSummary> topOffenders = clientEventRepository.findTopOffendersFiltered(
-				servers, valves, fromTime, toTime, clientQuery, effectiveGroupBy, limit);
+				servers, valves, fromTime, toTime, clientQuery, clientTypes, parsedAsn, effectiveGroupBy, limit);
 
 		model.addAttribute("topOffenders", topOffenders);
 		model.addAttribute("groupBy", effectiveGroupBy);
@@ -325,6 +341,8 @@ public class DashboardController {
 		model.addAttribute("fromTime", formatDateTimeLocal(fromTime));
 		model.addAttribute("toTime", formatDateTimeLocal(toTime));
 		model.addAttribute("clientQuery", clientQuery != null ? clientQuery : "");
+		model.addAttribute("selectedTypes", clientTypes != null ? clientTypes : List.of());
+		model.addAttribute("selectedAsn", asnStr != null ? asnStr : "");
 	}
 
 	private List<String> getAvailableServerIds() {
@@ -380,5 +398,20 @@ public class DashboardController {
 				totalBlocked,
 				distinctBlocked
 		);
+	}
+
+	private Long parseAsn(String input) {
+		if (input == null || input.trim().isEmpty()) {
+			return null;
+		}
+		String s = input.trim();
+		if (s.regionMatches(true, 0, "AS", 0, 2)) {
+			s = s.substring(2).trim();
+		}
+		try {
+			return Long.parseLong(s);
+		} catch (NumberFormatException e) {
+			return null;
+		}
 	}
 }

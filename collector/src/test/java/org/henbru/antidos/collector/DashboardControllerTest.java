@@ -102,8 +102,16 @@ class DashboardControllerTest {
 				.andExpect(content().string(containsString("Multi-Server Incident Explorer")))
 				.andExpect(content().string(containsString("events-filter-form")));
 
+		mockMvc.perform(get("/events")
+						.param("clientTypes", "PRIVATE_NETWORK")
+						.param("asn", "3320"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Multi-Server Incident Explorer")));
+
 		mockMvc.perform(get("/fragments/events-table")
 						.param("clientQuery", "198.51.100.")
+						.param("clientTypes", "DATACENTER")
+						.param("asn", "AS3320")
 						.param("limit", "25"))
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("events-table-container")));
@@ -116,8 +124,22 @@ class DashboardControllerTest {
 				.andExpect(content().string(containsString("Top Offender Analytics &amp; Subnet Rollup")))
 				.andExpect(content().string(containsString("Subnet Rollup (/24 &amp; /64)")));
 
+		mockMvc.perform(get("/offenders")
+						.param("groupBy", "ASN")
+						.param("clientTypes", "DATACENTER")
+						.param("asn", "8075"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("ASN Rollup (Fleet Autonomous System)")));
+
 		mockMvc.perform(get("/fragments/offenders-table")
 						.param("groupBy", "SUBNET")
+						.param("limit", "25"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("offenders-table-container")));
+
+		mockMvc.perform(get("/fragments/offenders-table")
+						.param("groupBy", "ASN")
+						.param("clientTypes", "PRIVATE_NETWORK")
 						.param("limit", "25"))
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("offenders-table-container")));
