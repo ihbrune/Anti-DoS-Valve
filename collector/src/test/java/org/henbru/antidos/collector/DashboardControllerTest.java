@@ -23,7 +23,8 @@ class DashboardControllerTest {
 		mockMvc.perform(get("/"))
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("Anti-DoS Fleet Manager")))
-				.andExpect(content().string(containsString("Monitored Server Nodes")));
+				.andExpect(content().string(containsString("Monitored Server Nodes")))
+				.andExpect(content().string(containsString("hx-target=\"#fleet-container\" hx-swap=\"outerHTML\"")));
 	}
 
 	@Test

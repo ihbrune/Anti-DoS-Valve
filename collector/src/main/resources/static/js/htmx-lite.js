@@ -16,10 +16,13 @@
 
             const url = el.getAttribute('hx-get');
             const targetSel = el.getAttribute('hx-target');
-            const targetEl = targetSel ? document.querySelector(targetSel) : el;
             const trigger = el.getAttribute('hx-trigger') || 'click';
+            const swap = el.getAttribute('hx-swap') || 'innerHTML';
 
             function executeSwap() {
+                const targetEl = targetSel ? document.querySelector(targetSel) : el;
+                if (!targetEl) return;
+
                 el.classList.add('htmx-request');
                 fetch(url, { headers: { 'HX-Request': 'true' } })
                     .then(res => {
@@ -27,9 +30,15 @@
                         return res.text();
                     })
                     .then(html => {
-                        targetEl.innerHTML = html;
+                        if (swap === 'outerHTML') {
+                            const parent = targetEl.parentNode;
+                            targetEl.outerHTML = html;
+                            initHtmxElements(parent || document);
+                        } else {
+                            targetEl.innerHTML = html;
+                            initHtmxElements(targetEl);
+                        }
                         el.classList.remove('htmx-request');
-                        initHtmxElements(targetEl);
                     })
                     .catch(err => {
                         console.warn('HTMX update error:', err);

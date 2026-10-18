@@ -83,7 +83,7 @@
         </div>
 
         <!-- HTMX Polling for Fleet Nodes -->
-        <div hx-get="/fragments/fleet" hx-trigger="every 10s" hx-target="#fleet-container">
+        <div hx-get="/fragments/fleet" hx-trigger="every 10s" hx-target="#fleet-container" hx-swap="outerHTML">
             <div th:replace="~{fragments/fleet :: fleetList}"></div>
         </div>
     </section>
@@ -95,9 +95,9 @@
                 <span>&#x26A0;</span> Top Offending Clients (Fleet-wide)
             </div>
             <div style="display:flex; gap:8px;">
-                <button class="btn" hx-get="/fragments/top-offenders?hours=1" hx-target="#offender-container">1h</button>
-                <button class="btn" hx-get="/fragments/top-offenders?hours=24" hx-target="#offender-container">24h</button>
-                <button class="btn" hx-get="/fragments/top-offenders?hours=168" hx-target="#offender-container">7d</button>
+                <button class="btn" hx-get="/fragments/top-offenders?hours=1" hx-target="#offender-container" hx-swap="outerHTML">1h</button>
+                <button class="btn" hx-get="/fragments/top-offenders?hours=24" hx-target="#offender-container" hx-swap="outerHTML">24h</button>
+                <button class="btn" hx-get="/fragments/top-offenders?hours=168" hx-target="#offender-container" hx-swap="outerHTML">7d</button>
             </div>
         </div>
 
@@ -112,7 +112,7 @@
             <div class="section-title">
                 <span>&#x1F4CB;</span> Recent Blocking Incidents
             </div>
-            <button class="btn" hx-get="/fragments/recent-events" hx-target="#events-container">
+            <button class="btn" hx-get="/fragments/recent-events" hx-target="#events-container" hx-swap="outerHTML">
                 Refresh Log
             </button>
         </div>
