@@ -14,7 +14,7 @@
                 <th>Timestamp</th>
                 <th>Server</th>
                 <th>Valve</th>
-                <th>Client IP</th>
+                <th>Client IP / Forensics</th>
                 <th>Requests</th>
                 <th>Retained</th>
                 <th>Total</th>
@@ -34,11 +34,26 @@
                 </td>
                 <td><span class="badge badge-info" th:text="${event.valveName}">API LIMITER</span></td>
                 <td>
-                    <a th:href="@{/events(clientQuery=${event.clientKey})}"
-                       class="ip-mono"
-                       style="text-decoration: none; color: inherit;"
-                       title="View all incidents for this client"
-                       th:text="${event.clientKey}">203.0.113.42</a>
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <a th:href="@{/events(clientQuery=${event.clientKey})}"
+                               class="ip-mono"
+                               style="text-decoration: underline; color: inherit; font-weight: 600;"
+                               title="View all incidents for this client"
+                               th:text="${event.clientKey}">203.0.113.42</a>
+                            <span th:if="${event.countryCode != null}" class="badge badge-secondary" style="padding: 1px 5px; font-size: 10px;" th:text="${event.countryCode}">DE</span>
+                        </div>
+                        <div style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center;">
+                            <span th:if="${event.clientType != null and event.clientType.name() == 'DATACENTER'}" class="badge badge-warning" style="padding: 1px 6px; font-size: 9px;" title="Hosting / Datacenter / Cloud">&#x1F3E2; Datacenter</span>
+                            <span th:if="${event.clientType != null and event.clientType.name() == 'SEARCH_ENGINE'}" class="badge badge-success" style="padding: 1px 6px; font-size: 9px;" title="Verified Search Engine Crawler">&#x1F50D; Search Engine</span>
+                            <span th:if="${event.clientType != null and event.clientType.name() == 'AI_CRAWLER'}" class="badge badge-purple" style="padding: 1px 6px; font-size: 9px;" title="Verified AI Bot / LLM Crawler">&#x1F916; AI Bot</span>
+                            <span th:if="${event.clientType != null and event.clientType.name() == 'RESIDENTIAL'}" class="badge badge-secondary" style="padding: 1px 6px; font-size: 9px;" title="Consumer / Residential ISP">&#x1F3E0; Residential</span>
+                            <span th:if="${event.clientType != null and event.clientType.name() == 'MOBILE'}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px;" title="Mobile Carrier / CGNAT">&#x1F4F1; Mobile</span>
+                            <span th:if="${event.clientType != null and event.clientType.name() == 'PRIVATE_NETWORK'}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px;" title="Private Intranet / RFC 1918 / Local Network">&#x1F512; Private Net</span>
+                            <span th:if="${event.asn != null}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px;" th:title="${event.asOrg}" th:text="'AS' + ${event.asn}">AS24940</span>
+                            <span th:if="${event.asn == null and event.asOrg != null}" style="font-size: 10px; color: var(--text-muted);" th:text="${event.asOrg}">Private Network</span>
+                        </div>
+                    </div>
                 </td>
                 <td th:text="${event.requestCount}">120</td>
                 <td th:text="${event.retainedCount}">25</td>

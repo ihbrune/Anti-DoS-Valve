@@ -12,6 +12,7 @@
         <thead>
             <tr>
                 <th>Client IP / Subnet</th>
+                <th>Classification</th>
                 <th>Total Block Incidents</th>
                 <th>Total Requests Attempted</th>
                 <th>Targeted Servers</th>
@@ -23,11 +24,27 @@
         <tbody>
             <tr th:each="offender : ${topOffenders}">
                 <td>
-                    <a th:href="@{/events(clientQuery=${offender.clientKey})}"
-                       class="ip-mono"
-                       style="text-decoration: none; color: inherit;"
-                       title="View all incidents for this client or subnet"
-                       th:text="${offender.clientKey}">192.168.1.100</a>
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <a th:href="@{/events(clientQuery=${offender.clientKey})}"
+                               class="ip-mono"
+                               style="text-decoration: underline; color: inherit; font-weight: 600;"
+                               title="View all incidents for this client or subnet"
+                               th:text="${offender.clientKey}">192.168.1.100</a>
+                            <span th:if="${offender.countryCode != null}" class="badge badge-secondary" style="padding: 1px 5px; font-size: 10px;" th:text="${offender.countryCode}">DE</span>
+                            <span th:if="${offender.asn != null}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px;" th:title="${offender.asOrg}" th:text="'AS' + ${offender.asn}">AS24940</span>
+                        </div>
+                        <span th:if="${offender.asOrg != null}" style="font-size: 11px; color: var(--text-muted);" th:text="${offender.asOrg}">Hetzner Online GmbH</span>
+                    </div>
+                </td>
+                <td>
+                    <span th:if="${offender.clientType != null and offender.clientType.name() == 'DATACENTER'}" class="badge badge-warning" title="Hosting / Datacenter / Cloud">&#x1F3E2; Datacenter</span>
+                    <span th:if="${offender.clientType != null and offender.clientType.name() == 'SEARCH_ENGINE'}" class="badge badge-success" title="Verified Search Engine Crawler">&#x1F50D; Search Engine</span>
+                    <span th:if="${offender.clientType != null and offender.clientType.name() == 'AI_CRAWLER'}" class="badge badge-purple" title="Verified AI Bot / LLM Crawler">&#x1F916; AI Bot</span>
+                    <span th:if="${offender.clientType != null and offender.clientType.name() == 'RESIDENTIAL'}" class="badge badge-secondary" title="Consumer / Residential ISP">&#x1F3E0; Residential</span>
+                    <span th:if="${offender.clientType != null and offender.clientType.name() == 'MOBILE'}" class="badge badge-info" title="Mobile Carrier / CGNAT">&#x1F4F1; Mobile</span>
+                    <span th:if="${offender.clientType != null and offender.clientType.name() == 'PRIVATE_NETWORK'}" class="badge badge-info" title="Private Intranet / RFC 1918 / Local Network">&#x1F512; Private Net</span>
+                    <span th:if="${offender.clientType == null or offender.clientType.name() == 'UNKNOWN'}" class="badge badge-secondary" title="Unknown classification">-</span>
                 </td>
                 <td>
                     <span class="badge badge-danger" th:text="${offender.totalBlockIncidents}">12</span>

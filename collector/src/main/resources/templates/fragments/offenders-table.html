@@ -37,6 +37,7 @@
                                    title="Inspect all individual blocking events for this client, subnet, or ASN"
                                    th:text="${offender.clientKey}">198.51.100.42</a>
                                 <span th:if="${offender.countryCode != null}" class="badge badge-secondary" style="padding: 1px 5px; font-size: 10px;" th:text="${offender.countryCode}">DE</span>
+                                <span th:if="${offender.asn != null and groupBy != 'ASN'}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px;" th:title="${offender.asOrg}" th:text="'AS' + ${offender.asn}">AS24940</span>
                             </div>
                             <span th:if="${offender.asOrg != null}" style="font-size: 11px; color: var(--text-muted);" th:text="${offender.asOrg}">Hetzner Online GmbH</span>
                         </div>
