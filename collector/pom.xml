@@ -115,7 +115,7 @@
 				<configuration>
 					<argLine>-XX:+EnableDynamicAgentLoading -Dnet.bytebuddy.experimental=true</argLine>
 					<systemPropertyVariables>
-						<spring.datasource.url>jdbc:sqlite:target/test-antidos-collector.db</spring.datasource.url>
+						<spring.datasource.url>jdbc:sqlite:target/test-antidos-collector.db?busy_timeout=10000</spring.datasource.url>
 					</systemPropertyVariables>
 				</configuration>
 			</plugin>

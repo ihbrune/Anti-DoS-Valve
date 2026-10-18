@@ -16,6 +16,7 @@ public class CollectorProperties {
 	private int pollLogRetentionDays = 1;
 	private int slowPollThresholdMs = 1000;
 	private boolean demoMode = false;
+	private boolean parallelFleetPolling = true;
 	private List<EndpointConfig> endpoints = new ArrayList<>();
 	private EnrichmentConfig enrichment = new EnrichmentConfig();
 
@@ -65,6 +66,14 @@ public class CollectorProperties {
 
 	public void setDemoMode(boolean demoMode) {
 		this.demoMode = demoMode;
+	}
+
+	public boolean isParallelFleetPolling() {
+		return parallelFleetPolling;
+	}
+
+	public void setParallelFleetPolling(boolean parallelFleetPolling) {
+		this.parallelFleetPolling = parallelFleetPolling;
 	}
 
 	public List<EndpointConfig> getEndpoints() {

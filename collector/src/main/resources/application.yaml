@@ -15,9 +15,11 @@ spring:
       - "optional:file:config/collector-config.yaml"
       - "optional:file:src/main/resources/collector-config.yaml"
       - "optional:file:collector/src/main/resources/collector-config.yaml"
+      - "optional:file:/etc/antidos/collector-config.yaml"
+      - "optional:file:${user.home}/.antidos/collector-config.yaml"
 
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:sqlite:antidos-collector.db}
+    url: ${SPRING_DATASOURCE_URL:jdbc:sqlite:antidos-collector.db?busy_timeout=10000}
     driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.sqlite.JDBC}
     username: ${SPRING_DATASOURCE_USERNAME:}
     password: ${SPRING_DATASOURCE_PASSWORD:}

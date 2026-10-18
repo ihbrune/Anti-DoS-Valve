@@ -1,18 +1,22 @@
 # Anti-DoS Collector - Fleet Endpoint Configuration
-# Copy this file to 'collector-config.yaml' (which is git-ignored) and add your actual server credentials.
-
+#
+# Supported configuration locations (checked automatically on startup):
+#   1. System-wide production: /etc/antidos/collector-config.yaml
+#   2. User-home directory:    ~/.antidos/collector-config.yaml
+#   3. Working directory:      ./collector-config.yaml (git-ignored)
+#   4. Command-line override:  --spring.config.additional-location=file:/custom/path/collector-config.yaml
+#
 # -----------------------------------------------------------------------------
 # Optional: Database Storage Location / Engine
 # -----------------------------------------------------------------------------
 # By default, SQLite stores data in 'antidos-collector.db' in the current working directory.
-# To keep your database in a fixed location regardless of where you start the process,
-# you can define an absolute path or use the user home directory:
+# In production, specify an absolute system path or user home directory to decouple data from code:
 #
 # spring:
 #   datasource:
-#     url: "jdbc:sqlite:${user.home}/.antidos/antidos-collector.db"
-#     # Or a fixed server path:
-#     # url: "jdbc:sqlite:/var/lib/antidos/antidos-collector.db"
+#     url: "jdbc:sqlite:/var/lib/antidos/antidos-collector.db?busy_timeout=10000"
+#     # Or in user home:
+#     # url: "jdbc:sqlite:${user.home}/.antidos/antidos-collector.db?busy_timeout=10000"
 #
 # Or switch to PostgreSQL for high-volume enterprise deployments:
 # spring:
@@ -34,6 +38,11 @@ collector:
 
   # Latency threshold in ms before marking a poll cycle as WARNING (default: 1000 ms)
   slow-poll-threshold-ms: 1000
+
+  # Concurrently poll fleet endpoints in parallel using Java 21 Virtual Threads (default: true)
+  # When enabled, slow or unreachable servers do not delay polling for other servers in the fleet.
+  # Requests to valves on the same server always remain sequential to avoid load spikes on that host.
+  parallel-fleet-polling: true
 
   # List of monitored Tomcat servers running AntiDoSValve
   endpoints:

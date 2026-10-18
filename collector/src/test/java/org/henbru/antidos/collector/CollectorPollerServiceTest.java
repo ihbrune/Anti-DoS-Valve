@@ -178,4 +178,58 @@ class CollectorPollerServiceTest {
 		// Ignored valve was never polled
 		verify(statusClient, never()).fetchSlotDetails(any(), eq("VALVE-IGNORED"), any(), any(), any(), any());
 	}
+
+	@Test
+	void testPollFleetParallelExecution() throws Exception {
+		EndpointConfig ep1 = new EndpointConfig("FLEET-NODE-1", "http://node1:8080/antidos-status", null, false, true);
+		EndpointConfig ep2 = new EndpointConfig("FLEET-NODE-2", "http://node2:8080/antidos-status", null, false, true);
+
+		ValveOverviewDto.ValveSummaryDto v1 = new ValveOverviewDto.ValveSummaryDto(
+				"V1", 1, "BLOCKING", false, false, 50, 60, 5, 2, 0, 500L, 499L, 500L, 50L, 2, 0
+		);
+		ValveOverviewDto overview1 = new ValveOverviewDto("2026-10-18T10:00:00Z", List.of(v1), null);
+
+		ValveOverviewDto.ValveSummaryDto v2 = new ValveOverviewDto.ValveSummaryDto(
+				"V2", 1, "BLOCKING", false, false, 50, 60, 5, 3, 0, 500L, 499L, 800L, 80L, 3, 0
+		);
+		ValveOverviewDto overview2 = new ValveOverviewDto("2026-10-18T10:00:00Z", List.of(v2), null);
+
+		when(statusClient.fetchOverview(argThat(ep -> ep != null && "FLEET-NODE-1".equals(ep.getName())))).thenReturn(overview1);
+		when(statusClient.fetchOverview(argThat(ep -> ep != null && "FLEET-NODE-2".equals(ep.getName())))).thenReturn(overview2);
+
+		ValveDetailsDto.SelectedSlotDto slotDto = new ValveDetailsDto.SelectedSlotDto(
+				"previous", 4, 499L, false, "2026-10-18T09:59:00Z", "2026-10-18T10:00:00Z", 50L, 2, 0
+		);
+		ValveDetailsDto details = new ValveDetailsDto("2026-10-18T10:00:00Z", null, slotDto, 0, "all", List.of(), null);
+		when(statusClient.fetchSlotDetails(any(), any(), eq("previous"), any(), any(), any())).thenReturn(details);
+
+		org.henbru.antidos.collector.config.CollectorProperties testProps = new org.henbru.antidos.collector.config.CollectorProperties();
+		testProps.setEndpoints(List.of(ep1, ep2));
+		testProps.setParallelFleetPolling(true);
+
+		CollectorPollerService customPoller = new CollectorPollerService(
+				testProps,
+				statusClient,
+				heartbeatRepository,
+				slotSnapshotRepository,
+				clientEventRepository,
+				pollEventLogRepository
+		);
+
+		customPoller.pollFleet();
+
+		// Verify both endpoints were polled and recorded heartbeats
+		Optional<EndpointHeartbeat> hb1 = heartbeatRepository.findByServerId("FLEET-NODE-1");
+		Optional<EndpointHeartbeat> hb2 = heartbeatRepository.findByServerId("FLEET-NODE-2");
+
+		assertTrue(hb1.isPresent());
+		assertTrue(hb1.get().online());
+		assertEquals("FLEET-NODE-1", hb1.get().serverId());
+
+		assertTrue(hb2.isPresent());
+		assertTrue(hb2.get().online());
+		assertEquals("FLEET-NODE-2", hb2.get().serverId());
+
+		customPoller.shutdown();
+	}
 }

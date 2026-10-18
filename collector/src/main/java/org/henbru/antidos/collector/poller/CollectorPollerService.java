@@ -5,7 +5,10 @@ import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import jakarta.annotation.PreDestroy;
 import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.config.EndpointConfig;
 import org.henbru.antidos.collector.model.BlockedClientEvent;
@@ -18,8 +21,10 @@ import org.henbru.antidos.collector.storage.ClientEventRepository;
 import org.henbru.antidos.collector.storage.HeartbeatRepository;
 import org.henbru.antidos.collector.storage.PollEventLogRepository;
 import org.henbru.antidos.collector.storage.SlotSnapshotRepository;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -36,7 +41,9 @@ public class CollectorPollerService {
 	private final SlotSnapshotRepository slotSnapshotRepository;
 	private final ClientEventRepository clientEventRepository;
 	private final PollEventLogRepository pollEventLogRepository;
+	private final ExecutorService pollerExecutor;
 
+	@Autowired
 	public CollectorPollerService(
 			CollectorProperties properties,
 			ValveStatusClient statusClient,
@@ -44,27 +51,65 @@ public class CollectorPollerService {
 			SlotSnapshotRepository slotSnapshotRepository,
 			ClientEventRepository clientEventRepository,
 			PollEventLogRepository pollEventLogRepository) {
+		this(properties, statusClient, heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
+				Executors.newVirtualThreadPerTaskExecutor());
+	}
+
+	CollectorPollerService(
+			CollectorProperties properties,
+			ValveStatusClient statusClient,
+			HeartbeatRepository heartbeatRepository,
+			SlotSnapshotRepository slotSnapshotRepository,
+			ClientEventRepository clientEventRepository,
+			PollEventLogRepository pollEventLogRepository,
+			ExecutorService pollerExecutor) {
 		this.properties = properties;
 		this.statusClient = statusClient;
 		this.heartbeatRepository = heartbeatRepository;
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
 		this.pollEventLogRepository = pollEventLogRepository;
+		this.pollerExecutor = pollerExecutor != null ? pollerExecutor : Executors.newVirtualThreadPerTaskExecutor();
+	}
+
+	@PreDestroy
+	public void shutdown() {
+		if (pollerExecutor != null && !pollerExecutor.isShutdown()) {
+			pollerExecutor.shutdown();
+		}
 	}
 
 	public void pollFleet() {
-		List<EndpointConfig> endpoints = properties.getEndpoints();
-		if (endpoints.isEmpty()) {
+		List<EndpointConfig> enabledEndpoints = properties.getEndpoints().stream()
+				.filter(EndpointConfig::isEnabled)
+				.toList();
+
+		if (enabledEndpoints.isEmpty()) {
 			log.debug("No endpoints configured for polling.");
 			return;
 		}
 
-		for (EndpointConfig endpoint : endpoints) {
-			if (!endpoint.isEnabled()) {
-				continue;
+		if (enabledEndpoints.size() == 1 || !properties.isParallelFleetPolling()) {
+			for (EndpointConfig endpoint : enabledEndpoints) {
+				pollEndpoint(endpoint);
 			}
-			pollEndpoint(endpoint);
+			return;
 		}
+
+		// Parallel polling across different servers using Java 21 Virtual Threads.
+		// Requests to valves on the same host remain strictly sequential.
+		List<CompletableFuture<Void>> futures = new ArrayList<>(enabledEndpoints.size());
+		for (EndpointConfig endpoint : enabledEndpoints) {
+			futures.add(CompletableFuture.runAsync(() -> {
+				try {
+					pollEndpoint(endpoint);
+				} catch (Throwable t) {
+					log.error("Unexpected error in parallel poll for endpoint '{}': {}", endpoint.getName(), t.getMessage(), t);
+				}
+			}, pollerExecutor));
+		}
+
+		CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
 	}
 
 	public void pollEndpoint(EndpointConfig endpoint) {
