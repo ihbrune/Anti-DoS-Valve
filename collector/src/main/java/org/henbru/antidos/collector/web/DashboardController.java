@@ -152,13 +152,17 @@ public class DashboardController {
 	}
 
 	@GetMapping("/server/{serverId}")
-	public String serverDetails(@PathVariable(name = "serverId") String serverId, Model model) {
+	public String serverDetails(
+			@PathVariable(name = "serverId") String serverId,
+			@RequestParam(name = "valve", required = false) String valve,
+			Model model) {
 		EndpointHeartbeat hb = heartbeatRepository.findByServerId(serverId).orElse(null);
-		List<SlotSnapshot> recentSlots = slotSnapshotRepository.findRecent(serverId, "", 50);
+		List<SlotSnapshot> recentSlots = slotSnapshotRepository.findRecent(serverId, valve, 50);
 		List<BlockedClientEvent> recentEvents = clientEventRepository.findRecentEvents(serverId, null, 100);
 
 		model.addAttribute("server", hb);
 		model.addAttribute("serverId", serverId);
+		model.addAttribute("selectedValve", valve);
 		model.addAttribute("recentSlots", recentSlots);
 		model.addAttribute("recentEvents", recentEvents);
 		return "server-details";

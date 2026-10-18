@@ -18,6 +18,9 @@ class DashboardControllerTest {
 	@Autowired
 	private MockMvc mockMvc;
 
+	@Autowired
+	private org.henbru.antidos.collector.storage.SlotSnapshotRepository slotSnapshotRepository;
+
 	@Test
 	void testIndexPageLoads() throws Exception {
 		mockMvc.perform(get("/"))
@@ -118,10 +121,19 @@ class DashboardControllerTest {
 
 	@Test
 	void testServerDetailsPageLoads() throws Exception {
+		java.time.Instant now = java.time.Instant.now();
+		slotSnapshotRepository.upsert(new org.henbru.antidos.collector.model.SlotSnapshot(
+				null, "Demo-Server", "TEST-VALVE", 55555L,
+				now.minusSeconds(60), now, 1250L, 10, 2, true, now
+		));
+
 		mockMvc.perform(get("/server/Demo-Server"))
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("Demo-Server")))
 				.andExpect(content().string(containsString("Node Incidents")))
-				.andExpect(content().string(containsString("Blocked Client Incidents on this Server")));
+				.andExpect(content().string(containsString("Blocked Client Incidents on this Server")))
+				.andExpect(content().string(containsString("55555")))
+				.andExpect(content().string(containsString("TEST-VALVE")))
+				.andExpect(content().string(containsString("View Incidents &rarr;")));
 	}
 }

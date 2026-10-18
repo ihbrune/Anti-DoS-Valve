@@ -82,6 +82,14 @@ class DatabaseMigrationAndRepositoryTest {
 		assertFalse(recent.isEmpty());
 		assertEquals(600L, recent.getFirst().totalRequests());
 
+		// Verify finding recent slots without valve filter (all valves on server)
+		List<SlotSnapshot> recentNoValve = slotSnapshotRepository.findRecent("TEST-NODE-1", null, 10);
+		assertFalse(recentNoValve.isEmpty());
+		assertEquals("VALVE-A", recentNoValve.getFirst().valveName());
+
+		List<SlotSnapshot> recentEmptyValve = slotSnapshotRepository.findRecent("TEST-NODE-1", "", 10);
+		assertFalse(recentEmptyValve.isEmpty());
+
 		long sumReq = slotSnapshotRepository.sumRequestsSince(Instant.now().minus(1, ChronoUnit.HOURS));
 		assertTrue(sumReq >= 600L);
 	}

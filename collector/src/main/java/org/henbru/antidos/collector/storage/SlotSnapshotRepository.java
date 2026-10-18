@@ -131,9 +131,17 @@ public class SlotSnapshotRepository {
 	}
 
 	public List<SlotSnapshot> findRecent(String serverId, String valveName, int limit) {
-		return jdbcTemplate.query(
-				"SELECT * FROM slot_snapshots WHERE server_id = ? AND valve_name = ? ORDER BY slot_key DESC LIMIT ?",
-				ROW_MAPPER, serverId, valveName, limit);
+		if (valveName != null && !valveName.isBlank()) {
+			return jdbcTemplate.query(
+					"SELECT * FROM slot_snapshots WHERE server_id = ? AND valve_name = ? ORDER BY start_time DESC, slot_key DESC LIMIT ?",
+					ROW_MAPPER, serverId, valveName, limit);
+		}
+		if (serverId != null && !serverId.isBlank()) {
+			return jdbcTemplate.query(
+					"SELECT * FROM slot_snapshots WHERE server_id = ? ORDER BY start_time DESC, slot_key DESC LIMIT ?",
+					ROW_MAPPER, serverId, limit);
+		}
+		return findRecentFleet(limit);
 	}
 
 	public List<SlotSnapshot> findRecentFleet(int limit) {

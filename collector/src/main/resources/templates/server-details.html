@@ -70,6 +70,7 @@
                             <th>Active Clients</th>
                             <th>Blocked Clients</th>
                             <th>State</th>
+                            <th style="text-align: right;">Forensics</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -86,6 +87,16 @@
                             <td>
                                 <span th:if="${slot.completed}" class="badge badge-success">FINALIZED</span>
                                 <span th:unless="${slot.completed}" class="badge badge-warning">IN PROGRESS</span>
+                            </td>
+                            <td style="text-align: right;">
+                                <a th:if="${slot.blockedCounters > 0}"
+                                   th:href="@{/events(servers=${serverId}, valves=${slot.valveName})}"
+                                   class="btn"
+                                   style="padding: 2px 8px; font-size: 11px;"
+                                   title="View incidents for this valve on this server">
+                                    View Incidents &rarr;
+                                </a>
+                                <span th:if="${slot.blockedCounters == 0}" style="color:var(--text-muted); font-size:12px;">-</span>
                             </td>
                         </tr>
                     </tbody>
