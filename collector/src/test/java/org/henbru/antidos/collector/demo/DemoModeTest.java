@@ -95,8 +95,10 @@ class DemoModeTest {
 		// Verify that ValveStatusClient can deserialize it into ValveOverviewDto
 		ValveOverviewDto overview = objectMapper.readValue(overviewJson, ValveOverviewDto.class);
 		assertNotNull(overview);
-		assertEquals(2, overview.valves().size());
+		assertEquals(3, overview.valves().size(), "Edge node should provide Primary-Rate-Limiter, Subnet-Guard, and IPv6-Rate-Limiter");
 		assertEquals("Primary-Rate-Limiter", overview.valves().getFirst().monitorName());
+		assertEquals("Subnet-Guard", overview.valves().get(1).monitorName());
+		assertEquals("IPv6-Rate-Limiter", overview.valves().get(2).monitorName());
 
 		// Fetch details JSON via MockMvc
 		String detailsJson = mockMvc.perform(get("/mock-valve/api-gateway/antidos-status")
@@ -122,7 +124,7 @@ class DemoModeTest {
 		ValveOverviewDto overview = simulator.buildOverview("edge-eu", null);
 		assertNotNull(overview);
 		assertNotNull(overview.serverTime());
-		assertEquals(2, overview.valves().size(), "Edge node should provide 2 valves");
+		assertEquals(3, overview.valves().size(), "Edge node should provide 3 valves");
 
 		ValveOverviewDto.ValveSummaryDto primary = overview.valves().getFirst();
 		assertEquals("Primary-Rate-Limiter", primary.monitorName());
@@ -135,6 +137,18 @@ class DemoModeTest {
 		assertNotNull(details.valve());
 		assertNotNull(details.selectedSlot());
 		assertEquals("previous", details.selectedSlot().type());
+
+		ValveDetailsDto subnetDetails = simulator.buildDetails("edge-eu", "Subnet-Guard", "previous", "all");
+		assertNotNull(subnetDetails);
+		assertNotNull(subnetDetails.selectedSlot());
+		assertTrue(subnetDetails.blockedClients().stream().anyMatch(c -> c.key().contains("/24")),
+				"Subnet-Guard should produce /24 subnet blocks");
+
+		ValveDetailsDto ipv6Details = simulator.buildDetails("edge-eu", "IPv6-Rate-Limiter", "previous", "all");
+		assertNotNull(ipv6Details);
+		assertNotNull(ipv6Details.selectedSlot());
+		assertTrue(ipv6Details.blockedClients().stream().anyMatch(c -> c.key().contains(":")),
+				"IPv6-Rate-Limiter should produce IPv6 client blocks");
 
 		ValveDetailsDto apiDetails = simulator.buildDetails("api-gateway", "API-DoS-Shield", "previous", "all");
 		assertNotNull(apiDetails);
@@ -157,7 +171,7 @@ class DemoModeTest {
 		mockMvc.perform(get("/mock-valve/edge-eu/antidos-status")
 						.header("Authorization", "Bearer demo-token"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.valves", hasSize(2)))
+				.andExpect(jsonPath("$.valves", hasSize(3)))
 				.andExpect(jsonPath("$.valves[0].monitorName", is("Primary-Rate-Limiter")));
 	}
 
@@ -209,5 +223,24 @@ class DemoModeTest {
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("Demo-Edge-EU")))
 				.andExpect(content().string(containsString("Demo-API-Gateway")));
+
+		// 6. Verify IPv6 and Subnet-Aggregated events are seeded
+		var ipv6Events = clientEventRepository.findRecentEventsFiltered(
+				java.util.List.of("Demo-Edge-EU"), java.util.List.of("IPv6-Rate-Limiter"), null, null, null, 10, 0);
+		assertFalse(ipv6Events.isEmpty(), "Should have seeded IPv6 events for IPv6-Rate-Limiter");
+		assertEquals(6, ipv6Events.getFirst().ipVersion(), "Event should be categorized as IPv6");
+
+		var subnetEvents = clientEventRepository.findRecentEventsFiltered(
+				java.util.List.of("Demo-Edge-EU"), java.util.List.of("Subnet-Guard"), null, null, null, 10, 0);
+		assertFalse(subnetEvents.isEmpty(), "Should have seeded Subnet-Guard /24 aggregated events");
+		assertEquals(24, subnetEvents.getFirst().cidrPrefix(), "Event should be categorized as /24 CIDR prefix");
+
+		// 7. Verify Subnet Rollup groups IPv6 into /64 and IPv4 into /24
+		var rollup = clientEventRepository.findTopOffendersFiltered(
+				null, null, since7d, now, null, "SUBNET", 30);
+		assertTrue(rollup.stream().anyMatch(o -> o.clientKey().contains("/64")),
+				"Subnet rollup should group rotating IPv6 clients into canonical /64 prefix");
+		assertTrue(rollup.stream().anyMatch(o -> o.clientKey().contains("/24")),
+				"Subnet rollup should contain /24 subnets");
 	}
 }

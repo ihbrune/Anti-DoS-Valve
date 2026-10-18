@@ -34,10 +34,14 @@ public class DemoDataSeeder {
 
 	private static final long SLOT_LENGTH_MILLIS = 10_000L; // 10s slot length
 
+	// Mixed IPv4 and IPv6 attackers for API Gateway
 	private static final String[] ATTACKER_IPS = {
 			"45.154.255.12", "185.220.101.5", "194.26.29.110", "91.240.118.77",
+			"2a03:2880:f12f:83:face:b00c:0:25de", // IPv6 attacker
 			"185.246.221.84", "103.149.28.19", "193.106.191.66", "195.123.245.9",
+			"2600:1f18:43b6:6100:9981:ef71:47d2:81a2", // IPv6 attacker
 			"178.62.204.14", "167.99.165.88", "146.190.112.51", "159.65.130.22",
+			"2a01:4f8:c010:d56::1", // IPv6 attacker
 			"89.248.163.74", "194.38.20.141", "45.148.10.66", "193.32.162.201"
 	};
 
@@ -136,11 +140,69 @@ public class DemoDataSeeder {
 					startTime, endTime, edgePrimaryReqs, edgePrimaryActive, edgePrimaryBlocked, true, endTime
 			));
 
+			// Server 1 - Valve 2: Subnet-Guard (aggregates IPv4 into /24 subnets)
 			long edgeSubnetReqs = (long) (900 + 1100 * diurnal + rnd.nextInt(350));
 			int edgeSubnetActive = (int) (120 + 80 * diurnal + rnd.nextInt(30));
+			int edgeSubnetBlocked = 0;
+
+			if (slotKey % 19 == 0) {
+				edgeSubnetBlocked++;
+				events.add(new BlockedClientEvent(
+						null, "Demo-Edge-EU", "Subnet-Guard", slotKey, startTime,
+						"198.51.100.0/24", 290 + rnd.nextInt(120), 0, true, true, endTime
+				));
+			}
+			if (slotKey % 43 == 0) {
+				edgeSubnetBlocked++;
+				events.add(new BlockedClientEvent(
+						null, "Demo-Edge-EU", "Subnet-Guard", slotKey, startTime,
+						"203.0.113.0/24", 260 + rnd.nextInt(90), 0, true, true, endTime
+				));
+			}
+			if (slotKey % 89 == 0) {
+				edgeSubnetBlocked++;
+				events.add(new BlockedClientEvent(
+						null, "Demo-Edge-EU", "Subnet-Guard", slotKey, startTime,
+						"45.154.255.0/24", 310 + rnd.nextInt(110), 0, true, true, endTime
+				));
+			}
+
 			snapshots.add(new SlotSnapshot(
 					null, "Demo-Edge-EU", "Subnet-Guard", slotKey,
-					startTime, endTime, edgeSubnetReqs, edgeSubnetActive, 0, true, endTime
+					startTime, endTime, edgeSubnetReqs, edgeSubnetActive, edgeSubnetBlocked, true, endTime
+			));
+
+			// Server 1 - Valve 3: IPv6-Rate-Limiter (dedicated IPv6 traffic & crawler mitigation)
+			long edgeIpv6Reqs = (long) (400 + 500 * diurnal + rnd.nextInt(150));
+			int edgeIpv6Active = (int) (80 + 60 * diurnal + rnd.nextInt(20));
+			int edgeIpv6Blocked = 0;
+
+			if (slotKey % 23 == 0) {
+				edgeIpv6Blocked++;
+				events.add(new BlockedClientEvent(
+						null, "Demo-Edge-EU", "IPv6-Rate-Limiter", slotKey, startTime,
+						"2a02:1205:502c:3b00:1c44:98ff:fe22:1011", 165 + rnd.nextInt(40), 0, true, true, endTime
+				));
+			}
+			if (slotKey % 47 == 0) {
+				// Second rotating client from the exact same residential /64 prefix
+				edgeIpv6Blocked++;
+				events.add(new BlockedClientEvent(
+						null, "Demo-Edge-EU", "IPv6-Rate-Limiter", slotKey, startTime,
+						"2a02:1205:502c:3b00:2d55:77aa:1122:3344", 152 + rnd.nextInt(35), 0, true, true, endTime
+				));
+			}
+			if (slotKey % 79 == 0) {
+				edgeIpv6Blocked++;
+				events.add(new BlockedClientEvent(
+						null, "Demo-Edge-EU", "IPv6-Rate-Limiter", slotKey, startTime,
+						"2001:db8:85a3::8a2e:370:7334", 140 + rnd.nextInt(30), 0, true, true, endTime
+				));
+			}
+
+			snapshots.add(new SlotSnapshot(
+					null, "Demo-Edge-EU", "IPv6-Rate-Limiter", slotKey,
+					startTime, endTime, edgeIpv6Reqs, edgeIpv6Active, edgeIpv6Blocked, true, endTime
 			));
 
 			// -----------------------------------------------------------------
@@ -214,7 +276,7 @@ public class DemoDataSeeder {
 		// 2. Pre-populate initial Heartbeats
 		heartbeatRepository.upsert(new EndpointHeartbeat(
 				"Demo-Edge-EU", "http://localhost:8090/mock-valve/edge-eu/antidos-status",
-				true, now, now, null, 14L, 2
+				true, now, now, null, 14L, 3
 		));
 		heartbeatRepository.upsert(new EndpointHeartbeat(
 				"Demo-API-Gateway", "http://localhost:8090/mock-valve/api-gateway/antidos-status",
@@ -233,8 +295,8 @@ public class DemoDataSeeder {
 			// Edge EU
 			logs.add(new PollEventLog(
 					null, "Demo-Edge-EU", "http://localhost:8090/mock-valve/edge-eu/antidos-status",
-					pollTime, "SUCCESS", 200, 12L + rnd.nextInt(15), 2, 2, 0,
-					"Polled 2 valve(s), 2 slot(s), 0 event(s)", null
+					pollTime, "SUCCESS", 200, 12L + rnd.nextInt(15), 3, 3, 0,
+					"Polled 3 valve(s), 3 slot(s), 0 event(s)", null
 			));
 
 			// API Gateway

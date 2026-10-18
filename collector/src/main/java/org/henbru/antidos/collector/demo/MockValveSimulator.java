@@ -20,11 +20,14 @@ public class MockValveSimulator {
 	public static final int SLOT_LENGTH_MILLIS = SLOT_LENGTH_SECONDS * 1000;
 	public static final int NUMBER_OF_SLOTS = 6;
 
-	// IP pool for the simulated distributed attack on API Gateway
+	// IP pool for the simulated distributed attack on API Gateway (mixed IPv4 and IPv6)
 	private static final String[] ATTACKER_IPS = {
 			"45.154.255.12", "185.220.101.5", "194.26.29.110", "91.240.118.77",
+			"2a03:2880:f12f:83:face:b00c:0:25de", // IPv6 attacker
 			"185.246.221.84", "103.149.28.19", "193.106.191.66", "195.123.245.9",
+			"2600:1f18:43b6:6100:9981:ef71:47d2:81a2", // IPv6 attacker
 			"178.62.204.14", "167.99.165.88", "146.190.112.51", "159.65.130.22",
+			"2a01:4f8:c010:d56::1", // IPv6 attacker
 			"89.248.163.74", "194.38.20.141", "45.148.10.66", "193.32.162.201"
 	};
 
@@ -44,6 +47,9 @@ public class MockValveSimulator {
 				}
 				if (matchesFilter(filterValve, "Subnet-Guard")) {
 					valves.add(buildEdgeSubnetSummary(currentSlotKey, lastCompletedSlotKey, 2));
+				}
+				if (matchesFilter(filterValve, "IPv6-Rate-Limiter")) {
+					valves.add(buildEdgeIpv6Summary(currentSlotKey, lastCompletedSlotKey, 3));
 				}
 			}
 			case "api-gateway" -> {
@@ -208,10 +214,35 @@ public class MockValveSimulator {
 		return new ValveOverviewDto.ValveSummaryDto(
 				"Subnet-Guard",
 				order,
-				"SIMULATION",
-				true,
+				"BLOCKING",
 				false,
-				350,
+				false,
+				250,
+				SLOT_LENGTH_SECONDS,
+				NUMBER_OF_SLOTS,
+				cur.activeCounters(),
+				cur.blockedCounters(),
+				currentKey,
+				lastCompletedKey,
+				cumulative,
+				prev.totalRequests(),
+				prev.activeCounters(),
+				prev.blockedCounters()
+		);
+	}
+
+	private ValveOverviewDto.ValveSummaryDto buildEdgeIpv6Summary(long currentKey, long lastCompletedKey, int order) {
+		SlotMetrics cur = calculateMetrics("edge-eu", "IPv6-Rate-Limiter", currentKey);
+		SlotMetrics prev = calculateMetrics("edge-eu", "IPv6-Rate-Limiter", lastCompletedKey);
+
+		long cumulative = 180_000L + (currentKey % 50_000L) * 900L;
+		return new ValveOverviewDto.ValveSummaryDto(
+				"IPv6-Rate-Limiter",
+				order,
+				"BLOCKING",
+				false,
+				false,
+				120,
 				SLOT_LENGTH_SECONDS,
 				NUMBER_OF_SLOTS,
 				cur.activeCounters(),
@@ -312,6 +343,9 @@ public class MockValveSimulator {
 				if ("Subnet-Guard".equalsIgnoreCase(valveName)) {
 					yield calculateSubnetMetrics(slotKey, rnd);
 				}
+				if ("IPv6-Rate-Limiter".equalsIgnoreCase(valveName)) {
+					yield calculateIpv6Metrics(slotKey, rnd);
+				}
 				yield calculateEdgePrimaryMetrics(slotKey, rnd);
 			}
 			case "staging-node" -> calculateStagingMetrics(slotKey, rnd);
@@ -363,9 +397,42 @@ public class MockValveSimulator {
 	}
 
 	private SlotMetrics calculateSubnetMetrics(long slotKey, Random rnd) {
-		long totalRequests = 1300L + (slotKey % 10) * 15L + rnd.nextInt(300);
-		int activeCounters = 180 + rnd.nextInt(40);
-		return new SlotMetrics(totalRequests, activeCounters, 0, List.of());
+		long totalRequests = 1600L + (slotKey % 10) * 25L + rnd.nextInt(400);
+		int activeCounters = 190 + rnd.nextInt(45);
+
+		List<ValveDetailsDto.BlockedClientDto> blocked = new ArrayList<>();
+		String lastUpdate = DateTimeFormatter.ISO_INSTANT.format(
+				Instant.ofEpochMilli(slotKey * SLOT_LENGTH_MILLIS + 3500)
+		);
+		// Baseline aggregated /24 subnet exceeding threshold
+		blocked.add(new ValveDetailsDto.BlockedClientDto("198.51.100.0/24", 320 + rnd.nextInt(90), 0, true, lastUpdate));
+		if (slotKey % 2 == 0) {
+			blocked.add(new ValveDetailsDto.BlockedClientDto("203.0.113.0/24", 260 + rnd.nextInt(70), 0, true, lastUpdate));
+		}
+		if (slotKey % 5 == 0) {
+			blocked.add(new ValveDetailsDto.BlockedClientDto("45.154.255.0/24", 290 + rnd.nextInt(80), 0, true, lastUpdate));
+		}
+
+		return new SlotMetrics(totalRequests, activeCounters, blocked.size(), blocked);
+	}
+
+	private SlotMetrics calculateIpv6Metrics(long slotKey, Random rnd) {
+		long totalRequests = 600L + rnd.nextInt(350);
+		int activeCounters = 110 + rnd.nextInt(40);
+
+		List<ValveDetailsDto.BlockedClientDto> blocked = new ArrayList<>();
+		String lastUpdate = DateTimeFormatter.ISO_INSTANT.format(
+				Instant.ofEpochMilli(slotKey * SLOT_LENGTH_MILLIS + 4500)
+		);
+		// Baseline blocked IPv6 scraper
+		blocked.add(new ValveDetailsDto.BlockedClientDto("2a02:1205:502c:3b00:1c44:98ff:fe22:1011", 165 + rnd.nextInt(30), 0, true, lastUpdate));
+		// Rotating second client from the same residential /64 prefix to demonstrate Subnet Rollup
+		blocked.add(new ValveDetailsDto.BlockedClientDto("2a02:1205:502c:3b00:2d55:77aa:1122:3344", 142 + rnd.nextInt(25), 0, true, lastUpdate));
+		if (slotKey % 2 == 0) {
+			blocked.add(new ValveDetailsDto.BlockedClientDto("2001:db8:85a3::8a2e:370:7334", 138 + rnd.nextInt(20), 0, true, lastUpdate));
+		}
+
+		return new SlotMetrics(totalRequests, activeCounters, blocked.size(), blocked);
 	}
 
 	private SlotMetrics calculateStagingMetrics(long slotKey, Random rnd) {

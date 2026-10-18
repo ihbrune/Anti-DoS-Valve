@@ -44,8 +44,8 @@ mvn spring-boot:run -pl collector -Dspring-boot.run.profiles=demo
 * **Strict Database Isolation:** Uses a dedicated, separate SQLite database file (`antidos-collector-demo.db`). Any existing production databases (`antidos-collector.db` or PostgreSQL) are completely untouched and protected from test data pollution. To reset the demo, simply delete `antidos-collector-demo.db`.
 * **Zero External Dependencies:** Runs 100% locally with embedded SQLite.
 * **Simulated Multi-Server Fleet:**
-  1. `Demo-Edge-EU`: Production web cluster with 2 valves (`Primary-Rate-Limiter` blocking crawlers and `Subnet-Guard` in marking mode).
-  2. `Demo-API-Gateway`: Public API under active distributed DoS attack, demonstrating real-time mitigation and top offending IPs.
+  1. `Demo-Edge-EU`: Production web cluster with 3 valves (`Primary-Rate-Limiter` for single IP bursts, `Subnet-Guard` for IPv4 `/24` subnet aggregation, and `IPv6-Rate-Limiter` for dedicated IPv6 crawler mitigation).
+  2. `Demo-API-Gateway`: Public API under active distributed DoS attack across mixed IPv4 and IPv6 botnet clusters, demonstrating real-time mitigation and Subnet Rollup forensics.
   3. `Demo-Staging-Node`: Host with simulated latency spikes and transient errors, demonstrating the Polling Event Audit Log and automatic recovery.
 * **Instant 7-Day Telemetry Pre-Seeding:** On the very first launch, the demo database is pre-populated in less than 200 ms with 7 days of diurnal traffic curves, 3 distinct attack waves (yesterday's DDoS, credential stuffing, active ongoing attack), top offender IP rankings, and poll audit events (including warning & error recovery simulations).
 * **100% Real Pipeline:** The scheduled poller, HTTP client, JSON deserialization, Flyway database persistence, and reactive HTMX dashboard all run exactly as in production.

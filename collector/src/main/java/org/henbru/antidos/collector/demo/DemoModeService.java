@@ -64,7 +64,7 @@ public class DemoModeService {
 					"demo-token",
 					false,
 					true,
-					List.of("Primary-Rate-Limiter", "Subnet-Guard")
+					List.of("Primary-Rate-Limiter", "Subnet-Guard", "IPv6-Rate-Limiter")
 			));
 			demoEndpoints.add(new EndpointConfig(
 					"Demo-API-Gateway",
