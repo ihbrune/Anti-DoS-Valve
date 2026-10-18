@@ -66,6 +66,47 @@ public class SlotSnapshotRepository {
 		);
 	}
 
+	public void batchUpsert(List<SlotSnapshot> snapshots) {
+		if (snapshots == null || snapshots.isEmpty()) {
+			return;
+		}
+
+		String sql = """
+				INSERT INTO slot_snapshots (server_id, valve_name, slot_key, start_time, end_time, total_requests, active_counters, blocked_counters, is_completed, last_polled_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				ON CONFLICT (server_id, valve_name, slot_key) DO UPDATE SET
+				    start_time = EXCLUDED.start_time,
+				    end_time = EXCLUDED.end_time,
+				    total_requests = EXCLUDED.total_requests,
+				    active_counters = EXCLUDED.active_counters,
+				    blocked_counters = EXCLUDED.blocked_counters,
+				    is_completed = EXCLUDED.is_completed,
+				    last_polled_at = EXCLUDED.last_polled_at
+				""";
+
+		jdbcTemplate.batchUpdate(sql, new org.springframework.jdbc.core.BatchPreparedStatementSetter() {
+			@Override
+			public void setValues(@NonNull java.sql.PreparedStatement ps, int i) throws java.sql.SQLException {
+				SlotSnapshot s = snapshots.get(i);
+				ps.setString(1, s.serverId());
+				ps.setString(2, s.valveName());
+				ps.setLong(3, s.slotKey());
+				ps.setTimestamp(4, Timestamp.from(s.startTime()));
+				ps.setTimestamp(5, Timestamp.from(s.endTime()));
+				ps.setLong(6, s.totalRequests());
+				ps.setInt(7, s.activeCounters());
+				ps.setInt(8, s.blockedCounters());
+				ps.setBoolean(9, s.completed());
+				ps.setTimestamp(10, Timestamp.from(s.lastPolledAt()));
+			}
+
+			@Override
+			public int getBatchSize() {
+				return snapshots.size();
+			}
+		});
+	}
+
 	public Optional<Long> findLatestSlotKey(String serverId, String valveName) {
 		List<Long> keys = jdbcTemplate.query(
 				"SELECT MAX(slot_key) FROM slot_snapshots WHERE server_id = ? AND valve_name = ?",

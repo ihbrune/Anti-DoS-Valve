@@ -14,6 +14,7 @@ This document serves as the architectural reference and development guide for hu
 * **`storage/`:** Data access layer backed by Spring Data / `JdbcTemplate` with Flyway migrations supporting both **SQLite** (default zero-ops) and **PostgreSQL** (production fleet scale).
 * **`web/`:** Web dashboard driven by Spring MVC, Thymeleaf, and **HTMX** for real-time reactivity without client-side JavaScript build tooling.
 * **`cli/`:** Command-line utilities (e.g. `test-endpoint`, `add-endpoint`) for operators to verify connectivity and generate configuration blocks.
+* **`demo/`:** Built-in exploration mode (`MockValveController`, `MockValveSimulator`, `DemoModeService`, `DemoDataSeeder`) simulating multi-node fleets and pre-populating 7 days of realistic attack and diurnal telemetry into an isolated database (`antidos-collector-demo.db`).
 
 ---
 
@@ -40,3 +41,4 @@ This document serves as the architectural reference and development guide for hu
 | `mvn test -pl collector` | Runs all unit and database migration tests for the collector. |
 | `mvn package -pl collector` | Builds the executable Spring Boot Fat-JAR in `collector/target/anti-dos-collector-1.7.0.jar`. |
 | `mvn spring-boot:run -pl collector` | Starts the collector service locally. |
+| `mvn spring-boot:run -pl collector -Dspring-boot.run.arguments="demo"` | Starts the collector in zero-configuration Demo Mode with isolated database. |

@@ -63,6 +63,43 @@ public class PollEventLogRepository {
 		);
 	}
 
+	public void batchInsert(List<PollEventLog> logs) {
+		if (logs == null || logs.isEmpty()) {
+			return;
+		}
+
+		String sql = """
+				INSERT INTO poll_event_log (
+				    server_id, url, poll_time, status, http_status_code,
+				    response_time_ms, valves_polled, slots_ingested, events_ingested,
+				    details, error_message
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				""";
+
+		jdbcTemplate.batchUpdate(sql, new org.springframework.jdbc.core.BatchPreparedStatementSetter() {
+			@Override
+			public void setValues(@NonNull java.sql.PreparedStatement ps, int i) throws java.sql.SQLException {
+				PollEventLog log = logs.get(i);
+				ps.setString(1, log.serverId());
+				ps.setString(2, log.url());
+				ps.setTimestamp(3, Timestamp.from(log.pollTime()));
+				ps.setString(4, log.status());
+				ps.setInt(5, log.httpStatusCode());
+				ps.setLong(6, log.responseTimeMs());
+				ps.setInt(7, log.valvesPolled());
+				ps.setInt(8, log.slotsIngested());
+				ps.setInt(9, log.eventsIngested());
+				ps.setString(10, log.details());
+				ps.setString(11, log.errorMessage());
+			}
+
+			@Override
+			public int getBatchSize() {
+				return logs.size();
+			}
+		});
+	}
+
 	@SuppressWarnings("null")
 	public List<PollEventLog> findRecent(Long beforeId, String statusFilter, String serverId, int limit) {
 		StringBuilder sql = new StringBuilder("SELECT * FROM poll_event_log WHERE 1=1 ");

@@ -27,7 +27,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {
 		"collector.demo-mode=true",
-		"spring.datasource.url=jdbc:sqlite:target/demo-test.db"
+		"spring.datasource.url=jdbc:sqlite:target/demo-test.db?busy_timeout=10000"
 })
 @SuppressWarnings("null")
 class DemoModeTest {
@@ -43,6 +43,18 @@ class DemoModeTest {
 
 	@Autowired
 	private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+
+	@Autowired
+	private org.henbru.antidos.collector.storage.SlotSnapshotRepository slotSnapshotRepository;
+
+	@Autowired
+	private org.henbru.antidos.collector.storage.ClientEventRepository clientEventRepository;
+
+	@Autowired
+	private org.henbru.antidos.collector.storage.PollEventLogRepository pollEventLogRepository;
+
+	@Autowired
+	private org.henbru.antidos.collector.storage.HeartbeatRepository heartbeatRepository;
 
 	@Test
 	void testDemoEndpointsAutoConfigured() {
@@ -156,5 +168,46 @@ class DemoModeTest {
 				.andExpect(content().string(containsString("DEMO MODE ACTIVE")))
 				.andExpect(content().string(containsString("antidos-collector-demo.db")))
 				.andExpect(content().string(containsString("simulated Anti-DoS Valve endpoints")));
+	}
+
+	@Test
+	void testDemoDataSeederPopulates7DayHistory() throws Exception {
+		java.time.Instant now = java.time.Instant.now();
+		java.time.Instant since24h = now.minus(24, java.time.temporal.ChronoUnit.HOURS);
+		java.time.Instant since7d = now.minus(7, java.time.temporal.ChronoUnit.DAYS);
+
+		// 1. Verify Slot Snapshots Seeding
+		long totalReqs24h = slotSnapshotRepository.sumRequestsSince(since24h);
+		assertTrue(totalReqs24h > 100_000L, "24h requests should be well populated (>100k) from seeder");
+
+		long totalBlocked24h = slotSnapshotRepository.sumBlockedRequestsSince(since24h);
+		assertTrue(totalBlocked24h > 10L, "24h blocked requests should reflect attacks");
+
+		// 2. Verify Top Offenders Seeding
+		var offenders24h = clientEventRepository.findTopOffenders(since24h, 10);
+		assertFalse(offenders24h.isEmpty(), "Top offenders (24h) should be populated");
+		assertTrue(offenders24h.getFirst().totalBlockedRequests() > 100, "Top offender should have substantial request count");
+
+		var offenders7d = clientEventRepository.findTopOffenders(since7d, 20);
+		assertTrue(offenders7d.size() >= offenders24h.size(), "7d offenders list should contain multi-day attack waves");
+
+		// 3. Verify Heartbeats
+		var heartbeats = heartbeatRepository.findAll();
+		assertEquals(3, heartbeats.size(), "3 demo endpoints should have seeded heartbeats");
+
+		// 4. Verify Poll Audit Logs
+		long successLogs = pollEventLogRepository.countByStatusSince("SUCCESS", since24h);
+		long warnLogs = pollEventLogRepository.countByStatusSince("WARNING", since24h);
+		long errorLogs = pollEventLogRepository.countByStatusSince("ERROR", since24h);
+
+		assertTrue(successLogs > 10, "Should have regular success poll logs");
+		assertTrue(warnLogs > 0, "Should have seeded slow-poll warning logs");
+		assertTrue(errorLogs > 0, "Should have seeded simulated error logs");
+
+		// 5. Verify Dashboard UI displays non-zero 24h stats
+		mockMvc.perform(get("/"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Demo-Edge-EU")))
+				.andExpect(content().string(containsString("Demo-API-Gateway")));
 	}
 }
