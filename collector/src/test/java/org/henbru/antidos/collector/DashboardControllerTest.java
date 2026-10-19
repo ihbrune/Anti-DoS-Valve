@@ -8,6 +8,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -31,7 +32,16 @@ class DashboardControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("Anti-DoS Fleet Manager")))
 				.andExpect(content().string(containsString("Monitored Server Nodes")))
+				.andExpect(content().string(containsString("/js/htmx.min.js")))
+				.andExpect(content().string(not(containsString("unpkg.com"))))
 				.andExpect(content().string(containsString("hx-target=\"#fleet-container\" hx-swap=\"outerHTML\"")));
+	}
+
+	@Test
+	void testLocalHtmxStaticAssetServed() throws Exception {
+		mockMvc.perform(get("/js/htmx.min.js"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("htmx")));
 	}
 
 	@Test
