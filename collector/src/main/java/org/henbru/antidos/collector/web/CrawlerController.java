@@ -52,19 +52,28 @@ public class CrawlerController {
 	}
 
 	private void ensureInitialFeedsLoaded() {
+		if (!properties.getEnrichment().isEnabled()) {
+			return;
+		}
 		List<CrawlerFeed> existing = crawlerFeedRepository.findAll();
-		if (existing.isEmpty() && properties.getEnrichment().isEnabled()) {
-			// Pre-populate with configured feeds so operator sees status immediately
-			for (var cfg : properties.getEnrichment().getCrawlerFeeds()) {
+		java.util.Set<String> existingKeys = existing.stream().map(CrawlerFeed::feedKey).collect(java.util.stream.Collectors.toSet());
+		for (var cfg : properties.getEnrichment().getCrawlerFeedsList()) {
+			if (!existingKeys.contains(cfg.getKey())) {
+				String initialStatus = !cfg.isEnabled() ? "DISABLED"
+						: (!cfg.hasValidCategory() ? "INVALID_CONFIG" : "PENDING");
+				String initialError = !cfg.hasValidCategory()
+						? "Unknown category '" + cfg.getCategory() + "'. Allowed: " + org.henbru.antidos.collector.config.CrawlerFeedConfig.VALID_CATEGORIES
+						: (!cfg.isEnabled() ? "Feed is disabled in configuration" : null);
+
 				crawlerFeedRepository.upsert(new CrawlerFeed(
 						cfg.getKey(),
 						cfg.getName(),
 						cfg.getCategory(),
 						cfg.getUrl(),
 						null,
-						"PENDING",
+						initialStatus,
 						0,
-						null
+						initialError
 				));
 			}
 		}

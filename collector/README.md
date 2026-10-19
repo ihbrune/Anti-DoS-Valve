@@ -368,8 +368,9 @@ export COLLECTOR_ENRICHMENT_COUNTRY_DATABASE_PATH="/var/data/dbip-country-lite.m
 * **Layered Hosting ASN Overlay:** Shipped defaults (`classpath:asns/default-hosting-asns.txt`) can be customized via `custom-hosting-asns.txt` without Git checkout conflicts:
   * `+12345` (force ASN 12345 to be classified as Datacenter/Hosting)
   * `-24940` (remove Hetzner from Datacenter list, classifying it as Residential)
-* **Crawler Feed Sync & Management UI (`/crawlers`):**
-  * Automated periodic sync fetches official JSON IP ranges for Googlebot, Bingbot, OpenAI GPTBot, ChatGPT-User, etc.
+* **Crawler & Anonymizer Feed Sync & Management UI (`/crawlers`):**
+  * Automated periodic sync fetches official IP ranges for Googlebot, Bingbot, OpenAI GPTBot, ChatGPT-User, and Tor Bulk Exit Nodes (`torbulkexitlist`).
+  * Extensible via `collector-config.yaml` (`crawler-feeds:<key>`) to add custom partner bots or disable default feeds without overriding other feeds. Supported categories: `SEARCH_ENGINE`, `AI_CRAWLER`, `TOR_EXIT_NODE`. Feeds with unknown categories log a startup warning and remain disabled (`INVALID_CONFIG`).
   * Trigger immediate manual syncs per feed or globally via the HTMX buttons in the `/crawlers` dashboard.
   * Pruning: Removed feed configurations automatically trigger an orphan purge from the database.
 

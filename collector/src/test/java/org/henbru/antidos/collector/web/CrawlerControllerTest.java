@@ -26,7 +26,8 @@ class CrawlerControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("Verified Search Engine &amp; AI Crawler Feeds")))
 				.andExpect(content().string(containsString("Googlebot")))
-				.andExpect(content().string(containsString("OpenAI GPTBot")));
+				.andExpect(content().string(containsString("OpenAI GPTBot")))
+				.andExpect(content().string(containsString("Tor Bulk Exit Nodes")));
 	}
 
 	@Test

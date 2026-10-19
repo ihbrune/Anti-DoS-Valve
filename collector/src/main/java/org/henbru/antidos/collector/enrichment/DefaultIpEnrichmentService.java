@@ -91,6 +91,8 @@ public class DefaultIpEnrichmentService implements IpEnrichmentService {
 			BotMatch match = botMatch.get();
 			if ("AI_CRAWLER".equalsIgnoreCase(match.category())) {
 				clientType = ClientType.AI_CRAWLER;
+			} else if ("TOR_EXIT_NODE".equalsIgnoreCase(match.category())) {
+				clientType = ClientType.TOR_EXIT_NODE;
 			} else {
 				clientType = ClientType.SEARCH_ENGINE;
 			}

@@ -219,8 +219,14 @@ class DatabaseMigrationAndRepositoryTest {
 				20, 0, false, true, now,
 				null, "Private Network", null, ClientType.PRIVATE_NETWORK, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
 		);
+		BlockedClientEvent e5 = new BlockedClientEvent(
+				null, "SERVER-PROD-1", "VALVE-API", 300L, now.minus(10, ChronoUnit.MINUTES), "185.220.101.4",
+				4, 32, null, null, null, null, "185.220.101.0/24",
+				60, 0, false, true, now,
+				24940L, "Hetzner Online GmbH", "DE", ClientType.TOR_EXIT_NODE, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+		);
 
-		clientEventRepository.batchUpsert(List.of(e1, e2, e3, e4));
+		clientEventRepository.batchUpsert(List.of(e1, e2, e3, e4, e5));
 
 		// 1. Filter by clientTypes = PRIVATE_NETWORK
 		List<BlockedClientEvent> privateEvents = clientEventRepository.findRecentEventsFiltered(
@@ -229,6 +235,15 @@ class DatabaseMigrationAndRepositoryTest {
 		);
 		assertTrue(privateEvents.stream().anyMatch(e -> "10.68.1.1".equals(e.clientKey())));
 		assertTrue(privateEvents.stream().allMatch(e -> e.clientType() == ClientType.PRIVATE_NETWORK));
+
+		// 1b. Filter by clientTypes = TOR_EXIT_NODE
+		List<BlockedClientEvent> torEvents = clientEventRepository.findRecentEventsFiltered(
+				null, null, now.minus(1, ChronoUnit.HOURS), now, null,
+				List.of("TOR_EXIT_NODE"), null, 50, 0
+		);
+		assertEquals(1, torEvents.size());
+		assertEquals("185.220.101.4", torEvents.getFirst().clientKey());
+		assertEquals(ClientType.TOR_EXIT_NODE, torEvents.getFirst().clientType());
 
 		// 2. Filter by numeric ASN = 3320
 		List<BlockedClientEvent> telekomEvents = clientEventRepository.findRecentEventsFiltered(

@@ -10,5 +10,6 @@ public enum ClientType {
 	AI_CRAWLER,
 	MOBILE,
 	PRIVATE_NETWORK,
+	TOR_EXIT_NODE,
 	UNKNOWN
 }

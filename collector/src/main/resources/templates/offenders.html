@@ -188,6 +188,11 @@
                         <span>&#x1F512; Private Net</span>
                     </label>
                     <label class="pill-label">
+                        <input type="checkbox" name="clientTypes" value="TOR_EXIT_NODE" class="type-cb"
+                               th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'TOR_EXIT_NODE')}">
+                        <span>&#x1F9C5; Tor Exit Node</span>
+                    </label>
+                    <label class="pill-label">
                         <input type="checkbox" name="clientTypes" value="UNKNOWN" class="type-cb"
                                th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'UNKNOWN')}">
                         <span>Unclassified</span>

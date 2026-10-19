@@ -86,4 +86,71 @@ class CrawlerSyncServiceTest {
 		verify(rangeRepo).deleteNotInFeedKeys(List.of("googlebot"));
 		verify(feedRepo).deleteNotIn(List.of("googlebot"));
 	}
+
+	@Test
+	void testExtractCidrsFromTorBulkExitListPlaintext() {
+		String torPlaintext = """
+				# Tor Bulk Exit List - https://check.torproject.org/torbulkexitlist
+				185.220.101.4
+				185.220.101.5
+				# Another comment
+				203.0.113.50
+				""";
+
+		CrawlerSyncService service = new CrawlerSyncService(
+				new CollectorProperties(),
+				mock(CrawlerFeedRepository.class),
+				mock(BotIpRangeRepository.class),
+				new ObjectMapper()
+		);
+
+		List<String> cidrs = service.extractCidrs(torPlaintext);
+		assertEquals(3, cidrs.size());
+		assertTrue(cidrs.contains("185.220.101.4/32"));
+		assertTrue(cidrs.contains("185.220.101.5/32"));
+		assertTrue(cidrs.contains("203.0.113.50/32"));
+	}
+
+	@Test
+	void testSyncFeedWithInvalidCategoryIsRejectedAndLogged() {
+		CrawlerFeedRepository feedRepo = mock(CrawlerFeedRepository.class);
+		BotIpRangeRepository rangeRepo = mock(BotIpRangeRepository.class);
+
+		CrawlerSyncService service = new CrawlerSyncService(
+				new CollectorProperties(),
+				feedRepo,
+				rangeRepo,
+				new ObjectMapper()
+		);
+
+		CrawlerFeedConfig badConfig = new CrawlerFeedConfig("bad-feed", "Bad Feed", "INVALID_CAT", "http://example.com/feed.txt");
+		boolean result = service.syncFeed(badConfig);
+
+		assertFalse(result, "Feed with invalid category must not be synchronized");
+		verify(feedRepo).upsert(argThat(feed ->
+				"INVALID_CONFIG".equals(feed.status()) &&
+				feed.lastError() != null && feed.lastError().contains("Unknown category 'INVALID_CAT'")
+		));
+		verify(rangeRepo).replaceRangesForFeed("bad-feed", List.of());
+	}
+
+	@Test
+	void testSyncFeedDisabledFeedIsSkipped() {
+		CrawlerFeedRepository feedRepo = mock(CrawlerFeedRepository.class);
+		BotIpRangeRepository rangeRepo = mock(BotIpRangeRepository.class);
+
+		CrawlerSyncService service = new CrawlerSyncService(
+				new CollectorProperties(),
+				feedRepo,
+				rangeRepo,
+				new ObjectMapper()
+		);
+
+		CrawlerFeedConfig disabledConfig = new CrawlerFeedConfig("disabled-feed", "Disabled Feed", "SEARCH_ENGINE", "http://example.com/feed.txt", false);
+		boolean result = service.syncFeed(disabledConfig);
+
+		assertFalse(result, "Disabled feed must not be synchronized");
+		verify(feedRepo).upsert(argThat(feed -> "DISABLED".equals(feed.status())));
+		verify(rangeRepo).replaceRangesForFeed("disabled-feed", List.of());
+	}
 }

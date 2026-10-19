@@ -63,7 +63,7 @@ public class CrawlerSyncService {
 			return;
 		}
 
-		List<CrawlerFeedConfig> configs = properties.getEnrichment().getCrawlerFeeds();
+		List<CrawlerFeedConfig> configs = properties.getEnrichment().getCrawlerFeedsList();
 		if (configs == null || configs.isEmpty()) {
 			return;
 		}
@@ -85,7 +85,7 @@ public class CrawlerSyncService {
 	 * Synchronizes an individual crawler feed by key (e.g. for manual ad-hoc UI triggers).
 	 */
 	public boolean syncFeedByKey(String feedKey) {
-		List<CrawlerFeedConfig> configs = properties.getEnrichment().getCrawlerFeeds();
+		List<CrawlerFeedConfig> configs = properties.getEnrichment().getCrawlerFeedsList();
 		if (configs == null) {
 			return false;
 		}
@@ -98,13 +98,51 @@ public class CrawlerSyncService {
 	}
 
 	public boolean syncFeed(CrawlerFeedConfig config) {
+		if (config == null) {
+			return false;
+		}
+
+		if (!config.isEnabled()) {
+			log.info("Crawler feed '{}' is disabled in configuration, skipping sync.", config.getName());
+			crawlerFeedRepository.upsert(new CrawlerFeed(
+					config.getKey(),
+					config.getName(),
+					config.getCategory(),
+					config.getUrl(),
+					null,
+					"DISABLED",
+					0,
+					"Feed is disabled in configuration"
+			));
+			botIpRangeRepository.replaceRangesForFeed(config.getKey(), List.of());
+			return false;
+		}
+
+		if (!config.hasValidCategory()) {
+			String error = "Unknown category '" + config.getCategory() + "'. Allowed: " + CrawlerFeedConfig.VALID_CATEGORIES;
+			log.warn("Crawler feed '{}' has invalid/unknown category '{}'. Allowed: {}. Feed will be skipped.",
+					config.getName(), config.getCategory(), CrawlerFeedConfig.VALID_CATEGORIES);
+			crawlerFeedRepository.upsert(new CrawlerFeed(
+					config.getKey(),
+					config.getName(),
+					config.getCategory(),
+					config.getUrl(),
+					null,
+					"INVALID_CONFIG",
+					0,
+					error
+			));
+			botIpRangeRepository.replaceRangesForFeed(config.getKey(), List.of());
+			return false;
+		}
+
 		log.info("Synchronizing crawler feed '{}' from {}", config.getName(), config.getUrl());
 
 		// Ensure feed metadata entry exists in database
 		crawlerFeedRepository.upsert(new CrawlerFeed(
 				config.getKey(),
 				config.getName(),
-				config.getCategory(),
+				config.getNormalizedCategory(),
 				config.getUrl(),
 				null,
 				"SYNCING",
@@ -131,7 +169,7 @@ public class CrawlerSyncService {
 
 			List<String> cidrs = extractCidrs(response.body());
 			if (cidrs.isEmpty()) {
-				String error = "Feed returned 0 valid CIDR prefixes";
+				String error = "Feed returned 0 valid CIDR prefixes or IP addresses";
 				crawlerFeedRepository.updateSyncStatus(config.getKey(), "FAILED", 0, error, Instant.now());
 				return false;
 			}
@@ -213,8 +251,8 @@ public class CrawlerSyncService {
 				JsonNode val = entry.getValue();
 				if ((key.contains("prefix") || key.contains("cidr") || key.contains("ip")) && val.isTextual()) {
 					String text = val.asText().trim();
-					if (isValidCidr(text)) {
-						result.add(text);
+					if (isValidCidrOrIp(text)) {
+						result.add(canonicalCidr(text));
 					}
 				} else {
 					findCidrsInJson(val, result);
@@ -224,8 +262,8 @@ public class CrawlerSyncService {
 			for (JsonNode child : node) {
 				if (child.isTextual()) {
 					String text = child.asText().trim();
-					if (isValidCidr(text)) {
-						result.add(text);
+					if (isValidCidrOrIp(text)) {
+						result.add(canonicalCidr(text));
 					}
 				} else {
 					findCidrsInJson(child, result);
@@ -238,13 +276,35 @@ public class CrawlerSyncService {
 		String[] lines = text.split("\\r?\\n");
 		for (String line : lines) {
 			String clean = line.trim();
-			if (!clean.isEmpty() && !clean.startsWith("#") && isValidCidr(clean)) {
-				result.add(clean);
+			if (!clean.isEmpty() && !clean.startsWith("#") && isValidCidrOrIp(clean)) {
+				result.add(canonicalCidr(clean));
 			}
 		}
 	}
 
-	private boolean isValidCidr(String s) {
-		return s.contains("/") && (s.contains(".") || s.contains(":"));
+	boolean isValidCidrOrIp(String s) {
+		if (s == null) {
+			return false;
+		}
+		String clean = s.trim();
+		if (clean.isEmpty()) {
+			return false;
+		}
+		if (clean.contains("/")) {
+			return clean.contains(".") || clean.contains(":");
+		}
+		IpNetworkInfo net = IpNetworkUtil.parse(clean);
+		return net.v4Start() != null || net.v6Start() != null;
+	}
+
+	String canonicalCidr(String s) {
+		String clean = s.trim();
+		if (clean.contains("/")) {
+			return clean;
+		}
+		if (clean.contains(":")) {
+			return clean + "/128";
+		}
+		return clean + "/32";
 	}
 }

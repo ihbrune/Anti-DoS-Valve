@@ -1,7 +1,9 @@
 package org.henbru.antidos.collector.config;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Configuration properties for IP enrichment, Geo/ASN lookups, and crawler synchronization.
@@ -15,22 +17,19 @@ public class EnrichmentConfig {
 	private List<Long> customHostingAsns = new ArrayList<>();
 	private boolean crawlerSyncEnabled = true;
 	private String crawlerSyncCron = "0 0 4 * * *"; // Daily at 04:00 AM
-	private List<CrawlerFeedConfig> crawlerFeeds = new ArrayList<>();
+	private Map<String, CrawlerFeedConfig> crawlerFeeds = createDefaultCrawlerFeeds();
+
+	public static Map<String, CrawlerFeedConfig> createDefaultCrawlerFeeds() {
+		Map<String, CrawlerFeedConfig> map = new LinkedHashMap<>();
+		map.put("googlebot", new CrawlerFeedConfig("googlebot", "Googlebot", "SEARCH_ENGINE", "https://developers.google.com/search/apis/ipranges/googlebot.json"));
+		map.put("bingbot", new CrawlerFeedConfig("bingbot", "Bingbot", "SEARCH_ENGINE", "https://www.bing.com/toolbox/bingbot.json"));
+		map.put("openai-gptbot", new CrawlerFeedConfig("openai-gptbot", "OpenAI GPTBot", "AI_CRAWLER", "https://openai.com/gptbot.json"));
+		map.put("openai-chatgpt-user", new CrawlerFeedConfig("openai-chatgpt-user", "ChatGPT User", "AI_CRAWLER", "https://openai.com/chatgpt-user.json"));
+		map.put("tor-exit-nodes", new CrawlerFeedConfig("tor-exit-nodes", "Tor Bulk Exit Nodes", "TOR_EXIT_NODE", "https://check.torproject.org/torbulkexitlist"));
+		return map;
+	}
 
 	public EnrichmentConfig() {
-		// Populate default feeds out-of-the-box
-		crawlerFeeds.add(new CrawlerFeedConfig(
-				"googlebot", "Googlebot", "SEARCH_ENGINE",
-				"https://developers.google.com/search/apis/ipranges/googlebot.json"));
-		crawlerFeeds.add(new CrawlerFeedConfig(
-				"bingbot", "Bingbot", "SEARCH_ENGINE",
-				"https://www.bing.com/toolbox/bingbot.json"));
-		crawlerFeeds.add(new CrawlerFeedConfig(
-				"openai-gptbot", "OpenAI GPTBot", "AI_CRAWLER",
-				"https://openai.com/gptbot.json"));
-		crawlerFeeds.add(new CrawlerFeedConfig(
-				"openai-chatgpt-user", "ChatGPT User", "AI_CRAWLER",
-				"https://openai.com/chatgpt-user.json"));
 	}
 
 	public boolean isEnabled() {
@@ -89,11 +88,22 @@ public class EnrichmentConfig {
 		this.crawlerSyncCron = crawlerSyncCron;
 	}
 
-	public List<CrawlerFeedConfig> getCrawlerFeeds() {
+	public Map<String, CrawlerFeedConfig> getCrawlerFeeds() {
+		for (Map.Entry<String, CrawlerFeedConfig> entry : crawlerFeeds.entrySet()) {
+			if (entry.getValue() != null && (entry.getValue().getKey() == null || entry.getValue().getKey().isBlank())) {
+				entry.getValue().setKey(entry.getKey());
+			}
+		}
 		return crawlerFeeds;
 	}
 
-	public void setCrawlerFeeds(List<CrawlerFeedConfig> crawlerFeeds) {
-		this.crawlerFeeds = crawlerFeeds != null ? crawlerFeeds : new ArrayList<>();
+	public void setCrawlerFeeds(Map<String, CrawlerFeedConfig> crawlerFeeds) {
+		if (crawlerFeeds != null) {
+			this.crawlerFeeds = crawlerFeeds;
+		}
+	}
+
+	public List<CrawlerFeedConfig> getCrawlerFeedsList() {
+		return new ArrayList<>(getCrawlerFeeds().values());
 	}
 }

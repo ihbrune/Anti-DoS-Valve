@@ -45,3 +45,33 @@ collector:
   poll-log-retention-days: 1
   slow-poll-threshold-ms: 1000
   demo-mode: ${COLLECTOR_DEMO_MODE:false}
+  enrichment:
+    enabled: true
+    crawler-sync-enabled: true
+    crawler-sync-cron: "0 0 4 * * *"
+    crawler-feeds:
+      googlebot:
+        name: "Googlebot"
+        category: "SEARCH_ENGINE"
+        url: "https://developers.google.com/search/apis/ipranges/googlebot.json"
+        enabled: true
+      bingbot:
+        name: "Bingbot"
+        category: "SEARCH_ENGINE"
+        url: "https://www.bing.com/toolbox/bingbot.json"
+        enabled: true
+      openai-gptbot:
+        name: "OpenAI GPTBot"
+        category: "AI_CRAWLER"
+        url: "https://openai.com/gptbot.json"
+        enabled: true
+      openai-chatgpt-user:
+        name: "ChatGPT User"
+        category: "AI_CRAWLER"
+        url: "https://openai.com/chatgpt-user.json"
+        enabled: true
+      tor-exit-nodes:
+        name: "Tor Bulk Exit Nodes"
+        category: "TOR_EXIT_NODE"
+        url: "https://check.torproject.org/torbulkexitlist"
+        enabled: true

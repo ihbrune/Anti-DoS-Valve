@@ -14,7 +14,7 @@
                 <tr>
                     <th>Crawler / Bot Name</th>
                     <th>Category</th>
-                    <th>Source JSON URL</th>
+                    <th>Source Feed URL</th>
                     <th>Status</th>
                     <th>Active IP Prefixes</th>
                     <th>Last Synchronized</th>
@@ -30,7 +30,8 @@
                     <td>
                         <span th:if="${feed.category == 'SEARCH_ENGINE'}" class="badge badge-success">&#x1F50D; Search Engine</span>
                         <span th:if="${feed.category == 'AI_CRAWLER'}" class="badge badge-purple">&#x1F916; AI Crawler</span>
-                        <span th:if="${feed.category != 'SEARCH_ENGINE' and feed.category != 'AI_CRAWLER'}" class="badge badge-secondary" th:text="${feed.category}">OTHER</span>
+                        <span th:if="${feed.category == 'TOR_EXIT_NODE'}" class="badge badge-warning">&#x1F9C5; Tor Exit Node</span>
+                        <span th:if="${feed.category != 'SEARCH_ENGINE' and feed.category != 'AI_CRAWLER' and feed.category != 'TOR_EXIT_NODE'}" class="badge badge-danger" th:text="${feed.category}">OTHER</span>
                     </td>
                     <td>
                         <a th:href="${feed.url}" target="_blank" rel="noopener noreferrer"
@@ -42,6 +43,8 @@
                         <span th:if="${feed.status == 'FAILED'}" class="badge badge-danger">&#x2717; FAILED</span>
                         <span th:if="${feed.status == 'SYNCING'}" class="badge badge-warning">&#x23F3; SYNCING</span>
                         <span th:if="${feed.status == 'PENDING'}" class="badge badge-secondary">PENDING</span>
+                        <span th:if="${feed.status == 'DISABLED'}" class="badge badge-secondary" style="opacity: 0.75;">DISABLED</span>
+                        <span th:if="${feed.status == 'INVALID_CONFIG'}" class="badge badge-danger">&#x26A0;&#xFE0F; INVALID CONFIG</span>
                         <div th:if="${feed.lastError != null}" class="log-err-text" th:text="${feed.lastError}">HTTP 404</div>
                     </td>
                     <td>
@@ -57,7 +60,8 @@
                                 style="padding: 4px 10px; font-size: 11px;"
                                 th:hx-post="@{'/crawlers/' + ${feed.feedKey} + '/sync'}"
                                 hx-target="#crawlers-table-container"
-                                hx-swap="outerHTML">
+                                hx-swap="outerHTML"
+                                th:disabled="${feed.status == 'INVALID_CONFIG' or feed.status == 'DISABLED'}">
                             &#x21BB; Sync Now
                         </button>
                     </td>

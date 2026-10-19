@@ -118,9 +118,14 @@ class DashboardControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("Multi-Server Incident Explorer")));
 
+		mockMvc.perform(get("/events")
+						.param("clientTypes", "TOR_EXIT_NODE"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Tor Exit Node")));
+
 		mockMvc.perform(get("/fragments/events-table")
 						.param("clientQuery", "198.51.100.")
-						.param("clientTypes", "DATACENTER")
+						.param("clientTypes", "TOR_EXIT_NODE")
 						.param("asn", "AS3320")
 						.param("limit", "25"))
 				.andExpect(status().isOk())

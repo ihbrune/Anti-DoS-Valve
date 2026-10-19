@@ -72,4 +72,17 @@ class DefaultIpEnrichmentServiceTest {
 		IpEnrichmentResult res = enrichmentService.enrich("10.68.1.1");
 		assertEquals(ClientType.UNKNOWN, res.clientType());
 	}
+
+	@Test
+	void testEnrichTorExitNode() {
+		when(botIpRangeRepository.findBotForIp("185.220.101.4")).thenReturn(
+				Optional.of(new org.henbru.antidos.collector.storage.BotIpRangeRepository.BotMatch(
+						"tor-exit-nodes", "Tor Bulk Exit Nodes", "TOR_EXIT_NODE"
+				))
+		);
+
+		IpEnrichmentResult res = enrichmentService.enrich("185.220.101.4");
+		assertEquals(ClientType.TOR_EXIT_NODE, res.clientType());
+		assertEquals("Tor Bulk Exit Nodes", res.asOrg());
+	}
 }
