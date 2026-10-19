@@ -48,7 +48,6 @@ class CollectorPollerServiceTest {
 	private JdbcTemplate jdbcTemplate;
 
 	@BeforeEach
-	@SuppressWarnings("unused")
 	void setUp() {
 		jdbcTemplate.update("DELETE FROM blocked_client_events");
 		jdbcTemplate.update("DELETE FROM slot_snapshots");

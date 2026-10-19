@@ -11,16 +11,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
-import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.hasSize;
-import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -29,8 +24,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 		"collector.demo-mode=true",
 		"spring.datasource.url=jdbc:sqlite:target/demo-test.db?busy_timeout=10000"
 })
-@SuppressWarnings("null")
 class DemoModeTest {
+
+	static {
+		java.io.File dbFile = new java.io.File("target/demo-test.db");
+		if (dbFile.exists()) {
+			dbFile.delete();
+		}
+	}
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -158,9 +159,12 @@ class DemoModeTest {
 	@Test
 	void testMockControllerAuthentication() throws Exception {
 		// 1. Without Token -> 401
-		mockMvc.perform(get("/mock-valve/edge-eu/antidos-status"))
+		String unauthorizedResponse = mockMvc.perform(get("/mock-valve/edge-eu/antidos-status"))
 				.andExpect(status().isUnauthorized())
-				.andExpect(jsonPath("$.error", containsString("Unauthorized")));
+				.andReturn()
+				.getResponse()
+				.getContentAsString();
+		assertTrue(unauthorizedResponse.contains("Unauthorized"));
 
 		// 2. With Wrong Token -> 401
 		mockMvc.perform(get("/mock-valve/edge-eu/antidos-status")
@@ -168,20 +172,27 @@ class DemoModeTest {
 				.andExpect(status().isUnauthorized());
 
 		// 3. With Valid Token -> 200 OK Overview
-		mockMvc.perform(get("/mock-valve/edge-eu/antidos-status")
+		String validResponse = mockMvc.perform(get("/mock-valve/edge-eu/antidos-status")
 						.header("Authorization", "Bearer demo-token"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.valves", hasSize(3)))
-				.andExpect(jsonPath("$.valves[0].monitorName", is("Primary-Rate-Limiter")));
+				.andReturn()
+				.getResponse()
+				.getContentAsString();
+		ValveOverviewDto overview = objectMapper.readValue(validResponse, ValveOverviewDto.class);
+		assertEquals(3, overview.valves().size());
+		assertEquals("Primary-Rate-Limiter", overview.valves().getFirst().monitorName());
 	}
 
 	@Test
 	void testDashboardRendersDemoBanner() throws Exception {
-		mockMvc.perform(get("/"))
+		String html = mockMvc.perform(get("/"))
 				.andExpect(status().isOk())
-				.andExpect(content().string(containsString("DEMO MODE ACTIVE")))
-				.andExpect(content().string(containsString("antidos-collector-demo.db")))
-				.andExpect(content().string(containsString("simulated Anti-DoS Valve endpoints")));
+				.andReturn()
+				.getResponse()
+				.getContentAsString();
+		assertTrue(html.contains("DEMO MODE ACTIVE"));
+		assertTrue(html.contains("antidos-collector-demo.db"));
+		assertTrue(html.contains("simulated Anti-DoS Valve endpoints"));
 	}
 
 	@Test
@@ -219,10 +230,13 @@ class DemoModeTest {
 		assertTrue(errorLogs > 0, "Should have seeded simulated error logs");
 
 		// 5. Verify Dashboard UI displays non-zero 24h stats
-		mockMvc.perform(get("/"))
+		String dashboardHtml = mockMvc.perform(get("/"))
 				.andExpect(status().isOk())
-				.andExpect(content().string(containsString("Demo-Edge-EU")))
-				.andExpect(content().string(containsString("Demo-API-Gateway")));
+				.andReturn()
+				.getResponse()
+				.getContentAsString();
+		assertTrue(dashboardHtml.contains("Demo-Edge-EU"));
+		assertTrue(dashboardHtml.contains("Demo-API-Gateway"));
 
 		// 6. Verify IPv6 and Subnet-Aggregated events are seeded
 		var ipv6Events = clientEventRepository.findRecentEventsFiltered(

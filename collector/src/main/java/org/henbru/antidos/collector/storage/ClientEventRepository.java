@@ -311,18 +311,6 @@ public class ClientEventRepository {
 			List<String> valveNames,
 			Instant fromTime,
 			Instant toTime,
-			String clientQuery
-	) {
-		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery, null, null);
-	}
-
-	private void appendFilterCriteria(
-			StringBuilder sql,
-			List<Object> params,
-			List<String> serverIds,
-			List<String> valveNames,
-			Instant fromTime,
-			Instant toTime,
 			String clientQuery,
 			List<String> clientTypes,
 			Long asn
@@ -412,7 +400,7 @@ public class ClientEventRepository {
 		if (s.regionMatches(true, 0, "AS", 0, 2)) {
 			String numPart = s.substring(2).trim();
 			try {
-				return Long.parseLong(numPart);
+				return Long.valueOf(numPart);
 			} catch (NumberFormatException ignored) {
 			}
 		}

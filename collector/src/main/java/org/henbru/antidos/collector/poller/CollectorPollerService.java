@@ -81,7 +81,7 @@ public class CollectorPollerService {
 
 	public void pollFleet() {
 		List<EndpointConfig> enabledEndpoints = properties.getEndpoints().stream()
-				.filter(EndpointConfig::isEnabled)
+				.filter(endpoint -> endpoint != null && endpoint.isEnabled())
 				.toList();
 
 		if (enabledEndpoints.isEmpty()) {
@@ -109,7 +109,7 @@ public class CollectorPollerService {
 			}, pollerExecutor));
 		}
 
-		CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+		CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
 	}
 
 	public void pollEndpoint(EndpointConfig endpoint) {

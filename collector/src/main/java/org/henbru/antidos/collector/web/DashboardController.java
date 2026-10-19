@@ -409,7 +409,7 @@ public class DashboardController {
 			s = s.substring(2).trim();
 		}
 		try {
-			return Long.parseLong(s);
+			return Long.valueOf(s);
 		} catch (NumberFormatException e) {
 			return null;
 		}
