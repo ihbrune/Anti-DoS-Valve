@@ -209,13 +209,21 @@ public final class IpNetworkUtil {
 
 		String q = query.trim();
 
-		// Handle IPv4 shorthand prefix, e.g. "192.168.1." -> /24, "192.168." -> /16, "10." -> /8
+		// Handle IPv4 shorthand prefix, e.g. "192.168.1." or "192.168.1" -> /24, "192.168." or "192.168" -> /16, "10." -> /8
 		if (q.endsWith(".")) {
 			String[] dots = q.split("\\.");
 			switch (dots.length) {
 				case 3 -> q = q + "0/24";
 				case 2 -> q = q + "0.0/16";
 				case 1 -> q = q + "0.0.0/8";
+				default -> {
+				}
+			}
+		} else if (isOctetsWithoutTrailingDot(q)) {
+			String[] dots = q.split("\\.");
+			switch (dots.length) {
+				case 3 -> q = q + ".0/24";
+				case 2 -> q = q + ".0.0/16";
 				default -> {
 				}
 			}
@@ -241,6 +249,33 @@ public final class IpNetworkUtil {
 
 		// Fallback: simple text match
 		return new SearchCriteria(true, false, null, null, null, null, null, query.trim());
+	}
+
+	private static boolean isOctetsWithoutTrailingDot(String s) {
+		String[] parts = s.split("\\.");
+		if (parts.length != 2 && parts.length != 3) {
+			return false;
+		}
+		for (String part : parts) {
+			if (part.isEmpty() || part.length() > 3) {
+				return false;
+			}
+			for (int i = 0; i < part.length(); i++) {
+				char c = part.charAt(i);
+				if (c < '0' || c > '9') {
+					return false;
+				}
+			}
+			try {
+				int val = Integer.parseInt(part);
+				if (val < 0 || val > 255) {
+					return false;
+				}
+			} catch (NumberFormatException e) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/**

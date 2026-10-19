@@ -1,8 +1,10 @@
 package org.henbru.antidos.collector;
 
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.henbru.antidos.collector.model.BlockedClientEvent;
 import org.henbru.antidos.collector.model.ClientType;
@@ -14,14 +16,19 @@ import org.henbru.antidos.collector.storage.ClientEventRepository;
 import org.henbru.antidos.collector.storage.HeartbeatRepository;
 import org.henbru.antidos.collector.storage.PollEventLogRepository;
 import org.henbru.antidos.collector.storage.SlotSnapshotRepository;
+import org.henbru.antidos.collector.util.IpNetworkUtil;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
 class DatabaseMigrationAndRepositoryTest {
+
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
 
 	@Autowired
 	private HeartbeatRepository heartbeatRepository;
@@ -307,4 +314,56 @@ class DatabaseMigrationAndRepositoryTest {
 		int deletedOld = pollEventLogRepository.deleteOlderThan(now.minus(30, ChronoUnit.DAYS));
 		assertTrue(deletedOld >= 1);
 	}
+
+	@Test
+	void testLegacyEventWithNullRangesAndRepair() {
+		Instant now = Instant.now();
+		// Simulate a pre-V3 legacy row with null ranges and subnet_group = client_key
+		jdbcTemplate.update("""
+				INSERT INTO blocked_client_events (
+				    server_id, valve_name, slot_key, slot_time, client_key,
+				    ip_version, cidr_prefix, ip_v4_start, ip_v4_end, ip_v6_start, ip_v6_end, subnet_group,
+				    request_count, retained_count, is_locked, is_completed, last_updated_at,
+				    client_type, enrichment_status
+				) VALUES (
+				    'LEGACY-SERVER', 'LEGACY-VALVE', 999999, ?, '52.167.114.213',
+				    4, 32, NULL, NULL, NULL, NULL, '52.167.114.213',
+				    42, 0, 1, 1, ?,
+				    'UNKNOWN', 'PENDING'
+				)
+				""", Timestamp.from(now), Timestamp.from(now));
+
+		// 1. Searching for exact IP "52.167.114.213" should find the legacy row even before repair!
+		List<BlockedClientEvent> ipHits = clientEventRepository.findRecentEventsFiltered(
+				List.of("LEGACY-SERVER"), null, null, null, "52.167.114.213", 10, 0
+		);
+		assertFalse(ipHits.isEmpty(), "Should find legacy event when searching for exact client IP");
+		assertEquals("52.167.114.213", ipHits.getFirst().clientKey());
+		// ROW_MAPPER dynamic fallback should already present canonical subnetGroup
+		assertEquals("52.167.114.0/24", ipHits.getFirst().subnetGroup());
+
+		// 2. Searching for shorthand "52.167.114" should also find it
+		List<BlockedClientEvent> shorthandHits = clientEventRepository.findRecentEventsFiltered(
+				List.of("LEGACY-SERVER"), null, null, null, "52.167.114", 10, 0
+		);
+		assertFalse(shorthandHits.isEmpty(), "Should find legacy event when searching for prefix '52.167.114'");
+
+		// 3. Trigger repairUnnormalizedEvents
+		clientEventRepository.repairUnnormalizedEvents();
+
+		// 4. Verify DB row was updated with canonical IP range and subnet_group
+		Map<String, Object> repairedRow = jdbcTemplate.queryForMap(
+				"SELECT subnet_group, ip_v4_start, ip_v4_end FROM blocked_client_events WHERE server_id = 'LEGACY-SERVER' AND slot_key = 999999"
+		);
+		assertEquals("52.167.114.0/24", repairedRow.get("subnet_group"));
+		assertNotNull(repairedRow.get("ip_v4_start"));
+		assertEquals(IpNetworkUtil.ipv4ToLong("52.167.114.213"), ((Number) repairedRow.get("ip_v4_start")).longValue());
+
+		// 5. Querying by subnet "52.167.114.0/24" now matches properly via CIDR containment
+		List<BlockedClientEvent> subnetHits = clientEventRepository.findRecentEventsFiltered(
+				List.of("LEGACY-SERVER"), null, null, null, "52.167.114.0/24", 10, 0
+		);
+		assertFalse(subnetHits.isEmpty(), "Should find repaired event when searching for canonical subnet");
+	}
 }
+

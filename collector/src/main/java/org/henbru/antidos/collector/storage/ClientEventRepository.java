@@ -7,16 +7,24 @@ import java.sql.Types;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+
 import org.henbru.antidos.collector.model.BlockedClientEvent;
 import org.henbru.antidos.collector.model.ClientType;
 import org.henbru.antidos.collector.model.EnrichmentStatus;
+import org.henbru.antidos.collector.model.IpNetworkInfo;
 import org.henbru.antidos.collector.model.TopOffenderSummary;
 import org.henbru.antidos.collector.util.IpNetworkUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Repository;
+
+import jakarta.annotation.PostConstruct;
 
 /**
  * JDBC repository for storing individual blocked IP/subnet client events and running analytics.
@@ -24,6 +32,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 @SuppressWarnings("null")
 public class ClientEventRepository {
+
+	private static final Logger log = LoggerFactory.getLogger(ClientEventRepository.class);
 
 	private final JdbcTemplate jdbcTemplate;
 
@@ -33,8 +43,29 @@ public class ClientEventRepository {
 
 	@NonNull
 	private static final RowMapper<BlockedClientEvent> ROW_MAPPER = (rs, rowNum) -> {
+		String clientKey = rs.getString("client_key");
+		int ipVersion = rs.getInt("ip_version");
+		int cidrPrefix = rs.getInt("cidr_prefix");
 		Long v4Start = rs.getObject("ip_v4_start") != null ? rs.getLong("ip_v4_start") : null;
 		Long v4End = rs.getObject("ip_v4_end") != null ? rs.getLong("ip_v4_end") : null;
+		String v6Start = rs.getString("ip_v6_start");
+		String v6End = rs.getString("ip_v6_end");
+		String subnetGroup = rs.getString("subnet_group");
+
+		// Dynamic fallback normalization for legacy/unparsed rows (e.g. from pre-V3 schema)
+		if ((v4Start == null && v6Start == null) || (subnetGroup == null || !subnetGroup.contains("/"))) {
+			IpNetworkInfo parsed = IpNetworkUtil.parse(clientKey);
+			if (parsed.v4Start() != null || parsed.v6Start() != null) {
+				ipVersion = parsed.version();
+				cidrPrefix = parsed.prefix();
+				v4Start = parsed.v4Start();
+				v4End = parsed.v4End();
+				v6Start = parsed.v6Start();
+				v6End = parsed.v6End();
+				subnetGroup = parsed.subnetGroup();
+			}
+		}
+
 		Long asn = rs.getObject("asn") != null ? rs.getLong("asn") : null;
 		String asOrg = rs.getString("as_org");
 		String countryCode = rs.getString("country_code");
@@ -49,14 +80,14 @@ public class ClientEventRepository {
 				rs.getString("valve_name"),
 				rs.getLong("slot_key"),
 				rs.getTimestamp("slot_time").toInstant(),
-				rs.getString("client_key"),
-				rs.getInt("ip_version"),
-				rs.getInt("cidr_prefix"),
+				clientKey,
+				ipVersion,
+				cidrPrefix,
 				v4Start,
 				v4End,
-				rs.getString("ip_v6_start"),
-				rs.getString("ip_v6_end"),
-				rs.getString("subnet_group"),
+				v6Start,
+				v6End,
+				subnetGroup,
 				rs.getInt("request_count"),
 				rs.getInt("retained_count"),
 				rs.getBoolean("is_locked"),
@@ -69,6 +100,67 @@ public class ClientEventRepository {
 				enrichmentStatus
 		);
 	};
+
+	@PostConstruct
+	public void repairUnnormalizedEvents() {
+		try {
+			List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
+					SELECT id, client_key FROM blocked_client_events
+					WHERE (ip_version = 4 AND (ip_v4_start IS NULL OR ip_v4_end IS NULL))
+					   OR (ip_version = 6 AND (ip_v6_start IS NULL OR ip_v6_end IS NULL))
+					   OR (subnet_group NOT LIKE '%/%' AND (client_key LIKE '%.%' OR client_key LIKE '%:%'))
+					""");
+			if (rows.isEmpty()) {
+				return;
+			}
+			log.info("Repairing {} unnormalized blocked client events with canonical network ranges and subnets...", rows.size());
+			String updateSql = """
+					UPDATE blocked_client_events SET
+					    ip_version = ?,
+					    cidr_prefix = ?,
+					    ip_v4_start = ?,
+					    ip_v4_end = ?,
+					    ip_v6_start = ?,
+					    ip_v6_end = ?,
+					    subnet_group = ?
+					WHERE id = ?
+					""";
+			jdbcTemplate.batchUpdate(updateSql, new BatchPreparedStatementSetter() {
+				@Override
+				public void setValues(@NonNull PreparedStatement ps, int i) throws SQLException {
+					Map<String, Object> row = rows.get(i);
+					long id = ((Number) row.get("id")).longValue();
+					String clientKey = (String) row.get("client_key");
+					IpNetworkInfo net = IpNetworkUtil.parse(clientKey);
+
+					ps.setInt(1, net.version());
+					ps.setInt(2, net.prefix());
+					if (net.v4Start() != null) {
+						ps.setLong(3, net.v4Start());
+					} else {
+						ps.setNull(3, Types.BIGINT);
+					}
+					if (net.v4End() != null) {
+						ps.setLong(4, net.v4End());
+					} else {
+						ps.setNull(4, Types.BIGINT);
+					}
+					ps.setString(5, net.v6Start());
+					ps.setString(6, net.v6End());
+					ps.setString(7, net.subnetGroup());
+					ps.setLong(8, id);
+				}
+
+				@Override
+				public int getBatchSize() {
+					return rows.size();
+				}
+			});
+			log.info("Successfully repaired {} blocked client events.", rows.size());
+		} catch (DataAccessException e) {
+			log.warn("Could not repair unnormalized events on startup: {}", e.getMessage());
+		}
+	}
 
 	public void batchUpsert(List<BlockedClientEvent> events) {
 		if (events == null || events.isEmpty()) {
@@ -373,13 +465,19 @@ public class ClientEventRepository {
 				IpNetworkUtil.SearchCriteria criteria = IpNetworkUtil.parseSearchQuery(trimmedQuery);
 				if (criteria.isIpSearch()) {
 					if (criteria.ipVersion() == 4) {
-						sql.append("AND (ip_version = 4 AND ip_v4_start <= ? AND ip_v4_end >= ?) ");
+						sql.append("AND ((ip_version = 4 AND ip_v4_start <= ? AND ip_v4_end >= ?) OR client_key = ? OR subnet_group = ? OR client_key LIKE ?) ");
 						params.add(criteria.v4End());
 						params.add(criteria.v4Start());
+						params.add(criteria.rawQuery());
+						params.add(criteria.rawQuery());
+						params.add(criteria.rawQuery() + "%");
 					} else if (criteria.ipVersion() == 6) {
-						sql.append("AND (ip_version = 6 AND ip_v6_start <= ? AND ip_v6_end >= ?) ");
+						sql.append("AND ((ip_version = 6 AND ip_v6_start <= ? AND ip_v6_end >= ?) OR client_key = ? OR subnet_group = ? OR client_key LIKE ?) ");
 						params.add(criteria.v6End());
 						params.add(criteria.v6Start());
+						params.add(criteria.rawQuery());
+						params.add(criteria.rawQuery());
+						params.add(criteria.rawQuery() + "%");
 					}
 				} else if (criteria.hasFilter()) {
 					sql.append("AND (client_key LIKE ? OR subnet_group LIKE ? OR as_org LIKE ?) ");

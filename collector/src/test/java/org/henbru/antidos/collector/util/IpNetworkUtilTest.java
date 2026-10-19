@@ -87,6 +87,19 @@ class IpNetworkUtilTest {
 		assertEquals(IpNetworkUtil.ipv4ToLong("10.0.0.0"), c2.v4Start());
 		assertEquals(IpNetworkUtil.ipv4ToLong("10.255.255.255"), c2.v4End());
 
+		// Shorthand prefix without trailing dot, e.g. "52.167.114" -> /24, "10.0" -> /16
+		IpNetworkUtil.SearchCriteria cShort24 = IpNetworkUtil.parseSearchQuery("52.167.114");
+		assertTrue(cShort24.isIpSearch());
+		assertEquals(4, cShort24.ipVersion());
+		assertEquals(IpNetworkUtil.ipv4ToLong("52.167.114.0"), cShort24.v4Start());
+		assertEquals(IpNetworkUtil.ipv4ToLong("52.167.114.255"), cShort24.v4End());
+
+		IpNetworkUtil.SearchCriteria cShort16 = IpNetworkUtil.parseSearchQuery("10.0");
+		assertTrue(cShort16.isIpSearch());
+		assertEquals(4, cShort16.ipVersion());
+		assertEquals(IpNetworkUtil.ipv4ToLong("10.0.0.0"), cShort16.v4Start());
+		assertEquals(IpNetworkUtil.ipv4ToLong("10.0.255.255"), cShort16.v4End());
+
 		IpNetworkUtil.SearchCriteria c3 = IpNetworkUtil.parseSearchQuery("test-host");
 		assertFalse(c3.isIpSearch());
 		assertTrue(c3.hasFilter());

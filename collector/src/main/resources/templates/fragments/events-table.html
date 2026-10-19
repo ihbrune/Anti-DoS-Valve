@@ -71,7 +71,7 @@
                         <span th:unless="${event.completed}" class="badge badge-warning">IN PROGRESS</span>
                     </td>
                     <td style="text-align: right;">
-                        <a th:href="@{/events(clientQuery=${event.subnetGroup})}"
+                        <a th:href="@{/events(clientQuery=${event.subnetGroup != null and !event.subnetGroup.isBlank() ? event.subnetGroup : event.clientKey})}"
                            class="btn"
                            style="padding: 2px 8px; font-size: 11px;"
                            title="Filter all events matching this subnet">
