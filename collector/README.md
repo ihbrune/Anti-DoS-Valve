@@ -33,7 +33,7 @@ To explore the dashboard and telemetry engine without configuring or connecting 
 
 ```bash
 # Using the Fat-JAR:
-java -jar collector/target/anti-dos-collector-1.7.0.jar demo
+java -jar collector/target/anti-dos-collector-1.7.1.jar demo
 
 # Or using Maven:
 mvn spring-boot:run -pl collector -Dspring-boot.run.arguments="demo"
@@ -61,7 +61,7 @@ From the root directory of the project:
 ```bash
 mvn package -pl collector
 ```
-This produces the executable Spring Boot JAR in `collector/target/anti-dos-collector-1.7.0.jar`.
+This produces the executable Spring Boot JAR in `collector/target/anti-dos-collector-1.7.1.jar`.
 
 ### 2. Configure Monitored Endpoints
 Copy the provided example configuration file:
@@ -82,7 +82,7 @@ collector:
 ### 3. Verify an Endpoint via CLI
 You can test connectivity to any Valve endpoint before running the service:
 ```bash
-java -jar collector/target/anti-dos-collector-1.7.0.jar test-endpoint \
+java -jar collector/target/anti-dos-collector-1.7.1.jar test-endpoint \
   --url "http://localhost:8080/antidos-status" \
   --token "secretToken1" \
   --name "Web-Node-1"
@@ -90,7 +90,7 @@ java -jar collector/target/anti-dos-collector-1.7.0.jar test-endpoint \
 
 ### 4. Run the Collector
 ```bash
-java -jar collector/target/anti-dos-collector-1.7.0.jar
+java -jar collector/target/anti-dos-collector-1.7.1.jar
 ```
 Open your browser at **`http://localhost:8090`** to access the Fleet Dashboard.
 
@@ -174,7 +174,7 @@ collector:
 #### Step 3: Test Endpoint Connectivity via CLI
 Before starting the background service, verify network connectivity and token authentication against your live Tomcat nodes:
 ```bash
-java -jar collector/target/anti-dos-collector-1.7.0.jar test-endpoint \
+java -jar collector/target/anti-dos-collector-1.7.1.jar test-endpoint \
   --url "https://web01.internal.example.com/antidos-status" \
   --token "yourSecureStatusToken1" \
   --name "Prod-Web-01"
@@ -183,7 +183,7 @@ java -jar collector/target/anti-dos-collector-1.7.0.jar test-endpoint \
 #### Step 4: Deploy the Fat-JAR & Install systemd Service
 Deploy the packaged Fat-JAR:
 ```bash
-sudo cp collector/target/anti-dos-collector-1.7.0.jar /opt/antidos-collector/anti-dos-collector.jar
+sudo cp collector/target/anti-dos-collector-1.7.1.jar /opt/antidos-collector/anti-dos-collector.jar
 sudo chown antidos:antidos /opt/antidos-collector/anti-dos-collector.jar
 ```
 
@@ -296,7 +296,7 @@ To connect to a PostgreSQL database, provide standard Spring Data Source environ
 export SPRING_DATASOURCE_URL="jdbc:postgresql://localhost:5432/antidos_collector"
 export SPRING_DATASOURCE_USERNAME="postgres"
 export SPRING_DATASOURCE_PASSWORD="password"
-java -jar collector/target/anti-dos-collector-1.7.0.jar
+java -jar collector/target/anti-dos-collector-1.7.1.jar
 ```
 Flyway will automatically initialize the PostgreSQL schema upon startup.
 

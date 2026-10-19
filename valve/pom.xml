@@ -6,7 +6,7 @@
 	<parent>
 		<groupId>org.henbru.antidos</groupId>
 		<artifactId>anti-dos-parent</artifactId>
-		<version>1.7.0</version>
+		<version>1.7.1</version>
 	</parent>
 
 	<artifactId>anti-dos-valve</artifactId>
