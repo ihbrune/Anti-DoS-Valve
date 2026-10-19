@@ -36,6 +36,10 @@ This document serves as an onboarding and development guide for human developers
    * Executes directly within the high-throughput request processing path of Tomcat.
    * Never use coarse-grained locks (`synchronized`) inside the request processing pipeline (`invoke()`).
    * Rely strictly on concurrency primitives such as `ConcurrentHashMap`, `LongAdder`, and atomic operations.
+4. **Self-Contained Dashboard Styling & CSP:**
+   * All HTML/CSS/JS in `AntiDoSStatusRenderer` must remain 100% self-contained string templates without external assets.
+   * Maintain both Dark and Light mode palettes in `appendCommonHeadStyles()`.
+   * The Content-Security-Policy header on HTML responses must permit `script-src 'unsafe-inline'` for the theme toggle button and anti-FOUC initialization.
 
 ### Constraints for `collector/` (Modern Spring Boot Ecosystem):
 1. **Java 21 & Virtual Threads:**

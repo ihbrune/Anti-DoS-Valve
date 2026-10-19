@@ -552,6 +552,7 @@ In servers running multiple valve instances (e.g., host-level rate limiting alon
 
 The status dashboard is engineered for high performance and zero external footprint:
 * **No External Dependencies:** No external stylesheets, fonts, or JavaScript libraries (100% self-contained).
+* **Dark & Light Mode:** Built-in theme switcher with client-side persistence and anti-FOUC initialization, retaining a clean terminal aesthetic across both palettes without external assets.
 * **Minimal Payload:** Compact HTML (< 4 KB) styled with system monospaced fonts (`ui-monospace`, `Menlo`, `Consolas`) for a clean terminal/dashboard look.
 * **Zero Reflection / Low Overhead:** Generated directly via an internal `StringBuilder` without template engines.
 * **JSON API:** Appending `?format=json` or sending an `Accept: application/json` header returns a machine-readable JSON representation, ideal for automated health checks, uptime monitoring, or Prometheus scrapers.

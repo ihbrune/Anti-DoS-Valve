@@ -31,6 +31,8 @@ This document serves as the architectural reference and development guide for hu
    * Schema tables must remain idempotent and compatible with batch upserts (`ON CONFLICT (...) DO UPDATE`).
 3. **Frontend Aesthetics & Reactivity:**
    * Follow the rich aesthetics guidelines: modern dark/light mode palette, glassmorphism, responsive cards, crisp typography.
+   * **CSS Custom Properties (Variables):** Never use hardcoded colors (e.g. `#0f172a`, `#fff`) in HTML/CSS templates or components. Rely strictly on CSS variables (`var(--bg-card)`, `var(--text-primary)`, etc.) to preserve seamless Dark/Light theme switching.
+   * **Theme Switcher & Anti-FOUC:** All primary view templates must include `<script th:src="@{/js/theme.js}"></script>` in `<head>` (synchronous anti-FOUC) and provide the theme toggle button in the navbar (`.btn-theme-toggle`).
    * Use HTMX attributes (`hx-get`, `hx-post`, `hx-trigger`, `hx-swap`) for dynamic updates rather than heavy external JavaScript frameworks.
 4. **IP Storage, Forensics & Enrichment Architecture:**
    * **Decoupled Ingestion:** Polling threads write events with `enrichment_status = 'PENDING'` immediately. `BackgroundEnrichmentWorker` resolves ASN, Geo, and Client Classification asynchronously to guarantee sub-millisecond polling cycles.
