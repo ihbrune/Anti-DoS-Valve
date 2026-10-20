@@ -11,8 +11,10 @@ import java.util.concurrent.Executors;
 import jakarta.annotation.PreDestroy;
 import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.config.EndpointConfig;
+import org.henbru.antidos.collector.enrichment.EntityResolver;
 import org.henbru.antidos.collector.model.BlockedClientEvent;
 import org.henbru.antidos.collector.model.EndpointHeartbeat;
+import org.henbru.antidos.collector.model.NetworkEntity;
 import org.henbru.antidos.collector.model.PollEventLog;
 import org.henbru.antidos.collector.model.SlotSnapshot;
 import org.henbru.antidos.collector.model.ValveDetailsDto;
@@ -41,6 +43,7 @@ public class CollectorPollerService {
 	private final SlotSnapshotRepository slotSnapshotRepository;
 	private final ClientEventRepository clientEventRepository;
 	private final PollEventLogRepository pollEventLogRepository;
+	private final EntityResolver entityResolver;
 	private final ExecutorService pollerExecutor;
 
 	@Autowired
@@ -50,18 +53,20 @@ public class CollectorPollerService {
 			HeartbeatRepository heartbeatRepository,
 			SlotSnapshotRepository slotSnapshotRepository,
 			ClientEventRepository clientEventRepository,
-			PollEventLogRepository pollEventLogRepository) {
+			PollEventLogRepository pollEventLogRepository,
+			EntityResolver entityResolver) {
 		this(properties, statusClient, heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
-				Executors.newVirtualThreadPerTaskExecutor());
+				entityResolver, Executors.newVirtualThreadPerTaskExecutor());
 	}
 
-	CollectorPollerService(
+	public CollectorPollerService(
 			CollectorProperties properties,
 			ValveStatusClient statusClient,
 			HeartbeatRepository heartbeatRepository,
 			SlotSnapshotRepository slotSnapshotRepository,
 			ClientEventRepository clientEventRepository,
 			PollEventLogRepository pollEventLogRepository,
+			EntityResolver entityResolver,
 			ExecutorService pollerExecutor) {
 		this.properties = properties;
 		this.statusClient = statusClient;
@@ -69,7 +74,19 @@ public class CollectorPollerService {
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
 		this.pollEventLogRepository = pollEventLogRepository;
+		this.entityResolver = entityResolver;
 		this.pollerExecutor = pollerExecutor != null ? pollerExecutor : Executors.newVirtualThreadPerTaskExecutor();
+	}
+
+	public CollectorPollerService(
+			CollectorProperties properties,
+			ValveStatusClient statusClient,
+			HeartbeatRepository heartbeatRepository,
+			SlotSnapshotRepository slotSnapshotRepository,
+			ClientEventRepository clientEventRepository,
+			PollEventLogRepository pollEventLogRepository) {
+		this(properties, statusClient, heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
+				null, Executors.newVirtualThreadPerTaskExecutor());
 	}
 
 	@PreDestroy
@@ -295,6 +312,15 @@ public class CollectorPollerService {
 			if (details.blockedClients() != null && !details.blockedClients().isEmpty()) {
 				List<BlockedClientEvent> events = new ArrayList<>();
 				for (ValveDetailsDto.BlockedClientDto c : details.blockedClients()) {
+					Long entityId = null;
+					if (entityResolver != null) {
+						try {
+							NetworkEntity entity = entityResolver.getOrCreate(c.key(), start);
+							entityId = entity.id();
+						} catch (Exception e) {
+							log.debug("Could not resolve entity for key {}: {}", c.key(), e.getMessage());
+						}
+					}
 					events.add(new BlockedClientEvent(
 							null,
 							endpoint.getName(),
@@ -307,7 +333,7 @@ public class CollectorPollerService {
 							c.locked(),
 							completed,
 							pollTime
-					));
+					).withEntityId(entityId));
 				}
 				clientEventRepository.batchUpsert(events);
 				eventsCount = events.size();

@@ -311,6 +311,7 @@ public class DemoDataSeeder {
 		// Batch insert historical snapshots and events
 		slotSnapshotRepository.batchUpsert(snapshots);
 		clientEventRepository.batchUpsert(events);
+		enrichLegacyDemoEventsIfAny();
 
 		// 2. Pre-populate initial Heartbeats
 		heartbeatRepository.upsert(new EndpointHeartbeat(
@@ -459,6 +460,47 @@ public class DemoDataSeeder {
 					UPDATE blocked_client_events
 					SET as_org = 'Unique Local Address (RFC 4193)', client_type = 'PRIVATE_NETWORK', enrichment_status = 'ENRICHED'
 					WHERE client_key = '2001:db8:85a3::8a2e:370:7334' OR client_key = 'fd00:10:68::42'
+					""");
+			// Ensure network_entity records exist for all demo events
+			jdbcTemplate.update("""
+					INSERT INTO network_entity (
+					    client_key, ip_version, cidr_prefix,
+					    ip_v4_start, ip_v4_end, ip_v6_start, ip_v6_end,
+					    subnet_group, mmdb_network, asn, as_org, country_code,
+					    client_type, tags, enrichment_status, resolved_at, resolved_versions,
+					    first_seen, last_seen
+					)
+					SELECT
+					    b.client_key,
+					    MAX(b.ip_version),
+					    MAX(b.cidr_prefix),
+					    MAX(b.ip_v4_start),
+					    MAX(b.ip_v4_end),
+					    MAX(b.ip_v6_start),
+					    MAX(b.ip_v6_end),
+					    MAX(b.subnet_group),
+					    NULL,
+					    MAX(b.asn),
+					    MAX(b.as_org),
+					    MAX(b.country_code),
+					    COALESCE(MAX(b.client_type), 'UNKNOWN'),
+					    NULL,
+					    COALESCE(MAX(b.enrichment_status), 'PENDING'),
+					    CASE WHEN MAX(b.enrichment_status) = 'ENRICHED' THEN MAX(b.last_updated_at) ELSE NULL END,
+					    NULL,
+					    MIN(b.slot_time),
+					    MAX(b.last_updated_at)
+					FROM blocked_client_events b
+					WHERE NOT EXISTS (
+					    SELECT 1 FROM network_entity ne WHERE ne.client_key = b.client_key
+					)
+					GROUP BY b.client_key
+					""");
+			// Link entity_id
+			jdbcTemplate.update("""
+					UPDATE blocked_client_events
+					SET entity_id = (SELECT ne.id FROM network_entity ne WHERE ne.client_key = blocked_client_events.client_key)
+					WHERE entity_id IS NULL
 					""");
 		} catch (DataAccessException e) {
 			log.warn("Could not backfill legacy demo events: {}", e.getMessage());

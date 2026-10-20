@@ -29,7 +29,8 @@ public record BlockedClientEvent(
 		String asOrg,
 		String countryCode,
 		ClientType clientType,
-		EnrichmentStatus enrichmentStatus
+		EnrichmentStatus enrichmentStatus,
+		Long entityId
 ) {
 
 	/**
@@ -66,7 +67,8 @@ public record BlockedClientEvent(
 				null,
 				null,
 				ClientType.UNKNOWN,
-				EnrichmentStatus.PENDING
+				EnrichmentStatus.PENDING,
+				null
 		);
 	}
 
@@ -116,7 +118,64 @@ public record BlockedClientEvent(
 				null,
 				null,
 				ClientType.UNKNOWN,
-				EnrichmentStatus.PENDING
+				EnrichmentStatus.PENDING,
+				null
+		);
+	}
+
+	/**
+	 * Backwards-compatible constructor with enrichment parameters but without entityId.
+	 */
+	public BlockedClientEvent(
+			Long id,
+			String serverId,
+			String valveName,
+			long slotKey,
+			Instant slotTime,
+			String clientKey,
+			int ipVersion,
+			int cidrPrefix,
+			Long ipV4Start,
+			Long ipV4End,
+			String ipV6Start,
+			String ipV6End,
+			String subnetGroup,
+			int requestCount,
+			int retainedCount,
+			boolean locked,
+			boolean completed,
+			Instant lastUpdatedAt,
+			Long asn,
+			String asOrg,
+			String countryCode,
+			ClientType clientType,
+			EnrichmentStatus enrichmentStatus
+	) {
+		this(
+				id,
+				serverId,
+				valveName,
+				slotKey,
+				slotTime,
+				clientKey,
+				ipVersion,
+				cidrPrefix,
+				ipV4Start,
+				ipV4End,
+				ipV6Start,
+				ipV6End,
+				subnetGroup,
+				requestCount,
+				retainedCount,
+				locked,
+				completed,
+				lastUpdatedAt,
+				asn,
+				asOrg,
+				countryCode,
+				clientType,
+				enrichmentStatus,
+				null
 		);
 	}
 
@@ -137,7 +196,8 @@ public record BlockedClientEvent(
 			String asOrg,
 			String countryCode,
 			ClientType clientType,
-			EnrichmentStatus enrichmentStatus
+			EnrichmentStatus enrichmentStatus,
+			Long entityId
 	) {
 		this(
 				id,
@@ -162,12 +222,42 @@ public record BlockedClientEvent(
 				asOrg,
 				countryCode,
 				clientType,
-				enrichmentStatus
+				enrichmentStatus,
+				entityId
 		);
 	}
 
 	public int totalEffectiveCount() {
 		return requestCount + retainedCount;
+	}
+
+	public BlockedClientEvent withEntityId(Long newEntityId) {
+		return new BlockedClientEvent(
+				id,
+				serverId,
+				valveName,
+				slotKey,
+				slotTime,
+				clientKey,
+				ipVersion,
+				cidrPrefix,
+				ipV4Start,
+				ipV4End,
+				ipV6Start,
+				ipV6End,
+				subnetGroup,
+				requestCount,
+				retainedCount,
+				locked,
+				completed,
+				lastUpdatedAt,
+				asn,
+				asOrg,
+				countryCode,
+				clientType,
+				enrichmentStatus,
+				newEntityId
+		);
 	}
 
 	public BlockedClientEvent withEnrichment(IpEnrichmentResult result) {
@@ -194,7 +284,8 @@ public record BlockedClientEvent(
 				result.asOrg(),
 				result.countryCode(),
 				result.clientType(),
-				EnrichmentStatus.ENRICHED
+				EnrichmentStatus.ENRICHED,
+				entityId
 		);
 	}
 }

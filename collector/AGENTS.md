@@ -41,8 +41,9 @@ This document serves as the architectural reference and development guide for hu
    * **Subnet & ASN Rollup:** Supports `/24` & `/64` Subnet Rollup and **ASN Rollup** (`groupBy=ASN`) to aggregate rotating residential proxy botnets across multiple networks.
    * **Search & Containment Queries:** Never use SQL `LIKE` for IP ranges! Always use the mathematical interval overlap condition (`ip_start <= :searchEnd AND ip_end >= :searchStart`) via `IpNetworkUtil.parseSearchQuery()`.
    * **Layered Configuration:** Default hosting ASNs packaged in `classpath:asns/default-hosting-asns.txt`. Operators customize via `custom-hosting-asns.txt` (`+12345` to add, `-24940` to exclude) without Git checkout conflicts.
-   * **Client Classifications:** Enriched into categories: `DATACENTER` (Cloud/VPS/Hoster), `RESIDENTIAL` (ISP/End-user), `SEARCH_ENGINE` (Verified Googlebot/Bingbot), `AI_CRAWLER` (Verified OpenAI/ChatGPT), `MOBILE` (Cellular/CGNAT), and `PRIVATE_NETWORK` (RFC 1918, RFC 4193 ULA, loopback, link-local).
-   * **Crawler/Bot Management:** Verified search engine and AI crawler IP ranges periodically updated from remote feeds with automatic orphan cleanup upon configuration changes, manageable via `/crawlers`.
+   * **Client Classifications:** Enriched into categories: `DATACENTER` (Cloud/VPS/Hoster), `RESIDENTIAL` (ISP/End-user), `SEARCH_ENGINE` (Verified Googlebot/Bingbot), `AI_CRAWLER` (Verified OpenAI/ChatGPT), `TOR_EXIT_NODE` (Official Tor bulk exit nodes), `MOBILE` (Cellular/CGNAT), and `PRIVATE_NETWORK` (RFC 1918, RFC 4193 ULA, loopback, link-local).
+   * **Multi-Source Intelligence & Entity Normalization:** IP and subnet metadata is centralized in `network_entity`, referenced by events via `entity_id`. The high-throughput in-memory interval index (`IntelRegistry`) resolves multi-source classifications (`intel_source`, `intel_range`) with microsecond lookup performance.
+   * **Crawler & Anonymizer Feed Management:** Verified search engine, AI crawler, and Tor exit node IP ranges periodically updated from remote feeds with automatic orphan cleanup upon configuration changes, manageable via `/crawlers`.
    * **View Separation:** The root dashboard (`/`) is an executive overview. Advanced filtering belongs in `/events` (Incident Explorer), `/offenders` (Top Offender Analytics), and `/crawlers` (Bot Feeds).
 
 ---

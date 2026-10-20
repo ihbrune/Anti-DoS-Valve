@@ -29,13 +29,23 @@ public class DefaultIpEnrichmentService implements IpEnrichmentService {
 	private final BotIpRangeRepository botIpRangeRepository;
 	private MmdbEnrichmentProvider mmdbProvider;
 
+	@org.springframework.beans.factory.annotation.Autowired
+	public DefaultIpEnrichmentService(
+			CollectorProperties properties,
+			AsnClassifierService asnClassifierService,
+			BotIpRangeRepository botIpRangeRepository,
+			MmdbEnrichmentProvider mmdbProvider) {
+		this.properties = properties;
+		this.asnClassifierService = asnClassifierService;
+		this.botIpRangeRepository = botIpRangeRepository;
+		this.mmdbProvider = mmdbProvider;
+	}
+
 	public DefaultIpEnrichmentService(
 			CollectorProperties properties,
 			AsnClassifierService asnClassifierService,
 			BotIpRangeRepository botIpRangeRepository) {
-		this.properties = properties;
-		this.asnClassifierService = asnClassifierService;
-		this.botIpRangeRepository = botIpRangeRepository;
+		this(properties, asnClassifierService, botIpRangeRepository, null);
 		initMmdbProvider();
 	}
 

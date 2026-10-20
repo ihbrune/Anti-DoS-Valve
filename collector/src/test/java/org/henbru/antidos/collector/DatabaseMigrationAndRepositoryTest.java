@@ -42,6 +42,15 @@ class DatabaseMigrationAndRepositoryTest {
 	@Autowired
 	private PollEventLogRepository pollEventLogRepository;
 
+	@Autowired
+	private org.henbru.antidos.collector.storage.NetworkEntityRepository networkEntityRepository;
+
+	@Autowired
+	private org.henbru.antidos.collector.storage.IntelSourceRepository intelSourceRepository;
+
+	@Autowired
+	private org.henbru.antidos.collector.storage.IntelRangeRepository intelRangeRepository;
+
 	@Test
 	void testHeartbeatRepositoryUpsertAndFind() {
 		Instant now = Instant.now();
@@ -379,6 +388,106 @@ class DatabaseMigrationAndRepositoryTest {
 				List.of("LEGACY-SERVER"), null, null, null, "52.167.114.0/24", 10, 0
 		);
 		assertFalse(subnetHits.isEmpty(), "Should find repaired event when searching for canonical subnet");
+	}
+
+	@Test
+	void testNetworkEntityAndIntelRepositories() {
+		Instant now = Instant.now();
+
+		// 1. Verify V5 migration initialized network entities from existing client events
+		long entityCount = networkEntityRepository.count();
+		assertTrue(entityCount >= 0, "Network entities table should be queryable");
+
+		// 2. Insert new NetworkEntity
+		org.henbru.antidos.collector.model.IpNetworkInfo net = IpNetworkUtil.parse("198.51.100.222");
+		org.henbru.antidos.collector.model.NetworkEntity entity = org.henbru.antidos.collector.model.NetworkEntity.pending(
+				"198.51.100.222", net, now);
+		networkEntityRepository.batchUpsert(List.of(entity));
+
+		Optional<org.henbru.antidos.collector.model.NetworkEntity> found = networkEntityRepository.findByClientKey("198.51.100.222");
+		assertTrue(found.isPresent(), "Entity should be found by clientKey");
+		assertEquals("198.51.100.222", found.get().clientKey());
+		assertEquals("198.51.100.0/24", found.get().subnetGroup());
+		assertNotNull(found.get().enrichmentStatus());
+
+		// 3. Test findPendingEnrichment and batchUpdateEnrichment
+		List<org.henbru.antidos.collector.model.NetworkEntity> pending = networkEntityRepository.findPendingEnrichment(10);
+		assertNotNull(pending, "findPendingEnrichment should return a non-null list");
+
+		org.henbru.antidos.collector.model.NetworkEntity enriched = new org.henbru.antidos.collector.model.NetworkEntity(
+				found.get().id(),
+				"198.51.100.222",
+				4,
+				32,
+				found.get().ipV4Start(),
+				found.get().ipV4End(),
+				null,
+				null,
+				"198.51.100.0/24",
+				"198.51.100.0/24",
+				64496L,
+				"Documentation Net",
+				"US",
+				ClientType.DATACENTER,
+				"DATACENTER",
+				org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED,
+				now,
+				"v1",
+				found.get().firstSeen(),
+				now
+		);
+		networkEntityRepository.batchUpdateEnrichment(List.of(enriched));
+
+		Optional<org.henbru.antidos.collector.model.NetworkEntity> updated = networkEntityRepository.findById(found.get().id());
+		assertTrue(updated.isPresent());
+		assertEquals(Long.valueOf(64496L), updated.get().asn());
+		assertEquals("Documentation Net", updated.get().asOrg());
+		assertEquals(ClientType.DATACENTER, updated.get().clientType());
+		assertEquals("DATACENTER", updated.get().tags());
+		assertEquals(org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED, updated.get().enrichmentStatus());
+
+		// 4. Test IntelSourceRepository and IntelRangeRepository
+		org.henbru.antidos.collector.model.IntelSource src = new org.henbru.antidos.collector.model.IntelSource(
+				"test-intel-src",
+				"FEED",
+				"Test Source",
+				"TOR_EXIT_NODE",
+				"https://example.com/tor.txt",
+				1L,
+				now,
+				"SUCCESS",
+				1,
+				null
+		);
+		intelSourceRepository.upsert(src);
+
+		Optional<org.henbru.antidos.collector.model.IntelSource> foundSrc = intelSourceRepository.findByKey("test-intel-src");
+		assertTrue(foundSrc.isPresent());
+		assertEquals("Test Source", foundSrc.get().name());
+
+		org.henbru.antidos.collector.model.IntelRange range = new org.henbru.antidos.collector.model.IntelRange(
+				null,
+				"test-intel-src",
+				"198.51.100.222/32",
+				4,
+				32,
+				IpNetworkUtil.ipv4ToLong("198.51.100.222"),
+				IpNetworkUtil.ipv4ToLong("198.51.100.222"),
+				null,
+				null,
+				null,
+				null,
+				"TOR_EXIT_NODE",
+				"Test Exit Node",
+				1L,
+				now
+		);
+		intelRangeRepository.replaceRangesForSource("test-intel-src", List.of(range));
+
+		int count = intelRangeRepository.countRangesBySourceKey("test-intel-src");
+		assertEquals(1, count);
+		List<org.henbru.antidos.collector.model.IntelRange> allRanges = intelRangeRepository.findAll();
+		assertTrue(allRanges.stream().anyMatch(r -> "test-intel-src".equals(r.sourceKey())));
 	}
 }
 

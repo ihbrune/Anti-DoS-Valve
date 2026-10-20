@@ -73,6 +73,7 @@ public class ClientEventRepository {
 		ClientType clientType = rawClientType != null ? ClientType.valueOf(rawClientType) : ClientType.UNKNOWN;
 		String rawStatus = rs.getString("enrichment_status");
 		EnrichmentStatus enrichmentStatus = rawStatus != null ? EnrichmentStatus.valueOf(rawStatus) : EnrichmentStatus.PENDING;
+		Long entityId = rs.getObject("entity_id") != null ? rs.getLong("entity_id") : null;
 
 		return new BlockedClientEvent(
 				rs.getLong("id"),
@@ -97,7 +98,8 @@ public class ClientEventRepository {
 				asOrg,
 				countryCode,
 				clientType,
-				enrichmentStatus
+				enrichmentStatus,
+				entityId
 		);
 	};
 
@@ -110,53 +112,59 @@ public class ClientEventRepository {
 					   OR (ip_version = 6 AND (ip_v6_start IS NULL OR ip_v6_end IS NULL))
 					   OR (subnet_group NOT LIKE '%/%' AND (client_key LIKE '%.%' OR client_key LIKE '%:%'))
 					""");
-			if (rows.isEmpty()) {
-				return;
+			if (!rows.isEmpty()) {
+				log.info("Repairing {} unnormalized blocked client events with canonical network ranges and subnets...", rows.size());
+				String updateSql = """
+						UPDATE blocked_client_events SET
+						    ip_version = ?,
+						    cidr_prefix = ?,
+						    ip_v4_start = ?,
+						    ip_v4_end = ?,
+						    ip_v6_start = ?,
+						    ip_v6_end = ?,
+						    subnet_group = ?
+						WHERE id = ?
+						""";
+				jdbcTemplate.batchUpdate(updateSql, new BatchPreparedStatementSetter() {
+					@Override
+					public void setValues(@NonNull PreparedStatement ps, int i) throws SQLException {
+						Map<String, Object> row = rows.get(i);
+						long id = ((Number) row.get("id")).longValue();
+						String clientKey = (String) row.get("client_key");
+						IpNetworkInfo net = IpNetworkUtil.parse(clientKey);
+
+						ps.setInt(1, net.version());
+						ps.setInt(2, net.prefix());
+						if (net.v4Start() != null) {
+							ps.setLong(3, net.v4Start());
+						} else {
+							ps.setNull(3, Types.BIGINT);
+						}
+						if (net.v4End() != null) {
+							ps.setLong(4, net.v4End());
+						} else {
+							ps.setNull(4, Types.BIGINT);
+						}
+						ps.setString(5, net.v6Start());
+						ps.setString(6, net.v6End());
+						ps.setString(7, net.subnetGroup());
+						ps.setLong(8, id);
+					}
+
+					@Override
+					public int getBatchSize() {
+						return rows.size();
+					}
+				});
+				log.info("Successfully repaired {} blocked client events.", rows.size());
 			}
-			log.info("Repairing {} unnormalized blocked client events with canonical network ranges and subnets...", rows.size());
-			String updateSql = """
-					UPDATE blocked_client_events SET
-					    ip_version = ?,
-					    cidr_prefix = ?,
-					    ip_v4_start = ?,
-					    ip_v4_end = ?,
-					    ip_v6_start = ?,
-					    ip_v6_end = ?,
-					    subnet_group = ?
-					WHERE id = ?
-					""";
-			jdbcTemplate.batchUpdate(updateSql, new BatchPreparedStatementSetter() {
-				@Override
-				public void setValues(@NonNull PreparedStatement ps, int i) throws SQLException {
-					Map<String, Object> row = rows.get(i);
-					long id = ((Number) row.get("id")).longValue();
-					String clientKey = (String) row.get("client_key");
-					IpNetworkInfo net = IpNetworkUtil.parse(clientKey);
 
-					ps.setInt(1, net.version());
-					ps.setInt(2, net.prefix());
-					if (net.v4Start() != null) {
-						ps.setLong(3, net.v4Start());
-					} else {
-						ps.setNull(3, Types.BIGINT);
-					}
-					if (net.v4End() != null) {
-						ps.setLong(4, net.v4End());
-					} else {
-						ps.setNull(4, Types.BIGINT);
-					}
-					ps.setString(5, net.v6Start());
-					ps.setString(6, net.v6End());
-					ps.setString(7, net.subnetGroup());
-					ps.setLong(8, id);
-				}
-
-				@Override
-				public int getBatchSize() {
-					return rows.size();
-				}
-			});
-			log.info("Successfully repaired {} blocked client events.", rows.size());
+			// Backfill missing entity_id from network_entity if unassigned
+			jdbcTemplate.update("""
+					UPDATE blocked_client_events
+					SET entity_id = (SELECT e.id FROM network_entity e WHERE e.client_key = blocked_client_events.client_key)
+					WHERE entity_id IS NULL AND EXISTS (SELECT 1 FROM network_entity e WHERE e.client_key = blocked_client_events.client_key)
+					""");
 		} catch (DataAccessException e) {
 			log.warn("Could not repair unnormalized events on startup: {}", e.getMessage());
 		}
@@ -172,9 +180,9 @@ public class ClientEventRepository {
 				    server_id, valve_name, slot_key, slot_time, client_key,
 				    ip_version, cidr_prefix, ip_v4_start, ip_v4_end, ip_v6_start, ip_v6_end, subnet_group,
 				    request_count, retained_count, is_locked, is_completed, last_updated_at,
-				    asn, as_org, country_code, client_type, enrichment_status
+				    asn, as_org, country_code, client_type, enrichment_status, entity_id
 				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (server_id, valve_name, slot_key, client_key) DO UPDATE SET
 				    slot_time = EXCLUDED.slot_time,
 				    ip_version = EXCLUDED.ip_version,
@@ -188,7 +196,8 @@ public class ClientEventRepository {
 				    retained_count = EXCLUDED.retained_count,
 				    is_locked = EXCLUDED.is_locked,
 				    is_completed = EXCLUDED.is_completed,
-				    last_updated_at = EXCLUDED.last_updated_at
+				    last_updated_at = EXCLUDED.last_updated_at,
+				    entity_id = COALESCE(EXCLUDED.entity_id, blocked_client_events.entity_id)
 				""";
 
 		jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
@@ -230,6 +239,11 @@ public class ClientEventRepository {
 				ps.setString(20, e.countryCode());
 				ps.setString(21, e.clientType() != null ? e.clientType().name() : ClientType.UNKNOWN.name());
 				ps.setString(22, e.enrichmentStatus() != null ? e.enrichmentStatus().name() : EnrichmentStatus.PENDING.name());
+				if (e.entityId() != null) {
+					ps.setLong(23, e.entityId());
+				} else {
+					ps.setNull(23, Types.BIGINT);
+				}
 			}
 
 			@Override

@@ -11,9 +11,14 @@ import java.net.InetAddress;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.henbru.antidos.collector.config.CollectorProperties;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
 /**
  * High-performance offline reader for MaxMind and DB-IP Lite binary .mmdb databases (ASN and Country).
  */
+@Component
 public class MmdbEnrichmentProvider implements AutoCloseable {
 
 	private static final Logger log = LoggerFactory.getLogger(MmdbEnrichmentProvider.class);
@@ -23,6 +28,16 @@ public class MmdbEnrichmentProvider implements AutoCloseable {
 
 	private final DatabaseReader asnReader;
 	private final DatabaseReader countryReader;
+
+	@Autowired
+	public MmdbEnrichmentProvider(CollectorProperties properties) {
+		this(
+				properties != null && properties.getEnrichment().isEnabled()
+						? properties.getEnrichment().getAsnDatabasePath() : null,
+				properties != null && properties.getEnrichment().isEnabled()
+						? properties.getEnrichment().getCountryDatabasePath() : null
+		);
+	}
 
 	public MmdbEnrichmentProvider(String asnDbPath, String countryDbPath) {
 		this.asnReader = initReader(asnDbPath, "ASN");

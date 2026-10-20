@@ -367,7 +367,9 @@ export COLLECTOR_ENRICHMENT_COUNTRY_DATABASE_PATH="/var/data/dbip-country-lite.m
 * **Asynchronous Background Processing:** Poller threads write incident events with status `PENDING` without blocking or polling latency. The `BackgroundEnrichmentWorker` resolves ASNs, Geolocation, and Client Types asynchronously in small batches on Java 21 Virtual Threads.
 * **Layered Hosting ASN Overlay:** Shipped defaults (`classpath:asns/default-hosting-asns.txt`) can be customized via `custom-hosting-asns.txt` without Git checkout conflicts:
   * `+12345` (force ASN 12345 to be classified as Datacenter/Hosting)
-  * `-24940` (remove Hetzner from Datacenter list, classifying it as Residential)
+* **Multi-Source Intelligence & Entity Normalization:**
+  * Client IP addresses and subnets are deduplicated and maintained in a normalized `network_entity` registry. Incidents reference this entity via `entity_id`, avoiding redundant Geo/ASN queries and unnecessary database row churn.
+  * An in-memory interval index (`IntelRegistry`) matches IPs against multiple intelligence feeds (`intel_source`, `intel_range`) with sub-microsecond latency, resolving prioritized classifications (Private Network > Crawler > Tor > MMDB/ASN).
 * **Crawler & Anonymizer Feed Sync & Management UI (`/crawlers`):**
   * Automated periodic sync fetches official IP ranges for Googlebot, Bingbot, OpenAI GPTBot, ChatGPT-User, and Tor Bulk Exit Nodes (`torbulkexitlist`).
   * Extensible via `collector-config.yaml` (`crawler-feeds:<key>`) to add custom partner bots or disable default feeds without overriding other feeds. Supported categories: `SEARCH_ENGINE`, `AI_CRAWLER`, `TOR_EXIT_NODE`. Feeds with unknown categories log a startup warning and remain disabled (`INVALID_CONFIG`).

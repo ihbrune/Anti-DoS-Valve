@@ -16,12 +16,17 @@ import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.config.CrawlerFeedConfig;
 import org.henbru.antidos.collector.model.BotIpRange;
 import org.henbru.antidos.collector.model.CrawlerFeed;
+import org.henbru.antidos.collector.model.IntelRange;
+import org.henbru.antidos.collector.model.IntelSource;
 import org.henbru.antidos.collector.model.IpNetworkInfo;
 import org.henbru.antidos.collector.storage.BotIpRangeRepository;
 import org.henbru.antidos.collector.storage.CrawlerFeedRepository;
+import org.henbru.antidos.collector.storage.IntelRangeRepository;
+import org.henbru.antidos.collector.storage.IntelSourceRepository;
 import org.henbru.antidos.collector.util.IpNetworkUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -36,22 +41,40 @@ public class CrawlerSyncService {
 	private final CollectorProperties properties;
 	private final CrawlerFeedRepository crawlerFeedRepository;
 	private final BotIpRangeRepository botIpRangeRepository;
+	private final IntelSourceRepository intelSourceRepository;
+	private final IntelRangeRepository intelRangeRepository;
+	private final IntelRegistry intelRegistry;
 	private final HttpClient httpClient;
 	private final ObjectMapper objectMapper;
+
+	@Autowired
+	public CrawlerSyncService(
+			CollectorProperties properties,
+			CrawlerFeedRepository crawlerFeedRepository,
+			BotIpRangeRepository botIpRangeRepository,
+			IntelSourceRepository intelSourceRepository,
+			IntelRangeRepository intelRangeRepository,
+			IntelRegistry intelRegistry,
+			ObjectMapper objectMapper) {
+		this.properties = properties;
+		this.crawlerFeedRepository = crawlerFeedRepository;
+		this.botIpRangeRepository = botIpRangeRepository;
+		this.intelSourceRepository = intelSourceRepository;
+		this.intelRangeRepository = intelRangeRepository;
+		this.intelRegistry = intelRegistry;
+		this.objectMapper = objectMapper;
+		this.httpClient = HttpClient.newBuilder()
+				.connectTimeout(Duration.ofSeconds(10))
+				.followRedirects(HttpClient.Redirect.NORMAL)
+				.build();
+	}
 
 	public CrawlerSyncService(
 			CollectorProperties properties,
 			CrawlerFeedRepository crawlerFeedRepository,
 			BotIpRangeRepository botIpRangeRepository,
 			ObjectMapper objectMapper) {
-		this.properties = properties;
-		this.crawlerFeedRepository = crawlerFeedRepository;
-		this.botIpRangeRepository = botIpRangeRepository;
-		this.objectMapper = objectMapper;
-		this.httpClient = HttpClient.newBuilder()
-				.connectTimeout(Duration.ofSeconds(10))
-				.followRedirects(HttpClient.Redirect.NORMAL)
-				.build();
+		this(properties, crawlerFeedRepository, botIpRangeRepository, null, null, null, objectMapper);
 	}
 
 	/**
@@ -193,12 +216,55 @@ public class CrawlerSyncService {
 			botIpRangeRepository.replaceRangesForFeed(config.getKey(), ranges);
 			crawlerFeedRepository.updateSyncStatus(config.getKey(), "SUCCESS", ranges.size(), null, Instant.now());
 
+			if (intelRangeRepository != null && intelSourceRepository != null) {
+				List<IntelRange> intelRanges = new ArrayList<>(ranges.size());
+				for (BotIpRange r : ranges) {
+					IpNetworkInfo net = IpNetworkUtil.parse(r.cidr());
+					intelRanges.add(new IntelRange(
+							null,
+							config.getKey(),
+							r.cidr(),
+							r.ipVersion(),
+							net.prefix(),
+							r.ipV4Start(),
+							r.ipV4End(),
+							r.ipV6Start(),
+							r.ipV6End(),
+							null,
+							null,
+							config.getNormalizedCategory(),
+							config.getName(),
+							1,
+							Instant.now()
+					));
+				}
+				intelRangeRepository.replaceRangesForSource(config.getKey(), intelRanges);
+				intelSourceRepository.upsert(new IntelSource(
+						config.getKey(),
+						"FEED",
+						config.getName(),
+						config.getNormalizedCategory(),
+						config.getUrl(),
+						1,
+						Instant.now(),
+						"SUCCESS",
+						intelRanges.size(),
+						null
+				));
+				if (intelRegistry != null) {
+					intelRegistry.reload();
+				}
+			}
+
 			log.info("Successfully updated crawler feed '{}': {} prefixes stored", config.getName(), ranges.size());
 			return true;
 
 		} catch (java.io.IOException | InterruptedException | RuntimeException e) {
 			String error = e.getClass().getSimpleName() + ": " + e.getMessage();
 			crawlerFeedRepository.updateSyncStatus(config.getKey(), "FAILED", 0, error, Instant.now());
+			if (intelSourceRepository != null) {
+				intelSourceRepository.updateSyncStatus(config.getKey(), "FAILED", 0, error, Instant.now());
+			}
 			log.warn("Exception during sync of crawler feed '{}': {}", config.getName(), error);
 			if (e instanceof InterruptedException) {
 				Thread.currentThread().interrupt();
@@ -214,6 +280,15 @@ public class CrawlerSyncService {
 		List<String> activeKeys = configs.stream().map(c -> c.getKey()).toList();
 		int deletedRanges = botIpRangeRepository.deleteNotInFeedKeys(activeKeys);
 		int deletedFeeds = crawlerFeedRepository.deleteNotIn(activeKeys);
+
+		if (intelRangeRepository != null && intelSourceRepository != null) {
+			intelRangeRepository.deleteNotInSourceKeys(activeKeys);
+			intelSourceRepository.deleteNotIn(activeKeys);
+			if (intelRegistry != null) {
+				intelRegistry.reload();
+			}
+		}
+
 		if (deletedFeeds > 0 || deletedRanges > 0) {
 			log.info("Cleaned up orphaned crawler feeds: purged {} feeds and {} associated IP ranges",
 					deletedFeeds, deletedRanges);
