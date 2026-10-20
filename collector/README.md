@@ -319,10 +319,23 @@ collector:
   parallel-fleet-polling: true  # Concurrently poll different servers via Virtual Threads (valves on same server remain sequential)
   retention-days: 30            # Retention for slot telemetry and client incident events (default: 30 days)
   poll-log-retention-days: 1    # Retention for polling event audit log entries (default: 1 day)
+  entity-retention-days: 60     # Retention for inactive unreferenced network entities (default: 60 days)
   slow-poll-threshold-ms: 1000  # Latency threshold before marking poll status as WARNING (default: 1000 ms)
 ```
 
 ---
+
+## Data Retention & Entity Hygiene Strategy
+
+To prevent unbounded database growth and remain compliant with IP data retention guidelines (e.g. MaxMind GeoLite2 EULA and GDPR data minimization), the Collector runs an automated daily cleanup job at **03:00 AM**:
+
+1. **Telemetry & Incident Retention (`retention-days`, default: 30 days):**
+   * High-resolution slot snapshots (`slot_snapshots`) and raw client incident events (`blocked_client_events`) older than `retention-days` are permanently purged.
+2. **Audit Diagnostics Retention (`poll-log-retention-days`, default: 1 day):**
+   * Endpoint health checks, latency records, and polling logs (`poll_event_log`) are pruned after 24 hours to keep the diagnostic audit lean.
+3. **Orphan Entity Cleanup (`entity-retention-days`, default: 60 days):**
+   * Client IP addresses and subnets are stored in a normalized `network_entity` table. When historic incident events age out and are deleted, older entities may no longer be referenced anywhere.
+   * Entities that have not been seen for more than `entity-retention-days` **and** have zero associated incident records in the database are automatically deleted along with their feed matches (`network_entity_match`). Active entities with existing incidents are always preserved.
 
 ## IP Enrichment: ASN, Geo-Location & Verified Bots
 
@@ -348,6 +361,7 @@ Add the database paths to your `collector-config.yaml` or set environment variab
 collector:
   enrichment:
     enabled: true
+    ttl-days: 30                                             # metadata freshness TTL in days (MaxMind GeoLite2 compliance)
     asn-database-path: "/var/data/dbip-asn-lite.mmdb"         # or /usr/share/GeoIP/GeoLite2-ASN.mmdb
     country-database-path: "/var/data/dbip-country-lite.mmdb" # or /usr/share/GeoIP/GeoLite2-Country.mmdb
     custom-hosting-asns-file: "custom-hosting-asns.txt"      # optional custom ASN overlay
@@ -370,6 +384,9 @@ export COLLECTOR_ENRICHMENT_COUNTRY_DATABASE_PATH="/var/data/dbip-country-lite.m
 * **Multi-Source Intelligence & Entity Normalization:**
   * Client IP addresses and subnets are deduplicated and maintained in a normalized `network_entity` registry. Incidents reference this entity via `entity_id`, avoiding redundant Geo/ASN queries and unnecessary database row churn.
   * An in-memory interval index (`IntelRegistry`) matches IPs against multiple intelligence feeds (`intel_source`, `intel_range`) with sub-microsecond latency, resolving prioritized classifications (Private Network > Crawler > Tor > MMDB/ASN).
+* **Metadata Freshness & MaxMind Compliance (`ttl-days`):**
+  * In compliance with MaxMind GeoLite2 guidelines and dynamic ISP reallocations, enrichment data has a configurable expiration (`ttl-days`, default: 30 days).
+  * Entities resolved older than `ttl-days` ago are automatically scheduled for background re-enrichment against the latest MMDB files and threat feeds. Local intranet networks (`PRIVATE_NETWORK`) remain permanently valid without expiration.
 * **Crawler & Anonymizer Feed Sync & Management UI (`/crawlers`):**
   * Automated periodic sync fetches official IP ranges for Googlebot, Bingbot, OpenAI GPTBot, ChatGPT-User, and Tor Bulk Exit Nodes (`torbulkexitlist`).
   * Extensible via `collector-config.yaml` (`crawler-feeds:<key>`) to add custom partner bots or disable default feeds without overriding other feeds. Supported categories: `SEARCH_ENGINE`, `AI_CRAWLER`, `TOR_EXIT_NODE`. Feeds with unknown categories log a startup warning and remain disabled (`INVALID_CONFIG`).

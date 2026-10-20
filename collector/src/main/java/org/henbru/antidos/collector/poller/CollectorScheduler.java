@@ -23,6 +23,8 @@ public class CollectorScheduler {
 	private final ClientEventRepository clientEventRepository;
 	private final org.henbru.antidos.collector.storage.PollEventLogRepository pollEventLogRepository;
 	private final org.henbru.antidos.collector.enrichment.CrawlerSyncService crawlerSyncService;
+	private final org.henbru.antidos.collector.storage.NetworkEntityRepository networkEntityRepository;
+	private final org.henbru.antidos.collector.enrichment.EntityResolver entityResolver;
 	private final CollectorProperties properties;
 
 	public CollectorScheduler(
@@ -31,12 +33,16 @@ public class CollectorScheduler {
 			ClientEventRepository clientEventRepository,
 			org.henbru.antidos.collector.storage.PollEventLogRepository pollEventLogRepository,
 			org.henbru.antidos.collector.enrichment.CrawlerSyncService crawlerSyncService,
+			org.henbru.antidos.collector.storage.NetworkEntityRepository networkEntityRepository,
+			org.henbru.antidos.collector.enrichment.EntityResolver entityResolver,
 			CollectorProperties properties) {
 		this.pollerService = pollerService;
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
 		this.pollEventLogRepository = pollEventLogRepository;
 		this.crawlerSyncService = crawlerSyncService;
+		this.networkEntityRepository = networkEntityRepository;
+		this.entityResolver = entityResolver;
 		this.properties = properties;
 	}
 
@@ -64,6 +70,7 @@ public class CollectorScheduler {
 
 	/**
 	 * Daily retention cleanup: deletes snapshots, client events, and poll event logs older than configured retention days.
+	 * Also purges unreferenced/orphan network entities and marks stale enrichments (> TTL) for re-resolution.
 	 */
 	@Scheduled(cron = "0 0 3 * * *") // Daily at 03:00 AM
 	public void runRetentionCleanup() {
@@ -78,8 +85,22 @@ public class CollectorScheduler {
 		Instant logCutoff = Instant.now().minus(logDays, ChronoUnit.DAYS);
 		int deletedLogs = pollEventLogRepository.deleteOlderThan(logCutoff);
 
-		log.info("Retention cleanup completed: purged {} slot snapshots, {} client events, and {} poll event logs",
-				deletedSlots, deletedEvents, deletedLogs);
+		// Clean up unreferenced/orphan network entities older than entity-retention-days
+		int entityDays = properties.getEntityRetentionDays() > 0 ? properties.getEntityRetentionDays() : Math.max(days, 30);
+		Instant entityCutoff = Instant.now().minus(entityDays, ChronoUnit.DAYS);
+		int deletedEntities = networkEntityRepository != null ? networkEntityRepository.deleteOrphans(entityCutoff) : 0;
+
+		// Expire stale enrichment entries past TTL (e.g. 30 days) to trigger re-enrichment against updated MMDB / feeds
+		int ttlDays = properties.getEnrichment() != null && properties.getEnrichment().getTtlDays() > 0
+				? properties.getEnrichment().getTtlDays() : 30;
+		Instant ttlCutoff = Instant.now().minus(ttlDays, ChronoUnit.DAYS);
+		int expiredEntities = networkEntityRepository != null ? networkEntityRepository.markExpiredEnrichment(ttlCutoff) : 0;
+		if (expiredEntities > 0 && entityResolver != null) {
+			entityResolver.clearCache();
+		}
+
+		log.info("Retention cleanup completed: purged {} slot snapshots, {} client events, {} poll event logs, {} orphan entities, and expired {} stale entities for re-enrichment",
+				deletedSlots, deletedEvents, deletedLogs, deletedEntities, expiredEntities);
 	}
 
 	/**

@@ -489,5 +489,65 @@ class DatabaseMigrationAndRepositoryTest {
 		List<org.henbru.antidos.collector.model.IntelRange> allRanges = intelRangeRepository.findAll();
 		assertTrue(allRanges.stream().anyMatch(r -> "test-intel-src".equals(r.sourceKey())));
 	}
+
+	@Test
+	void testNetworkEntityRetentionAndTtlExpiration() {
+		Instant now = Instant.now();
+		Instant oldTime = now.minus(75, ChronoUnit.DAYS);
+
+		// 1. Insert orphan entity (no events reference it)
+		org.henbru.antidos.collector.model.IpNetworkInfo net1 = IpNetworkUtil.parse("198.51.100.77");
+		org.henbru.antidos.collector.model.NetworkEntity orphan = new org.henbru.antidos.collector.model.NetworkEntity(
+				null, "198.51.100.77", 4, 32, net1.v4Start(), net1.v4End(), null, null,
+				net1.subnetGroup(), null, 12345L, "Old Net", "DE", ClientType.DATACENTER, null,
+				org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED,
+				oldTime, null, oldTime, oldTime
+		);
+		networkEntityRepository.batchUpsert(List.of(orphan));
+		Optional<org.henbru.antidos.collector.model.NetworkEntity> savedOrphan = networkEntityRepository.findByClientKey("198.51.100.77");
+		assertTrue(savedOrphan.isPresent());
+
+		// 2. Insert active entity referenced by an event
+		org.henbru.antidos.collector.model.IpNetworkInfo net2 = IpNetworkUtil.parse("198.51.100.88");
+		org.henbru.antidos.collector.model.NetworkEntity active = new org.henbru.antidos.collector.model.NetworkEntity(
+				null, "198.51.100.88", 4, 32, net2.v4Start(), net2.v4End(), null, null,
+				net2.subnetGroup(), null, 12345L, "Active Net", "DE", ClientType.DATACENTER, null,
+				org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED,
+				oldTime, null, oldTime, oldTime
+		);
+		networkEntityRepository.batchUpsert(List.of(active));
+		Optional<org.henbru.antidos.collector.model.NetworkEntity> savedActive = networkEntityRepository.findByClientKey("198.51.100.88");
+		assertTrue(savedActive.isPresent());
+
+		// Link event to savedActive
+		BlockedClientEvent event = new BlockedClientEvent(
+				null, "TEST-SRV", "VALVE", 100L, now, "198.51.100.88",
+				4, 32, net2.v4Start(), net2.v4End(), null, null, net2.subnetGroup(),
+				10, 0, false, true, now,
+				12345L, "Active Net", "DE", ClientType.DATACENTER, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+		).withEntityId(savedActive.get().id());
+		clientEventRepository.batchUpsert(List.of(event));
+
+		// 3. Run deleteOrphans with 60 day cutoff
+		int deleted = networkEntityRepository.deleteOrphans(now.minus(60, ChronoUnit.DAYS));
+		assertTrue(deleted >= 1, "Should have deleted at least 1 orphan entity");
+
+		Optional<org.henbru.antidos.collector.model.NetworkEntity> checkOrphan = networkEntityRepository.findByClientKey("198.51.100.77");
+		assertFalse(checkOrphan.isPresent(), "Orphan entity should be deleted");
+
+		Optional<org.henbru.antidos.collector.model.NetworkEntity> checkActive = networkEntityRepository.findByClientKey("198.51.100.88");
+		assertTrue(checkActive.isPresent(), "Referenced entity must NOT be deleted");
+
+		// 4. Test markExpiredEnrichment (30-day TTL)
+		jdbcTemplate.update("UPDATE network_entity SET resolved_at = ?, enrichment_status = 'ENRICHED', client_type = 'DATACENTER' WHERE id = ?",
+				Timestamp.from(oldTime), checkActive.get().id());
+
+		int expiredCount = networkEntityRepository.markExpiredEnrichment(now.minus(30, ChronoUnit.DAYS));
+		assertTrue(expiredCount >= 1, "Should have marked stale entity as PENDING");
+
+		Optional<org.henbru.antidos.collector.model.NetworkEntity> reloadedActive = networkEntityRepository.findByClientKey("198.51.100.88");
+		assertTrue(reloadedActive.isPresent());
+		assertEquals(org.henbru.antidos.collector.model.EnrichmentStatus.PENDING, reloadedActive.get().enrichmentStatus());
+	}
 }
 

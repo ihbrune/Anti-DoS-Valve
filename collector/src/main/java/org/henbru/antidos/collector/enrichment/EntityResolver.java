@@ -69,12 +69,21 @@ public class EntityResolver {
 
 		NetworkEntity cached = entityCache.get(cleanKey);
 		if (cached != null) {
+			if (isExpired(cached)) {
+				entityCache.remove(cleanKey);
+				entityRepository.markPending(cached.id());
+				cached = cached.withEnrichmentStatus(EnrichmentStatus.PENDING);
+			}
 			return cached;
 		}
 
 		Optional<NetworkEntity> fromDb = entityRepository.findByClientKey(cleanKey);
 		if (fromDb.isPresent()) {
 			NetworkEntity existing = fromDb.get();
+			if (isExpired(existing)) {
+				entityRepository.markPending(existing.id());
+				existing = existing.withEnrichmentStatus(EnrichmentStatus.PENDING);
+			}
 			putCache(cleanKey, existing);
 			return existing;
 		}
@@ -235,6 +244,24 @@ public class EntityResolver {
 
 	public void clearCache() {
 		entityCache.clear();
+	}
+
+	public boolean isExpired(NetworkEntity entity) {
+		if (entity == null || entity.enrichmentStatus() != EnrichmentStatus.ENRICHED) {
+			return false;
+		}
+		if (entity.clientType() == ClientType.PRIVATE_NETWORK) {
+			return false;
+		}
+		int ttlDays = properties != null && properties.getEnrichment() != null
+				? properties.getEnrichment().getTtlDays() : 30;
+		if (ttlDays <= 0) {
+			return false;
+		}
+		if (entity.resolvedAt() == null) {
+			return true;
+		}
+		return entity.resolvedAt().isBefore(Instant.now().minus(ttlDays, java.time.temporal.ChronoUnit.DAYS));
 	}
 
 	private static String extractCleanIp(String key) {

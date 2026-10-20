@@ -33,6 +33,9 @@ collector:
   # Historical retention period for completed slots and client events
   retention-days: 30
 
+  # Retention period for inactive unreferenced network entities (default: 60 days)
+  entity-retention-days: 60
+
   # Retention period for the polling event audit log (default: 1 day)
   poll-log-retention-days: 1
 
@@ -77,6 +80,10 @@ collector:
   # ---------------------------------------------------------------------------
   enrichment:
     enabled: true
+    # Metadata freshness TTL in days (MaxMind GeoLite2 compliance, default: 30 days):
+    # Entities resolved longer than ttl-days ago are automatically scheduled for re-enrichment.
+    ttl-days: 30
+
     # Paths to offline binary MMDB databases (DB-IP Lite or MaxMind GeoLite2):
     # asn-database-path: "/var/lib/antidos/dbip-asn-lite.mmdb"         # or /usr/share/GeoIP/GeoLite2-ASN.mmdb
     # country-database-path: "/var/lib/antidos/dbip-country-lite.mmdb" # or /usr/share/GeoIP/GeoLite2-Country.mmdb

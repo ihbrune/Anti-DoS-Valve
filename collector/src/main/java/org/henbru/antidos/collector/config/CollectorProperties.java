@@ -14,6 +14,7 @@ public class CollectorProperties {
 	private int pollIntervalSeconds = 15;
 	private int retentionDays = 30;
 	private int pollLogRetentionDays = 1;
+	private int entityRetentionDays = 60;
 	private int slowPollThresholdMs = 1000;
 	private boolean demoMode = false;
 	private boolean parallelFleetPolling = true;
@@ -50,6 +51,14 @@ public class CollectorProperties {
 
 	public void setPollLogRetentionDays(int pollLogRetentionDays) {
 		this.pollLogRetentionDays = pollLogRetentionDays;
+	}
+
+	public int getEntityRetentionDays() {
+		return entityRetentionDays;
+	}
+
+	public void setEntityRetentionDays(int entityRetentionDays) {
+		this.entityRetentionDays = entityRetentionDays;
 	}
 
 	public int getSlowPollThresholdMs() {

@@ -17,6 +17,7 @@ public class EnrichmentConfig {
 	private List<Long> customHostingAsns = new ArrayList<>();
 	private boolean crawlerSyncEnabled = true;
 	private String crawlerSyncCron = "0 0 4 * * *"; // Daily at 04:00 AM
+	private int ttlDays = 30; // MaxMind GeoLite2 compliance and metadata freshness TTL in days
 	private Map<String, CrawlerFeedConfig> crawlerFeeds = createDefaultCrawlerFeeds();
 
 	public static Map<String, CrawlerFeedConfig> createDefaultCrawlerFeeds() {
@@ -86,6 +87,14 @@ public class EnrichmentConfig {
 
 	public void setCrawlerSyncCron(String crawlerSyncCron) {
 		this.crawlerSyncCron = crawlerSyncCron;
+	}
+
+	public int getTtlDays() {
+		return ttlDays;
+	}
+
+	public void setTtlDays(int ttlDays) {
+		this.ttlDays = ttlDays;
 	}
 
 	public Map<String, CrawlerFeedConfig> getCrawlerFeeds() {

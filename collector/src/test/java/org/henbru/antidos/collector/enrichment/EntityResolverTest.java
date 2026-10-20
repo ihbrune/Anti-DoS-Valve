@@ -103,4 +103,34 @@ class EntityResolverTest {
 		NetworkEntity second = entityResolver.getOrCreate("203.0.113.199", Instant.now());
 		assertSame(first, second, "Should return cached entity instance");
 	}
+
+	@Test
+	void testExpiredEntityHandling() {
+		Instant now = Instant.now();
+		Instant staleTime = now.minus(35, java.time.temporal.ChronoUnit.DAYS);
+
+		// Fresh entity: not expired
+		NetworkEntity fresh = new NetworkEntity(
+				1L, "198.51.100.1", 4, 32, 100L, 100L, null, null, "198.51.100.0/24",
+				null, 123L, "Net", "US", ClientType.DATACENTER, null,
+				EnrichmentStatus.ENRICHED, now, null, now, now
+		);
+		assertFalse(entityResolver.isExpired(fresh));
+
+		// Stale entity: expired
+		NetworkEntity stale = new NetworkEntity(
+				2L, "198.51.100.2", 4, 32, 100L, 100L, null, null, "198.51.100.0/24",
+				null, 123L, "Net", "US", ClientType.DATACENTER, null,
+				EnrichmentStatus.ENRICHED, staleTime, null, staleTime, staleTime
+		);
+		assertTrue(entityResolver.isExpired(stale));
+
+		// Private network entity never expires
+		NetworkEntity priv = new NetworkEntity(
+				3L, "10.0.0.1", 4, 32, 100L, 100L, null, null, "10.0.0.0/24",
+				null, null, "Private", null, ClientType.PRIVATE_NETWORK, null,
+				EnrichmentStatus.ENRICHED, staleTime, null, staleTime, staleTime
+		);
+		assertFalse(entityResolver.isExpired(priv));
+	}
 }

@@ -4,6 +4,7 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.sql.Types;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.henbru.antidos.collector.model.ClientType;
@@ -202,5 +203,73 @@ public class NetworkEntityRepository {
 	public long count() {
 		Long count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM network_entity", Long.class);
 		return count != null ? count : 0L;
+	}
+
+	/**
+	 * Deletes inactive network entities that have not been seen since lastSeenBefore
+	 * and are no longer referenced by any blocked client events.
+	 * Also cleans up any associated network_entity_match records.
+	 *
+	 * @param lastSeenBefore cut-off timestamp for inactive entities
+	 * @return number of deleted entities
+	 */
+	public int deleteOrphans(Instant lastSeenBefore) {
+		if (lastSeenBefore == null) {
+			return 0;
+		}
+		Timestamp ts = Timestamp.from(lastSeenBefore);
+		String deleteMatchesSql = """
+				DELETE FROM network_entity_match
+				WHERE entity_id IN (
+				    SELECT id FROM network_entity
+				    WHERE last_seen < ?
+				      AND NOT EXISTS (
+				          SELECT 1 FROM blocked_client_events b WHERE b.entity_id = network_entity.id
+				      )
+				)
+				""";
+		jdbcTemplate.update(deleteMatchesSql, ts);
+
+		String deleteEntitiesSql = """
+				DELETE FROM network_entity
+				WHERE last_seen < ?
+				  AND NOT EXISTS (
+				      SELECT 1 FROM blocked_client_events b WHERE b.entity_id = network_entity.id
+				  )
+				""";
+		return jdbcTemplate.update(deleteEntitiesSql, ts);
+	}
+
+	/**
+	 * Marks enriched entities resolved before the specified cutoff as PENDING
+	 * so that the background enrichment worker refreshes their metadata against
+	 * updated GeoIP MMDB and intelligence feeds (e.g. 30-day MaxMind GeoLite2 compliance).
+	 * Private network entities are excluded because RFC1918 / ULA ranges never expire.
+	 *
+	 * @param resolvedBefore cut-off timestamp
+	 * @return number of entities marked as PENDING
+	 */
+	public int markExpiredEnrichment(Instant resolvedBefore) {
+		if (resolvedBefore == null) {
+			return 0;
+		}
+		String sql = """
+				UPDATE network_entity
+				SET enrichment_status = 'PENDING'
+				WHERE enrichment_status = 'ENRICHED'
+				  AND client_type != 'PRIVATE_NETWORK'
+				  AND resolved_at < ?
+				""";
+		return jdbcTemplate.update(sql, Timestamp.from(resolvedBefore));
+	}
+
+	/**
+	 * Marks an individual entity as PENDING for immediate re-enrichment.
+	 */
+	public void markPending(Long entityId) {
+		if (entityId == null) {
+			return;
+		}
+		jdbcTemplate.update("UPDATE network_entity SET enrichment_status = 'PENDING' WHERE id = ?", entityId);
 	}
 }

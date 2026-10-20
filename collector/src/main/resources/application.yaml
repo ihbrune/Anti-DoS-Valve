@@ -43,10 +43,12 @@ collector:
   poll-interval-seconds: 15
   retention-days: 30
   poll-log-retention-days: 1
+  entity-retention-days: 60
   slow-poll-threshold-ms: 1000
   demo-mode: ${COLLECTOR_DEMO_MODE:false}
   enrichment:
     enabled: true
+    ttl-days: 30
     crawler-sync-enabled: true
     crawler-sync-cron: "0 0 4 * * *"
     crawler-feeds:
