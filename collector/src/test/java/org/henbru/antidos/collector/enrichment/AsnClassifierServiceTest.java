@@ -70,9 +70,14 @@ class AsnClassifierServiceTest {
 		// Mobile keyword
 		assertEquals(ClientType.MOBILE, service.classify(3320L, "Deutsche Telekom Mobile 5G CGNAT"));
 
-		// Regular consumer ISP without hosting keywords
+		// Regular consumer ISP matching residential keywords
 		assertEquals(ClientType.RESIDENTIAL, service.classify(3209L, "Vodafone Deutschland GmbH"));
 		assertEquals(ClientType.RESIDENTIAL, service.classify(3320L, "Deutsche Telekom AG"));
+
+		// Unknown organization without hosting, mobile, or residential keywords -> UNKNOWN (no false RESIDENTIAL fallback)
+		assertEquals(ClientType.UNKNOWN, service.classify(32934L, "FACEBOOK"));
+		assertEquals(ClientType.UNKNOWN, service.classify(32934L, "Meta Platforms, Inc."));
+		assertEquals(ClientType.UNKNOWN, service.classify(12345L, "Acme Industrial Corporation"));
 
 		// Null/empty
 		assertEquals(ClientType.UNKNOWN, service.classify(null, null));

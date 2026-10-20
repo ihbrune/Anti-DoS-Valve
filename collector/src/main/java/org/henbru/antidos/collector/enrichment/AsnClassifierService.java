@@ -37,6 +37,16 @@ public class AsnClassifierService {
 			"cellular", "mobile", "wireless", "4g", "5g", "cgnat"
 	);
 
+	private static final List<String> RESIDENTIAL_KEYWORDS = List.of(
+			"telekom", "vodafone", "telefonica", "o2", "orange", "dsl", "cable",
+			"fiber", "broadband", "residential", "consumer", "dialup", "ftth", "gpon",
+			"isp", "telecom", "comcast", "charter", "spectrum", "cox", "verizon",
+			"centurylink", "swisscom", "kpn", "ziggo", "fastweb", "windtre", "iliad",
+			"t-online", "netcologne", "m-net", "proximus", "telenet", "virgin media",
+			"sky broadband", "talktalk", "bell canada", "rogers", "shaw", "telus",
+			"optimum", "frontier", "vnpt", "viettel"
+	);
+
 	private final CollectorProperties properties;
 	private final Set<Long> hostingAsns = new HashSet<>();
 
@@ -177,8 +187,13 @@ public class AsnClassifierService {
 					return ClientType.MOBILE;
 				}
 			}
+			for (String kw : RESIDENTIAL_KEYWORDS) {
+				if (lower.contains(kw)) {
+					return ClientType.RESIDENTIAL;
+				}
+			}
 		}
 
-		return ClientType.RESIDENTIAL;
+		return ClientType.UNKNOWN;
 	}
 }
