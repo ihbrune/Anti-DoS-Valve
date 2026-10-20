@@ -106,7 +106,11 @@ public class DefaultIpEnrichmentService implements IpEnrichmentService {
 			} else {
 				clientType = ClientType.SEARCH_ENGINE;
 			}
-			if (asOrg == null || asOrg.trim().isEmpty()) {
+			if (clientType == ClientType.SEARCH_ENGINE || clientType == ClientType.AI_CRAWLER) {
+				if (match.botName() != null && !match.botName().isBlank()) {
+					asOrg = match.botName();
+				}
+			} else if (asOrg == null || asOrg.trim().isEmpty()) {
 				asOrg = match.botName();
 			}
 		} else {

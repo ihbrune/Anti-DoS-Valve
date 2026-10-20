@@ -166,7 +166,10 @@ public class EntityResolver {
 
 		if (intelResult.preferredClientType() != null) {
 			clientType = intelResult.preferredClientType();
-			if (asOrg == null || asOrg.trim().isEmpty()) {
+			if ((clientType == ClientType.SEARCH_ENGINE || clientType == ClientType.AI_CRAWLER)
+					&& intelResult.primaryLabel() != null && !intelResult.primaryLabel().isBlank()) {
+				asOrg = intelResult.primaryLabel();
+			} else if (asOrg == null || asOrg.trim().isEmpty()) {
 				asOrg = intelResult.primaryLabel();
 			}
 		} else {
