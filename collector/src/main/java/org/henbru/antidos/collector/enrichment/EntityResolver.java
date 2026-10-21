@@ -1,6 +1,7 @@
 package org.henbru.antidos.collector.enrichment;
 
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -19,6 +20,7 @@ import org.henbru.antidos.collector.util.IpNetworkUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -155,13 +157,13 @@ public class EntityResolver {
 				asn = raw.asn();
 				asOrg = raw.asOrg();
 				countryCode = raw.countryCode();
-			} catch (Exception e) {
+			} catch (UnknownHostException e) {
 				log.debug("Could not resolve IP for MMDB lookup: {}", cleanIp);
 			}
 		}
 
 		// 4. Client Classification & Tags
-		ClientType clientType = ClientType.UNKNOWN;
+		ClientType clientType;
 		List<String> tags = new ArrayList<>();
 
 		if (intelResult.preferredClientType() != null) {
@@ -232,7 +234,7 @@ public class EntityResolver {
 								""", entity.id(), r.id(), Timestamp.from(Instant.now()));
 					}
 				}
-			} catch (Exception e) {
+			} catch (DataAccessException e) {
 				log.debug("Error recording entity matches for entity {}: {}", entity.id(), e.getMessage());
 			}
 		}

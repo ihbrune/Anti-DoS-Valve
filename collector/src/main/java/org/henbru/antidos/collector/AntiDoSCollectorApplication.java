@@ -32,7 +32,7 @@ public class AntiDoSCollectorApplication {
 				effectiveList.remove(i);
 				if (i < effectiveList.size() && effectiveList.get(i).matches("\\d+")) {
 					try {
-						demoCount = Integer.parseInt(effectiveList.get(i));
+						demoCount = Integer.valueOf(effectiveList.get(i));
 						effectiveList.remove(i);
 					} catch (NumberFormatException ignored) {}
 				}
@@ -42,7 +42,7 @@ public class AntiDoSCollectorApplication {
 				String val = a.substring(a.indexOf('=') + 1).trim();
 				if (val.matches("\\d+")) {
 					try {
-						demoCount = Integer.parseInt(val);
+						demoCount = Integer.valueOf(val);
 					} catch (NumberFormatException ignored) {}
 				}
 				effectiveList.remove(i);

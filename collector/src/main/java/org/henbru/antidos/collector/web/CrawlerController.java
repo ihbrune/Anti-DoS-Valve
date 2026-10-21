@@ -56,7 +56,12 @@ public class CrawlerController {
 			return;
 		}
 		List<CrawlerFeed> existing = crawlerFeedRepository.findAll();
-		java.util.Set<String> existingKeys = existing.stream().map(CrawlerFeed::feedKey).collect(java.util.stream.Collectors.toSet());
+		java.util.Set<String> existingKeys = new java.util.HashSet<>();
+		for (CrawlerFeed f : existing) {
+			if (f != null && f.feedKey() != null) {
+				existingKeys.add(f.feedKey());
+			}
+		}
 		for (var cfg : properties.getEnrichment().getCrawlerFeedsList()) {
 			if (!existingKeys.contains(cfg.getKey())) {
 				String initialStatus = !cfg.isEnabled() ? "DISABLED"

@@ -26,6 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 		"collector.demo-mode=true",
 		"spring.datasource.url=jdbc:sqlite:target/demo-test.db?busy_timeout=10000"
 })
+@SuppressWarnings("null")
 class DemoModeTest {
 
 	static {
