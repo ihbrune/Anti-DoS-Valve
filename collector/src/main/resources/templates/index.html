@@ -57,32 +57,10 @@
         </div>
     </div>
 
-    <!-- Top Stats Overview -->
-    <section class="stats-grid" id="stats-overview">
-        <div class="stat-card">
-            <div class="stat-label">Monitored Servers</div>
-            <div class="stat-value primary">
-                <span th:text="${fleetSummary.onlineEndpoints}">0</span>
-                <span style="font-size:16px; color:var(--text-muted);" th:text="' / ' + ${fleetSummary.totalEndpoints}"> / 0</span>
-            </div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Active Valves</div>
-            <div class="stat-value success" th:text="${fleetSummary.totalValvesMonitored}">0</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Total Requests (24h)</div>
-            <div class="stat-value" th:text="${#numbers.formatInteger(fleetSummary.totalRequests24h, 1, 'POINT')}">0</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Blocked Requests (24h)</div>
-            <div class="stat-value danger" th:text="${#numbers.formatInteger(fleetSummary.totalBlockedRequests24h, 1, 'POINT')}">0</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Unique Blocked IPs (24h)</div>
-            <div class="stat-value warning" th:text="${fleetSummary.distinctBlockedClients24h}">0</div>
-        </div>
-    </section>
+    <!-- Top Stats Overview (Auto-refreshes every 10s) -->
+    <div hx-get="/fragments/stats-overview" hx-trigger="every 10s" hx-target="#stats-overview" hx-swap="outerHTML">
+        <div th:replace="~{fragments/stats-overview :: statsOverview}"></div>
+    </div>
 
     <!-- Fleet Status Section -->
     <section>

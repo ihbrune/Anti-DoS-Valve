@@ -65,6 +65,13 @@ public class DashboardController {
 		return "index";
 	}
 
+	@GetMapping("/fragments/stats-overview")
+	public String statsOverviewFragment(Model model) {
+		List<EndpointHeartbeat> heartbeats = heartbeatRepository.findAll();
+		model.addAttribute("fleetSummary", buildFleetSummary(heartbeats));
+		return "fragments/stats-overview :: statsOverview";
+	}
+
 	@GetMapping("/fragments/fleet")
 	public String fleetFragment(Model model) {
 		List<EndpointHeartbeat> heartbeats = heartbeatRepository.findAll();

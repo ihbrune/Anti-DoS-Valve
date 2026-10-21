@@ -34,6 +34,7 @@ class DashboardControllerTest {
 				.andExpect(content().string(containsString("Monitored Server Nodes")))
 				.andExpect(content().string(containsString("/js/htmx.min.js")))
 				.andExpect(content().string(not(containsString("unpkg.com"))))
+				.andExpect(content().string(containsString("hx-target=\"#stats-overview\" hx-swap=\"outerHTML\"")))
 				.andExpect(content().string(containsString("hx-target=\"#fleet-container\" hx-swap=\"outerHTML\"")));
 	}
 
@@ -42,6 +43,14 @@ class DashboardControllerTest {
 		mockMvc.perform(get("/js/htmx.min.js"))
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("htmx")));
+	}
+
+	@Test
+	void testStatsOverviewFragment() throws Exception {
+		mockMvc.perform(get("/fragments/stats-overview"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("stats-overview")))
+				.andExpect(content().string(containsString("Total Requests (24h)")));
 	}
 
 	@Test
