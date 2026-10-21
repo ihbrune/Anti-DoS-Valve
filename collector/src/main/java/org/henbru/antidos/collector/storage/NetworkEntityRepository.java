@@ -7,6 +7,7 @@ import java.sql.Types;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+
 import org.henbru.antidos.collector.model.ClientType;
 import org.henbru.antidos.collector.model.EnrichmentStatus;
 import org.henbru.antidos.collector.model.NetworkEntity;
@@ -20,7 +21,6 @@ import org.springframework.stereotype.Repository;
  * JDBC repository for storing and querying normalized network intelligence entities (IPs and subnets).
  */
 @Repository
-@SuppressWarnings("null")
 public class NetworkEntityRepository {
 
 	private final JdbcTemplate jdbcTemplate;

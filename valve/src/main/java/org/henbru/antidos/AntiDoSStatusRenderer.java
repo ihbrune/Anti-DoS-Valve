@@ -57,6 +57,8 @@ public class AntiDoSStatusRenderer {
 		}
 	}
 
+	static record FilteredEntries(List<CounterEntry> entries, long maxOrder) {}
+
 	public static String buildDashboardUrl(String token, String valve, String view, String format) {
 		return buildDashboardUrl(token, valve, view, format, null, null, true);
 	}
@@ -163,38 +165,49 @@ public class AntiDoSStatusRenderer {
 
 	/**
 	 * Extracts up to {@code limit} top counter entries from the given counter map using a bounded
-	 * min-heap. This avoids full sorting and unnecessary object allocations when inspecting large caches.
-	 *
-	 * @param map    The counter map (active or blocked counters)
-	 * @param limit  Maximum number of entries to extract. If 0, returns an empty list immediately.
-	 * @param locked Whether the entries represent locked/blocked counters
-	 * @return A sorted list of the top entries in descending order of significance
+	 * min-heap, while simultaneously computing the maximum accessOrder seen.
 	 */
-	static List<CounterEntry> extractTopEntries(Map<String, AntiDoSCounter> map, int limit, boolean locked) {
-		if (limit <= 0 || map == null || map.isEmpty()) {
-			return Collections.emptyList();
+	static FilteredEntries extractTopEntriesWithMax(Map<String, AntiDoSCounter> map, int limit, boolean locked) {
+		if (map == null || map.isEmpty()) {
+			return new FilteredEntries(Collections.emptyList(), 0L);
+		}
+
+		long maxOrder = 0L;
+		if (limit <= 0) {
+			for (AntiDoSCounter c : map.values()) {
+				long order = c.getAccessOrder();
+				if (order > maxOrder) {
+					maxOrder = order;
+				}
+			}
+			return new FilteredEntries(Collections.emptyList(), maxOrder);
 		}
 
 		if (limit == Integer.MAX_VALUE || limit >= map.size()) {
 			List<CounterEntry> list = new ArrayList<>(map.size());
 			for (Map.Entry<String, AntiDoSCounter> entry : map.entrySet()) {
 				AntiDoSCounter c = entry.getValue();
+				long order = c.getAccessOrder();
+				if (order > maxOrder) {
+					maxOrder = order;
+				}
 				int count = c.getCount();
 				int rawRetained = c.getRetainedCounts();
 				int retained = rawRetained > 0 ? rawRetained : 0;
 				list.add(new CounterEntry(entry.getKey(), count, retained, count + retained, locked));
 			}
 			Collections.sort(list);
-			return list;
+			return new FilteredEntries(list, maxOrder);
 		}
 
-		// Top-N bounded min-heap
-		// Natural order of CounterEntry sorts descending (higher effective count has lower compareTo).
-		// Reversing the comparator puts the entry with lowest effective count (the weakest of the top-N) at peek().
 		PriorityQueue<CounterEntry> minHeap = new PriorityQueue<>(limit + 1, Comparator.reverseOrder());
 
 		for (Map.Entry<String, AntiDoSCounter> entry : map.entrySet()) {
 			AntiDoSCounter c = entry.getValue();
+			long order = c.getAccessOrder();
+			if (order > maxOrder) {
+				maxOrder = order;
+			}
 			int count = c.getCount();
 			int rawRetained = c.getRetainedCounts();
 			int retained = rawRetained > 0 ? rawRetained : 0;
@@ -202,7 +215,6 @@ public class AntiDoSStatusRenderer {
 
 			if (minHeap.size() == limit) {
 				CounterEntry worst = minHeap.peek();
-				// Fast path: if this candidate cannot beat the weakest entry currently in top-N, skip allocation!
 				if (effective < worst.effective()) {
 					continue;
 				}
@@ -218,7 +230,53 @@ public class AntiDoSStatusRenderer {
 
 		List<CounterEntry> result = new ArrayList<>(minHeap);
 		Collections.sort(result);
-		return result;
+		return new FilteredEntries(result, maxOrder);
+	}
+
+	/**
+	 * Linearly extracts counter entries that have an accessOrder strictly greater than {@code sinceOrder}
+	 * and an effective count greater than or equal to {@code minCount}.
+	 * Runs in O(N) with zero heap-sorting overhead.
+	 */
+	static FilteredEntries extractFilteredEntries(Map<String, AntiDoSCounter> map, Long sinceOrder, Integer minCount, boolean locked) {
+		if (map == null || map.isEmpty()) {
+			return new FilteredEntries(Collections.emptyList(), 0L);
+		}
+		long threshold = sinceOrder != null ? sinceOrder : Long.MIN_VALUE;
+		int min = minCount != null ? minCount : 1;
+		long maxOrder = 0L;
+		List<CounterEntry> list = new ArrayList<>();
+
+		for (Map.Entry<String, AntiDoSCounter> entry : map.entrySet()) {
+			AntiDoSCounter c = entry.getValue();
+			long order = c.getAccessOrder();
+			if (order > maxOrder) {
+				maxOrder = order;
+			}
+			if (order > threshold) {
+				int count = c.getCount();
+				int rawRetained = c.getRetainedCounts();
+				int retained = rawRetained > 0 ? rawRetained : 0;
+				int effective = count + retained;
+				if (effective >= min) {
+					list.add(new CounterEntry(entry.getKey(), count, retained, effective, locked));
+				}
+			}
+		}
+		return new FilteredEntries(list, maxOrder);
+	}
+
+	/**
+	 * Extracts up to {@code limit} top counter entries from the given counter map using a bounded
+	 * min-heap. This avoids full sorting and unnecessary object allocations when inspecting large caches.
+	 *
+	 * @param map    The counter map (active or blocked counters)
+	 * @param limit  Maximum number of entries to extract. If 0, returns an empty list immediately.
+	 * @param locked Whether the entries represent locked/blocked counters
+	 * @return A sorted list of the top entries in descending order of significance
+	 */
+	static List<CounterEntry> extractTopEntries(Map<String, AntiDoSCounter> map, int limit, boolean locked) {
+		return extractTopEntriesWithMax(map, limit, locked).entries();
 	}
 
 	/**
@@ -332,6 +390,12 @@ public class AntiDoSStatusRenderer {
 
 	public void renderStatusJson(Response response, String filterValve, String view, String slotParam, String limitParam,
 			String blockedLimitParam, String activeLimitParam) throws IOException {
+		renderStatusJson(response, filterValve, view, slotParam, limitParam, blockedLimitParam, activeLimitParam, null, null, null);
+	}
+
+	public void renderStatusJson(Response response, String filterValve, String view, String slotParam, String limitParam,
+			String blockedLimitParam, String activeLimitParam, String sinceBlockedOrderParam, String sinceActiveOrderParam,
+			String activeMinCountParam) throws IOException {
 		response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
 		response.setHeader("Pragma", "no-cache");
 		response.setHeader("Referrer-Policy", "no-referrer");
@@ -345,11 +409,36 @@ public class AntiDoSStatusRenderer {
 			String effActiveParam = (activeLimitParam != null && !activeLimitParam.trim().isEmpty()) ? activeLimitParam : limitParam;
 			Integer blockedLimit = effBlockedParam != null ? parseLimit(effBlockedParam, 50, true) : null;
 			Integer activeLimit = effActiveParam != null ? parseLimit(effActiveParam, 50, true) : null;
-			out.write(buildStatusJsonDetails(filterValve, slotParam, blockedLimit, activeLimit));
+			Long sinceBlockedOrder = parseLongParam(sinceBlockedOrderParam);
+			Long sinceActiveOrder = parseLongParam(sinceActiveOrderParam);
+			Integer activeMinCount = parseIntParam(activeMinCountParam);
+			out.write(buildStatusJsonDetails(filterValve, slotParam, blockedLimit, activeLimit, sinceBlockedOrder, sinceActiveOrder, activeMinCount));
 		} else {
 			out.write(buildStatusJson(filterValve));
 		}
 		out.flush();
+	}
+
+	public static Long parseLongParam(String param) {
+		if (param == null || param.trim().isEmpty()) {
+			return null;
+		}
+		try {
+			return Long.valueOf(param.trim());
+		} catch (NumberFormatException e) {
+			return null;
+		}
+	}
+
+	public static Integer parseIntParam(String param) {
+		if (param == null || param.trim().isEmpty()) {
+			return null;
+		}
+		try {
+			return Integer.valueOf(param.trim());
+		} catch (NumberFormatException e) {
+			return null;
+		}
 	}
 
 	private Set<AntiDoSValve> getValvesToRender() {
@@ -1060,6 +1149,11 @@ public class AntiDoSStatusRenderer {
 	}
 
 	public String buildStatusJsonDetails(String filterValve, String slotParam, Integer blockedLimit, Integer activeLimit) {
+		return buildStatusJsonDetails(filterValve, slotParam, blockedLimit, activeLimit, null, null, null);
+	}
+
+	public String buildStatusJsonDetails(String filterValve, String slotParam, Integer blockedLimit, Integer activeLimit,
+			Long sinceBlockedOrder, Long sinceActiveOrder, Integer activeMinCount) {
 		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
 		sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
 		String serverTime = sdf.format(new Date(getTimeInMillis()));
@@ -1195,13 +1289,25 @@ public class AntiDoSStatusRenderer {
 
 		// Blocked clients array
 		int totalBlockedClients = selectedSlot != null ? selectedSlot.getBlockedCounterCount() : 0;
-		List<CounterEntry> blockedList = (selectedSlot != null && effBlockedLimit > 0)
-				? extractTopEntries(selectedSlot.getBlockedCounters(), effBlockedLimit, true)
-				: Collections.emptyList();
+		FilteredEntries blockedEntries;
+		if (selectedSlot == null) {
+			blockedEntries = new FilteredEntries(Collections.emptyList(), 0L);
+		} else if (sinceBlockedOrder != null) {
+			blockedEntries = extractFilteredEntries(selectedSlot.getBlockedCounters(), sinceBlockedOrder, null, true);
+		} else if (effBlockedLimit > 0) {
+			blockedEntries = extractTopEntriesWithMax(selectedSlot.getBlockedCounters(), effBlockedLimit, true);
+		} else {
+			blockedEntries = extractTopEntriesWithMax(selectedSlot.getBlockedCounters(), 0, true);
+		}
+		List<CounterEntry> blockedList = blockedEntries.entries();
 
 		sb.append("  \"blockedLimit\": ").append(effBlockedLimit == Integer.MAX_VALUE ? "null" : effBlockedLimit).append(",\n")
 				.append("  \"totalBlockedClients\": ").append(totalBlockedClients).append(",\n")
-				.append("  \"blockedClients\": [\n");
+				.append("  \"maxBlockedOrder\": ").append(blockedEntries.maxOrder()).append(",\n");
+		if (sinceBlockedOrder != null) {
+			sb.append("  \"sinceBlockedOrder\": ").append(sinceBlockedOrder).append(",\n");
+		}
+		sb.append("  \"blockedClients\": [\n");
 		for (int i = 0; i < blockedList.size(); i++) {
 			if (i > 0) sb.append(",\n");
 			CounterEntry e = blockedList.get(i);
@@ -1218,13 +1324,28 @@ public class AntiDoSStatusRenderer {
 
 		// Top active clients array
 		int totalActiveClients = selectedSlot != null ? selectedSlot.getActiveCounterCount() : 0;
-		List<CounterEntry> activeList = (selectedSlot != null && effActiveLimit > 0)
-				? extractTopEntries(selectedSlot.getActiveCounters(), effActiveLimit, false)
-				: Collections.emptyList();
+		FilteredEntries activeEntries;
+		if (selectedSlot == null) {
+			activeEntries = new FilteredEntries(Collections.emptyList(), 0L);
+		} else if (sinceActiveOrder != null) {
+			activeEntries = extractFilteredEntries(selectedSlot.getActiveCounters(), sinceActiveOrder, activeMinCount, false);
+		} else if (effActiveLimit > 0) {
+			activeEntries = extractTopEntriesWithMax(selectedSlot.getActiveCounters(), effActiveLimit, false);
+		} else {
+			activeEntries = extractTopEntriesWithMax(selectedSlot.getActiveCounters(), 0, false);
+		}
+		List<CounterEntry> activeList = activeEntries.entries();
 
 		sb.append("  \"activeLimit\": ").append(effActiveLimit == Integer.MAX_VALUE ? "null" : effActiveLimit).append(",\n")
 				.append("  \"totalActiveClients\": ").append(totalActiveClients).append(",\n")
-				.append("  \"topActiveClients\": [\n");
+				.append("  \"maxActiveOrder\": ").append(activeEntries.maxOrder()).append(",\n");
+		if (sinceActiveOrder != null) {
+			sb.append("  \"sinceActiveOrder\": ").append(sinceActiveOrder).append(",\n");
+		}
+		if (activeMinCount != null) {
+			sb.append("  \"activeMinCount\": ").append(activeMinCount).append(",\n");
+		}
+		sb.append("  \"topActiveClients\": [\n");
 		for (int i = 0; i < activeList.size(); i++) {
 			if (i > 0) sb.append(",\n");
 			CounterEntry e = activeList.get(i);

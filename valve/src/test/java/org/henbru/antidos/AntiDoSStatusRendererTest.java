@@ -410,5 +410,62 @@ class AntiDoSStatusRendererTest {
 		assertTrue(htmlBlockedOnly.contains("Top Active Clients"));
 		assertTrue(htmlBlockedOnly.contains("No active clients in current slot."));
 	}
+
+	@Test
+	void testDeltaCursoringAndFiltering() {
+		// Verify helper parsing methods
+		assertNull(AntiDoSStatusRenderer.parseLongParam(null));
+		assertNull(AntiDoSStatusRenderer.parseLongParam(""));
+		assertNull(AntiDoSStatusRenderer.parseLongParam("abc"));
+		assertEquals(123456789L, AntiDoSStatusRenderer.parseLongParam("123456789"));
+
+		assertNull(AntiDoSStatusRenderer.parseIntParam(null));
+		assertNull(AntiDoSStatusRenderer.parseIntParam(""));
+		assertNull(AntiDoSStatusRenderer.parseIntParam("xyz"));
+		assertEquals(5, AntiDoSStatusRenderer.parseIntParam("5"));
+
+		// Populate slot with counters having controlled access orders
+		AntiDoSMonitor mon = valve.provideMonitor();
+		mon.registerAndCheckRequest("10.20.0.1");
+		AntiDoSSlot slot = mon.getCurrentSlotIfExists();
+		assertNotNull(slot);
+
+		// Add an active IP with 1 hit and low order
+		AntiDoSCounter c1 = slot.getActiveCounters().get("10.20.0.1");
+		assertNotNull(c1);
+		c1.touch(1000L);
+
+		// Add another active IP with 3 hits and high order
+		mon.registerAndCheckRequest("10.20.0.2");
+		mon.registerAndCheckRequest("10.20.0.2");
+		mon.registerAndCheckRequest("10.20.0.2");
+		AntiDoSCounter c2 = slot.getActiveCounters().get("10.20.0.2");
+		assertNotNull(c2);
+		c2.touch(2000L);
+
+		// 1. Initial poll without sinceOrder: should contain maxActiveOrder >= 2000 and both IPs
+		String jsonInitial = renderer.buildStatusJsonDetails("RENDERER_TEST", "current", null, null);
+		assertTrue(jsonInitial.contains("\"maxActiveOrder\":"));
+		assertTrue(jsonInitial.contains("\"maxBlockedOrder\":"));
+		assertTrue(jsonInitial.contains("\"10.20.0.1\""));
+		assertTrue(jsonInitial.contains("\"10.20.0.2\""));
+
+		// 2. Poll with sinceActiveOrder=1500: should only include 10.20.0.2
+		String jsonSince1500 = renderer.buildStatusJsonDetails("RENDERER_TEST", "current", null, null, null, 1500L, null);
+		assertTrue(jsonSince1500.contains("\"sinceActiveOrder\": 1500"));
+		assertTrue(jsonSince1500.contains("\"10.20.0.2\""));
+		assertFalse(jsonSince1500.contains("\"10.20.0.1\""));
+
+		// 3. Poll with sinceActiveOrder=2500: should include neither IP
+		String jsonSince2500 = renderer.buildStatusJsonDetails("RENDERER_TEST", "current", null, null, null, 2500L, null);
+		assertFalse(jsonSince2500.contains("\"10.20.0.1\""));
+		assertFalse(jsonSince2500.contains("\"10.20.0.2\""));
+
+		// 4. Poll with activeMinCount=2: 10.20.0.1 has count=1 -> excluded; 10.20.0.2 has count=3 -> included
+		String jsonMinCount2 = renderer.buildStatusJsonDetails("RENDERER_TEST", "current", null, null, null, 0L, 2);
+		assertTrue(jsonMinCount2.contains("\"activeMinCount\": 2"));
+		assertTrue(jsonMinCount2.contains("\"10.20.0.2\""));
+		assertFalse(jsonMinCount2.contains("\"10.20.0.1\""));
+	}
 }
 

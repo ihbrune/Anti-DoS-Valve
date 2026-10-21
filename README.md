@@ -626,7 +626,10 @@ When polling the status endpoint from automated monitoring scripts or collectors
 | `slot` | `current`, `previous`, `<slotKey>` | Selects which slot's blocked/active client list to inspect. Using `slot=previous` returns the completed previous time window (requires `numberOfSlots >= 2`; collectors should deduplicate by `slotKey`). Default: `current`. |
 | `limit` | positive integer (e.g. `100`), `all`, `-1` | Maximum number of clients returned (applies to both blocked and active lists as fallback). `all` or `-1` returns all entries (HTML tables capped at 1,000 for browser responsiveness). `0` or omitted defaults to `50`. |
 | `blockedLimit` | positive integer, `0`, `all`, `-1` | Specific limit for the `blockedClients` list. Falls back to `limit` if omitted. Specifying `0` suppresses blocked clients entirely. |
-| `activeLimit` | positive integer, `0`, `all`, `-1` | Specific limit for the `topActiveClients` list. Falls back to `limit` if omitted. Specifying `0` suppresses active clients entirely (recommended for telemetry collectors to avoid serializing unblocked IPs). |
+| `activeLimit` | positive integer, `0`, `all`, `-1` | Specific limit for the `topActiveClients` list. Falls back to `limit` if omitted. Specifying `0` suppresses active clients entirely. |
+| `sinceBlockedOrder` | monotonic timestamp/sequence (`long`) | Delta filter for `blockedClients`. Returns only entries updated after this sequence number without heap-sorting overhead ($O(N)$ linear filter). The response includes `maxBlockedOrder` as the cursor watermark for subsequent requests. |
+| `sinceActiveOrder` | monotonic timestamp/sequence (`long`) | Delta filter for `topActiveClients`. Returns only entries updated after this sequence number without heap-sorting overhead ($O(N)$ linear filter). The response includes `maxActiveOrder` as the cursor watermark for subsequent requests. |
+| `activeMinCount` | positive integer (e.g. `2`) | Minimum request count filter for `topActiveClients`. Suppresses low-frequency single-request visitors to keep payloads lightweight under heavy traffic. Default: `1` (all active clients). |
 | `valve` | `<monitorName>` | Filters by monitor name (required for details view if multiple valves are running). |
 
 ---

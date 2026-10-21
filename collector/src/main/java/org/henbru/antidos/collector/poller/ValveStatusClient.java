@@ -45,6 +45,13 @@ public class ValveStatusClient {
 	public ValveDetailsDto fetchSlotDetails(EndpointConfig endpoint, String valveName, String slotParam,
 			String limitParam, String blockedLimitParam, String activeLimitParam)
 			throws IOException, InterruptedException {
+		return fetchSlotDetails(endpoint, valveName, slotParam, limitParam, blockedLimitParam, activeLimitParam, null, null, null);
+	}
+
+	public ValveDetailsDto fetchSlotDetails(EndpointConfig endpoint, String valveName, String slotParam,
+			String limitParam, String blockedLimitParam, String activeLimitParam,
+			Long sinceBlockedOrder, Long sinceActiveOrder, Integer activeMinCount)
+			throws IOException, InterruptedException {
 		String base = cleanBaseUrl(endpoint.getUrl());
 		StringBuilder sb = new StringBuilder(base);
 		sb.append("?view=details&format=json");
@@ -62,6 +69,15 @@ public class ValveStatusClient {
 		}
 		if (activeLimitParam != null && !activeLimitParam.trim().isEmpty()) {
 			sb.append("&activeLimit=").append(URLEncoder.encode(activeLimitParam.trim(), StandardCharsets.UTF_8));
+		}
+		if (sinceBlockedOrder != null) {
+			sb.append("&sinceBlockedOrder=").append(sinceBlockedOrder);
+		}
+		if (sinceActiveOrder != null) {
+			sb.append("&sinceActiveOrder=").append(sinceActiveOrder);
+		}
+		if (activeMinCount != null) {
+			sb.append("&activeMinCount=").append(activeMinCount);
 		}
 
 		return executeGet(endpoint, sb.toString(), ValveDetailsDto.class);

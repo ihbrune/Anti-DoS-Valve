@@ -140,4 +140,77 @@ class ValveStatusClientTest {
 		String msg = ValveStatusClient.formatErrorMessage(ex);
 		assertEquals("RuntimeException", msg, "Should fall back to simple class name instead of 'null'");
 	}
+
+	@Test
+	void testDeserializeDetailsJsonWithDeltaFields() throws Exception {
+		String json = """
+				{
+				  "serverTime": "2026-10-21T12:00:00Z",
+				  "valve": {
+				    "monitorName": "DELTA_VALVE",
+				    "currentSlotKey": 500,
+				    "lastCompletedSlotKey": 499,
+				    "slotLength": 60,
+				    "numberOfSlots": 5
+				  },
+				  "selectedSlot": {
+				    "type": "current",
+				    "index": 0,
+				    "slotKey": 500,
+				    "isCurrent": true,
+				    "startTime": "2026-10-21T12:00:00Z",
+				    "endTime": "2026-10-21T12:01:00Z",
+				    "totalRequests": 250,
+				    "activeCounters": 50,
+				    "blockedCounters": 1
+				  },
+				  "blockedLimit": 50,
+				  "totalBlockedClients": 1,
+				  "maxBlockedOrder": 9876543210,
+				  "sinceBlockedOrder": 9876540000,
+				  "blockedClients": [
+				    {
+				      "key": "10.0.0.99",
+				      "count": 55,
+				      "retained": 0,
+				      "effective": 55,
+				      "limit": 50,
+				      "status": "BLOCKED"
+				    }
+				  ],
+				  "activeLimit": 50,
+				  "totalActiveClients": 50,
+				  "maxActiveOrder": 1234567890123,
+				  "sinceActiveOrder": 1234567800000,
+				  "activeMinCount": 2,
+				  "topActiveClients": [
+				    {
+				      "key": "192.168.10.5",
+				      "count": 12,
+				      "retained": 0,
+				      "effective": 12,
+				      "limit": 50,
+				      "quotaPercent": 24
+				    }
+				  ]
+				}
+				""";
+
+		ValveDetailsDto dto = objectMapper.readValue(json, ValveDetailsDto.class);
+		assertNotNull(dto);
+		assertEquals(9876543210L, dto.maxBlockedOrder());
+		assertEquals(9876540000L, dto.sinceBlockedOrder());
+		assertEquals(1234567890123L, dto.maxActiveOrder());
+		assertEquals(1234567800000L, dto.sinceActiveOrder());
+		assertEquals(2, dto.activeMinCount());
+		assertEquals(50, dto.totalActiveClients());
+
+		assertNotNull(dto.topActiveClients());
+		assertEquals(1, dto.topActiveClients().size());
+		ValveDetailsDto.ActiveClientDto activeClient = dto.topActiveClients().getFirst();
+		assertEquals("192.168.10.5", activeClient.key());
+		assertEquals(12, activeClient.count());
+		assertEquals(12, activeClient.effective());
+		assertEquals(24, activeClient.quotaPercent());
+	}
 }

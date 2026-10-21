@@ -1101,9 +1101,13 @@ public class AntiDoSValve extends ValveBase {
 		String limit = request.getParameter("limit");
 		String blockedLimit = request.getParameter("blockedLimit");
 		String activeLimit = request.getParameter("activeLimit");
+		String sinceBlockedOrder = request.getParameter("sinceBlockedOrder");
+		String sinceActiveOrder = request.getParameter("sinceActiveOrder");
+		String activeMinCount = request.getParameter("activeMinCount");
 
 		if (isJson) {
-			statusRenderer.renderStatusJson(response, filterValve, view, slot, limit, blockedLimit, activeLimit);
+			statusRenderer.renderStatusJson(response, filterValve, view, slot, limit, blockedLimit, activeLimit,
+					sinceBlockedOrder, sinceActiveOrder, activeMinCount);
 		} else {
 			statusRenderer.renderStatusHtml(response, filterValve, view, token, slot, limit, blockedLimit, activeLimit);
 		}
@@ -1293,6 +1297,12 @@ public class AntiDoSValve extends ValveBase {
 
 	public String buildStatusJsonDetails(String filterValve, String slotParam, Integer blockedLimit, Integer activeLimit) {
 		return statusRenderer.buildStatusJsonDetails(filterValve, slotParam, blockedLimit, activeLimit);
+	}
+
+	public String buildStatusJsonDetails(String filterValve, String slotParam, Integer blockedLimit, Integer activeLimit,
+			Long sinceBlockedOrder, Long sinceActiveOrder, Integer activeMinCount) {
+		return statusRenderer.buildStatusJsonDetails(filterValve, slotParam, blockedLimit, activeLimit,
+				sinceBlockedOrder, sinceActiveOrder, activeMinCount);
 	}
 
 	public static String buildDashboardUrl(String token, String valve, String view, String format) {
