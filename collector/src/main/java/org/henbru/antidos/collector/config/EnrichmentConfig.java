@@ -24,6 +24,7 @@ public class EnrichmentConfig {
 		Map<String, CrawlerFeedConfig> map = new LinkedHashMap<>();
 		map.put("googlebot", new CrawlerFeedConfig("googlebot", "Googlebot", "SEARCH_ENGINE", "https://developers.google.com/search/apis/ipranges/googlebot.json"));
 		map.put("bingbot", new CrawlerFeedConfig("bingbot", "Bingbot", "SEARCH_ENGINE", "https://www.bing.com/toolbox/bingbot.json"));
+		map.put("applebot", new CrawlerFeedConfig("applebot", "Applebot", "SEARCH_ENGINE", "https://search.developer.apple.com/applebot.json"));
 		map.put("openai-gptbot", new CrawlerFeedConfig("openai-gptbot", "OpenAI GPTBot", "AI_CRAWLER", "https://openai.com/gptbot.json"));
 		map.put("openai-chatgpt-user", new CrawlerFeedConfig("openai-chatgpt-user", "ChatGPT User", "AI_CRAWLER", "https://openai.com/chatgpt-user.json"));
 		map.put("tor-exit-nodes", new CrawlerFeedConfig("tor-exit-nodes", "Tor Bulk Exit Nodes", "TOR_EXIT_NODE", "https://check.torproject.org/torbulkexitlist"));

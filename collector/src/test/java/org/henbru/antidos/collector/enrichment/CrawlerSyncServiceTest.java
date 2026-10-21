@@ -153,4 +153,42 @@ class CrawlerSyncServiceTest {
 		verify(feedRepo).upsert(argThat(feed -> "DISABLED".equals(feed.status())));
 		verify(rangeRepo).replaceRangesForFeed("disabled-feed", List.of());
 	}
+
+	@Test
+	void testExtractCidrsFromApplebotJson() {
+		String appleJson = """
+				{
+				  "creationTime": "2024-03-01T00:00:00",
+				  "prefixes": [
+				    { "ipv4Prefix": "17.58.98.0/24" },
+				    { "ipv4Prefix": "17.58.101.0/24" },
+				    { "ipv6Prefix": "2620:149:a40::/48" }
+				  ]
+				}
+				""";
+
+		CrawlerSyncService service = new CrawlerSyncService(
+				new CollectorProperties(),
+				mock(CrawlerFeedRepository.class),
+				mock(BotIpRangeRepository.class),
+				new ObjectMapper()
+		);
+
+		List<String> cidrs = service.extractCidrs(appleJson);
+		assertEquals(3, cidrs.size());
+		assertTrue(cidrs.contains("17.58.98.0/24"));
+		assertTrue(cidrs.contains("17.58.101.0/24"));
+		assertTrue(cidrs.contains("2620:149:a40::/48"));
+	}
+
+	@Test
+	void testDefaultCrawlerFeedsContainsApplebot() {
+		var defaults = org.henbru.antidos.collector.config.EnrichmentConfig.createDefaultCrawlerFeeds();
+		assertTrue(defaults.containsKey("applebot"));
+		var appleConfig = defaults.get("applebot");
+		assertEquals("Applebot", appleConfig.getName());
+		assertEquals("SEARCH_ENGINE", appleConfig.getCategory());
+		assertEquals("https://search.developer.apple.com/applebot.json", appleConfig.getUrl());
+		assertTrue(appleConfig.isEnabled());
+	}
 }

@@ -8,11 +8,13 @@
 # or 'collector-config.yaml' without modifying this file.
 # ==============================================================================
 
-# Hyperscalers & Cloud Providers
+# Hyperscalers, Big Tech & Cloud Providers
 16509  # Amazon.com / AWS
 14618  # Amazon.com / AWS
 8075   # Microsoft Corporation (Azure)
 396982 # Google Cloud Platform (GCP)
+32934  # Meta Platforms, Inc. (Facebook)
+63293  # Meta Platforms, Inc.
 31898  # Oracle Corporation (OCI)
 45102  # Alibaba Cloud
 37963  # Alibaba Cloud

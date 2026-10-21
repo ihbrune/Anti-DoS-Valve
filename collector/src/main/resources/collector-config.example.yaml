@@ -96,7 +96,7 @@ collector:
     crawler-sync-cron: "0 0 4 * * *"
 
     # Crawler & Anonymizer IP range feeds:
-    # Default feeds out-of-the-box (Googlebot, Bingbot, OpenAI, ChatGPT, Tor Exit Nodes)
+    # Default feeds out-of-the-box (Googlebot, Bingbot, Applebot, OpenAI, ChatGPT, Tor Exit Nodes)
     # are defined in application.yaml and automatically merged with your custom feeds below.
     # Supported categories: SEARCH_ENGINE, AI_CRAWLER, TOR_EXIT_NODE
     # (Feeds with unknown categories will log a warning and remain disabled as INVALID_CONFIG).

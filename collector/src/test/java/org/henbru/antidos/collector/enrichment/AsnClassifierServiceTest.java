@@ -23,9 +23,12 @@ class AsnClassifierServiceTest {
 		assertTrue(service.getHostingAsns().contains(16509L)); // AWS
 		assertTrue(service.getHostingAsns().contains(16276L)); // OVH
 		assertTrue(service.getHostingAsns().contains(14061L)); // DigitalOcean
+		assertTrue(service.getHostingAsns().contains(32934L)); // Meta Platforms (Facebook)
 
 		assertEquals(ClientType.DATACENTER, service.classify(24940L, "Hetzner Online GmbH"));
 		assertEquals(ClientType.DATACENTER, service.classify(16509L, "AMAZON-02"));
+		assertEquals(ClientType.DATACENTER, service.classify(32934L, "FACEBOOK"));
+		assertEquals(ClientType.DATACENTER, service.classify(32934L, "Meta Platforms, Inc."));
 	}
 
 	@Test
@@ -75,8 +78,7 @@ class AsnClassifierServiceTest {
 		assertEquals(ClientType.RESIDENTIAL, service.classify(3320L, "Deutsche Telekom AG"));
 
 		// Unknown organization without hosting, mobile, or residential keywords -> UNKNOWN (no false RESIDENTIAL fallback)
-		assertEquals(ClientType.UNKNOWN, service.classify(32934L, "FACEBOOK"));
-		assertEquals(ClientType.UNKNOWN, service.classify(32934L, "Meta Platforms, Inc."));
+		assertEquals(ClientType.UNKNOWN, service.classify(999999L, "Random Enterprise LLC"));
 		assertEquals(ClientType.UNKNOWN, service.classify(12345L, "Acme Industrial Corporation"));
 
 		// Null/empty

@@ -62,6 +62,11 @@ collector:
         category: "SEARCH_ENGINE"
         url: "https://www.bing.com/toolbox/bingbot.json"
         enabled: true
+      applebot:
+        name: "Applebot"
+        category: "SEARCH_ENGINE"
+        url: "https://search.developer.apple.com/applebot.json"
+        enabled: true
       openai-gptbot:
         name: "OpenAI GPTBot"
         category: "AI_CRAWLER"
