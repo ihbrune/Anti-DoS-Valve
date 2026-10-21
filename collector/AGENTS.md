@@ -53,7 +53,7 @@ This document serves as the architectural reference and development guide for hu
 | Command | Purpose |
 |---|---|
 | `mvn test -pl collector` | Runs all unit and database migration tests for the collector. |
-| `mvn package -pl collector` | Builds the executable Spring Boot Fat-JAR in `collector/target/anti-dos-collector-1.7.1.jar`. |
+| `mvn package -pl collector` | Builds the executable Spring Boot Fat-JAR in `collector/target/anti-dos-collector-1.7.2.jar`. |
 | `mvn spring-boot:run -pl collector` | Starts the collector service locally. |
 | `mvn spring-boot:run -pl collector -Dspring-boot.run.arguments="demo"` | Starts the collector in zero-configuration Demo Mode with isolated database. |
 | `mvn spring-boot:run -pl collector -Dspring-boot.run.arguments="demo 4"` | Starts Demo Mode with fleet scaling (4 instances per type = 12 total servers A..D). |
