@@ -40,7 +40,7 @@ This document serves as the architectural reference and development guide for hu
    * **IPv6 Upper-64-Bit Prefix Storage:** Stored as 16-character lowercase hex strings (`ip_v6_start`, `ip_v6_end`). Intentionally limited to the upper 64-bit routing prefix because individual host bits (/65-/128) are ephemeral due to IPv6 Privacy Extensions (RFC 4941).
    * **Subnet & ASN Rollup:** Supports `/24` & `/64` Subnet Rollup and **ASN Rollup** (`groupBy=ASN`) to aggregate rotating residential proxy botnets across multiple networks.
    * **Search & Containment Queries:** Never use SQL `LIKE` for IP ranges! Always use the mathematical interval overlap condition (`ip_start <= :searchEnd AND ip_end >= :searchStart`) via `IpNetworkUtil.parseSearchQuery()`.
-   * **Layered Configuration:** Default hosting ASNs packaged in `classpath:asns/default-hosting-asns.txt`. Operators customize via `custom-hosting-asns.txt` (`+12345` to add, `-24940` to exclude) without Git checkout conflicts.
+   * **Layered Configuration:** Default datacenter ASNs packaged in `classpath:asns/default-datacenter-asns.txt`. Operators customize via `custom-datacenter-asns.txt` (`+12345` to add, `-24940` to exclude) without Git checkout conflicts.
    * **Client Classifications:** Enriched into categories: `DATACENTER` (Cloud/VPS/Hoster), `RESIDENTIAL` (ISP/End-user), `SEARCH_ENGINE` (Verified Googlebot/Bingbot), `AI_CRAWLER` (Verified OpenAI/ChatGPT), `TOR_EXIT_NODE` (Official Tor bulk exit nodes), `MOBILE` (Cellular/CGNAT), and `PRIVATE_NETWORK` (RFC 1918, RFC 4193 ULA, loopback, link-local).
    * **Multi-Source Intelligence & Entity Normalization:** IP and subnet metadata is centralized in `network_entity`, referenced by events via `entity_id`. The high-throughput in-memory interval index (`IntelRegistry`) resolves multi-source classifications (`intel_source`, `intel_range`) with microsecond lookup performance.
    * **Crawler & Anonymizer Feed Management:** Verified search engine, AI crawler, and Tor exit node IP ranges periodically updated from remote feeds with automatic orphan cleanup upon configuration changes, manageable via `/crawlers`.
@@ -56,3 +56,4 @@ This document serves as the architectural reference and development guide for hu
 | `mvn package -pl collector` | Builds the executable Spring Boot Fat-JAR in `collector/target/anti-dos-collector-1.7.1.jar`. |
 | `mvn spring-boot:run -pl collector` | Starts the collector service locally. |
 | `mvn spring-boot:run -pl collector -Dspring-boot.run.arguments="demo"` | Starts the collector in zero-configuration Demo Mode with isolated database. |
+| `mvn spring-boot:run -pl collector -Dspring-boot.run.arguments="demo 4"` | Starts Demo Mode with fleet scaling (4 instances per type = 12 total servers A..D). |

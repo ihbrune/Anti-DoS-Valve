@@ -69,6 +69,7 @@ public class DemoDataSeeder {
 	private final PollEventLogRepository pollEventLogRepository;
 	private final org.henbru.antidos.collector.storage.CrawlerFeedRepository crawlerFeedRepository;
 	private final JdbcTemplate jdbcTemplate;
+	private final org.henbru.antidos.collector.config.CollectorProperties properties;
 
 	public DemoDataSeeder(
 			SlotSnapshotRepository slotSnapshotRepository,
@@ -76,13 +77,15 @@ public class DemoDataSeeder {
 			HeartbeatRepository heartbeatRepository,
 			PollEventLogRepository pollEventLogRepository,
 			org.henbru.antidos.collector.storage.CrawlerFeedRepository crawlerFeedRepository,
-			JdbcTemplate jdbcTemplate) {
+			JdbcTemplate jdbcTemplate,
+			org.henbru.antidos.collector.config.CollectorProperties properties) {
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
 		this.heartbeatRepository = heartbeatRepository;
 		this.pollEventLogRepository = pollEventLogRepository;
 		this.crawlerFeedRepository = crawlerFeedRepository;
 		this.jdbcTemplate = jdbcTemplate;
+		this.properties = properties;
 	}
 
 	@EventListener(ApplicationReadyEvent.class)
@@ -99,13 +102,34 @@ public class DemoDataSeeder {
 		}
 
 		long start = System.currentTimeMillis();
-		log.info("Seeding realistic 7-day telemetry history into isolated demo database...");
+		int instanceCount = Math.max(1, Math.min(26, properties.getDemoInstanceCount()));
+		log.info("Seeding realistic 7-day telemetry history into isolated demo database (fleet scale: {} instances/type)...", instanceCount);
 
 		Instant now = Instant.now();
 		Random rnd = new Random(42L); // Fixed seed for reproducible demo analytics
 
-		List<SlotSnapshot> snapshots = new ArrayList<>(2500);
-		List<BlockedClientEvent> events = new ArrayList<>(1500);
+		List<String> edgeServers;
+		List<String> apiServers;
+		List<String> stagingServers;
+
+		if (instanceCount == 1) {
+			edgeServers = List.of("Demo-Edge-EU");
+			apiServers = List.of("Demo-API-Gateway");
+			stagingServers = List.of("Demo-Staging-Node");
+		} else {
+			edgeServers = new ArrayList<>(instanceCount);
+			apiServers = new ArrayList<>(instanceCount);
+			stagingServers = new ArrayList<>(instanceCount);
+			for (int i = 0; i < instanceCount; i++) {
+				char letter = (char) ('A' + i);
+				edgeServers.add("Demo-Edge-EU " + letter);
+				apiServers.add("Demo-API-Gateway " + letter);
+				stagingServers.add("Demo-Staging-Node " + letter);
+			}
+		}
+
+		List<SlotSnapshot> snapshots = new ArrayList<>(2500 * instanceCount);
+		List<BlockedClientEvent> events = new ArrayList<>(1500 * instanceCount);
 
 		// 1. Generate Historical Timepoints:
 		// - Last 6 hours: high density (every 1 minute)
@@ -140,103 +164,108 @@ public class DemoDataSeeder {
 			// -----------------------------------------------------------------
 			// Server 1: Demo-Edge-EU (Primary-Rate-Limiter & Subnet-Guard)
 			// -----------------------------------------------------------------
-			long edgePrimaryReqs = (long) (500 + 800 * diurnal + rnd.nextInt(250));
-			int edgePrimaryActive = (int) (180 + 200 * diurnal + rnd.nextInt(50));
-			int edgePrimaryBlocked = 0;
+			for (int idx = 0; idx < edgeServers.size(); idx++) {
+				String edgeServer = edgeServers.get(idx);
+				Random sRnd = (idx == 0) ? rnd : new Random((slotKey * 31L) ^ edgeServer.hashCode());
 
-			// Occasional crawlers exceeding rate limit
-			if (slotKey % 67 == 0) {
-				edgePrimaryBlocked = 1;
-				events.add(createEnrichedEvent(
-						"Demo-Edge-EU", "Primary-Rate-Limiter", slotKey, startTime,
-						"20.15.240.65", 8075L, "OpenAI / Microsoft", "US", org.henbru.antidos.collector.model.ClientType.AI_CRAWLER,
-						142 + rnd.nextInt(30), 0, false, true, endTime
+				long edgePrimaryReqs = (long) (500 + 800 * diurnal + sRnd.nextInt(250));
+				int edgePrimaryActive = (int) (180 + 200 * diurnal + sRnd.nextInt(50));
+				int edgePrimaryBlocked = 0;
+
+				// Occasional crawlers exceeding rate limit
+				if ((slotKey + idx * 7) % 67 == 0) {
+					edgePrimaryBlocked = 1;
+					events.add(createEnrichedEvent(
+							edgeServer, "Primary-Rate-Limiter", slotKey, startTime,
+							"20.15.240.65", 8075L, "OpenAI / Microsoft", "US", org.henbru.antidos.collector.model.ClientType.AI_CRAWLER,
+							142 + sRnd.nextInt(30), 0, false, true, endTime
+					));
+				}
+				if ((slotKey + idx * 11) % 131 == 0) {
+					edgePrimaryBlocked++;
+					events.add(createEnrichedEvent(
+							edgeServer, "Primary-Rate-Limiter", slotKey, startTime,
+							"66.249.66.1", 15169L, "Google LLC", "US", org.henbru.antidos.collector.model.ClientType.SEARCH_ENGINE,
+							129 + sRnd.nextInt(25), 0, false, true, endTime
+					));
+				}
+
+				snapshots.add(new SlotSnapshot(
+						null, edgeServer, "Primary-Rate-Limiter", slotKey,
+						startTime, endTime, edgePrimaryReqs, edgePrimaryActive, edgePrimaryBlocked, true, endTime
+				));
+
+				// Server 1 - Valve 2: Subnet-Guard (aggregates IPv4 into /24 subnets)
+				long edgeSubnetReqs = (long) (900 + 1100 * diurnal + sRnd.nextInt(350));
+				int edgeSubnetActive = (int) (120 + 80 * diurnal + sRnd.nextInt(30));
+				int edgeSubnetBlocked = 0;
+
+				if ((slotKey + idx * 5) % 19 == 0) {
+					edgeSubnetBlocked++;
+					events.add(createEnrichedEvent(
+							edgeServer, "Subnet-Guard", slotKey, startTime,
+							"45.154.255.0/24", 45102L, "Alibaba Cloud", "SG", org.henbru.antidos.collector.model.ClientType.DATACENTER,
+							290 + sRnd.nextInt(120), 0, true, true, endTime
+					));
+				}
+				if ((slotKey + idx * 13) % 43 == 0) {
+					edgeSubnetBlocked++;
+					events.add(createEnrichedEvent(
+							edgeServer, "Subnet-Guard", slotKey, startTime,
+							"185.246.221.0/24", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
+							260 + sRnd.nextInt(90), 0, true, true, endTime
+					));
+				}
+				if ((slotKey + idx * 17) % 89 == 0) {
+					edgeSubnetBlocked++;
+					events.add(createEnrichedEvent(
+							edgeServer, "Subnet-Guard", slotKey, startTime,
+							"10.68.42.0/24", null, "Private Network (RFC 1918)", null, org.henbru.antidos.collector.model.ClientType.PRIVATE_NETWORK,
+							310 + sRnd.nextInt(110), 0, true, true, endTime
+					));
+				}
+
+				snapshots.add(new SlotSnapshot(
+						null, edgeServer, "Subnet-Guard", slotKey,
+						startTime, endTime, edgeSubnetReqs, edgeSubnetActive, edgeSubnetBlocked, true, endTime
+				));
+
+				// Server 1 - Valve 3: IPv6-Rate-Limiter (dedicated IPv6 traffic & crawler mitigation)
+				long edgeIpv6Reqs = (long) (400 + 500 * diurnal + sRnd.nextInt(150));
+				int edgeIpv6Active = (int) (80 + 60 * diurnal + sRnd.nextInt(20));
+				int edgeIpv6Blocked = 0;
+
+				if ((slotKey + idx * 3) % 23 == 0) {
+					edgeIpv6Blocked++;
+					events.add(createEnrichedEvent(
+							edgeServer, "IPv6-Rate-Limiter", slotKey, startTime,
+							"2a02:1205:502c:3b00:1c44:98ff:fe22:1011", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
+							165 + sRnd.nextInt(40), 0, true, true, endTime
+					));
+				}
+				if ((slotKey + idx * 9) % 47 == 0) {
+					// Second rotating client from the exact same residential /64 prefix
+					edgeIpv6Blocked++;
+					events.add(createEnrichedEvent(
+							edgeServer, "IPv6-Rate-Limiter", slotKey, startTime,
+							"2a02:1205:502c:3b00:2d55:77aa:1122:3344", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
+							152 + sRnd.nextInt(35), 0, true, true, endTime
+					));
+				}
+				if ((slotKey + idx * 19) % 79 == 0) {
+					edgeIpv6Blocked++;
+					events.add(createEnrichedEvent(
+							edgeServer, "IPv6-Rate-Limiter", slotKey, startTime,
+							"fd00:10:68::42", null, "Unique Local Address (RFC 4193)", null, org.henbru.antidos.collector.model.ClientType.PRIVATE_NETWORK,
+							140 + sRnd.nextInt(30), 0, true, true, endTime
+					));
+				}
+
+				snapshots.add(new SlotSnapshot(
+						null, edgeServer, "IPv6-Rate-Limiter", slotKey,
+						startTime, endTime, edgeIpv6Reqs, edgeIpv6Active, edgeIpv6Blocked, true, endTime
 				));
 			}
-			if (slotKey % 131 == 0) {
-				edgePrimaryBlocked++;
-				events.add(createEnrichedEvent(
-						"Demo-Edge-EU", "Primary-Rate-Limiter", slotKey, startTime,
-						"66.249.66.1", 15169L, "Google LLC", "US", org.henbru.antidos.collector.model.ClientType.SEARCH_ENGINE,
-						129 + rnd.nextInt(25), 0, false, true, endTime
-				));
-			}
-
-			snapshots.add(new SlotSnapshot(
-					null, "Demo-Edge-EU", "Primary-Rate-Limiter", slotKey,
-					startTime, endTime, edgePrimaryReqs, edgePrimaryActive, edgePrimaryBlocked, true, endTime
-			));
-
-			// Server 1 - Valve 2: Subnet-Guard (aggregates IPv4 into /24 subnets)
-			long edgeSubnetReqs = (long) (900 + 1100 * diurnal + rnd.nextInt(350));
-			int edgeSubnetActive = (int) (120 + 80 * diurnal + rnd.nextInt(30));
-			int edgeSubnetBlocked = 0;
-
-			if (slotKey % 19 == 0) {
-				edgeSubnetBlocked++;
-				events.add(createEnrichedEvent(
-						"Demo-Edge-EU", "Subnet-Guard", slotKey, startTime,
-						"45.154.255.0/24", 45102L, "Alibaba Cloud", "SG", org.henbru.antidos.collector.model.ClientType.DATACENTER,
-						290 + rnd.nextInt(120), 0, true, true, endTime
-				));
-			}
-			if (slotKey % 43 == 0) {
-				edgeSubnetBlocked++;
-				events.add(createEnrichedEvent(
-						"Demo-Edge-EU", "Subnet-Guard", slotKey, startTime,
-						"185.246.221.0/24", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
-						260 + rnd.nextInt(90), 0, true, true, endTime
-				));
-			}
-			if (slotKey % 89 == 0) {
-				edgeSubnetBlocked++;
-				events.add(createEnrichedEvent(
-						"Demo-Edge-EU", "Subnet-Guard", slotKey, startTime,
-						"10.68.42.0/24", null, "Private Network (RFC 1918)", null, org.henbru.antidos.collector.model.ClientType.PRIVATE_NETWORK,
-						310 + rnd.nextInt(110), 0, true, true, endTime
-				));
-			}
-
-			snapshots.add(new SlotSnapshot(
-					null, "Demo-Edge-EU", "Subnet-Guard", slotKey,
-					startTime, endTime, edgeSubnetReqs, edgeSubnetActive, edgeSubnetBlocked, true, endTime
-			));
-
-			// Server 1 - Valve 3: IPv6-Rate-Limiter (dedicated IPv6 traffic & crawler mitigation)
-			long edgeIpv6Reqs = (long) (400 + 500 * diurnal + rnd.nextInt(150));
-			int edgeIpv6Active = (int) (80 + 60 * diurnal + rnd.nextInt(20));
-			int edgeIpv6Blocked = 0;
-
-			if (slotKey % 23 == 0) {
-				edgeIpv6Blocked++;
-				events.add(createEnrichedEvent(
-						"Demo-Edge-EU", "IPv6-Rate-Limiter", slotKey, startTime,
-						"2a02:1205:502c:3b00:1c44:98ff:fe22:1011", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
-						165 + rnd.nextInt(40), 0, true, true, endTime
-				));
-			}
-			if (slotKey % 47 == 0) {
-				// Second rotating client from the exact same residential /64 prefix
-				edgeIpv6Blocked++;
-				events.add(createEnrichedEvent(
-						"Demo-Edge-EU", "IPv6-Rate-Limiter", slotKey, startTime,
-						"2a02:1205:502c:3b00:2d55:77aa:1122:3344", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
-						152 + rnd.nextInt(35), 0, true, true, endTime
-				));
-			}
-			if (slotKey % 79 == 0) {
-				edgeIpv6Blocked++;
-				events.add(createEnrichedEvent(
-						"Demo-Edge-EU", "IPv6-Rate-Limiter", slotKey, startTime,
-						"fd00:10:68::42", null, "Unique Local Address (RFC 4193)", null, org.henbru.antidos.collector.model.ClientType.PRIVATE_NETWORK,
-						140 + rnd.nextInt(30), 0, true, true, endTime
-				));
-			}
-
-			snapshots.add(new SlotSnapshot(
-					null, "Demo-Edge-EU", "IPv6-Rate-Limiter", slotKey,
-					startTime, endTime, edgeIpv6Reqs, edgeIpv6Active, edgeIpv6Blocked, true, endTime
-			));
 
 			// -----------------------------------------------------------------
 			// Server 2: Demo-API-Gateway (API-DoS-Shield under attack)
@@ -245,67 +274,76 @@ public class DemoDataSeeder {
 			boolean isAttackWave2 = (hoursAgo >= 70 && hoursAgo <= 74);      // Credential stuffing 3 days ago
 			boolean isRecentAttack = (hoursAgo <= 1);                         // Active attack ongoing
 
-			long apiReqs;
-			int apiActive;
-			int apiBlocked;
+			for (int idx = 0; idx < apiServers.size(); idx++) {
+				String apiServer = apiServers.get(idx);
+				Random aRnd = (idx == 0) ? rnd : new Random((slotKey * 37L) ^ apiServer.hashCode());
 
-			if (isAttackWave1) {
-				apiReqs = 6500L + rnd.nextInt(3000);
-				apiActive = 1100 + rnd.nextInt(300);
-				apiBlocked = 12 + rnd.nextInt(4);
-				for (int i = 0; i < apiBlocked && i < DEMO_PROFILES.length; i++) {
-					DemoIpProfile p = DEMO_PROFILES[i % DEMO_PROFILES.length];
-					events.add(createEnrichedEvent(
-							"Demo-API-Gateway", "API-DoS-Shield", slotKey, startTime,
-							p.ip(), p.asn(), p.asOrg(), p.country(), p.type(),
-							180 + rnd.nextInt(750), 10 + rnd.nextInt(25), true, true, endTime
-					));
+				long apiReqs;
+				int apiActive;
+				int apiBlocked;
+
+				if (isAttackWave1) {
+					apiReqs = 6500L + aRnd.nextInt(3000);
+					apiActive = 1100 + aRnd.nextInt(300);
+					apiBlocked = 12 + aRnd.nextInt(4);
+					for (int i = 0; i < apiBlocked && i < DEMO_PROFILES.length; i++) {
+						DemoIpProfile p = DEMO_PROFILES[(i + idx) % DEMO_PROFILES.length];
+						events.add(createEnrichedEvent(
+								apiServer, "API-DoS-Shield", slotKey, startTime,
+								p.ip(), p.asn(), p.asOrg(), p.country(), p.type(),
+								180 + aRnd.nextInt(750), 10 + aRnd.nextInt(25), true, true, endTime
+						));
+					}
+				} else if (isAttackWave2) {
+					apiReqs = 4800L + aRnd.nextInt(2200);
+					apiActive = 850 + aRnd.nextInt(200);
+					apiBlocked = 8 + aRnd.nextInt(4);
+					for (int i = 0; i < apiBlocked && i < DEMO_PROFILES.length; i++) {
+						DemoIpProfile p = DEMO_PROFILES[(i + 4 + idx) % DEMO_PROFILES.length];
+						events.add(createEnrichedEvent(
+								apiServer, "API-DoS-Shield", slotKey, startTime,
+								p.ip(), p.asn(), p.asOrg(), p.country(), p.type(),
+								140 + aRnd.nextInt(500), 5 + aRnd.nextInt(15), true, true, endTime
+						));
+					}
+				} else if (isRecentAttack) {
+					apiReqs = 5200L + aRnd.nextInt(2500);
+					apiActive = 980 + aRnd.nextInt(250);
+					apiBlocked = 10 + aRnd.nextInt(5);
+					for (int i = 0; i < apiBlocked && i < DEMO_PROFILES.length; i++) {
+						DemoIpProfile p = DEMO_PROFILES[(i + idx) % DEMO_PROFILES.length];
+						events.add(createEnrichedEvent(
+								apiServer, "API-DoS-Shield", slotKey, startTime,
+								p.ip(), p.asn(), p.asOrg(), p.country(), p.type(),
+								150 + aRnd.nextInt(600), 8 + aRnd.nextInt(20), aRnd.nextBoolean(), true, endTime
+						));
+					}
+				} else {
+					// Normal baseline traffic
+					apiReqs = (long) (1500 + 1200 * diurnal + aRnd.nextInt(400));
+					apiActive = (int) (350 + 250 * diurnal + aRnd.nextInt(80));
+					apiBlocked = 0;
 				}
-			} else if (isAttackWave2) {
-				apiReqs = 4800L + rnd.nextInt(2200);
-				apiActive = 850 + rnd.nextInt(200);
-				apiBlocked = 8 + rnd.nextInt(4);
-				for (int i = 0; i < apiBlocked && i < DEMO_PROFILES.length; i++) {
-					DemoIpProfile p = DEMO_PROFILES[(i + 4) % DEMO_PROFILES.length];
-					events.add(createEnrichedEvent(
-							"Demo-API-Gateway", "API-DoS-Shield", slotKey, startTime,
-							p.ip(), p.asn(), p.asOrg(), p.country(), p.type(),
-							140 + rnd.nextInt(500), 5 + rnd.nextInt(15), true, true, endTime
-					));
-				}
-			} else if (isRecentAttack) {
-				apiReqs = 5200L + rnd.nextInt(2500);
-				apiActive = 980 + rnd.nextInt(250);
-				apiBlocked = 10 + rnd.nextInt(5);
-				for (int i = 0; i < apiBlocked && i < DEMO_PROFILES.length; i++) {
-					DemoIpProfile p = DEMO_PROFILES[i % DEMO_PROFILES.length];
-					events.add(createEnrichedEvent(
-							"Demo-API-Gateway", "API-DoS-Shield", slotKey, startTime,
-							p.ip(), p.asn(), p.asOrg(), p.country(), p.type(),
-							150 + rnd.nextInt(600), 8 + rnd.nextInt(20), rnd.nextBoolean(), true, endTime
-					));
-				}
-			} else {
-				// Normal baseline traffic
-				apiReqs = (long) (1500 + 1200 * diurnal + rnd.nextInt(400));
-				apiActive = (int) (350 + 250 * diurnal + rnd.nextInt(80));
-				apiBlocked = 0;
+
+				snapshots.add(new SlotSnapshot(
+						null, apiServer, "API-DoS-Shield", slotKey,
+						startTime, endTime, apiReqs, apiActive, apiBlocked, true, endTime
+				));
 			}
-
-			snapshots.add(new SlotSnapshot(
-					null, "Demo-API-Gateway", "API-DoS-Shield", slotKey,
-					startTime, endTime, apiReqs, apiActive, apiBlocked, true, endTime
-			));
 
 			// -----------------------------------------------------------------
 			// Server 3: Demo-Staging-Node (Staging-Limiter)
 			// -----------------------------------------------------------------
-			long stagingReqs = 40L + rnd.nextInt(70);
-			int stagingActive = 15 + rnd.nextInt(20);
-			snapshots.add(new SlotSnapshot(
-					null, "Demo-Staging-Node", "Staging-Limiter", slotKey,
-					startTime, endTime, stagingReqs, stagingActive, 0, true, endTime
-			));
+			for (int idx = 0; idx < stagingServers.size(); idx++) {
+				String stagingServer = stagingServers.get(idx);
+				Random stRnd = (idx == 0) ? rnd : new Random((slotKey * 41L) ^ stagingServer.hashCode());
+				long stagingReqs = 40L + stRnd.nextInt(70);
+				int stagingActive = 15 + stRnd.nextInt(20);
+				snapshots.add(new SlotSnapshot(
+						null, stagingServer, "Staging-Limiter", slotKey,
+						startTime, endTime, stagingReqs, stagingActive, 0, true, endTime
+				));
+			}
 		}
 
 		// Batch insert historical snapshots and events
@@ -314,61 +352,59 @@ public class DemoDataSeeder {
 		enrichLegacyDemoEventsIfAny();
 
 		// 2. Pre-populate initial Heartbeats
-		heartbeatRepository.upsert(new EndpointHeartbeat(
-				"Demo-Edge-EU", "http://localhost:8090/mock-valve/edge-eu/antidos-status",
-				true, now, now, null, 14L, 3
-		));
-		heartbeatRepository.upsert(new EndpointHeartbeat(
-				"Demo-API-Gateway", "http://localhost:8090/mock-valve/api-gateway/antidos-status",
-				true, now, now, null, 18L, 1
-		));
-		heartbeatRepository.upsert(new EndpointHeartbeat(
-				"Demo-Staging-Node", "http://localhost:8090/mock-valve/staging-node/antidos-status",
-				true, now, now, null, 24L, 1
-		));
+		List<org.henbru.antidos.collector.config.EndpointConfig> demoEndpoints =
+				DemoModeService.createDemoEndpoints(8090, instanceCount);
+		for (org.henbru.antidos.collector.config.EndpointConfig ep : demoEndpoints) {
+			int valves = ep.getValves() != null ? ep.getValves().size() : 1;
+			long lat = ep.getName().contains("Edge") ? 14L : (ep.getName().contains("API") ? 18L : 24L);
+			heartbeatRepository.upsert(new EndpointHeartbeat(
+					ep.getName(), ep.getUrl(), true, now, now, null, lat, valves
+			));
+		}
 
 		// 3. Pre-populate Poll Event Audit Logs over the last 24h
 		List<PollEventLog> logs = new ArrayList<>();
 		for (int h = 24; h >= 1; h--) {
 			Instant pollTime = now.minus(h, ChronoUnit.HOURS).plus(rnd.nextInt(10), ChronoUnit.MINUTES);
-
-			// Edge EU
-			logs.add(new PollEventLog(
-					null, "Demo-Edge-EU", "http://localhost:8090/mock-valve/edge-eu/antidos-status",
-					pollTime, "SUCCESS", 200, 12L + rnd.nextInt(15), 3, 3, 0,
-					"Polled 3 valve(s), 3 slot(s), 0 event(s)", null
-			));
-
-			// API Gateway
-			boolean underAttack = (h >= 12 && h <= 15) || (h <= 1);
-			int evs = underAttack ? (8 + rnd.nextInt(6)) : 0;
-			logs.add(new PollEventLog(
-					null, "Demo-API-Gateway", "http://localhost:8090/mock-valve/api-gateway/antidos-status",
-					pollTime.plusSeconds(3), "SUCCESS", 200, 18L + rnd.nextInt(20), 1, 1, evs,
-					"Polled 1 valve(s), 1 slot(s), " + evs + " event(s)", null
-			));
-
-			switch (h) {
-				case 9 ->
-					// Simulated temporary outage
+			for (org.henbru.antidos.collector.config.EndpointConfig ep : demoEndpoints) {
+				String name = ep.getName();
+				String url = ep.getUrl();
+				if (name.contains("Edge")) {
 					logs.add(new PollEventLog(
-							null, "Demo-Staging-Node", "http://localhost:8090/mock-valve/staging-node/antidos-status",
-							pollTime.plusSeconds(5), "ERROR", 503, 42L, 0, 0, 0,
-							"Connection failed: HTTP 503 Service Unavailable", "HTTP 503 response from Demo-Staging-Node"
+							null, name, url,
+							pollTime, "SUCCESS", 200, 12L + rnd.nextInt(15), 3, 3, 0,
+							"Polled 3 valve(s), 3 slot(s), 0 event(s)", null
 					));
-				case 17, 5 ->
-					// Simulated slow response warning
+				} else if (name.contains("API")) {
+					boolean underAttack = (h >= 12 && h <= 15) || (h <= 1);
+					int evs = underAttack ? (8 + rnd.nextInt(6)) : 0;
 					logs.add(new PollEventLog(
-							null, "Demo-Staging-Node", "http://localhost:8090/mock-valve/staging-node/antidos-status",
-							pollTime.plusSeconds(5), "WARNING", 200, 1140L + rnd.nextInt(80), 1, 1, 0,
-							"Slow response: 1140 ms (threshold: 1000 ms)", null
+							null, name, url,
+							pollTime.plusSeconds(3), "SUCCESS", 200, 18L + rnd.nextInt(20), 1, 1, evs,
+							"Polled 1 valve(s), 1 slot(s), " + evs + " event(s)", null
 					));
-				default ->
-					logs.add(new PollEventLog(
-							null, "Demo-Staging-Node", "http://localhost:8090/mock-valve/staging-node/antidos-status",
-							pollTime.plusSeconds(5), "SUCCESS", 200, 20L + rnd.nextInt(15), 1, 1, 0,
-							"Polled 1 valve(s), 1 slot(s), 0 event(s)", null
-					));
+				} else {
+					switch (h) {
+						case 9 ->
+							logs.add(new PollEventLog(
+									null, name, url,
+									pollTime.plusSeconds(5), "ERROR", 503, 42L, 0, 0, 0,
+									"Connection failed: HTTP 503 Service Unavailable", "HTTP 503 response from " + name
+							));
+						case 17, 5 ->
+							logs.add(new PollEventLog(
+									null, name, url,
+									pollTime.plusSeconds(5), "WARNING", 200, 1140L + rnd.nextInt(80), 1, 1, 0,
+									"Slow response: 1140 ms (threshold: 1000 ms)", null
+							));
+						default ->
+							logs.add(new PollEventLog(
+									null, name, url,
+									pollTime.plusSeconds(5), "SUCCESS", 200, 20L + rnd.nextInt(15), 1, 1, 0,
+									"Polled 1 valve(s), 1 slot(s), 0 event(s)", null
+							));
+					}
+				}
 			}
 		}
 

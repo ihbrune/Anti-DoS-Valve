@@ -49,6 +49,8 @@ public class DemoModeService {
 		boolean alreadyConfigured = properties.getEndpoints().stream()
 				.anyMatch(e -> e.getName().startsWith("Demo-"));
 
+		int instanceCount = Math.max(1, Math.min(26, properties.getDemoInstanceCount()));
+
 		if (alreadyConfigured) {
 			// Update port for all demo endpoints in case the port changed (e.g. random port in tests)
 			for (EndpointConfig ep : properties.getEndpoints()) {
@@ -57,7 +59,36 @@ public class DemoModeService {
 				}
 			}
 		} else {
-			List<EndpointConfig> demoEndpoints = new ArrayList<>();
+			List<EndpointConfig> demoEndpoints = createDemoEndpoints(port, instanceCount);
+			properties.getEndpoints().addAll(demoEndpoints);
+		}
+
+		if (printBanner) {
+			List<EndpointConfig> currentDemo = properties.getEndpoints().stream()
+					.filter(e -> e.getName().startsWith("Demo-"))
+					.toList();
+			log.info("================================================================================");
+			if (instanceCount > 1) {
+				log.info(" Anti-DoS Collector: DEMO MODE ACTIVE (Fleet Scale: {} instances/type, {} total servers)",
+						instanceCount, currentDemo.size());
+			} else {
+				log.info(" Anti-DoS Collector: DEMO MODE ACTIVE");
+			}
+			log.info(" Database:             Isolated SQLite (antidos-collector-demo.db)");
+			log.info("                       [Production database remains completely untouched]");
+			log.info(" Registered {} simulated AntiDoSValve endpoints on port {}:", currentDemo.size(), port);
+			for (EndpointConfig ep : currentDemo) {
+				log.info("   - {:<22} {}", ep.getName() + ":", ep.getUrl());
+			}
+			log.info(" Access the live web dashboard at: http://localhost:{}/", port);
+			log.info("================================================================================");
+		}
+	}
+
+	public static List<EndpointConfig> createDemoEndpoints(int port, int instanceCount) {
+		int count = Math.max(1, Math.min(26, instanceCount));
+		List<EndpointConfig> demoEndpoints = new ArrayList<>();
+		if (count == 1) {
 			demoEndpoints.add(new EndpointConfig(
 					"Demo-Edge-EU",
 					"http://localhost:" + port + "/mock-valve/edge-eu/antidos-status",
@@ -82,21 +113,36 @@ public class DemoModeService {
 					true,
 					List.of("Staging-Limiter")
 			));
-
-			properties.getEndpoints().addAll(demoEndpoints);
+		} else {
+			for (int i = 0; i < count; i++) {
+				char letter = (char) ('A' + i);
+				char letterLower = Character.toLowerCase(letter);
+				demoEndpoints.add(new EndpointConfig(
+						"Demo-Edge-EU " + letter,
+						"http://localhost:" + port + "/mock-valve/edge-eu-" + letterLower + "/antidos-status",
+						"demo-token",
+						false,
+						true,
+						List.of("Primary-Rate-Limiter", "Subnet-Guard", "IPv6-Rate-Limiter")
+				));
+				demoEndpoints.add(new EndpointConfig(
+						"Demo-API-Gateway " + letter,
+						"http://localhost:" + port + "/mock-valve/api-gateway-" + letterLower + "/antidos-status",
+						"demo-token",
+						false,
+						true,
+						List.of("API-DoS-Shield")
+				));
+				demoEndpoints.add(new EndpointConfig(
+						"Demo-Staging-Node " + letter,
+						"http://localhost:" + port + "/mock-valve/staging-node-" + letterLower + "/antidos-status",
+						"demo-token",
+						false,
+						true,
+						List.of("Staging-Limiter")
+				));
+			}
 		}
-
-		if (printBanner) {
-			log.info("================================================================================");
-			log.info(" Anti-DoS Collector: DEMO MODE ACTIVE");
-			log.info(" Database:             Isolated SQLite (antidos-collector-demo.db)");
-			log.info("                       [Production database remains completely untouched]");
-			log.info(" Registered 3 simulated AntiDoSValve endpoints on port {}:", port);
-			log.info("   - Demo-Edge-EU:        http://localhost:{}/mock-valve/edge-eu/antidos-status", port);
-			log.info("   - Demo-API-Gateway:    http://localhost:{}/mock-valve/api-gateway/antidos-status", port);
-			log.info("   - Demo-Staging-Node:   http://localhost:{}/mock-valve/staging-node/antidos-status", port);
-			log.info(" Access the live web dashboard at: http://localhost:{}/", port);
-			log.info("================================================================================");
-		}
+		return demoEndpoints;
 	}
 }

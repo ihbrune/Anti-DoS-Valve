@@ -13,8 +13,8 @@ public class EnrichmentConfig {
 	private boolean enabled = true;
 	private String asnDatabasePath;
 	private String countryDatabasePath;
-	private String customHostingAsnsFile = "custom-hosting-asns.txt";
-	private List<Long> customHostingAsns = new ArrayList<>();
+	private String customDatacenterAsnsFile = "custom-datacenter-asns.txt";
+	private List<Long> customDatacenterAsns = new ArrayList<>();
 	private boolean crawlerSyncEnabled = true;
 	private String crawlerSyncCron = "0 0 4 * * *"; // Daily at 04:00 AM
 	private int ttlDays = 30; // MaxMind GeoLite2 compliance and metadata freshness TTL in days
@@ -58,20 +58,37 @@ public class EnrichmentConfig {
 		this.countryDatabasePath = countryDatabasePath;
 	}
 
+	public String getCustomDatacenterAsnsFile() {
+		return customDatacenterAsnsFile;
+	}
+
+	public void setCustomDatacenterAsnsFile(String customDatacenterAsnsFile) {
+		this.customDatacenterAsnsFile = customDatacenterAsnsFile;
+	}
+
+	public List<Long> getCustomDatacenterAsns() {
+		return customDatacenterAsns;
+	}
+
+	public void setCustomDatacenterAsns(List<Long> customDatacenterAsns) {
+		this.customDatacenterAsns = customDatacenterAsns != null ? customDatacenterAsns : new ArrayList<>();
+	}
+
+	// Backwards compatibility aliases for hosting-asns
 	public String getCustomHostingAsnsFile() {
-		return customHostingAsnsFile;
+		return getCustomDatacenterAsnsFile();
 	}
 
 	public void setCustomHostingAsnsFile(String customHostingAsnsFile) {
-		this.customHostingAsnsFile = customHostingAsnsFile;
+		setCustomDatacenterAsnsFile(customHostingAsnsFile);
 	}
 
 	public List<Long> getCustomHostingAsns() {
-		return customHostingAsns;
+		return getCustomDatacenterAsns();
 	}
 
 	public void setCustomHostingAsns(List<Long> customHostingAsns) {
-		this.customHostingAsns = customHostingAsns != null ? customHostingAsns : new ArrayList<>();
+		setCustomDatacenterAsns(customHostingAsns);
 	}
 
 	public boolean isCrawlerSyncEnabled() {

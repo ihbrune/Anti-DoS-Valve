@@ -43,23 +43,23 @@ public class MockValveSimulator {
 		switch (normalizedNode) {
 			case "edge-eu" -> {
 				if (matchesFilter(filterValve, "Primary-Rate-Limiter")) {
-					valves.add(buildEdgePrimarySummary(currentSlotKey, lastCompletedSlotKey, 1));
+					valves.add(buildEdgePrimarySummary(nodeId, currentSlotKey, lastCompletedSlotKey, 1));
 				}
 				if (matchesFilter(filterValve, "Subnet-Guard")) {
-					valves.add(buildEdgeSubnetSummary(currentSlotKey, lastCompletedSlotKey, 2));
+					valves.add(buildEdgeSubnetSummary(nodeId, currentSlotKey, lastCompletedSlotKey, 2));
 				}
 				if (matchesFilter(filterValve, "IPv6-Rate-Limiter")) {
-					valves.add(buildEdgeIpv6Summary(currentSlotKey, lastCompletedSlotKey, 3));
+					valves.add(buildEdgeIpv6Summary(nodeId, currentSlotKey, lastCompletedSlotKey, 3));
 				}
 			}
 			case "api-gateway" -> {
 				if (matchesFilter(filterValve, "API-DoS-Shield")) {
-					valves.add(buildApiShieldSummary(currentSlotKey, lastCompletedSlotKey, 1));
+					valves.add(buildApiShieldSummary(nodeId, currentSlotKey, lastCompletedSlotKey, 1));
 				}
 			}
 			case "staging-node" -> {
 				if (matchesFilter(filterValve, "Staging-Limiter")) {
-					valves.add(buildStagingSummary(currentSlotKey, lastCompletedSlotKey, 1));
+					valves.add(buildStagingSummary(nodeId, currentSlotKey, lastCompletedSlotKey, 1));
 				}
 			}
 			default -> {
@@ -181,11 +181,12 @@ public class MockValveSimulator {
 	// Overview Summaries
 	// -------------------------------------------------------------------------
 
-	private ValveOverviewDto.ValveSummaryDto buildEdgePrimarySummary(long currentKey, long lastCompletedKey, int order) {
-		SlotMetrics cur = calculateMetrics("edge-eu", "Primary-Rate-Limiter", currentKey);
-		SlotMetrics prev = calculateMetrics("edge-eu", "Primary-Rate-Limiter", lastCompletedKey);
+	private ValveOverviewDto.ValveSummaryDto buildEdgePrimarySummary(String nodeId, long currentKey, long lastCompletedKey, int order) {
+		SlotMetrics cur = calculateMetrics(nodeId, "Primary-Rate-Limiter", currentKey);
+		SlotMetrics prev = calculateMetrics(nodeId, "Primary-Rate-Limiter", lastCompletedKey);
 
-		long cumulative = 240_000L + (currentKey % 50_000L) * 1100L;
+		long offset = (nodeId != null) ? Math.abs(nodeId.hashCode() % 10_000L) : 0L;
+		long cumulative = 240_000L + offset + (currentKey % 50_000L) * 1100L;
 		return new ValveOverviewDto.ValveSummaryDto(
 				"Primary-Rate-Limiter",
 				order,
@@ -206,11 +207,12 @@ public class MockValveSimulator {
 		);
 	}
 
-	private ValveOverviewDto.ValveSummaryDto buildEdgeSubnetSummary(long currentKey, long lastCompletedKey, int order) {
-		SlotMetrics cur = calculateMetrics("edge-eu", "Subnet-Guard", currentKey);
-		SlotMetrics prev = calculateMetrics("edge-eu", "Subnet-Guard", lastCompletedKey);
+	private ValveOverviewDto.ValveSummaryDto buildEdgeSubnetSummary(String nodeId, long currentKey, long lastCompletedKey, int order) {
+		SlotMetrics cur = calculateMetrics(nodeId, "Subnet-Guard", currentKey);
+		SlotMetrics prev = calculateMetrics(nodeId, "Subnet-Guard", lastCompletedKey);
 
-		long cumulative = 310_000L + (currentKey % 50_000L) * 1400L;
+		long offset = (nodeId != null) ? Math.abs(nodeId.hashCode() % 10_000L) : 0L;
+		long cumulative = 310_000L + offset + (currentKey % 50_000L) * 1400L;
 		return new ValveOverviewDto.ValveSummaryDto(
 				"Subnet-Guard",
 				order,
@@ -231,11 +233,12 @@ public class MockValveSimulator {
 		);
 	}
 
-	private ValveOverviewDto.ValveSummaryDto buildEdgeIpv6Summary(long currentKey, long lastCompletedKey, int order) {
-		SlotMetrics cur = calculateMetrics("edge-eu", "IPv6-Rate-Limiter", currentKey);
-		SlotMetrics prev = calculateMetrics("edge-eu", "IPv6-Rate-Limiter", lastCompletedKey);
+	private ValveOverviewDto.ValveSummaryDto buildEdgeIpv6Summary(String nodeId, long currentKey, long lastCompletedKey, int order) {
+		SlotMetrics cur = calculateMetrics(nodeId, "IPv6-Rate-Limiter", currentKey);
+		SlotMetrics prev = calculateMetrics(nodeId, "IPv6-Rate-Limiter", lastCompletedKey);
 
-		long cumulative = 180_000L + (currentKey % 50_000L) * 900L;
+		long offset = (nodeId != null) ? Math.abs(nodeId.hashCode() % 10_000L) : 0L;
+		long cumulative = 180_000L + offset + (currentKey % 50_000L) * 900L;
 		return new ValveOverviewDto.ValveSummaryDto(
 				"IPv6-Rate-Limiter",
 				order,
@@ -256,11 +259,12 @@ public class MockValveSimulator {
 		);
 	}
 
-	private ValveOverviewDto.ValveSummaryDto buildApiShieldSummary(long currentKey, long lastCompletedKey, int order) {
-		SlotMetrics cur = calculateMetrics("api-gateway", "API-DoS-Shield", currentKey);
-		SlotMetrics prev = calculateMetrics("api-gateway", "API-DoS-Shield", lastCompletedKey);
+	private ValveOverviewDto.ValveSummaryDto buildApiShieldSummary(String nodeId, long currentKey, long lastCompletedKey, int order) {
+		SlotMetrics cur = calculateMetrics(nodeId, "API-DoS-Shield", currentKey);
+		SlotMetrics prev = calculateMetrics(nodeId, "API-DoS-Shield", lastCompletedKey);
 
-		long cumulative = 1_850_000L + (currentKey % 50_000L) * 5200L;
+		long offset = (nodeId != null) ? Math.abs(nodeId.hashCode() % 25_000L) : 0L;
+		long cumulative = 1_850_000L + offset + (currentKey % 50_000L) * 5200L;
 		return new ValveOverviewDto.ValveSummaryDto(
 				"API-DoS-Shield",
 				order,
@@ -281,11 +285,12 @@ public class MockValveSimulator {
 		);
 	}
 
-	private ValveOverviewDto.ValveSummaryDto buildStagingSummary(long currentKey, long lastCompletedKey, int order) {
-		SlotMetrics cur = calculateMetrics("staging-node", "Staging-Limiter", currentKey);
-		SlotMetrics prev = calculateMetrics("staging-node", "Staging-Limiter", lastCompletedKey);
+	private ValveOverviewDto.ValveSummaryDto buildStagingSummary(String nodeId, long currentKey, long lastCompletedKey, int order) {
+		SlotMetrics cur = calculateMetrics(nodeId, "Staging-Limiter", currentKey);
+		SlotMetrics prev = calculateMetrics(nodeId, "Staging-Limiter", lastCompletedKey);
 
-		long cumulative = 45_000L + (currentKey % 50_000L) * 85L;
+		long offset = (nodeId != null) ? Math.abs(nodeId.hashCode() % 2_000L) : 0L;
+		long cumulative = 45_000L + offset + (currentKey % 50_000L) * 85L;
 		return new ValveOverviewDto.ValveSummaryDto(
 				"Staging-Limiter",
 				order,
@@ -335,7 +340,8 @@ public class MockValveSimulator {
 
 	private SlotMetrics calculateMetrics(String nodeId, String valveName, long slotKey) {
 		String norm = normalizeNodeId(nodeId);
-		Random rnd = new Random((slotKey * 31L) ^ valveName.hashCode() ^ norm.hashCode());
+		String effectiveNode = (nodeId != null && !nodeId.isBlank()) ? nodeId : norm;
+		Random rnd = new Random((slotKey * 31L) ^ valveName.hashCode() ^ effectiveNode.hashCode());
 
 		return switch (norm) {
 			case "api-gateway" -> calculateApiGatewayMetrics(slotKey, rnd);

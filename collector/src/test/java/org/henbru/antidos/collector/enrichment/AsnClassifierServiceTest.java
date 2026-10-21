@@ -33,7 +33,7 @@ class AsnClassifierServiceTest {
 
 	@Test
 	void testCustomFileOverlayAddAndExclude(@TempDir File tempDir) throws Exception {
-		File customFile = new File(tempDir, "custom-hosting-asns.txt");
+		File customFile = new File(tempDir, "custom-datacenter-asns.txt");
 		Files.writeString(customFile.toPath(), """
 				# Custom additions
 				+99999 # My local data center
@@ -44,8 +44,8 @@ class AsnClassifierServiceTest {
 				""");
 
 		CollectorProperties properties = new CollectorProperties();
-		properties.getEnrichment().setCustomHostingAsnsFile(customFile.getAbsolutePath());
-		properties.getEnrichment().setCustomHostingAsns(List.of(77777L));
+		properties.getEnrichment().setCustomDatacenterAsnsFile(customFile.getAbsolutePath());
+		properties.getEnrichment().setCustomDatacenterAsns(List.of(77777L));
 
 		AsnClassifierService service = new AsnClassifierService(properties);
 		service.loadAsnDefinitions();

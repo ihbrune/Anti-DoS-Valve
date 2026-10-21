@@ -88,8 +88,8 @@ collector:
     # asn-database-path: "/var/lib/antidos/dbip-asn-lite.mmdb"         # or /usr/share/GeoIP/GeoLite2-ASN.mmdb
     # country-database-path: "/var/lib/antidos/dbip-country-lite.mmdb" # or /usr/share/GeoIP/GeoLite2-Country.mmdb
 
-    # Custom hosting ASN overlay file (add with +12345, exclude with -24940):
-    custom-hosting-asns-file: "custom-hosting-asns.txt"
+    # Custom datacenter ASN overlay file (add with +12345, exclude with -24940):
+    custom-datacenter-asns-file: "custom-datacenter-asns.txt"
 
     # Automated daily sync of verified Search Engine, AI crawler & Tor exit IP ranges:
     crawler-sync-enabled: true

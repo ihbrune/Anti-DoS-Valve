@@ -46,6 +46,7 @@ collector:
   entity-retention-days: 60
   slow-poll-threshold-ms: 1000
   demo-mode: ${COLLECTOR_DEMO_MODE:false}
+  demo-instance-count: ${COLLECTOR_DEMO_INSTANCE_COUNT:1}
   enrichment:
     enabled: true
     ttl-days: 30

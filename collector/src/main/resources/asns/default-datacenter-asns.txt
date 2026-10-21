@@ -4,7 +4,7 @@
 # This built-in baseline list identifies traffic originating from data centers,
 # virtual private servers (VPS), and cloud hosting providers.
 #
-# Custom ASNs can be added or excluded via 'custom-hosting-asns.txt'
+# Custom ASNs can be added or excluded via 'custom-datacenter-asns.txt'
 # or 'collector-config.yaml' without modifying this file.
 # ==============================================================================
 

@@ -15,7 +15,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -27,9 +29,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class DemoModeTest {
 
 	static {
-		java.io.File dbFile = new java.io.File("target/demo-test.db");
-		if (dbFile.exists()) {
-			dbFile.delete();
+		for (String suffix : new String[]{"", "-wal", "-shm"}) {
+			java.io.File f = new java.io.File("target/demo-test.db" + suffix);
+			if (f.exists()) {
+				f.delete();
+			}
 		}
 	}
 
@@ -256,5 +260,56 @@ class DemoModeTest {
 				"Subnet rollup should group rotating IPv6 clients into canonical /64 prefix");
 		assertTrue(rollup.stream().anyMatch(o -> o.clientKey().contains("/24")),
 				"Subnet rollup should contain /24 subnets");
+	}
+
+	@Test
+	void testDemoFleetScalingEndpointGeneration() {
+		// When fleet instance count = 1
+		var singleEndpoints = DemoModeService.createDemoEndpoints(8090, 1);
+		assertEquals(3, singleEndpoints.size());
+		assertEquals("Demo-Edge-EU", singleEndpoints.get(0).getName());
+		assertEquals("Demo-API-Gateway", singleEndpoints.get(1).getName());
+		assertEquals("Demo-Staging-Node", singleEndpoints.get(2).getName());
+
+		// When fleet instance count = 3 (3 instances per type = 9 total servers)
+		var fleetEndpoints = DemoModeService.createDemoEndpoints(8090, 3);
+		assertEquals(9, fleetEndpoints.size());
+
+		assertEquals("Demo-Edge-EU A", fleetEndpoints.get(0).getName());
+		assertEquals("http://localhost:8090/mock-valve/edge-eu-a/antidos-status", fleetEndpoints.get(0).getUrl());
+
+		assertEquals("Demo-API-Gateway A", fleetEndpoints.get(1).getName());
+		assertEquals("http://localhost:8090/mock-valve/api-gateway-a/antidos-status", fleetEndpoints.get(1).getUrl());
+
+		assertEquals("Demo-Staging-Node A", fleetEndpoints.get(2).getName());
+		assertEquals("http://localhost:8090/mock-valve/staging-node-a/antidos-status", fleetEndpoints.get(2).getUrl());
+
+		assertEquals("Demo-Edge-EU B", fleetEndpoints.get(3).getName());
+		assertEquals("http://localhost:8090/mock-valve/edge-eu-b/antidos-status", fleetEndpoints.get(3).getUrl());
+
+		assertEquals("Demo-API-Gateway B", fleetEndpoints.get(4).getName());
+		assertEquals("http://localhost:8090/mock-valve/api-gateway-b/antidos-status", fleetEndpoints.get(4).getUrl());
+
+		assertEquals("Demo-Staging-Node B", fleetEndpoints.get(5).getName());
+		assertEquals("http://localhost:8090/mock-valve/staging-node-b/antidos-status", fleetEndpoints.get(5).getUrl());
+
+		assertEquals("Demo-Edge-EU C", fleetEndpoints.get(6).getName());
+		assertEquals("Demo-API-Gateway C", fleetEndpoints.get(7).getName());
+		assertEquals("Demo-Staging-Node C", fleetEndpoints.get(8).getName());
+	}
+
+	@Test
+	void testFleetMockControllerResponses() throws Exception {
+		// Query instance B of Edge EU
+		mockMvc.perform(get("/mock-valve/edge-eu-b/antidos-status")
+						.header("Authorization", "Bearer demo-token"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Primary-Rate-Limiter")));
+
+		// Query instance C of API Gateway
+		mockMvc.perform(get("/mock-valve/api-gateway-c/antidos-status")
+						.header("Authorization", "Bearer demo-token"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("API-DoS-Shield")));
 	}
 }

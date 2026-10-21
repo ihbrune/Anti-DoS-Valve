@@ -58,38 +58,41 @@ public class AsnClassifierService {
 	public void loadAsnDefinitions() {
 		hostingAsns.clear();
 
-		// 1. Load built-in default hosting ASNs from classpath
+		// 1. Load built-in default datacenter ASNs from classpath
 		loadClasspathDefaults();
 
-		// 2. Load custom hosting ASNs from external file (overlay)
-		String customFile = properties.getEnrichment().getCustomHostingAsnsFile();
+		// 2. Load custom datacenter ASNs from external file (overlay)
+		String customFile = properties.getEnrichment().getCustomDatacenterAsnsFile();
 		if (customFile != null && !customFile.trim().isEmpty()) {
 			loadCustomFileOverlay(new File(customFile.trim()));
 		}
 
 		// 3. Load explicit numeric ASNs from collector-config.yaml / application.yaml
-		List<Long> yamlCustom = properties.getEnrichment().getCustomHostingAsns();
+		List<Long> yamlCustom = properties.getEnrichment().getCustomDatacenterAsns();
 		if (yamlCustom != null && !yamlCustom.isEmpty()) {
 			hostingAsns.addAll(yamlCustom);
 		}
 
-		log.info("Initialized ASN classifier with {} known hosting/cloud ASNs", hostingAsns.size());
+		log.info("Initialized ASN classifier with {} known datacenter/cloud ASNs", hostingAsns.size());
 	}
 
 	private void loadClasspathDefaults() {
-		try (InputStream is = getClass().getResourceAsStream("/asns/default-hosting-asns.txt")) {
-			if (is == null) {
-				log.warn("Default hosting ASNs file '/asns/default-hosting-asns.txt' not found on classpath");
-				return;
-			}
-			try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
-				String line;
-				while ((line = reader.readLine()) != null) {
-					parseLine(line, true);
-				}
+		InputStream stream = getClass().getResourceAsStream("/asns/default-datacenter-asns.txt");
+		if (stream == null) {
+			// Fallback for legacy resource path
+			stream = getClass().getResourceAsStream("/asns/default-hosting-asns.txt");
+		}
+		if (stream == null) {
+			log.warn("Default datacenter ASNs file '/asns/default-datacenter-asns.txt' not found on classpath");
+			return;
+		}
+		try (InputStream is = stream; BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+			String line;
+			while ((line = reader.readLine()) != null) {
+				parseLine(line, true);
 			}
 		} catch (Exception e) {
-			log.error("Failed to load default hosting ASNs from classpath: {}", e.getMessage(), e);
+			log.error("Failed to load default datacenter ASNs from classpath: {}", e.getMessage(), e);
 		}
 	}
 

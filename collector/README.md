@@ -35,9 +35,13 @@ To explore the dashboard and telemetry engine without configuring or connecting 
 ```bash
 # Using the Fat-JAR:
 java -jar collector/target/anti-dos-collector-1.7.1.jar demo
+# Or with a larger fleet (e.g. 3 instances per server type = 9 total servers A, B, C):
+java -jar collector/target/anti-dos-collector-1.7.1.jar demo 3
 
 # Or using Maven:
 mvn spring-boot:run -pl collector -Dspring-boot.run.arguments="demo"
+# Larger fleet with Maven:
+mvn spring-boot:run -pl collector -Dspring-boot.run.arguments="demo 4"
 # or:
 mvn spring-boot:run -pl collector -Dspring-boot.run.profiles=demo
 ```
@@ -167,7 +171,7 @@ collector:
     enabled: true
     asn-database-path: "/var/lib/antidos/dbip-asn-lite.mmdb"
     country-database-path: "/var/lib/antidos/dbip-country-lite.mmdb"
-    custom-hosting-asns-file: "/etc/antidos/custom-hosting-asns.txt"
+    custom-datacenter-asns-file: "/etc/antidos/custom-datacenter-asns.txt"
 ```
 
 > **Note on Auto-Discovery:** The Collector automatically looks for `/etc/antidos/collector-config.yaml` and `${user.home}/.antidos/collector-config.yaml` upon startup. No extra `--spring.config.additional-location` flag is required.
@@ -361,37 +365,57 @@ Add the database paths to your `collector-config.yaml` or set environment variab
 collector:
   enrichment:
     enabled: true
-    ttl-days: 30                                             # metadata freshness TTL in days (MaxMind GeoLite2 compliance)
-    asn-database-path: "/var/data/dbip-asn-lite.mmdb"         # or /usr/share/GeoIP/GeoLite2-ASN.mmdb
-    country-database-path: "/var/data/dbip-country-lite.mmdb" # or /usr/share/GeoIP/GeoLite2-Country.mmdb
-    custom-hosting-asns-file: "custom-hosting-asns.txt"      # optional custom ASN overlay
-    crawler-sync-enabled: true                               # automated search engine & AI bot feed sync
-    crawler-sync-cron: "0 0 4 * * *"                         # daily at 04:00 AM
+    ttl-days: 30                                               # metadata freshness TTL in days (MaxMind GeoLite2 compliance)
+    asn-database-path: "/var/data/dbip-asn-lite.mmdb"           # or /usr/share/GeoIP/GeoLite2-ASN.mmdb
+    country-database-path: "/var/data/dbip-country-lite.mmdb"   # or /usr/share/GeoIP/GeoLite2-Country.mmdb
+    custom-datacenter-asns-file: "custom-datacenter-asns.txt"  # optional custom Datacenter ASN overlay
+    crawler-sync-enabled: true                                 # automated search engine & AI bot feed sync
+    crawler-sync-cron: "0 0 4 * * *"                           # daily at 04:00 AM
 ```
 
 Or via environment variables:
 ```bash
 export COLLECTOR_ENRICHMENT_ASN_DATABASE_PATH="/var/data/dbip-asn-lite.mmdb"
 export COLLECTOR_ENRICHMENT_COUNTRY_DATABASE_PATH="/var/data/dbip-country-lite.mmdb"
+export COLLECTOR_ENRICHMENT_CUSTOM_DATACENTER_ASNS_FILE="/etc/antidos/custom-datacenter-asns.txt"
 ```
+
+> **Backwards Compatibility:** Legacy property names `custom-hosting-asns-file` and `custom-hosting-asns` remain fully supported as aliases.
 
 ### 3. How Enrichment Operates
 
-* **Zero-Ops Fallback:** If no MMDB database paths are configured, the collector boots immediately without errors. Verified Search Engine/AI Bot detection and Private Network (`10.68.*.*`, `192.168.*.*`, IPv6 ULA) classification still operate out-of-the-box.
-* **Asynchronous Background Processing:** Poller threads write incident events with status `PENDING` without blocking or polling latency. The `BackgroundEnrichmentWorker` resolves ASNs, Geolocation, and Client Types asynchronously in small batches on Java 21 Virtual Threads.
-* **Layered Hosting ASN Overlay:** Shipped defaults (`classpath:asns/default-hosting-asns.txt`) can be customized via `custom-hosting-asns.txt` without Git checkout conflicts:
-  * `+12345` (force ASN 12345 to be classified as Datacenter/Hosting)
-* **Multi-Source Intelligence & Entity Normalization:**
-  * Client IP addresses and subnets are deduplicated and maintained in a normalized `network_entity` registry. Incidents reference this entity via `entity_id`, avoiding redundant Geo/ASN queries and unnecessary database row churn.
-  * An in-memory interval index (`IntelRegistry`) matches IPs against multiple intelligence feeds (`intel_source`, `intel_range`) with sub-microsecond latency, resolving prioritized classifications (Private Network > Crawler > Tor > MMDB/ASN).
-* **Metadata Freshness & MaxMind Compliance (`ttl-days`):**
-  * In compliance with MaxMind GeoLite2 guidelines and dynamic ISP reallocations, enrichment data has a configurable expiration (`ttl-days`, default: 30 days).
-  * Entities resolved older than `ttl-days` ago are automatically scheduled for background re-enrichment against the latest MMDB files and threat feeds. Local intranet networks (`PRIVATE_NETWORK`) remain permanently valid without expiration.
-* **Crawler & Anonymizer Feed Sync & Management UI (`/crawlers`):**
-  * Automated periodic sync fetches official IP ranges for Googlebot, Bingbot, OpenAI GPTBot, ChatGPT-User, and Tor Bulk Exit Nodes (`torbulkexitlist`).
-  * Extensible via `collector-config.yaml` (`crawler-feeds:<key>`) to add custom partner bots or disable default feeds without overriding other feeds. Supported categories: `SEARCH_ENGINE`, `AI_CRAWLER`, `TOR_EXIT_NODE`. Feeds with unknown categories log a startup warning and remain disabled (`INVALID_CONFIG`).
-  * Trigger immediate manual syncs per feed or globally via the HTMX buttons in the `/crawlers` dashboard.
-  * Pruning: Removed feed configurations automatically trigger an orphan purge from the database.
+#### A. MMDB Database vs. Classification Rules
+* **Offline MMDB Database (DB-IP Lite or MaxMind GeoLite2):** Queries memory-mapped `.mmdb` files to extract raw facts: client ASN number (e.g., `32934`), organisation string (e.g., `"FACEBOOK"`), and country code. The database itself does not classify client intent.
+* **Collector Classification Engine:** Evaluates the resolved ASN, organisation name, and threat intelligence to assign a concrete category (`DATACENTER`, `SEARCH_ENGINE`, `AI_CRAWLER`, `TOR_EXIT_NODE`, `MOBILE`, `RESIDENTIAL`, or `UNKNOWN`).
+
+#### B. Layered Datacenter ASN Hierarchy
+The set of ASNs classified as `DATACENTER` (Cloud, VPS, Colocation, and Hyperscaler infrastructure) is resolved in three hierarchical tiers:
+1. **Built-in Defaults (`classpath:asns/default-datacenter-asns.txt`):** Baseline list covering major cloud providers and hyperscalers (AWS, Azure, GCP, Meta/Facebook, Oracle, Alibaba, Hetzner, OVH, DigitalOcean, Cloudflare, Fastly, etc.).
+2. **File Overlay (`custom-datacenter-asns.txt`):** Takes precedence over defaults and allows operators to customize classification without Git conflicts:
+   * `+12345` (forces ASN 12345 to be classified as Datacenter)
+   * `-24940` (whitelists / removes ASN 24940 from Datacenter classification)
+3. **YAML Configuration (`collector-config.yaml`):** Additional ASNs can be configured under `collector.enrichment.custom-datacenter-asns: [ 77777, ... ]`.
+
+#### C. Classification Priority & Precedence
+When an incident IP is enriched by `EntityResolver`, the following strict priority pipeline is applied:
+
+| Priority | Step / Data Source | ClientType Result | Description |
+|---|---|---|---|
+| **1. Highest** | **Private Network & Loopback** | `PRIVATE_NETWORK` | RFC 1918 (10.x, 192.168.x, 172.16-31.x), RFC 4193 ULA, loopback (127.0.0.1, `::1`). Terminates evaluation immediately. |
+| **2.** | **Dynamic Intel Feeds (`IntelRegistry`)** | `SEARCH_ENGINE`, `AI_CRAWLER`, `TOR_EXIT_NODE` | Verified Googlebot, Bingbot, Applebot, OpenAI, Tor exit nodes. Always overrides ASN categorization. |
+| **3.** | **MMDB Lookup** | *(Raw Metadata)* | Retrieves numerical `asn`, `asOrg`, and `countryCode` from offline `.mmdb` files. |
+| **4.** | **Datacenter ASN Match** | `DATACENTER` | Checked against the combined `hostingAsns` set (default + custom overlay + YAML). |
+| **5.** | **Heuristic: Hosting Keywords** | `DATACENTER` | Triggered if `asOrg` contains `cloud`, `vps`, `hosting`, `datacenter`, `server`, `cdn`, `colocation`, etc. |
+| **6.** | **Heuristic: Mobile Keywords** | `MOBILE` | Triggered if `asOrg` contains `cellular`, `mobile`, `5g`, `4g`, `wireless`, `cgnat`, etc. |
+| **7.** | **Heuristic: Residential Keywords** | `RESIDENTIAL` | Triggered if `asOrg` contains consumer ISP markers: `telekom`, `vodafone`, `dsl`, `cable`, `fiber`, `broadband`, `residential`, `consumer`, `isp`, `comcast`, `spectrum`, `o2`, `telefonica`, etc. |
+| **8. Fallback** | **Unclassified / Unknown** | `UNKNOWN` | If no rules or keywords match, the entity remains neutral (`UNKNOWN` / *Unclassified*), avoiding false residential classifications for enterprise, corporate, or university networks. |
+
+#### D. Performance & Lifecycle Management
+* **Zero-Ops Fallback:** If no MMDB database paths are configured, the collector boots immediately without errors. Verified bot detection and private network classification remain operational out-of-the-box.
+* **Asynchronous Virtual Thread Processing:** Pollers write incidents with status `PENDING` without blocking or polling latency. `BackgroundEnrichmentWorker` resolves ASNs, Geolocation, and Client Types asynchronously in small batches on Java 21 Virtual Threads.
+* **Multi-Source Intelligence & Entity Normalization:** Client IP addresses and subnets are deduplicated and maintained in a normalized `network_entity` registry. Incidents reference this entity via `entity_id`, avoiding redundant Geo/ASN queries and unnecessary database row churn. An in-memory interval index (`IntelRegistry`) matches IPs against intelligence feeds with sub-microsecond latency.
+* **Metadata Freshness & MaxMind Compliance (`ttl-days`):** In compliance with MaxMind GeoLite2 guidelines, enrichment data has a configurable expiration (`ttl-days`, default: 30 days). Entities resolved older than `ttl-days` ago are automatically scheduled for background re-enrichment. Local intranet networks (`PRIVATE_NETWORK`) remain permanently valid.
+* **Crawler & Anonymizer Feed Sync & Management UI (`/crawlers`):** Automated periodic sync fetches official IP ranges for Googlebot, Bingbot, Applebot, OpenAI GPTBot, ChatGPT-User, and Tor Bulk Exit Nodes (`torbulkexitlist`). Extensible via `collector-config.yaml` (`crawler-feeds:<key>`). Manual syncs can be triggered per feed or globally via the `/crawlers` dashboard. Removed feed configurations automatically purge orphaned IP ranges from the database.
 
 ### 4. Automated Daily Updates via Cron Job or Systemd Timer
 
