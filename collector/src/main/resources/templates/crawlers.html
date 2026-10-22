@@ -65,13 +65,6 @@
         </div>
     </div>
 
-    <!-- Info Card -->
-    <div style="background: rgba(15, 23, 42, 0.4); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px 20px; margin-bottom: 24px; font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
-        <strong style="color: var(--text-primary);">&#x2139;&#xFE0F; Feed Lifecycle &amp; Automatic Cleanup:</strong>
-        Ranges are fetched periodically via cron (<code th:text="${syncCron}">0 0 4 * * *</code>) and matched using fast mathematical interval search.
-        When a feed is removed from your <code style="color: var(--color-primary);">collector-config.yaml</code>, its associated IP ranges are automatically pruned from the database during synchronization to prevent orphaned data.
-    </div>
-
     <!-- Crawlers Table -->
     <div th:replace="~{fragments/crawlers-table :: crawlersTable}"></div>
 </div>
