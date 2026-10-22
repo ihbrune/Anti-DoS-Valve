@@ -154,6 +154,26 @@ collector:
   slow-poll-threshold-ms: 1000
   parallel-fleet-polling: true
 
+  # ---------------------------------------------------------------------------
+  # Telemetry & Active Tracking Rules (3-Tier Cascade)
+  # ---------------------------------------------------------------------------
+  # 1. Global Default: applied to all valves across all servers unless overridden
+  default-valve-rules:
+    collect-active: false         # Default: activeLimit=0 (saves Valve CPU & network bandwidth)
+    active-min-count: 10          # Default threshold when active collection is enabled
+    active-limit: 1000            # Safety limit cap per slot
+
+  # 2. Global Valve-Name Rules: applies across all servers in your fleet by valve name
+  valve-rules:
+    "Subnet-24-Limiter":          # Subnet aggregator: capture every subnet immediately
+      collect-active: true
+      active-min-count: 1
+    "IP-Aggregator":              # Standard IP limiter: noise filter, capture from count 15
+      collect-active: true
+      active-min-count: 15
+    "Api-Overlapping-Limiter":    # Overlapping URL valve: disable active telemetry (prevents double counting)
+      collect-active: false
+
   # Monitored Tomcat server endpoints
   endpoints:
     - name: "Prod-Web-01"
@@ -161,12 +181,22 @@ collector:
       token: "yourSecureStatusToken1"
       poll-intermediate-slots: false
       enabled: true
+      valves:
+        - "IP-Aggregator"
+        - "Subnet-24-Limiter"
 
     - name: "Prod-Web-02"
       url: "https://web02.internal.example.com/antidos-status"
       token: "yourSecureStatusToken2"
       poll-intermediate-slots: false
       enabled: true
+
+    - name: "Staging-Node"
+      url: "https://staging.internal.example.com/antidos-status"
+      token: "stagingToken"
+      valves:
+        - name: "IP-Aggregator"
+          active-min-count: 3     # Endpoint override: lower threshold for staging analysis
 
   enrichment:
     enabled: true

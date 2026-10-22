@@ -42,6 +42,25 @@ public class DashboardController {
 	private final PollEventLogRepository pollEventLogRepository;
 	private final DocumentationService documentationService;
 	private final org.henbru.antidos.collector.config.CollectorProperties properties;
+	private final org.henbru.antidos.collector.config.ValveRuleResolver valveRuleResolver;
+
+	@org.springframework.beans.factory.annotation.Autowired
+	public DashboardController(
+			HeartbeatRepository heartbeatRepository,
+			SlotSnapshotRepository slotSnapshotRepository,
+			ClientEventRepository clientEventRepository,
+			PollEventLogRepository pollEventLogRepository,
+			DocumentationService documentationService,
+			org.henbru.antidos.collector.config.CollectorProperties properties,
+			org.henbru.antidos.collector.config.ValveRuleResolver valveRuleResolver) {
+		this.heartbeatRepository = heartbeatRepository;
+		this.slotSnapshotRepository = slotSnapshotRepository;
+		this.clientEventRepository = clientEventRepository;
+		this.pollEventLogRepository = pollEventLogRepository;
+		this.documentationService = documentationService;
+		this.properties = properties;
+		this.valveRuleResolver = valveRuleResolver != null ? valveRuleResolver : new org.henbru.antidos.collector.config.ValveRuleResolver(properties);
+	}
 
 	public DashboardController(
 			HeartbeatRepository heartbeatRepository,
@@ -50,12 +69,8 @@ public class DashboardController {
 			PollEventLogRepository pollEventLogRepository,
 			DocumentationService documentationService,
 			org.henbru.antidos.collector.config.CollectorProperties properties) {
-		this.heartbeatRepository = heartbeatRepository;
-		this.slotSnapshotRepository = slotSnapshotRepository;
-		this.clientEventRepository = clientEventRepository;
-		this.pollEventLogRepository = pollEventLogRepository;
-		this.documentationService = documentationService;
-		this.properties = properties;
+		this(heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
+				documentationService, properties, new org.henbru.antidos.collector.config.ValveRuleResolver(properties));
 	}
 
 	@org.springframework.web.bind.annotation.ModelAttribute("demoMode")
@@ -215,8 +230,32 @@ public class DashboardController {
 			slotEventsMap.computeIfAbsent(key, k -> new ArrayList<>()).add(event);
 		}
 
+		// Resolve valves and active tracking rules for this server
+		org.henbru.antidos.collector.config.EndpointConfig endpoint = properties.getEndpoints().stream()
+				.filter(e -> e != null && e.getName() != null && e.getName().equalsIgnoreCase(serverId))
+				.findFirst()
+				.orElse(null);
+
+		java.util.Set<String> valveNames = new java.util.LinkedHashSet<>();
+		if (endpoint != null && endpoint.getValves() != null) {
+			for (org.henbru.antidos.collector.config.EndpointValveConfig v : endpoint.getValves()) {
+				if (v.getName() != null && !v.getName().isBlank()) {
+					valveNames.add(v.getName().trim());
+				}
+			}
+		}
+		List<String> distinctValves = slotSnapshotRepository.findDistinctValvesForServer(serverId);
+		valveNames.addAll(distinctValves);
+
+		List<org.henbru.antidos.collector.config.EffectiveValveRule> configuredValves = new ArrayList<>();
+		for (String vName : valveNames) {
+			configuredValves.add(valveRuleResolver.resolve(endpoint, vName));
+		}
+
 		model.addAttribute("server", hb);
 		model.addAttribute("serverId", serverId);
+		model.addAttribute("endpointConfig", endpoint);
+		model.addAttribute("configuredValves", configuredValves);
 		model.addAttribute("selectedValve", valve);
 		model.addAttribute("recentSlots", recentSlots);
 		model.addAttribute("recentEvents", recentEvents);

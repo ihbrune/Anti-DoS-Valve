@@ -63,6 +63,15 @@ public class DemoModeService {
 			properties.getEndpoints().addAll(demoEndpoints);
 		}
 
+		if (properties.getValveRules().isEmpty()) {
+			// Scenario 1: Subnet Aggregation -> capture every subnet immediately from count 1
+			properties.getValveRules().put("Subnet-Guard", new org.henbru.antidos.collector.config.ValveRuleConfig(true, 1, "1000"));
+			// Scenario 2: Standard IP Rate Limiter -> filter background noise, capture from count 15
+			properties.getValveRules().put("Primary-Rate-Limiter", new org.henbru.antidos.collector.config.ValveRuleConfig(true, 15, "1000"));
+			// Scenario 3: Overlapping Valve -> disable active tracking to avoid double-counting IPs
+			properties.getValveRules().put("IPv6-Rate-Limiter", new org.henbru.antidos.collector.config.ValveRuleConfig(false, 10, "0"));
+		}
+
 		if (printBanner) {
 			List<EndpointConfig> currentDemo = properties.getEndpoints().stream()
 					.filter(e -> e.getName().startsWith("Demo-"))
@@ -105,13 +114,14 @@ public class DemoModeService {
 					true,
 					List.of("API-DoS-Shield")
 			));
+			// Scenario 4: Endpoint-specific override on Staging node (captures active tracking from count 3)
 			demoEndpoints.add(new EndpointConfig(
 					"Demo-Staging-Node",
 					"http://localhost:" + port + "/mock-valve/staging-node/antidos-status",
 					"demo-token",
 					false,
 					true,
-					List.of("Staging-Limiter")
+					List.of(new org.henbru.antidos.collector.config.EndpointValveConfig("Staging-Limiter", true, 3, "500"))
 			));
 		} else {
 			for (int i = 0; i < count; i++) {
@@ -139,7 +149,7 @@ public class DemoModeService {
 						"demo-token",
 						false,
 						true,
-						List.of("Staging-Limiter")
+						List.of(new org.henbru.antidos.collector.config.EndpointValveConfig("Staging-Limiter", true, 3, "500"))
 				));
 			}
 		}

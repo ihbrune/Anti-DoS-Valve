@@ -108,8 +108,17 @@ public class CollectorCliRunner {
 			if (overview.valves() != null && !overview.valves().isEmpty()) {
 				System.out.println("      # Valves to poll (remove/comment out any you wish to ignore, or omit 'valves' to poll all):");
 				System.out.println("      valves:");
+				boolean first = true;
 				for (ValveOverviewDto.ValveSummaryDto v : overview.valves()) {
 					System.out.printf("        - \"%s\"\n", v.monitorName());
+					if (first) {
+						System.out.println("        # Optional override for active telemetry and threshold filtering:");
+						System.out.printf("        # - name: \"%s\"\n", v.monitorName());
+						System.out.println("        #   collect-active: true      # Fetch active client telemetry (default: false / activeLimit=0)");
+						System.out.println("        #   active-min-count: 10      # Threshold (e.g. 1 for subnets, 15 for IP rate limiters)");
+						System.out.println("        #   active-limit: 1000        # Max active entries per slot (or 'all')");
+						first = false;
+					}
 				}
 			}
 			System.out.println("--------------------------------------------------------------------------------");

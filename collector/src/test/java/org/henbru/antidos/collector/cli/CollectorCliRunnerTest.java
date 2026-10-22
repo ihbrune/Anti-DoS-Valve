@@ -54,8 +54,21 @@ class CollectorCliRunnerTest {
 		when(client.fetchOverview(any())).thenReturn(dto);
 
 		CollectorCliRunner runner = new CollectorCliRunner(client);
-		int code = runner.execute("test-endpoint", "--url", "http://localhost:8080/antidos-status", "--token", "secret", "--name", "Node-A");
-		assertEquals(0, code);
+		java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+		java.io.PrintStream originalOut = System.out;
+		System.setOut(new java.io.PrintStream(out));
+		try {
+			int code = runner.execute("test-endpoint", "--url", "http://localhost:8080/antidos-status", "--token", "secret", "--name", "Node-A");
+			assertEquals(0, code);
+			String output = out.toString();
+			assertTrue(output.contains("- \"TEST-VALVE\""));
+			assertTrue(output.contains("# Optional override for active telemetry and threshold filtering:"));
+			assertTrue(output.contains("# - name: \"TEST-VALVE\""));
+			assertTrue(output.contains("#   collect-active: true"));
+			assertTrue(output.contains("#   active-min-count: 10"));
+		} finally {
+			System.setOut(originalOut);
+		}
 		verify(client, times(1)).fetchOverview(any());
 	}
 }

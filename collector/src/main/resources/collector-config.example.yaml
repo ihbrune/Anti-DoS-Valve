@@ -47,18 +47,43 @@ collector:
   # Requests to valves on the same server always remain sequential to avoid load spikes on that host.
   parallel-fleet-polling: true
 
+  # ---------------------------------------------------------------------------
+  # Telemetry & Active Tracking Rules (3-Tier Cascade)
+  # ---------------------------------------------------------------------------
+  # 1. Global Default: applies to all valves on all servers unless overridden below
+  default-valve-rules:
+    collect-active: false         # Default: do not query active counters (activeLimit=0, saves Valve CPU & bandwidth)
+    active-min-count: 10          # Threshold when active tracking is enabled
+    active-limit: 1000            # Safety cap per slot (e.g. 1000 or "all")
+
+  # 2. Global Valve-Name Rules: applies across all servers in your fleet for the matching valve name.
+  # Eliminates duplicate configuration in multi-node clusters!
+  valve-rules:
+    # Scenario A: Subnet Aggregator -> capture every subnet immediately from count 1
+    "Subnet-24-Limiter":
+      collect-active: true
+      active-min-count: 1
+
+    # Scenario B: Standard IP Rate Limiter -> filter background noise, capture from count 15
+    "IP-Aggregator":
+      collect-active: true
+      active-min-count: 15
+
+    # Scenario C: Overlapping URL Valve -> explicitly disable active telemetry to avoid double counting
+    "Api-Overlapping-Limiter":
+      collect-active: false
+
   # List of monitored Tomcat servers running AntiDoSValve
   endpoints:
-    # Example 1: Local Tomcat instance - polls all valves by default
+    # Example 1: Local Tomcat instance - polls all valves by default using the rules above
     - name: "Local-Tomcat"
       url: "http://localhost:8080/antidos-status"
       token: "secretToken1"
       poll-intermediate-slots: false
       enabled: true
 
-    # Example 2: Remote Production Node with specific valve filtering
-    # Only the listed valves are polled. If 'valves' is omitted or empty, all valves are polled.
-    # Useful to ignore pure monitoring-only valves (e.g. "STATUS VALVE").
+    # Example 2: Remote Production Node with valve filtering
+    # Only the listed valves are polled. Telemetry settings are inherited from global valve-rules.
     - name: "Prod-Web-01"
       url: "https://web01.internal.example.com/antidos-status"
       token: "productionStatusToken123"
@@ -68,12 +93,17 @@ collector:
         - "IP-Aggregator"
         - "Subnet-24-Limiter"
 
-    # Example 3: Additional cluster node
-    - name: "Prod-Web-02"
-      url: "https://web02.internal.example.com/antidos-status"
-      token: "productionStatusToken456"
+    # Example 3: Node with an endpoint-specific override
+    # Overrides active tracking settings specifically for this server node
+    - name: "Staging-Node"
+      url: "https://staging.internal.example.com/antidos-status"
+      token: "stagingToken456"
       poll-intermediate-slots: true
       enabled: false
+      valves:
+        - name: "IP-Aggregator"
+          active-min-count: 3     # Staging override: capture lower traffic starting from count 3
+          active-limit: 500
 
   # ---------------------------------------------------------------------------
   # Optional: IP Enrichment, ASN/Country Lookups & Bot Classification

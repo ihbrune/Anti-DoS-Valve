@@ -231,4 +231,40 @@ class CollectorPollerServiceTest {
 
 		customPoller.shutdown();
 	}
+
+	@Test
+	void testPollEndpointWithActiveTrackingRule() throws Exception {
+		org.henbru.antidos.collector.config.CollectorProperties testProps = new org.henbru.antidos.collector.config.CollectorProperties();
+		testProps.getValveRules().put("SUBNET-VALVE", new org.henbru.antidos.collector.config.ValveRuleConfig(true, 1, "2000"));
+
+		EndpointConfig ep = new EndpointConfig("SUBNET-NODE", "http://subnet-host:8080/antidos-status", null, false, true);
+		testProps.setEndpoints(List.of(ep));
+
+		ValveOverviewDto.ValveSummaryDto v = new ValveOverviewDto.ValveSummaryDto(
+				"SUBNET-VALVE", 1, "BLOCKING", false, false, 50, 60, 5, 3, 0, 500L, 499L, 800L, 80L, 3, 0
+		);
+		ValveOverviewDto overview = new ValveOverviewDto("2026-10-18T10:00:00Z", List.of(v), null);
+		when(statusClient.fetchOverview(any())).thenReturn(overview);
+
+		ValveDetailsDto.SelectedSlotDto slotDto = new ValveDetailsDto.SelectedSlotDto(
+				"previous", 4, 499L, false, "2026-10-18T09:59:00Z", "2026-10-18T10:00:00Z", 50L, 2, 0
+		);
+		ValveDetailsDto details = new ValveDetailsDto("2026-10-18T10:00:00Z", null, slotDto, 0, "all", List.of(), null);
+		when(statusClient.fetchSlotDetails(any(), eq("SUBNET-VALVE"), eq("previous"), eq("all"), eq("all"), eq("2000"), isNull(), isNull(), eq(1)))
+				.thenReturn(details);
+
+		CollectorPollerService customPoller = new CollectorPollerService(
+				testProps,
+				statusClient,
+				heartbeatRepository,
+				slotSnapshotRepository,
+				clientEventRepository,
+				pollEventLogRepository
+		);
+
+		customPoller.pollFleet();
+
+		verify(statusClient, times(1)).fetchSlotDetails(any(), eq("SUBNET-VALVE"), eq("previous"), eq("all"), eq("all"), eq("2000"), isNull(), isNull(), eq(1));
+		customPoller.shutdown();
+	}
 }

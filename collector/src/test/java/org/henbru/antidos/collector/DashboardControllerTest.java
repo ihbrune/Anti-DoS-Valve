@@ -192,6 +192,8 @@ class DashboardControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("Demo-Server")))
 				.andExpect(content().string(containsString("Node Incidents")))
+				.andExpect(content().string(containsString("Monitored Valves &amp; Active Tracking Configuration")))
+				.andExpect(content().string(containsString("Global Default")))
 				.andExpect(content().string(containsString("Blocked Client Incidents on this Server")))
 				.andExpect(content().string(containsString("55555")))
 				.andExpect(content().string(containsString("TEST-VALVE")))

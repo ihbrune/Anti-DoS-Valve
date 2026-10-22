@@ -58,6 +58,73 @@
         </div>
     </div>
 
+    <!-- Monitored Valves & Active Tracking Configuration -->
+    <section style="margin-bottom: 28px;">
+        <div class="section-header">
+            <div class="section-title">&#x1F6E1; Monitored Valves &amp; Active Tracking Configuration</div>
+            <a th:if="${selectedValve != null}" th:href="@{'/server/' + ${serverId}}" class="btn" style="padding: 2px 8px; font-size: 11px;">
+                &times; Clear Valve Filter (<span th:text="${selectedValve}"></span>)
+            </a>
+        </div>
+        <div class="table-card">
+            <div class="table-responsive">
+                <div th:if="${#lists.isEmpty(configuredValves)}" class="empty-state">
+                    <p>No valves discovered or configured for this node yet.</p>
+                </div>
+                <table th:unless="${#lists.isEmpty(configuredValves)}">
+                    <thead>
+                        <tr>
+                            <th>Valve Name</th>
+                            <th>Polling Scope</th>
+                            <th>Active Tracking</th>
+                            <th>Min-Count Threshold</th>
+                            <th>Safety Limit</th>
+                            <th>Configuration Source</th>
+                            <th style="text-align: right;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="v : ${configuredValves}">
+                            <td>
+                                <strong style="font-size: 13px;" th:text="${v.valveName}">Primary-Rate-Limiter</strong>
+                            </td>
+                            <td>
+                                <span th:if="${v.isIncluded}" class="badge badge-success">&#x2714; INCLUDED</span>
+                                <span th:unless="${v.isIncluded}" class="badge badge-secondary" title="Excluded by endpoint valve filter">&#x2716; EXCLUDED</span>
+                            </td>
+                            <td>
+                                <span th:if="${v.collectActive}" class="badge badge-success" title="Active clients telemetry collected for this valve">&#x2714; ENABLED</span>
+                                <span th:unless="${v.collectActive}" class="badge badge-secondary" style="opacity: 0.8;" title="No active clients retrieved (activeLimit=0)">&#x2716; DISABLED (activeLimit=0)</span>
+                            </td>
+                            <td>
+                                <code th:if="${v.collectActive}" style="font-weight: 600; color: var(--color-primary);" th:text="'count &ge; ' + ${v.activeMinCount}">count &ge; 10</code>
+                                <span th:unless="${v.collectActive}" style="color: var(--text-muted);">&mdash;</span>
+                            </td>
+                            <td>
+                                <span th:if="${v.collectActive}" th:text="${v.activeLimit}">1000</span>
+                                <span th:unless="${v.collectActive}" style="color: var(--text-muted);">&mdash;</span>
+                            </td>
+                            <td>
+                                <span th:if="${v.source.name() == 'ENDPOINT_OVERRIDE'}" class="badge badge-info" title="Overridden specifically for this server in endpoints[].valves" th:text="${v.source.label}">Endpoint Override</span>
+                                <span th:if="${v.source.name() == 'VALVE_RULE'}" class="badge badge-purple" title="Governed by global rule for this valve name in collector.valve-rules" th:text="${v.source.label}">Global Valve Rule</span>
+                                <span th:if="${v.source.name() == 'GLOBAL_DEFAULT'}" class="badge badge-secondary" title="Inherited from fleet-wide default in collector.default-valve-rules" th:text="${v.source.label}">Global Default</span>
+                                <span th:if="${v.source.name() == 'SYSTEM_DEFAULT'}" class="badge badge-secondary" title="System default fallback" th:text="${v.source.label}">System Default</span>
+                            </td>
+                            <td style="text-align: right;">
+                                <a th:href="@{'/server/' + ${serverId}(valve=${v.valveName})}"
+                                   class="btn"
+                                   style="padding: 2px 8px; font-size: 11px;"
+                                   title="Filter slots timeline for this valve">
+                                    Filter Slots &rarr;
+                                </a>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
     <!-- Recent Slots Timeline -->
     <section>
         <div class="section-header">

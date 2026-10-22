@@ -11,6 +11,7 @@ import java.util.concurrent.Executors;
 import jakarta.annotation.PreDestroy;
 import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.config.EndpointConfig;
+import org.henbru.antidos.collector.config.ValveRuleResolver;
 import org.henbru.antidos.collector.enrichment.EntityResolver;
 import org.henbru.antidos.collector.model.BlockedClientEvent;
 import org.henbru.antidos.collector.model.EndpointHeartbeat;
@@ -44,6 +45,7 @@ public class CollectorPollerService {
 	private final ClientEventRepository clientEventRepository;
 	private final PollEventLogRepository pollEventLogRepository;
 	private final EntityResolver entityResolver;
+	private final ValveRuleResolver valveRuleResolver;
 	private final ExecutorService pollerExecutor;
 
 	@Autowired
@@ -54,9 +56,10 @@ public class CollectorPollerService {
 			SlotSnapshotRepository slotSnapshotRepository,
 			ClientEventRepository clientEventRepository,
 			PollEventLogRepository pollEventLogRepository,
-			EntityResolver entityResolver) {
+			EntityResolver entityResolver,
+			ValveRuleResolver valveRuleResolver) {
 		this(properties, statusClient, heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
-				entityResolver, Executors.newVirtualThreadPerTaskExecutor());
+				entityResolver, valveRuleResolver, Executors.newVirtualThreadPerTaskExecutor());
 	}
 
 	public CollectorPollerService(
@@ -68,6 +71,20 @@ public class CollectorPollerService {
 			PollEventLogRepository pollEventLogRepository,
 			EntityResolver entityResolver,
 			ExecutorService pollerExecutor) {
+		this(properties, statusClient, heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
+				entityResolver, new ValveRuleResolver(properties), pollerExecutor);
+	}
+
+	public CollectorPollerService(
+			CollectorProperties properties,
+			ValveStatusClient statusClient,
+			HeartbeatRepository heartbeatRepository,
+			SlotSnapshotRepository slotSnapshotRepository,
+			ClientEventRepository clientEventRepository,
+			PollEventLogRepository pollEventLogRepository,
+			EntityResolver entityResolver,
+			ValveRuleResolver valveRuleResolver,
+			ExecutorService pollerExecutor) {
 		this.properties = properties;
 		this.statusClient = statusClient;
 		this.heartbeatRepository = heartbeatRepository;
@@ -75,6 +92,7 @@ public class CollectorPollerService {
 		this.clientEventRepository = clientEventRepository;
 		this.pollEventLogRepository = pollEventLogRepository;
 		this.entityResolver = entityResolver;
+		this.valveRuleResolver = valveRuleResolver != null ? valveRuleResolver : new ValveRuleResolver(properties);
 		this.pollerExecutor = pollerExecutor != null ? pollerExecutor : Executors.newVirtualThreadPerTaskExecutor();
 	}
 
@@ -86,7 +104,7 @@ public class CollectorPollerService {
 			ClientEventRepository clientEventRepository,
 			PollEventLogRepository pollEventLogRepository) {
 		this(properties, statusClient, heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
-				null, Executors.newVirtualThreadPerTaskExecutor());
+				null, new ValveRuleResolver(properties), Executors.newVirtualThreadPerTaskExecutor());
 	}
 
 	@PreDestroy
@@ -282,9 +300,14 @@ public class CollectorPollerService {
 
 	private SlotIngestResult fetchAndStoreSlot(EndpointConfig endpoint, String valveName, String slotParam, boolean completed, Instant pollTime) {
 		try {
-			// Request blockedLimit=all and activeLimit=0 to avoid serialization overhead for non-blocked clients on the Valve.
-			// limit=all is retained as backward-compatible fallback for older Valve versions.
-			ValveDetailsDto details = statusClient.fetchSlotDetails(endpoint, valveName, slotParam, "all", "all", "0");
+			// Apply effective telemetry rules (activeLimit=0 if disabled, or activeLimit + activeMinCount)
+			org.henbru.antidos.collector.config.EffectiveValveRule rule = valveRuleResolver.resolve(endpoint, valveName);
+			String activeLimitParam = rule.collectActive() ? rule.activeLimit() : "0";
+			Integer activeMinCountParam = rule.collectActive() ? rule.activeMinCount() : null;
+
+			ValveDetailsDto details = (activeMinCountParam != null)
+					? statusClient.fetchSlotDetails(endpoint, valveName, slotParam, "all", "all", activeLimitParam, null, null, activeMinCountParam)
+					: statusClient.fetchSlotDetails(endpoint, valveName, slotParam, "all", "all", activeLimitParam);
 			if (details.selectedSlot() == null) {
 				return new SlotIngestResult(0, 0, null);
 			}

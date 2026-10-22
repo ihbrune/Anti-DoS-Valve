@@ -1,7 +1,9 @@
 package org.henbru.antidos.collector.config;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -21,6 +23,18 @@ public class CollectorProperties {
 	private boolean parallelFleetPolling = true;
 	private List<EndpointConfig> endpoints = new ArrayList<>();
 	private EnrichmentConfig enrichment = new EnrichmentConfig();
+
+	/**
+	 * Fleet-wide fallback rule for telemetry and active tracking.
+	 * Default: collectActive=false (activeLimit=0), activeMinCount=10, activeLimit="1000".
+	 */
+	private ValveRuleConfig defaultValveRules = new ValveRuleConfig(false, 10, "1000");
+
+	/**
+	 * Global telemetry rules keyed by valve name (case-insensitive lookup).
+	 * Applies across all servers in the fleet unless overridden at endpoint level.
+	 */
+	private Map<String, ValveRuleConfig> valveRules = new LinkedHashMap<>();
 
 	public String getConfigFile() {
 		return configFile;
@@ -108,5 +122,21 @@ public class CollectorProperties {
 
 	public void setEnrichment(EnrichmentConfig enrichment) {
 		this.enrichment = enrichment != null ? enrichment : new EnrichmentConfig();
+	}
+
+	public ValveRuleConfig getDefaultValveRules() {
+		return defaultValveRules;
+	}
+
+	public void setDefaultValveRules(ValveRuleConfig defaultValveRules) {
+		this.defaultValveRules = defaultValveRules != null ? defaultValveRules : new ValveRuleConfig(false, 10, "1000");
+	}
+
+	public Map<String, ValveRuleConfig> getValveRules() {
+		return valveRules;
+	}
+
+	public void setValveRules(Map<String, ValveRuleConfig> valveRules) {
+		this.valveRules = valveRules != null ? valveRules : new LinkedHashMap<>();
 	}
 }

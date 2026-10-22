@@ -2,6 +2,7 @@ package org.henbru.antidos.collector.config;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Definition of a single monitored AntiDoSValve endpoint.
@@ -13,7 +14,7 @@ public class EndpointConfig {
 	private String token;
 	private boolean pollIntermediateSlots = false;
 	private boolean enabled = true;
-	private List<String> valves = new ArrayList<>();
+	private List<EndpointValveConfig> valves = new ArrayList<>();
 
 	public EndpointConfig() {
 	}
@@ -22,13 +23,22 @@ public class EndpointConfig {
 		this(name, url, token, pollIntermediateSlots, enabled, new ArrayList<>());
 	}
 
-	public EndpointConfig(String name, String url, String token, boolean pollIntermediateSlots, boolean enabled, List<String> valves) {
+	public EndpointConfig(String name, String url, String token, boolean pollIntermediateSlots, boolean enabled, List<?> valves) {
 		this.name = name;
 		this.url = url;
 		this.token = token;
 		this.pollIntermediateSlots = pollIntermediateSlots;
 		this.enabled = enabled;
-		this.valves = valves != null ? new ArrayList<>(valves) : new ArrayList<>();
+		this.valves = new ArrayList<>();
+		if (valves != null) {
+			for (Object obj : valves) {
+				if (obj instanceof EndpointValveConfig evc) {
+					this.valves.add(evc);
+				} else if (obj instanceof String s) {
+					this.valves.add(new EndpointValveConfig(s.trim()));
+				}
+			}
+		}
 	}
 
 	public String getName() {
@@ -75,12 +85,22 @@ public class EndpointConfig {
 		this.enabled = enabled;
 	}
 
-	public List<String> getValves() {
+	public List<EndpointValveConfig> getValves() {
 		return valves;
 	}
 
-	public void setValves(List<String> valves) {
+	public void setValves(List<EndpointValveConfig> valves) {
 		this.valves = valves != null ? new ArrayList<>(valves) : new ArrayList<>();
+	}
+
+	public List<String> getValveNames() {
+		if (valves == null) {
+			return new ArrayList<>();
+		}
+		return valves.stream()
+				.map(EndpointValveConfig::getName)
+				.filter(n -> n != null && !n.isBlank())
+				.toList();
 	}
 
 	/**
@@ -94,7 +114,19 @@ public class EndpointConfig {
 		if (valveName == null) {
 			return false;
 		}
-		return valves.stream().anyMatch(v -> v != null && v.trim().equalsIgnoreCase(valveName.trim()));
+		return valves.stream().anyMatch(v -> v != null && v.getName() != null && v.getName().trim().equalsIgnoreCase(valveName.trim()));
+	}
+
+	/**
+	 * Looks up the endpoint-specific configuration override for a valve.
+	 */
+	public Optional<EndpointValveConfig> findValveConfig(String valveName) {
+		if (valves == null || valveName == null) {
+			return Optional.empty();
+		}
+		return valves.stream()
+				.filter(v -> v != null && v.getName() != null && v.getName().trim().equalsIgnoreCase(valveName.trim()))
+				.findFirst();
 	}
 
 	@Override

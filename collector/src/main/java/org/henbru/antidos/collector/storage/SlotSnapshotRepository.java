@@ -171,6 +171,15 @@ public class SlotSnapshotRepository {
 		return count != null ? count : 0;
 	}
 
+	public List<String> findDistinctValvesForServer(String serverId) {
+		if (serverId == null || serverId.isBlank()) {
+			return List.of();
+		}
+		return jdbcTemplate.query(
+				"SELECT DISTINCT valve_name FROM slot_snapshots WHERE server_id = ? ORDER BY valve_name",
+				(rs, rowNum) -> rs.getString(1), serverId);
+	}
+
 	public int deleteOlderThan(Instant cutoff) {
 		return jdbcTemplate.update(
 				"DELETE FROM slot_snapshots WHERE start_time < ?",
