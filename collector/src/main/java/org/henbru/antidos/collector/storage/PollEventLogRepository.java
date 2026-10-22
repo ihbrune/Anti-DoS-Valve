@@ -141,4 +141,11 @@ public class PollEventLogRepository {
 				Long.class, status, Timestamp.from(since));
 		return count != null ? count : 0L;
 	}
+
+	public long countSince(Instant since) {
+		Long count = jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM poll_event_log WHERE poll_time >= ?",
+				Long.class, Timestamp.from(since));
+		return count != null ? count : 0L;
+	}
 }

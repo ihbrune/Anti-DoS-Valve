@@ -328,6 +328,8 @@ class DatabaseMigrationAndRepositoryTest {
 		// Count stats
 		long errCount = pollEventLogRepository.countByStatusSince("ERROR", now.minus(1, ChronoUnit.HOURS));
 		assertTrue(errCount >= 1L);
+		long totalCount = pollEventLogRepository.countSince(now.minus(1, ChronoUnit.HOURS));
+		assertTrue(totalCount >= 3L);
 
 		// Delete retention older than 30 days
 		PollEventLog veryOld = new PollEventLog(

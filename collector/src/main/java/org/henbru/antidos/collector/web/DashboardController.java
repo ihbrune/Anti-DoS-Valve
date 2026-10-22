@@ -215,6 +215,7 @@ public class DashboardController {
 		Long nextBeforeId = hasMore && !entries.isEmpty() ? entries.getLast().id() : null;
 
 		Instant since24h = Instant.now().minus(24, ChronoUnit.HOURS);
+		long totalPolls24h = pollEventLogRepository.countSince(since24h);
 		long errorCount24h = pollEventLogRepository.countByStatusSince("ERROR", since24h);
 		long warningCount24h = pollEventLogRepository.countByStatusSince("WARNING", since24h);
 		List<EndpointHeartbeat> heartbeats = heartbeatRepository.findAll();
@@ -225,6 +226,7 @@ public class DashboardController {
 		model.addAttribute("selectedStatus", status);
 		model.addAttribute("selectedServer", serverId != null ? serverId : "");
 		model.addAttribute("heartbeats", heartbeats);
+		model.addAttribute("totalPolls24h", totalPolls24h);
 		model.addAttribute("errorCount24h", errorCount24h);
 		model.addAttribute("warningCount24h", warningCount24h);
 		return "poll-log";

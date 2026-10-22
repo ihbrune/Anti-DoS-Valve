@@ -98,6 +98,7 @@ class DashboardControllerTest {
 		mockMvc.perform(get("/poll-log"))
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("Collector Polling Events")))
+				.andExpect(content().string(containsString("Total Polls (24h)")))
 				.andExpect(content().string(containsString("Poll Timestamp")));
 	}
 

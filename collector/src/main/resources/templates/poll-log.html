@@ -41,22 +41,20 @@
     <!-- Top Summary Stats -->
     <section class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom: 28px;">
         <div class="stat-card">
-            <div class="stat-label">Poll Errors (24h)</div>
-            <div class="stat-value danger" th:text="${errorCount24h}">0</div>
+            <div class="stat-label">Total Polls (24h)</div>
+            <div class="stat-value" th:text="${#numbers.formatInteger(totalPolls24h, 1, 'POINT')}">0</div>
         </div>
         <div class="stat-card">
             <div class="stat-label">Poll Warnings (24h)</div>
             <div class="stat-value warning" th:text="${warningCount24h}">0</div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">Monitored Endpoints</div>
-            <div class="stat-value primary" th:text="${#lists.size(heartbeats)}">0</div>
+            <div class="stat-label">Poll Errors (24h)</div>
+            <div class="stat-value danger" th:text="${errorCount24h}">0</div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">History Scroll Mode</div>
-            <div class="stat-value" style="font-size: 18px; color: var(--color-primary); margin-top: 6px;">
-                Infinite Scroll Active
-            </div>
+            <div class="stat-label">Monitored Endpoints</div>
+            <div class="stat-value primary" th:text="${#lists.size(heartbeats)}">0</div>
         </div>
     </section>
 
