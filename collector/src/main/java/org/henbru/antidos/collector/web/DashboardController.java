@@ -12,6 +12,7 @@ import java.util.Map;
 
 import org.henbru.antidos.collector.model.BlockedClientEvent;
 import org.henbru.antidos.collector.model.EndpointHeartbeat;
+import org.henbru.antidos.collector.docs.DocumentationService;
 import org.henbru.antidos.collector.model.FleetSummary;
 import org.henbru.antidos.collector.model.PollEventLog;
 import org.henbru.antidos.collector.model.SlotSnapshot;
@@ -39,6 +40,7 @@ public class DashboardController {
 	private final SlotSnapshotRepository slotSnapshotRepository;
 	private final ClientEventRepository clientEventRepository;
 	private final PollEventLogRepository pollEventLogRepository;
+	private final DocumentationService documentationService;
 	private final org.henbru.antidos.collector.config.CollectorProperties properties;
 
 	public DashboardController(
@@ -46,11 +48,13 @@ public class DashboardController {
 			SlotSnapshotRepository slotSnapshotRepository,
 			ClientEventRepository clientEventRepository,
 			PollEventLogRepository pollEventLogRepository,
+			DocumentationService documentationService,
 			org.henbru.antidos.collector.config.CollectorProperties properties) {
 		this.heartbeatRepository = heartbeatRepository;
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
 		this.pollEventLogRepository = pollEventLogRepository;
+		this.documentationService = documentationService;
 		this.properties = properties;
 	}
 
@@ -63,6 +67,22 @@ public class DashboardController {
 	public String index(Model model) {
 		populateDashboardModel(model);
 		return "index";
+	}
+
+	@GetMapping("/help")
+	public String helpPage(Model model) {
+		DocumentationService.DocumentationPayload payload = documentationService.getDocumentation();
+		model.addAttribute("docHtml", payload.html());
+		model.addAttribute("docToc", payload.tableOfContents());
+		return "help";
+	}
+
+	@GetMapping("/fragments/help")
+	public String helpFragment(Model model) {
+		DocumentationService.DocumentationPayload payload = documentationService.getDocumentation();
+		model.addAttribute("docHtml", payload.html());
+		model.addAttribute("docToc", payload.tableOfContents());
+		return "help :: docContent";
 	}
 
 	@GetMapping("/fragments/stats-overview")

@@ -199,4 +199,26 @@ class DashboardControllerTest {
 				.andExpect(content().string(containsString("AS8075")))
 				.andExpect(content().string(containsString("View Incidents &rarr;")));
 	}
+
+	@Test
+	void testHelpPageLoads() throws Exception {
+		mockMvc.perform(get("/help"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Anti-DoS Fleet Manager")))
+				.andExpect(content().string(containsString("Documentation &amp; Forensics Guide")))
+				.andExpect(content().string(containsString("Contents &amp; Topics")))
+				.andExpect(content().string(containsString("Release Embedded Manual")))
+				.andExpect(content().string(containsString("100% Offline &amp; Air-Gap Ready")))
+				.andExpect(content().string(containsString("Zero-Configuration Demo Mode")))
+				.andExpect(content().string(containsString("id=\"zero-configuration-demo-mode\"")));
+	}
+
+	@Test
+	void testHelpFragmentLoads() throws Exception {
+		mockMvc.perform(get("/fragments/help"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("id=\"docContent\"")))
+				.andExpect(content().string(containsString("Anti-DoS Collector")));
+	}
 }
+

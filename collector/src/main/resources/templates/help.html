@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anti-DoS Collector - Documentation &amp; Reference Guide</title>
+    <link rel="stylesheet" th:href="@{/css/collector.css}">
+    <script th:src="@{/js/theme.js}"></script>
+    <script th:src="@{/js/htmx.min.js}" defer></script>
+    <script th:src="@{/js/htmx-lite.js}" defer></script>
+</head>
+<body>
+
+<div class="app-container">
+    <!-- Navbar -->
+    <header class="navbar">
+        <a href="/" class="brand">
+            <div class="brand-icon">&#x1F6E1;</div>
+            <div>
+                <div class="brand-title">Anti-DoS Fleet Manager</div>
+                <div class="brand-subtitle">Documentation &amp; Forensics Guide</div>
+            </div>
+        </a>
+        <div class="nav-actions">
+            <a href="/" class="btn">
+                <span>&#x2190;</span> Dashboard
+            </a>
+            <a href="/offenders" class="btn" title="View aggregated Top Offender and Subnet Analytics">
+                <span>&#x26A0;</span> Top Offenders
+            </a>
+            <a href="/events" class="btn" title="Multi-Server Incident Explorer with advanced filtering">
+                <span>&#x1F4CB;</span> Incident Explorer
+            </a>
+            <a href="/poll-log" class="btn" title="View polling event audit log">
+                <span>&#x1F4DC;</span> Event Log
+            </a>
+            <a href="/crawlers" class="btn" title="Verified Search Engine & AI Crawler IP Range Feeds">
+                <span>&#x1F916;</span> Crawlers &amp; Bots
+            </a>
+            <a href="/help" class="btn btn-primary" title="In-App Documentation & Architecture Reference">
+                <span>&#x2753;</span> Help &amp; Guide
+            </a>
+            <button type="button" class="btn btn-theme-toggle" onclick="toggleTheme()" title="Switch Light / Dark Theme" aria-label="Toggle theme">
+                <span class="theme-icon-sun">&#x2600;&#xFE0F;</span>
+                <span class="theme-icon-moon">&#x1F319;</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Demo Mode Notice Banner -->
+    <div th:if="${demoMode}" class="demo-banner">
+        <div class="demo-badge">DEMO MODE ACTIVE</div>
+        <div class="demo-text">
+            Operating with simulated Anti-DoS Valve endpoints (Edge EU, API Gateway US, Staging Node)
+            and an isolated database (<code>antidos-collector-demo.db</code>).
+        </div>
+    </div>
+
+    <!-- Main Documentation Layout: Sidebar + Document Content -->
+    <div class="doc-layout">
+        <!-- Sticky Table of Contents Sidebar -->
+        <aside class="doc-sidebar">
+            <div class="doc-toc-title">
+                <span>&#x1F4D6;</span> Contents &amp; Topics
+            </div>
+            <input type="text" id="tocFilter" class="input-control" placeholder="Filter topics..."
+                   style="font-size: 12px; padding: 6px 10px; margin-bottom: 12px;"
+                   onkeyup="filterToc()" aria-label="Filter documentation topics">
+
+            <nav>
+                <ul class="doc-toc-list" id="tocList">
+                    <li th:each="item : ${docToc}"
+                        th:class="${item.level == 2 ? 'doc-toc-item-2' : 'doc-toc-item-3'}">
+                        <a th:href="'#' + ${item.anchorId}" class="doc-toc-link" th:text="${item.title}">Topic</a>
+                    </li>
+                </ul>
+            </nav>
+
+            <div style="margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 8px;">
+                <button type="button" class="btn" style="font-size: 11.5px; width: 100%; justify-content: center;" onclick="window.scrollTo({top: 0, behavior: 'smooth'})">
+                    <span>&#x2191;</span> Back to Top
+                </button>
+                <a href="https://github.com/ihbrune/Anti-DoS-Valve/tree/master/collector" target="_blank" rel="noopener noreferrer"
+                   class="btn" style="font-size: 11.5px; width: 100%; justify-content: center;" title="Open GitHub Repository (requires external network connectivity)">
+                    GitHub Master &#x2197;
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Document Body -->
+        <main class="doc-main-card">
+            <!-- Documentation Release & Status Header Banner -->
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color);">
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <span class="badge badge-info" style="font-size: 12px; padding: 4px 10px;">
+                        &#x1F4E6; Release Embedded Manual
+                    </span>
+                    <span class="badge badge-success" style="font-size: 12px; padding: 4px 10px;">
+                        &#x1F6E1; 100% Offline &amp; Air-Gap Ready
+                    </span>
+                    <span class="badge badge-secondary" style="font-size: 12px; padding: 4px 10px;">
+                        Zero Runtime Drift
+                    </span>
+                </div>
+                <div style="font-size: 12px; color: var(--text-muted);">
+                    Source: <code>collector/README.md</code>
+                </div>
+            </div>
+
+            <!-- Rendered Markdown Fragment -->
+            <article id="docContent" th:fragment="docContent" class="doc-content" th:utext="${docHtml}">
+                <!-- Rendered markdown HTML will be inserted here -->
+            </article>
+        </main>
+    </div>
+</div>
+
+<script>
+function filterToc() {
+    var query = document.getElementById('tocFilter').value.toLowerCase();
+    var items = document.querySelectorAll('#tocList li');
+    items.forEach(function(item) {
+        var text = item.textContent.toLowerCase();
+        if (text.includes(query)) {
+            item.style.display = '';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+}
+</script>
+
+</body>
+</html>
