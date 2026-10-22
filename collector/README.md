@@ -123,8 +123,8 @@ In a production environment, keep the three domains strictly separated:
 #### Step 1: Create Dedicated System User & Directories
 Create an unprivileged system user and the standard production directories:
 ```bash
-# Create dedicated system user
-sudo useradd -r -s /bin/false -d /var/lib/antidos -c "Anti-DoS Collector Service" antidos || true
+# Create dedicated system user and group (-U)
+sudo useradd -r -U -s /bin/false -d /var/lib/antidos -c "Anti-DoS Collector Service" antidos || true
 
 # Create configuration, data, and binary directories
 sudo mkdir -p /etc/antidos /var/lib/antidos /opt/antidos-collector
