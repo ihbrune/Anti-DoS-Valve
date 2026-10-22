@@ -641,6 +641,7 @@ For multi-server fleet monitoring and advanced analytics across multiple Tomcat 
 * Real-time HTMX fleet dashboard with Incident Explorer, Subnet/ASN Rollup, and Bot categorization.
 * Built-in Demo Mode (`java -jar anti-dos-collector-*.jar demo`) for instant exploration.
 * **[Production Setup & Zero-Friction Update Guide](collector/README.md#production-setup--zero-friction-update-guide)** for configuring automated 24/7 systemd operation with conflict-free GitHub updates.
+* **[Relational Database Schema & Data Model](collector/README.md#relational-database-schema--data-model)** describing all tables, attributes, entity relationships, and indexing strategies.
 
 
 
