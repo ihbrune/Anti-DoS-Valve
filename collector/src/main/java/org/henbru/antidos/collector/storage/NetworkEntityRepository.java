@@ -224,7 +224,7 @@ public class NetworkEntityRepository {
 				    SELECT id FROM network_entity
 				    WHERE last_seen < ?
 				      AND NOT EXISTS (
-				          SELECT 1 FROM blocked_client_events b WHERE b.entity_id = network_entity.id
+				          SELECT 1 FROM client_events b WHERE b.entity_id = network_entity.id
 				      )
 				)
 				""";
@@ -234,7 +234,7 @@ public class NetworkEntityRepository {
 				DELETE FROM network_entity
 				WHERE last_seen < ?
 				  AND NOT EXISTS (
-				      SELECT 1 FROM blocked_client_events b WHERE b.entity_id = network_entity.id
+				      SELECT 1 FROM client_events b WHERE b.entity_id = network_entity.id
 				  )
 				""";
 		return jdbcTemplate.update(deleteEntitiesSql, ts);

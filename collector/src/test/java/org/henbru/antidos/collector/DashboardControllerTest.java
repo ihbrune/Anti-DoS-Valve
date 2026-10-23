@@ -178,11 +178,11 @@ class DashboardControllerTest {
 				now.minusSeconds(60), now, 1250L, 10, 2, true, now
 		));
 
-		clientEventRepository.batchUpsert(List.of(new org.henbru.antidos.collector.model.BlockedClientEvent(
+		clientEventRepository.batchUpsert(List.of(new org.henbru.antidos.collector.model.ClientEvent(
 				null, "Demo-Server", "TEST-VALVE", 55555L,
 				now.minusSeconds(60), "198.51.100.42",
 				4, 32, null, null, null, null, "198.51.100.0/24",
-				15, 0, false, true, now,
+				15, 0, false, org.henbru.antidos.collector.model.ClientEvent.STATUS_BLOCKED, true, now,
 				8075L, "OpenAI / Microsoft", "US",
 				org.henbru.antidos.collector.model.ClientType.AI_CRAWLER,
 				org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED

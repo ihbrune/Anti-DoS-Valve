@@ -13,7 +13,7 @@ import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.config.EndpointConfig;
 import org.henbru.antidos.collector.config.ValveRuleResolver;
 import org.henbru.antidos.collector.enrichment.EntityResolver;
-import org.henbru.antidos.collector.model.BlockedClientEvent;
+import org.henbru.antidos.collector.model.ClientEvent;
 import org.henbru.antidos.collector.model.EndpointHeartbeat;
 import org.henbru.antidos.collector.model.NetworkEntity;
 import org.henbru.antidos.collector.model.PollEventLog;
@@ -332,19 +332,26 @@ public class CollectorPollerService {
 			slotSnapshotRepository.upsert(snapshot);
 
 			int eventsCount = 0;
+			List<ClientEvent> events = new ArrayList<>();
+
+			// 1. Ingest blocked clients (status = BLOCKED, locked = true)
 			if (details.blockedClients() != null && !details.blockedClients().isEmpty()) {
-				List<BlockedClientEvent> events = new ArrayList<>();
 				for (ValveDetailsDto.BlockedClientDto c : details.blockedClients()) {
 					Long entityId = null;
 					if (entityResolver != null) {
-						try {
-							NetworkEntity entity = entityResolver.getOrCreate(c.key(), start);
-							entityId = entity.id();
-						} catch (Exception e) {
-							log.debug("Could not resolve entity for key {}: {}", c.key(), e.getMessage());
+						entityId = entityResolver.getCached(c.key())
+								.map(NetworkEntity::id)
+								.orElse(null);
+						if (entityId == null) {
+							try {
+								NetworkEntity entity = entityResolver.getOrCreate(c.key(), start);
+								entityId = entity.id();
+							} catch (Exception e) {
+								log.debug("Could not resolve entity for key {}: {}", c.key(), e.getMessage());
+							}
 						}
 					}
-					events.add(new BlockedClientEvent(
+					events.add(new ClientEvent(
 							null,
 							endpoint.getName(),
 							valveName,
@@ -354,10 +361,42 @@ public class CollectorPollerService {
 							c.count(),
 							c.retained(),
 							c.locked(),
+							ClientEvent.STATUS_BLOCKED,
 							completed,
 							pollTime
 					).withEntityId(entityId));
 				}
+			}
+
+			// 2. Ingest active clients (status = ACTIVE, locked = false)
+			// Uses memory-cached entity lookup to avoid synchronous DB write storms during parallel polling;
+			// uncached entities are enriched asynchronously by BackgroundEnrichmentWorker.
+			if (details.topActiveClients() != null && !details.topActiveClients().isEmpty()) {
+				for (ValveDetailsDto.ActiveClientDto c : details.topActiveClients()) {
+					Long entityId = null;
+					if (entityResolver != null) {
+						entityId = entityResolver.getCached(c.key())
+								.map(NetworkEntity::id)
+								.orElse(null);
+					}
+					events.add(new ClientEvent(
+							null,
+							endpoint.getName(),
+							valveName,
+							slot.slotKey(),
+							start,
+							c.key(),
+							c.count(),
+							c.retained(),
+							false,
+							ClientEvent.STATUS_ACTIVE,
+							completed,
+							pollTime
+					).withEntityId(entityId));
+				}
+			}
+
+			if (!events.isEmpty()) {
 				clientEventRepository.batchUpsert(events);
 				eventsCount = events.size();
 			}

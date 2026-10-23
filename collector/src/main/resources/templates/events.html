@@ -197,6 +197,31 @@
                     Filter events matching this numeric ASN (optional 'AS' prefix accepted).
                 </div>
             </div>
+
+            <!-- 7. Traffic Status Filter -->
+            <div class="filter-field">
+                <div class="filter-label">Traffic Status</div>
+                <div class="pills-group">
+                    <label class="pill-label">
+                        <input type="radio" name="status" value="ALL"
+                               th:checked="${selectedStatus == null or selectedStatus == 'ALL'}">
+                        <span>All</span>
+                    </label>
+                    <label class="pill-label">
+                        <input type="radio" name="status" value="BLOCKED"
+                               th:checked="${selectedStatus == 'BLOCKED'}">
+                        <span>&#x1F6D1; Blocked (429)</span>
+                    </label>
+                    <label class="pill-label">
+                        <input type="radio" name="status" value="ACTIVE"
+                               th:checked="${selectedStatus == 'ACTIVE'}">
+                        <span>&#x1F535; Active (Monitored)</span>
+                    </label>
+                </div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                    Show blocked clients, top active monitored clients, or both.
+                </div>
+            </div>
         </div>
 
         <!-- Filter Actions Bar -->

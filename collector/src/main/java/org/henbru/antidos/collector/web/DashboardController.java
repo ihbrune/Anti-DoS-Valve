@@ -10,7 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.henbru.antidos.collector.model.BlockedClientEvent;
+import org.henbru.antidos.collector.model.ClientEvent;
 import org.henbru.antidos.collector.model.EndpointHeartbeat;
 import org.henbru.antidos.collector.docs.DocumentationService;
 import org.henbru.antidos.collector.model.FleetSummary;
@@ -133,7 +133,7 @@ public class DashboardController {
 			@RequestParam(name = "filterIp", required = false) String filterIp,
 			@RequestParam(name = "limit", defaultValue = "50") int limit,
 			Model model) {
-		List<BlockedClientEvent> events = clientEventRepository.findRecentEvents(serverId, filterIp, limit);
+		List<ClientEvent> events = clientEventRepository.findRecentEvents(serverId, filterIp, limit);
 		model.addAttribute("recentEvents", events);
 		model.addAttribute("selectedServer", serverId);
 		model.addAttribute("filterIp", filterIp);
@@ -149,9 +149,10 @@ public class DashboardController {
 			@RequestParam(name = "clientQuery", required = false) String clientQuery,
 			@RequestParam(name = "clientTypes", required = false) List<String> clientTypes,
 			@RequestParam(name = "asn", required = false) String asn,
+			@RequestParam(name = "status", required = false) String status,
 			@RequestParam(name = "limit", defaultValue = "50") int limit,
 			Model model) {
-		populateEventsModel(servers, valves, fromStr, toStr, clientQuery, clientTypes, asn, limit, 0, model);
+		populateEventsModel(servers, valves, fromStr, toStr, clientQuery, clientTypes, asn, status, limit, 0, model);
 		return "events";
 	}
 
@@ -164,10 +165,11 @@ public class DashboardController {
 			@RequestParam(name = "clientQuery", required = false) String clientQuery,
 			@RequestParam(name = "clientTypes", required = false) List<String> clientTypes,
 			@RequestParam(name = "asn", required = false) String asn,
+			@RequestParam(name = "status", required = false) String status,
 			@RequestParam(name = "limit", defaultValue = "50") int limit,
 			@RequestParam(name = "offset", defaultValue = "0") int offset,
 			Model model) {
-		populateEventsModel(servers, valves, fromStr, toStr, clientQuery, clientTypes, asn, limit, offset, model);
+		populateEventsModel(servers, valves, fromStr, toStr, clientQuery, clientTypes, asn, status, limit, offset, model);
 		return "fragments/events-table :: eventsTable";
 	}
 
@@ -180,10 +182,11 @@ public class DashboardController {
 			@RequestParam(name = "clientQuery", required = false) String clientQuery,
 			@RequestParam(name = "clientTypes", required = false) List<String> clientTypes,
 			@RequestParam(name = "asn", required = false) String asn,
+			@RequestParam(name = "status", required = false) String status,
 			@RequestParam(name = "groupBy", defaultValue = "CLIENT") String groupBy,
 			@RequestParam(name = "limit", defaultValue = "25") int limit,
 			Model model) {
-		populateOffendersModel(servers, valves, fromStr, toStr, clientQuery, clientTypes, asn, groupBy, limit, model);
+		populateOffendersModel(servers, valves, fromStr, toStr, clientQuery, clientTypes, asn, status, groupBy, limit, model);
 		return "offenders";
 	}
 
@@ -196,10 +199,11 @@ public class DashboardController {
 			@RequestParam(name = "clientQuery", required = false) String clientQuery,
 			@RequestParam(name = "clientTypes", required = false) List<String> clientTypes,
 			@RequestParam(name = "asn", required = false) String asn,
+			@RequestParam(name = "status", required = false) String status,
 			@RequestParam(name = "groupBy", defaultValue = "CLIENT") String groupBy,
 			@RequestParam(name = "limit", defaultValue = "25") int limit,
 			Model model) {
-		populateOffendersModel(servers, valves, fromStr, toStr, clientQuery, clientTypes, asn, groupBy, limit, model);
+		populateOffendersModel(servers, valves, fromStr, toStr, clientQuery, clientTypes, asn, status, groupBy, limit, model);
 		return "fragments/offenders-table :: offenderTable";
 	}
 
@@ -210,10 +214,10 @@ public class DashboardController {
 			Model model) {
 		EndpointHeartbeat hb = heartbeatRepository.findByServerId(serverId).orElse(null);
 		List<SlotSnapshot> recentSlots = slotSnapshotRepository.findRecent(serverId, valve, 50);
-		List<BlockedClientEvent> recentEvents = clientEventRepository.findRecentEvents(serverId, null, 100);
+		List<ClientEvent> recentEvents = clientEventRepository.findRecentEvents(serverId, null, 100);
 
 		Instant minStartTime = recentSlots.isEmpty() ? null : recentSlots.get(recentSlots.size() - 1).startTime();
-		List<BlockedClientEvent> slotEvents = (minStartTime != null)
+		List<ClientEvent> slotEvents = (minStartTime != null)
 				? clientEventRepository.findRecentEventsFiltered(
 						List.of(serverId),
 						valve != null ? List.of(valve) : null,
@@ -224,8 +228,8 @@ public class DashboardController {
 						0)
 				: recentEvents;
 
-		Map<String, List<BlockedClientEvent>> slotEventsMap = new HashMap<>();
-		for (BlockedClientEvent event : slotEvents) {
+		Map<String, List<ClientEvent>> slotEventsMap = new HashMap<>();
+		for (ClientEvent event : slotEvents) {
 			String key = event.valveName() + "_" + event.slotKey();
 			slotEventsMap.computeIfAbsent(key, k -> new ArrayList<>()).add(event);
 		}
@@ -315,7 +319,7 @@ public class DashboardController {
 		Instant since24h = Instant.now().minus(24, ChronoUnit.HOURS);
 
 		List<TopOffenderSummary> topOffenders = clientEventRepository.findTopOffenders(since24h, 25);
-		List<BlockedClientEvent> recentEvents = clientEventRepository.findRecentEvents(null, null, 50);
+		List<ClientEvent> recentEvents = clientEventRepository.findRecentEvents(null, null, 50);
 		List<SlotSnapshot> recentSlots = slotSnapshotRepository.findRecentFleet(20);
 
 		model.addAttribute("heartbeats", heartbeats);
@@ -333,6 +337,7 @@ public class DashboardController {
 			String clientQuery,
 			List<String> clientTypes,
 			String asnStr,
+			String status,
 			int limit,
 			int offset,
 			Model model) {
@@ -347,10 +352,14 @@ public class DashboardController {
 		}
 
 		Long parsedAsn = parseAsn(asnStr);
-		List<BlockedClientEvent> events = clientEventRepository.findRecentEventsFiltered(
-				servers, valves, fromTime, toTime, clientQuery, clientTypes, parsedAsn, limit, offset);
+		String normalizedStatus = (status != null && !status.isBlank() && !"ALL".equalsIgnoreCase(status.trim()))
+				? status.trim().toUpperCase()
+				: null;
+
+		List<ClientEvent> events = clientEventRepository.findRecentEventsFiltered(
+				servers, valves, fromTime, toTime, clientQuery, clientTypes, parsedAsn, normalizedStatus, limit, offset);
 		long totalCount = clientEventRepository.countRecentEventsFiltered(
-				servers, valves, fromTime, toTime, clientQuery, clientTypes, parsedAsn);
+				servers, valves, fromTime, toTime, clientQuery, clientTypes, parsedAsn, normalizedStatus);
 
 		boolean hasMore = (offset + events.size()) < totalCount;
 		int nextOffset = offset + limit;
@@ -370,6 +379,7 @@ public class DashboardController {
 		model.addAttribute("clientQuery", clientQuery != null ? clientQuery : "");
 		model.addAttribute("selectedTypes", clientTypes != null ? clientTypes : List.of());
 		model.addAttribute("selectedAsn", asnStr != null ? asnStr : "");
+		model.addAttribute("selectedStatus", status != null ? status : "ALL");
 	}
 
 	private void populateOffendersModel(
@@ -380,6 +390,7 @@ public class DashboardController {
 			String clientQuery,
 			List<String> clientTypes,
 			String asnStr,
+			String status,
 			String groupBy,
 			int limit,
 			Model model) {
@@ -394,9 +405,13 @@ public class DashboardController {
 		}
 
 		Long parsedAsn = parseAsn(asnStr);
+		String normalizedStatus = (status != null && !status.isBlank() && !"ALL".equalsIgnoreCase(status.trim()))
+				? status.trim().toUpperCase()
+				: null;
+
 		String effectiveGroupBy = "ASN".equalsIgnoreCase(groupBy) ? "ASN" : ("SUBNET".equalsIgnoreCase(groupBy) ? "SUBNET" : "CLIENT");
 		List<TopOffenderSummary> topOffenders = clientEventRepository.findTopOffendersFiltered(
-				servers, valves, fromTime, toTime, clientQuery, clientTypes, parsedAsn, effectiveGroupBy, limit);
+				servers, valves, fromTime, toTime, clientQuery, clientTypes, parsedAsn, normalizedStatus, effectiveGroupBy, limit);
 
 		model.addAttribute("topOffenders", topOffenders);
 		model.addAttribute("groupBy", effectiveGroupBy);
@@ -411,6 +426,7 @@ public class DashboardController {
 		model.addAttribute("clientQuery", clientQuery != null ? clientQuery : "");
 		model.addAttribute("selectedTypes", clientTypes != null ? clientTypes : List.of());
 		model.addAttribute("selectedAsn", asnStr != null ? asnStr : "");
+		model.addAttribute("selectedStatus", status != null ? status : "ALL");
 	}
 
 	private List<String> getAvailableServerIds() {

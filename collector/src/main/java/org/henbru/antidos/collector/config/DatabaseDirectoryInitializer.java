@@ -55,6 +55,27 @@ public class DatabaseDirectoryInitializer implements BeanFactoryPostProcessor {
 	}
 
 	@org.springframework.context.annotation.Bean
+	public static org.springframework.beans.factory.config.BeanPostProcessor sqliteHikariCustomizer() {
+		return new org.springframework.beans.factory.config.BeanPostProcessor() {
+			@Override
+			public Object postProcessBeforeInitialization(@NonNull Object bean, @NonNull String beanName) throws BeansException {
+				if (bean instanceof com.zaxxer.hikari.HikariDataSource hikari) {
+					String url = hikari.getJdbcUrl();
+					if (url != null && url.startsWith(SQLITE_PREFIX)) {
+						hikari.setConnectionInitSql("PRAGMA journal_mode=WAL;");
+						if (!url.contains("busy_timeout")) {
+							String separator = url.contains("?") ? "&" : "?";
+							hikari.setJdbcUrl(url + separator + "busy_timeout=10000");
+						}
+						log.info("Configured SQLite WAL mode and busy_timeout=10000 on HikariDataSource");
+					}
+				}
+				return bean;
+			}
+		};
+	}
+
+	@org.springframework.context.annotation.Bean
 	public org.springframework.boot.autoconfigure.flyway.FlywayConfigurationCustomizer flywayVendorCustomizer(
 			@org.springframework.beans.factory.annotation.Value("${spring.datasource.url:}") String url) {
 		return configuration -> {

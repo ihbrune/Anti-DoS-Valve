@@ -6,7 +6,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import org.henbru.antidos.collector.model.BlockedClientEvent;
+import org.henbru.antidos.collector.model.ClientEvent;
 import org.henbru.antidos.collector.model.ClientType;
 import org.henbru.antidos.collector.model.EndpointHeartbeat;
 import org.henbru.antidos.collector.model.PollEventLog;
@@ -114,11 +114,11 @@ class DatabaseMigrationAndRepositoryTest {
 	@Test
 	void testClientEventRepositoryBatchUpsertAndAnalytics() {
 		Instant now = Instant.now();
-		BlockedClientEvent e1 = new BlockedClientEvent(
+		ClientEvent e1 = new ClientEvent(
 				null, "NODE-A", "VALVE-1", 100L, now, "198.51.100.42", 50, 10, true, true, now);
-		BlockedClientEvent e2 = new BlockedClientEvent(
+		ClientEvent e2 = new ClientEvent(
 				null, "NODE-B", "VALVE-1", 100L, now, "198.51.100.42", 70, 0, true, true, now);
-		BlockedClientEvent e3 = new BlockedClientEvent(
+		ClientEvent e3 = new ClientEvent(
 				null, "NODE-A", "VALVE-1", 100L, now, "203.0.113.99", 20, 0, true, true, now);
 
 		clientEventRepository.batchUpsert(List.of(e1, e2, e3));
@@ -140,21 +140,21 @@ class DatabaseMigrationAndRepositoryTest {
 	@Test
 	void testClientEventRepositoryAdvancedFilteringAndSubnetRollup() {
 		Instant now = Instant.now();
-		BlockedClientEvent e1 = new BlockedClientEvent(
+		ClientEvent e1 = new ClientEvent(
 				null, "SERVER-PROD-1", "VALVE-API", 200L, now.minus(30, ChronoUnit.MINUTES), "198.51.100.10", 30, 0, true, true, now);
-		BlockedClientEvent e2 = new BlockedClientEvent(
+		ClientEvent e2 = new ClientEvent(
 				null, "SERVER-PROD-2", "VALVE-API", 200L, now.minus(25, ChronoUnit.MINUTES), "198.51.100.25", 50, 0, true, true, now);
-		BlockedClientEvent e3 = new BlockedClientEvent(
+		ClientEvent e3 = new ClientEvent(
 				null, "SERVER-STAGE", "VALVE-API", 200L, now.minus(20, ChronoUnit.MINUTES), "198.51.100.99", 100, 0, true, true, now);
-		BlockedClientEvent e4 = new BlockedClientEvent(
+		ClientEvent e4 = new ClientEvent(
 				null, "SERVER-PROD-1", "VALVE-ADMIN", 200L, now.minus(15, ChronoUnit.MINUTES), "198.51.100.10", 40, 0, true, true, now);
-		BlockedClientEvent e5 = new BlockedClientEvent(
+		ClientEvent e5 = new ClientEvent(
 				null, "SERVER-PROD-1", "VALVE-API", 200L, now.minus(10, ChronoUnit.MINUTES), "203.0.113.5", 80, 0, true, true, now);
 
 		clientEventRepository.batchUpsert(List.of(e1, e2, e3, e4, e5));
 
 		// 1. Multi-server + multi-valve filter: Only PROD-1 and PROD-2, only VALVE-API
-		List<BlockedClientEvent> filtered = clientEventRepository.findRecentEventsFiltered(
+		List<ClientEvent> filtered = clientEventRepository.findRecentEventsFiltered(
 				List.of("SERVER-PROD-1", "SERVER-PROD-2"),
 				List.of("VALVE-API"),
 				now.minus(1, ChronoUnit.HOURS),
@@ -167,7 +167,7 @@ class DatabaseMigrationAndRepositoryTest {
 		assertEquals(3, filtered.size());
 
 		// 2. Subnet range search: search for "198.51.100.0/24" (or "198.51.100.")
-		List<BlockedClientEvent> subnetHits = clientEventRepository.findRecentEventsFiltered(
+		List<ClientEvent> subnetHits = clientEventRepository.findRecentEventsFiltered(
 				List.of("SERVER-PROD-1", "SERVER-PROD-2"),
 				List.of("VALVE-API"),
 				(Instant) null,
@@ -204,32 +204,32 @@ class DatabaseMigrationAndRepositoryTest {
 	@Test
 	void testClientEventRepositoryClassificationAndAsnFilteringAndAsnRollup() {
 		Instant now = Instant.now();
-		BlockedClientEvent e1 = new BlockedClientEvent(
-				null, "SERVER-PROD-1", "VALVE-API", 300L, now.minus(30, ChronoUnit.MINUTES), "198.51.100.1",
+		ClientEvent e1 = new ClientEvent(
+				null, "SERVER-ASN-1", "VALVE-API", 300L, now.minus(30, ChronoUnit.MINUTES), "198.51.100.1",
 				4, 32, null, null, null, null, "198.51.100.0/24",
 				50, 0, false, true, now,
 				3320L, "Deutsche Telekom AG", "DE", ClientType.RESIDENTIAL, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
 		);
-		BlockedClientEvent e2 = new BlockedClientEvent(
-				null, "SERVER-PROD-2", "VALVE-API", 300L, now.minus(25, ChronoUnit.MINUTES), "198.51.100.2",
+		ClientEvent e2 = new ClientEvent(
+				null, "SERVER-ASN-2", "VALVE-API", 300L, now.minus(25, ChronoUnit.MINUTES), "198.51.100.2",
 				4, 32, null, null, null, null, "198.51.100.0/24",
 				70, 0, false, true, now,
 				3320L, "Deutsche Telekom AG", "DE", ClientType.RESIDENTIAL, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
 		);
-		BlockedClientEvent e3 = new BlockedClientEvent(
-				null, "SERVER-PROD-1", "VALVE-API", 300L, now.minus(20, ChronoUnit.MINUTES), "203.0.113.10",
+		ClientEvent e3 = new ClientEvent(
+				null, "SERVER-ASN-1", "VALVE-API", 300L, now.minus(20, ChronoUnit.MINUTES), "203.0.113.10",
 				4, 32, null, null, null, null, "203.0.113.0/24",
 				100, 0, false, true, now,
 				8075L, "Microsoft Corporation", "US", ClientType.DATACENTER, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
 		);
-		BlockedClientEvent e4 = new BlockedClientEvent(
-				null, "SERVER-PROD-1", "VALVE-API", 300L, now.minus(15, ChronoUnit.MINUTES), "10.68.1.1",
+		ClientEvent e4 = new ClientEvent(
+				null, "SERVER-ASN-1", "VALVE-API", 300L, now.minus(15, ChronoUnit.MINUTES), "10.68.1.1",
 				4, 32, null, null, null, null, "10.68.1.0/24",
 				20, 0, false, true, now,
 				null, "Private Network", null, ClientType.PRIVATE_NETWORK, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
 		);
-		BlockedClientEvent e5 = new BlockedClientEvent(
-				null, "SERVER-PROD-1", "VALVE-API", 300L, now.minus(10, ChronoUnit.MINUTES), "185.220.101.4",
+		ClientEvent e5 = new ClientEvent(
+				null, "SERVER-ASN-1", "VALVE-API", 300L, now.minus(10, ChronoUnit.MINUTES), "185.220.101.4",
 				4, 32, null, null, null, null, "185.220.101.0/24",
 				60, 0, false, true, now,
 				24940L, "Hetzner Online GmbH", "DE", ClientType.TOR_EXIT_NODE, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
@@ -238,7 +238,7 @@ class DatabaseMigrationAndRepositoryTest {
 		clientEventRepository.batchUpsert(List.of(e1, e2, e3, e4, e5));
 
 		// 1. Filter by clientTypes = PRIVATE_NETWORK
-		List<BlockedClientEvent> privateEvents = clientEventRepository.findRecentEventsFiltered(
+		List<ClientEvent> privateEvents = clientEventRepository.findRecentEventsFiltered(
 				null, null, now.minus(1, ChronoUnit.HOURS), now, null,
 				List.of("PRIVATE_NETWORK"), null, 50, 0
 		);
@@ -246,7 +246,7 @@ class DatabaseMigrationAndRepositoryTest {
 		assertTrue(privateEvents.stream().allMatch(e -> e.clientType() == ClientType.PRIVATE_NETWORK));
 
 		// 1b. Filter by clientTypes = TOR_EXIT_NODE
-		List<BlockedClientEvent> torEvents = clientEventRepository.findRecentEventsFiltered(
+		List<ClientEvent> torEvents = clientEventRepository.findRecentEventsFiltered(
 				null, null, now.minus(1, ChronoUnit.HOURS), now, null,
 				List.of("TOR_EXIT_NODE"), null, 50, 0
 		);
@@ -255,7 +255,7 @@ class DatabaseMigrationAndRepositoryTest {
 		assertEquals(ClientType.TOR_EXIT_NODE, torEvents.getFirst().clientType());
 
 		// 2. Filter by numeric ASN = 3320
-		List<BlockedClientEvent> telekomEvents = clientEventRepository.findRecentEventsFiltered(
+		List<ClientEvent> telekomEvents = clientEventRepository.findRecentEventsFiltered(
 				null, null, now.minus(1, ChronoUnit.HOURS), now, null,
 				null, 3320L, 50, 0
 		);
@@ -263,7 +263,7 @@ class DatabaseMigrationAndRepositoryTest {
 		assertTrue(telekomEvents.stream().allMatch(e -> Long.valueOf(3320L).equals(e.asn())));
 
 		// 3. Filter by query string "AS8075" (clientQuery automatic ASN parsing)
-		List<BlockedClientEvent> msEvents = clientEventRepository.findRecentEventsFiltered(
+		List<ClientEvent> msEvents = clientEventRepository.findRecentEventsFiltered(
 				null, null, now.minus(1, ChronoUnit.HOURS), now, "AS8075",
 				null, null, 50, 0
 		);
@@ -344,23 +344,24 @@ class DatabaseMigrationAndRepositoryTest {
 	@Test
 	void testLegacyEventWithNullRangesAndRepair() {
 		Instant now = Instant.now();
+		jdbcTemplate.update("DELETE FROM client_events WHERE server_id = 'LEGACY-SERVER' AND slot_key = 999999");
 		// Simulate a pre-V3 legacy row with null ranges and subnet_group = client_key
 		jdbcTemplate.update("""
-				INSERT INTO blocked_client_events (
+				INSERT INTO client_events (
 				    server_id, valve_name, slot_key, slot_time, client_key,
 				    ip_version, cidr_prefix, ip_v4_start, ip_v4_end, ip_v6_start, ip_v6_end, subnet_group,
-				    request_count, retained_count, is_locked, is_completed, last_updated_at,
+				    request_count, retained_count, is_locked, status, is_completed, last_updated_at,
 				    client_type, enrichment_status
 				) VALUES (
 				    'LEGACY-SERVER', 'LEGACY-VALVE', 999999, ?, '52.167.114.213',
 				    4, 32, NULL, NULL, NULL, NULL, '52.167.114.213',
-				    42, 0, 1, 1, ?,
+				    42, 0, 1, 'BLOCKED', 1, ?,
 				    'UNKNOWN', 'PENDING'
 				)
 				""", Timestamp.from(now), Timestamp.from(now));
 
 		// 1. Searching for exact IP "52.167.114.213" should find the legacy row even before repair!
-		List<BlockedClientEvent> ipHits = clientEventRepository.findRecentEventsFiltered(
+		List<ClientEvent> ipHits = clientEventRepository.findRecentEventsFiltered(
 				List.of("LEGACY-SERVER"), null, null, null, "52.167.114.213", 10, 0
 		);
 		assertFalse(ipHits.isEmpty(), "Should find legacy event when searching for exact client IP");
@@ -369,7 +370,7 @@ class DatabaseMigrationAndRepositoryTest {
 		assertEquals("52.167.114.0/24", ipHits.getFirst().subnetGroup());
 
 		// 2. Searching for shorthand "52.167.114" should also find it
-		List<BlockedClientEvent> shorthandHits = clientEventRepository.findRecentEventsFiltered(
+		List<ClientEvent> shorthandHits = clientEventRepository.findRecentEventsFiltered(
 				List.of("LEGACY-SERVER"), null, null, null, "52.167.114", 10, 0
 		);
 		assertFalse(shorthandHits.isEmpty(), "Should find legacy event when searching for prefix '52.167.114'");
@@ -379,14 +380,14 @@ class DatabaseMigrationAndRepositoryTest {
 
 		// 4. Verify DB row was updated with canonical IP range and subnet_group
 		Map<String, Object> repairedRow = jdbcTemplate.queryForMap(
-				"SELECT subnet_group, ip_v4_start, ip_v4_end FROM blocked_client_events WHERE server_id = 'LEGACY-SERVER' AND slot_key = 999999"
+				"SELECT subnet_group, ip_v4_start, ip_v4_end FROM client_events WHERE server_id = 'LEGACY-SERVER' AND slot_key = 999999"
 		);
 		assertEquals("52.167.114.0/24", repairedRow.get("subnet_group"));
 		assertNotNull(repairedRow.get("ip_v4_start"));
 		assertEquals(IpNetworkUtil.ipv4ToLong("52.167.114.213"), ((Number) repairedRow.get("ip_v4_start")).longValue());
 
 		// 5. Querying by subnet "52.167.114.0/24" now matches properly via CIDR containment
-		List<BlockedClientEvent> subnetHits = clientEventRepository.findRecentEventsFiltered(
+		List<ClientEvent> subnetHits = clientEventRepository.findRecentEventsFiltered(
 				List.of("LEGACY-SERVER"), null, null, null, "52.167.114.0/24", 10, 0
 		);
 		assertFalse(subnetHits.isEmpty(), "Should find repaired event when searching for canonical subnet");
@@ -522,10 +523,10 @@ class DatabaseMigrationAndRepositoryTest {
 		assertTrue(savedActive.isPresent());
 
 		// Link event to savedActive
-		BlockedClientEvent event = new BlockedClientEvent(
+		ClientEvent event = new ClientEvent(
 				null, "TEST-SRV", "VALVE", 100L, now, "198.51.100.88",
 				4, 32, net2.v4Start(), net2.v4End(), null, null, net2.subnetGroup(),
-				10, 0, false, true, now,
+				10, 0, false, ClientEvent.STATUS_BLOCKED, true, now,
 				12345L, "Active Net", "DE", ClientType.DATACENTER, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
 		).withEntityId(savedActive.get().id());
 		clientEventRepository.batchUpsert(List.of(event));
@@ -550,6 +551,64 @@ class DatabaseMigrationAndRepositoryTest {
 		Optional<org.henbru.antidos.collector.model.NetworkEntity> reloadedActive = networkEntityRepository.findByClientKey("198.51.100.88");
 		assertTrue(reloadedActive.isPresent());
 		assertEquals(org.henbru.antidos.collector.model.EnrichmentStatus.PENDING, reloadedActive.get().enrichmentStatus());
+	}
+
+	@Test
+	void testClientEventsStatusFilteringAndRetention() {
+		Instant now = Instant.now();
+		Instant oldSlot = now.minus(5, ChronoUnit.DAYS);
+
+		ClientEvent blockedOld = new ClientEvent(
+				null, "RET-SRV", "VALVE", 101L, oldSlot, "198.51.100.51",
+				50, 0, true, ClientEvent.STATUS_BLOCKED, true, oldSlot
+		);
+		ClientEvent activeOld = new ClientEvent(
+				null, "RET-SRV", "VALVE", 101L, oldSlot, "198.51.100.52",
+				10, 0, false, ClientEvent.STATUS_ACTIVE, true, oldSlot
+		);
+		ClientEvent activeNew = new ClientEvent(
+				null, "RET-SRV", "VALVE", 102L, now, "198.51.100.53",
+				25, 0, false, ClientEvent.STATUS_ACTIVE, true, now
+		);
+
+		clientEventRepository.batchUpsert(List.of(blockedOld, activeOld, activeNew));
+
+		// 1. Filter by status: BLOCKED
+		List<ClientEvent> blockedHits = clientEventRepository.findRecentEventsFiltered(
+				List.of("RET-SRV"), null, null, null, null, null, null, "BLOCKED", 50, 0
+		);
+		assertEquals(1, blockedHits.size());
+		assertEquals("198.51.100.51", blockedHits.getFirst().clientKey());
+		assertEquals(ClientEvent.STATUS_BLOCKED, blockedHits.getFirst().status());
+
+		// 2. Filter by status: ACTIVE
+		List<ClientEvent> activeHits = clientEventRepository.findRecentEventsFiltered(
+				List.of("RET-SRV"), null, null, null, null, null, null, "ACTIVE", 50, 0
+		);
+		assertEquals(2, activeHits.size());
+		assertTrue(activeHits.stream().allMatch(e -> ClientEvent.STATUS_ACTIVE.equals(e.status())));
+
+		// 3. Status-specific retention cleanup: Delete ACTIVE events older than 2 days
+		int deletedActive = clientEventRepository.deleteOlderThan(now.minus(2, ChronoUnit.DAYS), ClientEvent.STATUS_ACTIVE);
+		assertTrue(deletedActive >= 1, "Should have deleted at least 1 active event");
+
+		// Blocked old event should still exist!
+		List<ClientEvent> blockedAfterCleanup = clientEventRepository.findRecentEventsFiltered(
+				List.of("RET-SRV"), null, null, null, "198.51.100.51", null, null, "BLOCKED", 10, 0
+		);
+		assertEquals(1, blockedAfterCleanup.size(), "Blocked event must remain intact after active retention cleanup");
+
+		// Active old event should be gone
+		List<ClientEvent> activeOldAfterCleanup = clientEventRepository.findRecentEventsFiltered(
+				List.of("RET-SRV"), null, null, null, "198.51.100.52", null, null, "ACTIVE", 10, 0
+		);
+		assertTrue(activeOldAfterCleanup.isEmpty(), "Old active event should have been purged");
+
+		// Active new event should still exist
+		List<ClientEvent> activeNewAfterCleanup = clientEventRepository.findRecentEventsFiltered(
+				List.of("RET-SRV"), null, null, null, "198.51.100.53", null, null, "ACTIVE", 10, 0
+		);
+		assertEquals(1, activeNewAfterCleanup.size(), "Recent active event must remain intact");
 	}
 }
 

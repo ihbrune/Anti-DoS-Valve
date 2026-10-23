@@ -49,7 +49,7 @@ class CollectorPollerServiceTest {
 
 	@BeforeEach
 	void setUp() {
-		jdbcTemplate.update("DELETE FROM blocked_client_events");
+		jdbcTemplate.update("DELETE FROM client_events");
 		jdbcTemplate.update("DELETE FROM slot_snapshots");
 		jdbcTemplate.update("DELETE FROM poll_event_log");
 		jdbcTemplate.update("DELETE FROM endpoint_heartbeats");

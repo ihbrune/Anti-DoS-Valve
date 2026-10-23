@@ -9,7 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import org.henbru.antidos.collector.model.BlockedClientEvent;
+import org.henbru.antidos.collector.model.ClientEvent;
 import org.henbru.antidos.collector.model.ClientType;
 import org.henbru.antidos.collector.model.EnrichmentStatus;
 import org.henbru.antidos.collector.model.IpNetworkInfo;
@@ -27,7 +27,7 @@ import org.springframework.stereotype.Repository;
 import jakarta.annotation.PostConstruct;
 
 /**
- * JDBC repository for storing individual blocked IP/subnet client events and running analytics.
+ * JDBC repository for storing individual client events (both BLOCKED and ACTIVE) and running analytics.
  */
 @Repository
 @SuppressWarnings("null")
@@ -42,7 +42,7 @@ public class ClientEventRepository {
 	}
 
 	@NonNull
-	private static final RowMapper<BlockedClientEvent> ROW_MAPPER = (rs, rowNum) -> {
+	private static final RowMapper<ClientEvent> ROW_MAPPER = (rs, rowNum) -> {
 		String clientKey = rs.getString("client_key");
 		int ipVersion = rs.getInt("ip_version");
 		int cidrPrefix = rs.getInt("cidr_prefix");
@@ -52,7 +52,7 @@ public class ClientEventRepository {
 		String v6End = rs.getString("ip_v6_end");
 		String subnetGroup = rs.getString("subnet_group");
 
-		// Dynamic fallback normalization for legacy/unparsed rows (e.g. from pre-V3 schema)
+		// Dynamic fallback normalization for legacy/unparsed rows
 		if ((v4Start == null && v6Start == null) || (subnetGroup == null || !subnetGroup.contains("/"))) {
 			IpNetworkInfo parsed = IpNetworkUtil.parse(clientKey);
 			if (parsed.v4Start() != null || parsed.v6Start() != null) {
@@ -75,7 +75,12 @@ public class ClientEventRepository {
 		EnrichmentStatus enrichmentStatus = rawStatus != null ? EnrichmentStatus.valueOf(rawStatus) : EnrichmentStatus.PENDING;
 		Long entityId = rs.getObject("entity_id") != null ? rs.getLong("entity_id") : null;
 
-		return new BlockedClientEvent(
+		String eventStatus = rs.getString("status");
+		if (eventStatus == null || eventStatus.isBlank()) {
+			eventStatus = rs.getBoolean("is_locked") ? ClientEvent.STATUS_BLOCKED : ClientEvent.STATUS_ACTIVE;
+		}
+
+		return new ClientEvent(
 				rs.getLong("id"),
 				rs.getString("server_id"),
 				rs.getString("valve_name"),
@@ -92,6 +97,7 @@ public class ClientEventRepository {
 				rs.getInt("request_count"),
 				rs.getInt("retained_count"),
 				rs.getBoolean("is_locked"),
+				eventStatus,
 				rs.getBoolean("is_completed"),
 				rs.getTimestamp("last_updated_at").toInstant(),
 				asn,
@@ -107,15 +113,15 @@ public class ClientEventRepository {
 	public void repairUnnormalizedEvents() {
 		try {
 			List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
-					SELECT id, client_key FROM blocked_client_events
+					SELECT id, client_key FROM client_events
 					WHERE (ip_version = 4 AND (ip_v4_start IS NULL OR ip_v4_end IS NULL))
 					   OR (ip_version = 6 AND (ip_v6_start IS NULL OR ip_v6_end IS NULL))
 					   OR (subnet_group NOT LIKE '%/%' AND (client_key LIKE '%.%' OR client_key LIKE '%:%'))
 					""");
 			if (!rows.isEmpty()) {
-				log.info("Repairing {} unnormalized blocked client events with canonical network ranges and subnets...", rows.size());
+				log.info("Repairing {} unnormalized client events with canonical network ranges and subnets...", rows.size());
 				String updateSql = """
-						UPDATE blocked_client_events SET
+						UPDATE client_events SET
 						    ip_version = ?,
 						    cidr_prefix = ?,
 						    ip_v4_start = ?,
@@ -156,33 +162,33 @@ public class ClientEventRepository {
 						return rows.size();
 					}
 				});
-				log.info("Successfully repaired {} blocked client events.", rows.size());
+				log.info("Successfully repaired {} client events.", rows.size());
 			}
 
 			// Backfill missing entity_id from network_entity if unassigned
 			jdbcTemplate.update("""
-					UPDATE blocked_client_events
-					SET entity_id = (SELECT e.id FROM network_entity e WHERE e.client_key = blocked_client_events.client_key)
-					WHERE entity_id IS NULL AND EXISTS (SELECT 1 FROM network_entity e WHERE e.client_key = blocked_client_events.client_key)
+					UPDATE client_events
+					SET entity_id = (SELECT e.id FROM network_entity e WHERE e.client_key = client_events.client_key)
+					WHERE entity_id IS NULL AND EXISTS (SELECT 1 FROM network_entity e WHERE e.client_key = client_events.client_key)
 					""");
 		} catch (DataAccessException e) {
 			log.warn("Could not repair unnormalized events on startup: {}", e.getMessage());
 		}
 	}
 
-	public void batchUpsert(List<BlockedClientEvent> events) {
+	public void batchUpsert(List<ClientEvent> events) {
 		if (events == null || events.isEmpty()) {
 			return;
 		}
 
 		String sql = """
-				INSERT INTO blocked_client_events (
+				INSERT INTO client_events (
 				    server_id, valve_name, slot_key, slot_time, client_key,
 				    ip_version, cidr_prefix, ip_v4_start, ip_v4_end, ip_v6_start, ip_v6_end, subnet_group,
-				    request_count, retained_count, is_locked, is_completed, last_updated_at,
+				    request_count, retained_count, is_locked, status, is_completed, last_updated_at,
 				    asn, as_org, country_code, client_type, enrichment_status, entity_id
 				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (server_id, valve_name, slot_key, client_key) DO UPDATE SET
 				    slot_time = EXCLUDED.slot_time,
 				    ip_version = EXCLUDED.ip_version,
@@ -195,15 +201,16 @@ public class ClientEventRepository {
 				    request_count = EXCLUDED.request_count,
 				    retained_count = EXCLUDED.retained_count,
 				    is_locked = EXCLUDED.is_locked,
+				    status = EXCLUDED.status,
 				    is_completed = EXCLUDED.is_completed,
 				    last_updated_at = EXCLUDED.last_updated_at,
-				    entity_id = COALESCE(EXCLUDED.entity_id, blocked_client_events.entity_id)
+				    entity_id = COALESCE(EXCLUDED.entity_id, client_events.entity_id)
 				""";
 
 		jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
 			@Override
 			public void setValues(@NonNull PreparedStatement ps, int i) throws SQLException {
-				BlockedClientEvent e = events.get(i);
+				ClientEvent e = events.get(i);
 				ps.setString(1, e.serverId());
 				ps.setString(2, e.valveName());
 				ps.setLong(3, e.slotKey());
@@ -227,22 +234,23 @@ public class ClientEventRepository {
 				ps.setInt(13, e.requestCount());
 				ps.setInt(14, e.retainedCount());
 				ps.setBoolean(15, e.locked());
-				ps.setBoolean(16, e.completed());
-				ps.setTimestamp(17, Timestamp.from(e.lastUpdatedAt()));
+				ps.setString(16, e.status() != null ? e.status() : (e.locked() ? ClientEvent.STATUS_BLOCKED : ClientEvent.STATUS_ACTIVE));
+				ps.setBoolean(17, e.completed());
+				ps.setTimestamp(18, Timestamp.from(e.lastUpdatedAt()));
 
 				if (e.asn() != null) {
-					ps.setLong(18, e.asn());
+					ps.setLong(19, e.asn());
 				} else {
-					ps.setNull(18, Types.BIGINT);
+					ps.setNull(19, Types.BIGINT);
 				}
-				ps.setString(19, e.asOrg());
-				ps.setString(20, e.countryCode());
-				ps.setString(21, e.clientType() != null ? e.clientType().name() : ClientType.UNKNOWN.name());
-				ps.setString(22, e.enrichmentStatus() != null ? e.enrichmentStatus().name() : EnrichmentStatus.PENDING.name());
+				ps.setString(20, e.asOrg());
+				ps.setString(21, e.countryCode());
+				ps.setString(22, e.clientType() != null ? e.clientType().name() : ClientType.UNKNOWN.name());
+				ps.setString(23, e.enrichmentStatus() != null ? e.enrichmentStatus().name() : EnrichmentStatus.PENDING.name());
 				if (e.entityId() != null) {
-					ps.setLong(23, e.entityId());
+					ps.setLong(24, e.entityId());
 				} else {
-					ps.setNull(23, Types.BIGINT);
+					ps.setNull(24, Types.BIGINT);
 				}
 			}
 
@@ -254,19 +262,43 @@ public class ClientEventRepository {
 	}
 
 	public List<TopOffenderSummary> findTopOffenders(Instant since, int limit) {
-		return findTopOffendersFiltered(null, null, since, null, null, "CLIENT", limit);
+		return findTopOffendersFiltered(null, null, since, null, null, null, null, null, "CLIENT", limit);
 	}
 
-	public List<BlockedClientEvent> findRecentEvents(String serverId, String filterIp, int limit) {
+	public List<ClientEvent> findRecentEvents(String serverId, String filterIp, int limit) {
 		List<String> servers = (serverId != null && !serverId.trim().isEmpty()) ? List.of(serverId) : null;
-		return findRecentEventsFiltered(servers, null, null, null, filterIp, limit, 0);
+		return findRecentEventsFiltered(servers, null, null, null, filterIp, null, null, null, limit, 0);
 	}
 
 	/**
-	 * Core query builder for filtering recent blocking events with multi-server, multi-valve, time range,
-	 * CIDR/subnet, classification, and ASN criteria.
+	 * Core query builder for filtering recent client events with multi-server, multi-valve, time range,
+	 * CIDR/subnet, classification, ASN, and status criteria.
 	 */
-	public List<BlockedClientEvent> findRecentEventsFiltered(
+	public List<ClientEvent> findRecentEventsFiltered(
+			List<String> serverIds,
+			List<String> valveNames,
+			Instant fromTime,
+			Instant toTime,
+			String clientQuery,
+			List<String> clientTypes,
+			Long asn,
+			String status,
+			int limit,
+			int offset
+	) {
+		StringBuilder sql = new StringBuilder("SELECT * FROM client_events WHERE 1=1 ");
+		List<Object> params = new ArrayList<>();
+
+		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn, status);
+
+		sql.append("ORDER BY slot_time DESC LIMIT ? OFFSET ?");
+		params.add(Math.max(1, Math.min(limit, 500)));
+		params.add(Math.max(0, offset));
+
+		return jdbcTemplate.query(sql.toString(), ROW_MAPPER, params.toArray());
+	}
+
+	public List<ClientEvent> findRecentEventsFiltered(
 			List<String> serverIds,
 			List<String> valveNames,
 			Instant fromTime,
@@ -277,19 +309,10 @@ public class ClientEventRepository {
 			int limit,
 			int offset
 	) {
-		StringBuilder sql = new StringBuilder("SELECT * FROM blocked_client_events WHERE 1=1 ");
-		List<Object> params = new ArrayList<>();
-
-		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn);
-
-		sql.append("ORDER BY slot_time DESC LIMIT ? OFFSET ?");
-		params.add(Math.max(1, Math.min(limit, 500)));
-		params.add(Math.max(0, offset));
-
-		return jdbcTemplate.query(sql.toString(), ROW_MAPPER, params.toArray());
+		return findRecentEventsFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn, null, limit, offset);
 	}
 
-	public List<BlockedClientEvent> findRecentEventsFiltered(
+	public List<ClientEvent> findRecentEventsFiltered(
 			List<String> serverIds,
 			List<String> valveNames,
 			Instant fromTime,
@@ -298,7 +321,7 @@ public class ClientEventRepository {
 			int limit,
 			int offset
 	) {
-		return findRecentEventsFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, null, null, limit, offset);
+		return findRecentEventsFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, null, null, null, limit, offset);
 	}
 
 	public long countRecentEventsFiltered(
@@ -308,12 +331,13 @@ public class ClientEventRepository {
 			Instant toTime,
 			String clientQuery,
 			List<String> clientTypes,
-			Long asn
+			Long asn,
+			String status
 	) {
-		StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM blocked_client_events WHERE 1=1 ");
+		StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM client_events WHERE 1=1 ");
 		List<Object> params = new ArrayList<>();
 
-		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn);
+		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn, status);
 
 		Long count = jdbcTemplate.queryForObject(sql.toString(), Long.class, params.toArray());
 		return count != null ? count : 0L;
@@ -326,12 +350,12 @@ public class ClientEventRepository {
 			Instant toTime,
 			String clientQuery
 	) {
-		return countRecentEventsFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, null, null);
+		return countRecentEventsFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, null, null, null);
 	}
 
 	/**
 	 * Aggregates top offenders either by single client IP/key ("CLIENT"), by canonical subnet ("SUBNET"),
-	 * or by full Autonomous System ("ASN"), supporting classification and ASN filtering.
+	 * or by full Autonomous System ("ASN"), supporting classification, ASN, and status filtering.
 	 */
 	public List<TopOffenderSummary> findTopOffendersFiltered(
 			List<String> serverIds,
@@ -341,6 +365,7 @@ public class ClientEventRepository {
 			String clientQuery,
 			List<String> clientTypes,
 			Long asn,
+			String status,
 			String groupBy,
 			int limit
 	) {
@@ -366,11 +391,11 @@ public class ClientEventRepository {
 				.append("COUNT(DISTINCT server_id) AS distinct_servers, ")
 				.append("MIN(slot_time) AS first_seen, ")
 				.append("MAX(slot_time) AS last_seen ")
-				.append("FROM blocked_client_events ")
+				.append("FROM client_events ")
 				.append("WHERE 1=1 ");
 
 		List<Object> params = new ArrayList<>();
-		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn);
+		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn, status);
 
 		sql.append("GROUP BY ").append(groupCol).append(" ");
 		sql.append("ORDER BY total_requests DESC LIMIT ?");
@@ -404,10 +429,24 @@ public class ClientEventRepository {
 			Instant fromTime,
 			Instant toTime,
 			String clientQuery,
+			List<String> clientTypes,
+			Long asn,
 			String groupBy,
 			int limit
 	) {
-		return findTopOffendersFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, null, null, groupBy, limit);
+		return findTopOffendersFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn, null, groupBy, limit);
+	}
+
+	public List<TopOffenderSummary> findTopOffendersFiltered(
+			List<String> serverIds,
+			List<String> valveNames,
+			Instant fromTime,
+			Instant toTime,
+			String clientQuery,
+			String groupBy,
+			int limit
+	) {
+		return findTopOffendersFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, null, null, null, groupBy, limit);
 	}
 
 	private void appendFilterCriteria(
@@ -419,7 +458,8 @@ public class ClientEventRepository {
 			Instant toTime,
 			String clientQuery,
 			List<String> clientTypes,
-			Long asn
+			Long asn,
+			String status
 	) {
 		if (serverIds != null && !serverIds.isEmpty()) {
 			sql.append("AND server_id IN (");
@@ -452,6 +492,11 @@ public class ClientEventRepository {
 		if (asn != null) {
 			sql.append("AND asn = ? ");
 			params.add(asn);
+		}
+
+		if (status != null && !status.isBlank() && !"ALL".equalsIgnoreCase(status.trim())) {
+			sql.append("AND status = ? ");
+			params.add(status.trim().toUpperCase());
 		}
 
 		if (clientTypes != null && !clientTypes.isEmpty()) {
@@ -521,19 +566,23 @@ public class ClientEventRepository {
 
 	public List<String> findDistinctServerIds() {
 		return jdbcTemplate.query(
-				"SELECT DISTINCT server_id FROM blocked_client_events ORDER BY server_id ASC",
+				"SELECT DISTINCT server_id FROM client_events ORDER BY server_id ASC",
 				(rs, rowNum) -> rs.getString(1)
 		);
 	}
 
 	public List<String> findDistinctValveNames(List<String> serverIds) {
+		return findDistinctValves(serverIds);
+	}
+
+	public List<String> findDistinctValves(List<String> serverIds) {
 		if (serverIds == null || serverIds.isEmpty()) {
 			return jdbcTemplate.query(
-					"SELECT DISTINCT valve_name FROM blocked_client_events ORDER BY valve_name ASC",
+					"SELECT DISTINCT valve_name FROM client_events ORDER BY valve_name ASC",
 					(rs, rowNum) -> rs.getString(1)
 			);
 		}
-		StringBuilder sql = new StringBuilder("SELECT DISTINCT valve_name FROM blocked_client_events WHERE server_id IN (");
+		StringBuilder sql = new StringBuilder("SELECT DISTINCT valve_name FROM client_events WHERE server_id IN (");
 		for (int i = 0; i < serverIds.size(); i++) {
 			sql.append(i > 0 ? ",?" : "?");
 		}
@@ -543,29 +592,38 @@ public class ClientEventRepository {
 
 	public long countDistinctBlockedClientsSince(Instant since) {
 		Long count = jdbcTemplate.queryForObject(
-				"SELECT COUNT(DISTINCT client_key) FROM blocked_client_events WHERE slot_time >= ?",
+				"SELECT COUNT(DISTINCT client_key) FROM client_events WHERE status = 'BLOCKED' AND slot_time >= ?",
 				Long.class, Timestamp.from(since));
 		return count != null ? count : 0L;
 	}
 
 	public int deleteOlderThan(Instant cutoff) {
 		return jdbcTemplate.update(
-				"DELETE FROM blocked_client_events WHERE slot_time < ?",
+				"DELETE FROM client_events WHERE slot_time < ?",
 				Timestamp.from(cutoff));
 	}
 
-	public List<BlockedClientEvent> findPendingEnrichment(int limit) {
-		String sql = "SELECT * FROM blocked_client_events WHERE enrichment_status = 'PENDING' ORDER BY id ASC LIMIT ?";
+	public int deleteOlderThan(Instant cutoff, String status) {
+		if (status == null || status.isBlank()) {
+			return deleteOlderThan(cutoff);
+		}
+		return jdbcTemplate.update(
+				"DELETE FROM client_events WHERE status = ? AND slot_time < ?",
+				status.trim().toUpperCase(), Timestamp.from(cutoff));
+	}
+
+	public List<ClientEvent> findPendingEnrichment(int limit) {
+		String sql = "SELECT * FROM client_events WHERE enrichment_status = 'PENDING' ORDER BY id ASC LIMIT ?";
 		return jdbcTemplate.query(sql, ROW_MAPPER, limit);
 	}
 
-	public void batchUpdateEnrichment(List<BlockedClientEvent> events) {
+	public void batchUpdateEnrichment(List<ClientEvent> events) {
 		if (events == null || events.isEmpty()) {
 			return;
 		}
 
 		String sql = """
-				UPDATE blocked_client_events SET
+				UPDATE client_events SET
 				    asn = ?,
 				    as_org = ?,
 				    country_code = ?,
@@ -577,7 +635,7 @@ public class ClientEventRepository {
 		jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
 			@Override
 			public void setValues(@NonNull PreparedStatement ps, int i) throws SQLException {
-				BlockedClientEvent e = events.get(i);
+				ClientEvent e = events.get(i);
 				if (e.asn() != null) {
 					ps.setLong(1, e.asn());
 				} else {

@@ -3,7 +3,7 @@ package org.henbru.antidos.collector.enrichment;
 import java.time.Instant;
 import java.util.List;
 import org.henbru.antidos.collector.config.CollectorProperties;
-import org.henbru.antidos.collector.model.BlockedClientEvent;
+import org.henbru.antidos.collector.model.ClientEvent;
 import org.henbru.antidos.collector.model.ClientType;
 import org.henbru.antidos.collector.model.EnrichmentStatus;
 import org.henbru.antidos.collector.model.IpEnrichmentResult;
@@ -23,9 +23,9 @@ class BackgroundEnrichmentWorkerTest {
 		IpEnrichmentService enrichmentService = mock(IpEnrichmentService.class);
 		CollectorProperties properties = new CollectorProperties();
 
-		BlockedClientEvent event1 = new BlockedClientEvent(
+		ClientEvent event1 = new ClientEvent(
 				1L, "Node-1", "VALVE", 100L, Instant.now(), "198.51.100.42",
-				10, 0, true, true, Instant.now()
+				10, 0, true, ClientEvent.STATUS_BLOCKED, true, Instant.now()
 		);
 		assertEquals(EnrichmentStatus.PENDING, event1.enrichmentStatus());
 
@@ -39,12 +39,12 @@ class BackgroundEnrichmentWorkerTest {
 
 		assertEquals(1, processed);
 
-		ArgumentCaptor<List<BlockedClientEvent>> captor = ArgumentCaptor.forClass(List.class);
+		ArgumentCaptor<List<ClientEvent>> captor = ArgumentCaptor.forClass(List.class);
 		verify(repo).batchUpdateEnrichment(captor.capture());
 
-		List<BlockedClientEvent> updated = captor.getValue();
+		List<ClientEvent> updated = captor.getValue();
 		assertEquals(1, updated.size());
-		BlockedClientEvent enriched = updated.get(0);
+		ClientEvent enriched = updated.get(0);
 		assertEquals(24940L, enriched.asn());
 		assertEquals("Hetzner Online GmbH", enriched.asOrg());
 		assertEquals("DE", enriched.countryCode());

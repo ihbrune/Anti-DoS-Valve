@@ -364,13 +364,13 @@ collector:
 
 To prevent unbounded database growth and remain compliant with IP data retention guidelines (e.g. MaxMind GeoLite2 EULA and GDPR data minimization), the Collector runs an automated daily cleanup job at **03:00 AM**:
 
-1. **Telemetry & Incident Retention (`retention-days`, default: 30 days):**
-   * High-resolution slot snapshots (`slot_snapshots`) and raw client incident events (`blocked_client_events`) older than `retention-days` are permanently purged.
+1. **Telemetry & Incident Retention (`retention-days`, default: 30 days; `retention-days-active`, default: 7 days):**
+   * High-resolution slot snapshots (`slot_snapshots`) and raw client events (`client_events`) older than `retention-days` (for blocked events) or `retention-days-active` (for active events) are permanently purged.
 2. **Audit Diagnostics Retention (`poll-log-retention-days`, default: 1 day):**
    * Endpoint health checks, latency records, and polling logs (`poll_event_log`) are pruned after 24 hours to keep the diagnostic audit lean.
 3. **Orphan Entity Cleanup (`entity-retention-days`, default: 60 days):**
-   * Client IP addresses and subnets are stored in a normalized `network_entity` table. When historic incident events age out and are deleted, older entities may no longer be referenced anywhere.
-   * Entities that have not been seen for more than `entity-retention-days` **and** have zero associated incident records in the database are automatically deleted along with their feed matches (`network_entity_match`). Active entities with existing incidents are always preserved.
+   * Client IP addresses and subnets are stored in a normalized `network_entity` table. When historic events age out and are deleted, older entities may no longer be referenced anywhere.
+   * Entities that have not been seen for more than `entity-retention-days` **and** have zero associated event records in `client_events` are automatically deleted along with their feed matches (`network_entity_match`). Active entities with existing events are always preserved.
 
 ## IP Enrichment: ASN, Geo-Location & Verified Bots
 
@@ -534,11 +534,11 @@ The model separates high-volume, transient telemetry data (slots, incident event
              | (logical)
              | N
  +-----------v---------------------------------------------------+
- |                     blocked_client_events                     |
+ |                         client_events                         |
  +---------------------------------------------------------------+
  | PK id                                                         |
  | UQ (server_id, valve_name, slot_key, client_key)              |
- |    request_count, retained_count, is_locked                   |
+ |    request_count, retained_count, is_locked, status           |
  |    ip_version, cidr_prefix, ip_v4_start/end, ip_v6_start/end   |
  |    subnet_group, client_type, country_code, asn, as_org       |
  | FK entity_id -------------------------------------------+     |
@@ -586,11 +586,11 @@ The model separates high-volume, transient telemetry data (slots, incident event
    * `endpoint_heartbeats` tracks the operational availability of each monitored Tomcat instance identified by `server_id`.
    * `slot_snapshots` stores historical time-slot windows captured from the valve instances running on that server.
    * `poll_event_log` records granular telemetry collection events, round-trip latencies, and error diagnostics for that server.
-2. **`slot_snapshots` &rarr; `blocked_client_events` (1:N, Logical):**
-   * Each time-slot snapshot contains zero or more blocked client incidents, matched by the composite key `(server_id, valve_name, slot_key)`.
-3. **`network_entity` &rarr; `blocked_client_events` (1:N, Foreign Key):**
-   * Normalization layer: Instead of redundantly evaluating ASN, country, and bot signatures for identical IP addresses or subnets across thousands of time-slots, `blocked_client_events.entity_id` references the shared `network_entity` master record.
-   * For backwards compatibility and high-throughput bulk insertions, denormalized network and classification fields are also kept directly on `blocked_client_events`.
+2. **`slot_snapshots` &rarr; `client_events` (1:N, Logical):**
+   * Each time-slot snapshot contains zero or more client traffic records (blocked incidents or top active monitored clients), matched by the composite key `(server_id, valve_name, slot_key)`.
+3. **`network_entity` &rarr; `client_events` (1:N, Foreign Key):**
+   * Normalization layer: Instead of redundantly evaluating ASN, country, and bot signatures for identical IP addresses or subnets across thousands of time-slots, `client_events.entity_id` references the shared `network_entity` master record.
+   * For backwards compatibility and high-throughput bulk insertions, denormalized network and classification fields are also kept directly on `client_events`.
 4. **`intel_source` &rarr; `intel_range` (1:N, Foreign Key with CASCADE):**
    * An intelligence provider (e.g. Googlebot feed, OpenAI bot list, Tor exit list) publishes one or more CIDR IP ranges. Deleting or updating a source cascades to its constituent ranges.
 5. **`network_entity` &harr; `intel_range` via `network_entity_match` (N:M, Foreign Keys):**
@@ -640,20 +640,21 @@ Records aggregated traffic statistics and counter tallies for each monitoring ti
 
 ---
 
-#### 3. `blocked_client_events`
-Stores individual rate-limiting incident records for blocked client IPs or subnets. Powers the **Incident Explorer (`/events`)** and **Top Offender Analytics (`/offenders`)**.
+#### 3. `client_events`
+Stores individual client traffic records (both rate-limiting incidents for blocked clients and top active monitored clients). Powers the **Incident & Traffic Explorer (`/events`)** and **Top Offender Analytics (`/offenders`)**.
 
 | Column | Type | Constraints | Description |
 |---|---|---|---|
-| `id` | `INTEGER` / `BIGSERIAL` | **PRIMARY KEY**, Auto-inc | Unique surrogate identifier for the incident event. |
+| `id` | `INTEGER` / `BIGSERIAL` | **PRIMARY KEY**, Auto-inc | Unique surrogate identifier for the event. |
 | `server_id` | `VARCHAR(100)` | `NOT NULL` | Originating Tomcat server. |
 | `valve_name` | `VARCHAR(100)` | `NOT NULL` | Originating Anti-DoS Valve instance. |
 | `slot_key` | `BIGINT` | `NOT NULL` | Associated time-slot identifier. |
 | `slot_time` | `TIMESTAMP` | `NOT NULL` | Timestamp of the associated time-slot. |
 | `client_key` | `VARCHAR(64)` | `NOT NULL` | Target IP address (e.g. `198.51.100.42`, `2001:db8::1`) or subnet (`198.51.100.0/24`). |
-| `request_count` | `INTEGER` | `NOT NULL DEFAULT 0` | HTTP requests made by this client in the slot prior to or during blocking. |
+| `request_count` | `INTEGER` | `NOT NULL DEFAULT 0` | HTTP requests made by this client in the slot prior to or during blocking/monitoring. |
 | `retained_count`| `INTEGER` | `NOT NULL DEFAULT 0` | Historical request weight carried over from previous slots. |
 | `is_locked` | `BOOLEAN` | `NOT NULL DEFAULT 1` | Indicates whether the client was actively locked/blocked (HTTP 429). |
+| `status` | `VARCHAR(16)` | `NOT NULL DEFAULT 'BLOCKED'` | Lifecycle status: `'BLOCKED'` (HTTP 429 rate limit applied) or `'ACTIVE'` (monitored active traffic). |
 | `is_completed` | `BOOLEAN` | `NOT NULL DEFAULT 0` | `1` if the slot has finalized; `0` if updated during an active slot. |
 | `last_updated_at`| `TIMESTAMP` | `NOT NULL` | Timestamp of the latest counter update. |
 | `ip_version` | `SMALLINT` | `NOT NULL DEFAULT 4` | Protocol family: `4` (IPv4) or `6` (IPv6). |
@@ -671,7 +672,7 @@ Stores individual rate-limiting incident records for blocked client IPs or subne
 | `entity_id` | `BIGINT` | **FOREIGN KEY** (Nullable) | References `network_entity(id)` master record. |
 
 * **Unique Constraint:** `uq_client_event` on `(server_id, valve_name, slot_key, client_key)`.
-* **Range & Rollup Indexes:** `idx_events_v4_range`, `idx_events_v6_range`, `idx_events_subnet_group`, `idx_events_asn`, `idx_events_client_type`, `idx_events_country`, `idx_events_filter (slot_time, server_id, valve_name)`.
+* **Range & Rollup Indexes:** `idx_events_v4_range`, `idx_events_v6_range`, `idx_events_subnet_group`, `idx_events_asn`, `idx_events_client_type`, `idx_events_country`, `idx_events_status_time (status, slot_time)`, `idx_events_filter (slot_time, server_id, valve_name)`.
 
 ---
 
@@ -782,7 +783,7 @@ Audit trail recording every telemetry polling cycle across monitored Tomcat endp
 | `response_time_ms`| `INTEGER` | `DEFAULT 0` | HTTP round-trip latency in milliseconds. |
 | `valves_polled` | `INTEGER` | `DEFAULT 0` | Number of distinct valve status payloads parsed. |
 | `slots_ingested` | `INTEGER` | `DEFAULT 0` | Number of new or updated `slot_snapshots` written. |
-| `events_ingested`| `INTEGER` | `DEFAULT 0` | Number of new or updated `blocked_client_events` written. |
+| `events_ingested`| `INTEGER` | `DEFAULT 0` | Number of new or updated `client_events` written. |
 | `details` | `TEXT` | *Nullable* | Diagnostic summary or structured telemetry details. |
 | `error_message` | `TEXT` | *Nullable* | Full exception message or connection timeout details if failed. |
 
@@ -791,7 +792,7 @@ Audit trail recording every telemetry polling cycle across monitored Tomcat endp
 ---
 
 #### 10. `crawler_feeds` & `bot_ip_ranges` (Legacy Tables)
-Maintained for backwards-compatibility from schema migration `V4`. In schema version `V5`, active reads and writes are conducted through the unified `intel_source` and `intel_range` tables.
+Maintained for backwards-compatibility from schema migration `V4`. In schema version `V5`, active threat intelligence lookups are conducted through the unified `intel_source` and `intel_range` tables.
 
 ---
 

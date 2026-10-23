@@ -3,7 +3,7 @@ package org.henbru.antidos.collector.enrichment;
 import java.util.ArrayList;
 import java.util.List;
 import org.henbru.antidos.collector.config.CollectorProperties;
-import org.henbru.antidos.collector.model.BlockedClientEvent;
+import org.henbru.antidos.collector.model.ClientEvent;
 import org.henbru.antidos.collector.model.IpEnrichmentResult;
 import org.henbru.antidos.collector.model.NetworkEntity;
 import org.henbru.antidos.collector.storage.ClientEventRepository;
@@ -15,7 +15,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Background worker that continuously enriches pending NetworkEntity records and BlockedClientEvents
+ * Background worker that continuously enriches pending NetworkEntity records and ClientEvents
  * with ASN, AS Organization, Geolocation, and Client Classification without blocking polling threads.
  */
 @Component
@@ -83,14 +83,14 @@ public class BackgroundEnrichmentWorker {
 			}
 		}
 
-		// 2. Enrich pending BlockedClientEvent records (ensures backwards compatibility and entity_id linking)
-		List<BlockedClientEvent> pending = clientEventRepository.findPendingEnrichment(limit);
+		// 2. Enrich pending ClientEvent records (ensures backwards compatibility and entity_id linking)
+		List<ClientEvent> pending = clientEventRepository.findPendingEnrichment(limit);
 		if (pending == null || pending.isEmpty()) {
 			return enrichedEntities;
 		}
 
-		List<BlockedClientEvent> enrichedList = new ArrayList<>(pending.size());
-		for (BlockedClientEvent event : pending) {
+		List<ClientEvent> enrichedList = new ArrayList<>(pending.size());
+		for (ClientEvent event : pending) {
 			try {
 				Long entityId = event.entityId();
 				if (entityId == null && entityResolver != null) {
@@ -98,7 +98,7 @@ public class BackgroundEnrichmentWorker {
 					entityId = entity.id();
 				}
 				IpEnrichmentResult result = enrichmentService.enrich(event.clientKey());
-				BlockedClientEvent enriched = event.withEnrichment(result);
+				ClientEvent enriched = event.withEnrichment(result);
 				if (entityId != null) {
 					enriched = enriched.withEntityId(entityId);
 				}
@@ -110,7 +110,7 @@ public class BackgroundEnrichmentWorker {
 
 		if (!enrichedList.isEmpty()) {
 			clientEventRepository.batchUpdateEnrichment(enrichedList);
-			log.debug("Enriched batch of {} blocked client events in background", enrichedList.size());
+			log.debug("Enriched batch of {} client events in background", enrichedList.size());
 		}
 
 		return enrichedList.size() + enrichedEntities;

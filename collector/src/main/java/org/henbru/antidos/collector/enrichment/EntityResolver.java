@@ -61,6 +61,21 @@ public class EntityResolver {
 	}
 
 	/**
+	 * Returns the cached NetworkEntity if present in memory and not expired, without accessing the database.
+	 */
+	public Optional<NetworkEntity> getCached(String clientKey) {
+		if (clientKey == null || clientKey.trim().isEmpty()) {
+			return Optional.empty();
+		}
+		String cleanKey = clientKey.trim();
+		NetworkEntity cached = entityCache.get(cleanKey);
+		if (cached != null && !isExpired(cached)) {
+			return Optional.of(cached);
+		}
+		return Optional.empty();
+	}
+
+	/**
 	 * Looks up the NetworkEntity for the clientKey from cache or database, or registers it if new.
 	 */
 	public NetworkEntity getOrCreate(String clientKey, Instant seenAt) {

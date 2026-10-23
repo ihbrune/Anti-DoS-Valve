@@ -6,7 +6,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
-import org.henbru.antidos.collector.model.BlockedClientEvent;
+import org.henbru.antidos.collector.model.ClientEvent;
 import org.henbru.antidos.collector.model.EndpointHeartbeat;
 import org.henbru.antidos.collector.model.PollEventLog;
 import org.henbru.antidos.collector.model.SlotSnapshot;
@@ -129,7 +129,7 @@ public class DemoDataSeeder {
 		}
 
 		List<SlotSnapshot> snapshots = new ArrayList<>(2500 * instanceCount);
-		List<BlockedClientEvent> events = new ArrayList<>(1500 * instanceCount);
+		List<ClientEvent> events = new ArrayList<>(1500 * instanceCount);
 
 		// 1. Generate Historical Timepoints:
 		// - Last 6 hours: high density (every 1 minute)
@@ -437,7 +437,7 @@ public class DemoDataSeeder {
 				elapsed, snapshots.size(), events.size(), logs.size());
 	}
 
-	private BlockedClientEvent createEnrichedEvent(
+	private ClientEvent createEnrichedEvent(
 			String serverId,
 			String valveName,
 			long slotKey,
@@ -454,46 +454,49 @@ public class DemoDataSeeder {
 			Instant lastUpdatedAt
 	) {
 		org.henbru.antidos.collector.model.IpNetworkInfo net = org.henbru.antidos.collector.util.IpNetworkUtil.parse(ip);
-		return new BlockedClientEvent(
+		return new ClientEvent(
 				null, serverId, valveName, slotKey, slotTime,
 				ip, net.version(), net.prefix(), net.v4Start(), net.v4End(),
 				net.v6Start(), net.v6End(), net.subnetGroup(),
-				requestCount, retainedCount, locked, completed, lastUpdatedAt,
-				asn, asOrg, country, type, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+				requestCount, retainedCount, locked,
+				locked ? ClientEvent.STATUS_BLOCKED : ClientEvent.STATUS_ACTIVE,
+				completed, lastUpdatedAt,
+				asn, asOrg, country, type, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED,
+				null
 		);
 	}
 
 	private void enrichLegacyDemoEventsIfAny() {
 		try {
 			jdbcTemplate.update("""
-					UPDATE blocked_client_events
+					UPDATE client_events
 					SET asn = 8075, as_org = 'OpenAI / Microsoft', country_code = 'US', client_type = 'AI_CRAWLER', enrichment_status = 'ENRICHED'
 					WHERE client_key = '198.51.100.42' OR client_key = '20.15.240.65'
 					""");
 			jdbcTemplate.update("""
-					UPDATE blocked_client_events
+					UPDATE client_events
 					SET asn = 15169, as_org = 'Google LLC', country_code = 'US', client_type = 'SEARCH_ENGINE', enrichment_status = 'ENRICHED'
 					WHERE client_key = '203.0.113.88' OR client_key = '66.249.66.1'
 					""");
 			jdbcTemplate.update("""
-					UPDATE blocked_client_events
+					UPDATE client_events
 					SET asn = 45102, as_org = 'Alibaba Cloud', country_code = 'SG', client_type = 'DATACENTER', enrichment_status = 'ENRICHED'
 					WHERE client_key = '198.51.100.0/24' OR client_key = '45.154.255.0/24'
 					""");
 			jdbcTemplate.update("""
-					UPDATE blocked_client_events
+					UPDATE client_events
 					SET asn = 3320, as_org = 'Deutsche Telekom AG', country_code = 'DE', client_type = 'RESIDENTIAL', enrichment_status = 'ENRICHED'
 					WHERE client_key = '203.0.113.0/24' OR client_key = '185.246.221.0/24'
 					   OR client_key = '2a02:1205:502c:3b00:1c44:98ff:fe22:1011'
 					   OR client_key = '2a02:1205:502c:3b00:2d55:77aa:1122:3344'
 					""");
 			jdbcTemplate.update("""
-					UPDATE blocked_client_events
+					UPDATE client_events
 					SET as_org = 'Private Network (RFC 1918)', client_type = 'PRIVATE_NETWORK', enrichment_status = 'ENRICHED'
 					WHERE client_key = '10.68.42.15' OR client_key = '10.68.42.0/24'
 					""");
 			jdbcTemplate.update("""
-					UPDATE blocked_client_events
+					UPDATE client_events
 					SET as_org = 'Unique Local Address (RFC 4193)', client_type = 'PRIVATE_NETWORK', enrichment_status = 'ENRICHED'
 					WHERE client_key = '2001:db8:85a3::8a2e:370:7334' OR client_key = 'fd00:10:68::42'
 					""");
@@ -526,7 +529,7 @@ public class DemoDataSeeder {
 					    NULL,
 					    MIN(b.slot_time),
 					    MAX(b.last_updated_at)
-					FROM blocked_client_events b
+					FROM client_events b
 					WHERE NOT EXISTS (
 					    SELECT 1 FROM network_entity ne WHERE ne.client_key = b.client_key
 					)
@@ -534,8 +537,8 @@ public class DemoDataSeeder {
 					""");
 			// Link entity_id
 			jdbcTemplate.update("""
-					UPDATE blocked_client_events
-					SET entity_id = (SELECT ne.id FROM network_entity ne WHERE ne.client_key = blocked_client_events.client_key)
+					UPDATE client_events
+					SET entity_id = (SELECT ne.id FROM network_entity ne WHERE ne.client_key = client_events.client_key)
 					WHERE entity_id IS NULL
 					""");
 		} catch (DataAccessException e) {
