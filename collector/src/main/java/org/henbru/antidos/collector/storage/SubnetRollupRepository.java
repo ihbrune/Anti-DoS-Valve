@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.henbru.antidos.collector.model.ClientSubnetRollup;
 import org.henbru.antidos.collector.model.ClientType;
@@ -141,7 +142,7 @@ public class SubnetRollupRepository {
 		params.add(limit);
 		params.add(offset);
 
-		return jdbcTemplate.query(sql.toString(), ROW_MAPPER, params.toArray());
+		return jdbcTemplate.query(Objects.requireNonNull(sql.toString()), ROW_MAPPER, params.toArray());
 	}
 
 	public long countRollupsFiltered(
@@ -158,7 +159,7 @@ public class SubnetRollupRepository {
 
 		appendFilterConditions(sql, params, servers, valves, from, to, subnetQuery, asn, clientTypes);
 
-		Long count = jdbcTemplate.queryForObject(sql.toString(), Long.class, params.toArray());
+		Long count = jdbcTemplate.queryForObject(Objects.requireNonNull(sql.toString()), Long.class, params.toArray());
 		return count != null ? count : 0L;
 	}
 

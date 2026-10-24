@@ -340,7 +340,7 @@ public class CollectorPollerService {
 					Long entityId = null;
 					if (entityResolver != null) {
 						entityId = entityResolver.getCached(c.key())
-								.map(NetworkEntity::id)
+								.map(entity -> entity.id())
 								.orElse(null);
 						if (entityId == null) {
 							try {
@@ -376,7 +376,7 @@ public class CollectorPollerService {
 					Long entityId = null;
 					if (entityResolver != null) {
 						entityId = entityResolver.getCached(c.key())
-								.map(NetworkEntity::id)
+								.map(entity -> entity.id())
 								.orElse(null);
 					}
 					events.add(new ClientEvent(

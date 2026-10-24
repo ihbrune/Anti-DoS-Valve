@@ -1,13 +1,13 @@
 package org.henbru.antidos.collector.config;
 
 import java.util.List;
-import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
 
 class EndpointConfigTest {
 
@@ -37,7 +37,6 @@ class EndpointConfigTest {
 		assertEquals("My-Limiter", config.getName());
 		assertNull(config.getCollectActive());
 
-		assertNull(converter.convert(null));
 		assertNull(converter.convert("   "));
 	}
 }

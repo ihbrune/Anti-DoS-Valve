@@ -125,7 +125,7 @@ public class BenchmarkRunner {
 					return line.trim();
 				}
 			}
-		} catch (Exception ignored) {
+		} catch (java.io.IOException | RuntimeException ignored) {
 		}
 		return "unknown";
 	}

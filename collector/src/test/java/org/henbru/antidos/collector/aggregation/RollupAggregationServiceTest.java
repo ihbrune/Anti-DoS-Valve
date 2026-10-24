@@ -3,19 +3,20 @@ package org.henbru.antidos.collector.aggregation;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import org.henbru.antidos.collector.config.CollectorProperties;
+
 import org.henbru.antidos.collector.model.ClientEvent;
 import org.henbru.antidos.collector.model.ClientSubnetRollup;
 import org.henbru.antidos.collector.model.ClientType;
 import org.henbru.antidos.collector.storage.ClientEventRepository;
 import org.henbru.antidos.collector.storage.SubnetRollupRepository;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
 class RollupAggregationServiceTest {
@@ -32,11 +33,8 @@ class RollupAggregationServiceTest {
 	@Autowired
 	private RollupAggregationService aggregationService;
 
-	@Autowired
-	private CollectorProperties properties;
-
 	@BeforeEach
-	void setUp() {
+	public void setUp() {
 		jdbcTemplate.update("DELETE FROM client_subnet_rollups");
 		jdbcTemplate.update("DELETE FROM client_events");
 	}

@@ -2,6 +2,7 @@ package org.henbru.antidos.collector.config;
 
 import org.springframework.boot.context.properties.ConfigurationPropertiesBinding;
 import org.springframework.core.convert.converter.Converter;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 
 /**
@@ -14,8 +15,8 @@ import org.springframework.stereotype.Component;
 public class StringToEndpointValveConfigConverter implements Converter<String, EndpointValveConfig> {
 
 	@Override
-	public EndpointValveConfig convert(String source) {
-		if (source == null || source.isBlank()) {
+	public EndpointValveConfig convert(@NonNull String source) {
+		if (source.isBlank()) {
 			return null;
 		}
 		return new EndpointValveConfig(source.trim());

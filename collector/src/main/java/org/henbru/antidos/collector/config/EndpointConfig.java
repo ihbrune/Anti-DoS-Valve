@@ -98,7 +98,7 @@ public class EndpointConfig {
 			return new ArrayList<>();
 		}
 		return valves.stream()
-				.map(EndpointValveConfig::getName)
+				.map(v -> v.getName())
 				.filter(n -> n != null && !n.isBlank())
 				.toList();
 	}

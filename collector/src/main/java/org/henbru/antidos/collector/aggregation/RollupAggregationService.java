@@ -3,7 +3,6 @@ package org.henbru.antidos.collector.aggregation;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.List;
 import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.model.ClientSubnetRollup;
