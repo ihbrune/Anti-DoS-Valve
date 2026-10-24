@@ -21,6 +21,9 @@ public class CollectorProperties {
 	private boolean demoMode = false;
 	private int demoInstanceCount = 1;
 	private boolean parallelFleetPolling = true;
+	private int rollupWindowMinutes = 60;
+	private int rollupRetentionDays = 180;
+	private boolean rollupEnabled = true;
 	private List<EndpointConfig> endpoints = new ArrayList<>();
 	private EnrichmentConfig enrichment = new EnrichmentConfig();
 
@@ -138,5 +141,29 @@ public class CollectorProperties {
 
 	public void setValveRules(Map<String, ValveRuleConfig> valveRules) {
 		this.valveRules = valveRules != null ? valveRules : new LinkedHashMap<>();
+	}
+
+	public int getRollupWindowMinutes() {
+		return rollupWindowMinutes;
+	}
+
+	public void setRollupWindowMinutes(int rollupWindowMinutes) {
+		this.rollupWindowMinutes = Math.max(1, rollupWindowMinutes);
+	}
+
+	public int getRollupRetentionDays() {
+		return rollupRetentionDays;
+	}
+
+	public void setRollupRetentionDays(int rollupRetentionDays) {
+		this.rollupRetentionDays = Math.max(1, rollupRetentionDays);
+	}
+
+	public boolean isRollupEnabled() {
+		return rollupEnabled;
+	}
+
+	public void setRollupEnabled(boolean rollupEnabled) {
+		this.rollupEnabled = rollupEnabled;
 	}
 }

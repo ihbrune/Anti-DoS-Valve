@@ -63,29 +63,7 @@
           class="filter-panel">
 
         <div class="filter-grid">
-            <!-- 1. Group-By Mode (Killer Feature for Residential Proxies & Distributed Attacks!) -->
-            <div class="filter-field">
-                <div class="filter-label">Aggregation &amp; Forensics Mode</div>
-                <div class="filter-btn-group" style="margin-top: 4px;">
-                    <label class="filter-btn" style="cursor: pointer;" th:classappend="${groupBy != 'SUBNET' and groupBy != 'ASN' ? 'active' : ''}">
-                        <input type="radio" name="groupBy" value="CLIENT" th:checked="${groupBy != 'SUBNET' and groupBy != 'ASN'}" style="display:none;" onchange="updateRadioActive(this); htmx.trigger('#offenders-filter-form', 'submit');">
-                        Individual Clients / IPs
-                    </label>
-                    <label class="filter-btn" style="cursor: pointer;" th:classappend="${groupBy == 'SUBNET' ? 'active' : ''}">
-                        <input type="radio" name="groupBy" value="SUBNET" th:checked="${groupBy == 'SUBNET'}" style="display:none;" onchange="updateRadioActive(this); htmx.trigger('#offenders-filter-form', 'submit');">
-                        Subnet Rollup (/24 &amp; /64)
-                    </label>
-                    <label class="filter-btn" style="cursor: pointer;" th:classappend="${groupBy == 'ASN' ? 'active' : ''}">
-                        <input type="radio" name="groupBy" value="ASN" th:checked="${groupBy == 'ASN'}" style="display:none;" onchange="updateRadioActive(this); htmx.trigger('#offenders-filter-form', 'submit');">
-                        ASN Rollup (Fleet Autonomous System)
-                    </label>
-                </div>
-                <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
-                    Correlate distributed rotating IPs into their common /24 (IPv4) or /64 (IPv6) subnet, or group by full ISP/Cloud Autonomous System.
-                </div>
-            </div>
-
-            <!-- 2. Target Servers -->
+            <!-- 1. Target Servers -->
             <div class="filter-field">
                 <div class="filter-label" style="display: flex; justify-content: space-between;">
                     <span>Target Servers</span>
@@ -101,7 +79,7 @@
                 </div>
             </div>
 
-            <!-- 3. Target Valves -->
+            <!-- 2. Target Valves -->
             <div class="filter-field">
                 <div class="filter-label" style="display: flex; justify-content: space-between;">
                     <span>Valves</span>
@@ -117,18 +95,34 @@
                 </div>
             </div>
 
-            <!-- 4. Subnet / IP Search -->
+            <!-- 3. Client IP / Subnet & ASN Filter (Combined Column) -->
             <div class="filter-field">
-                <label class="filter-label" for="clientQueryInput">Client IP / Subnet Filter</label>
-                <input type="text"
-                       id="clientQueryInput"
-                       name="clientQuery"
-                       class="input-control"
-                       placeholder="e.g. 198.51.100.0/24 or 198.51.100."
-                       th:value="${clientQuery}">
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div>
+                        <label class="filter-label" for="clientQueryInput">Client IP / Subnet Filter</label>
+                        <input type="text"
+                               id="clientQueryInput"
+                               name="clientQuery"
+                               class="input-control"
+                               placeholder="e.g. 198.51.100.0/24 or 198.51.100."
+                               th:value="${clientQuery}">
+                    </div>
+                    <div>
+                        <label class="filter-label" for="asnInput">Autonomous System (ASN)</label>
+                        <input type="text"
+                               id="asnInput"
+                               name="asn"
+                               class="input-control"
+                               placeholder="e.g. 3320 or AS15169"
+                               th:value="${selectedAsn}">
+                    </div>
+                </div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                    Filter offenders by IP, CIDR subnet, or Autonomous System number.
+                </div>
             </div>
 
-            <!-- 5. Time Window -->
+            <!-- 4. Time Window -->
             <div class="filter-field">
                 <div class="filter-label">Time Window</div>
                 <div class="filter-btn-group" style="margin-bottom: 8px;">
@@ -150,7 +144,7 @@
                 </div>
             </div>
 
-            <!-- 6. Classification Filter -->
+            <!-- 5. Classification Filter -->
             <div class="filter-field">
                 <div class="filter-label" style="display: flex; justify-content: space-between;">
                     <span>Classification</span>
@@ -203,17 +197,37 @@
                 </div>
             </div>
 
-            <!-- 7. Autonomous System (ASN) Filter -->
+            <!-- 6. Forensics & Aggregation Mode (Radio Button Pills) -->
             <div class="filter-field">
-                <label class="filter-label" for="asnInput">Autonomous System (ASN)</label>
-                <input type="text"
-                       id="asnInput"
-                       name="asn"
-                       class="input-control"
-                       placeholder="e.g. 3320 or AS15169"
-                       th:value="${selectedAsn}">
+                <div class="filter-label">Forensics &amp; Aggregation Mode</div>
+                <div class="pills-group">
+                    <label class="pill-label">
+                        <input type="radio" name="groupBy" value="CLIENT"
+                               th:checked="${groupBy != 'SUBNET' and groupBy != 'ASN' and groupBy != 'ROLLUP'}"
+                               onchange="htmx.trigger('#offenders-filter-form', 'submit');">
+                        <span>Individual Clients / IPs</span>
+                    </label>
+                    <label class="pill-label">
+                        <input type="radio" name="groupBy" value="SUBNET"
+                               th:checked="${groupBy == 'SUBNET'}"
+                               onchange="htmx.trigger('#offenders-filter-form', 'submit');">
+                        <span>Subnet Rollup (/24 &amp; /64)</span>
+                    </label>
+                    <label class="pill-label">
+                        <input type="radio" name="groupBy" value="ASN"
+                               th:checked="${groupBy == 'ASN'}"
+                               onchange="htmx.trigger('#offenders-filter-form', 'submit');">
+                        <span>ASN Rollup (Fleet Autonomous System)</span>
+                    </label>
+                    <label class="pill-label">
+                        <input type="radio" name="groupBy" value="ROLLUP"
+                               th:checked="${groupBy == 'ROLLUP'}"
+                               onchange="htmx.trigger('#offenders-filter-form', 'submit');">
+                        <span>&#x1F4BE; Subnet Time Rollups (Long-Term)</span>
+                    </label>
+                </div>
                 <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-                    Filter offenders matching this numeric ASN (optional 'AS' prefix accepted).
+                    Select client level, ad-hoc subnet/ASN grouping, or persistent time rollups.
                 </div>
             </div>
         </div>
@@ -254,11 +268,6 @@
 <script>
     function toggleCheckboxes(className, check) {
         document.querySelectorAll('.' + className).forEach(cb => cb.checked = check);
-    }
-
-    function updateRadioActive(radio) {
-        radio.closest('.filter-btn-group').querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-        radio.closest('.filter-btn').classList.add('active');
     }
 
     function applyPreset(hours) {

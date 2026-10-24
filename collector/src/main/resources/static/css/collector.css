@@ -571,9 +571,16 @@ tr:hover td {
     border-color: var(--color-primary);
 }
 
-.pill-label input[type="checkbox"] {
+.pill-label input[type="checkbox"],
+.pill-label input[type="radio"] {
     accent-color: var(--color-primary);
     cursor: pointer;
+}
+
+.pill-label:has(input:checked) {
+    color: var(--text-primary);
+    border-color: var(--color-primary);
+    background: rgba(59, 130, 246, 0.2);
 }
 
 .filter-actions {
@@ -739,6 +746,12 @@ tr:hover td {
 [data-theme="light"] .pill-label:hover {
     color: var(--text-primary);
     border-color: var(--color-primary);
+}
+
+[data-theme="light"] .pill-label:has(input:checked) {
+    background: rgba(59, 130, 246, 0.12);
+    border-color: var(--color-primary);
+    color: #1d4ed8;
 }
 
 [data-theme="light"] code {

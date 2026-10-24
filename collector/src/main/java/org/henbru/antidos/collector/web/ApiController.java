@@ -31,16 +31,22 @@ public class ApiController {
 	private final SlotSnapshotRepository slotSnapshotRepository;
 	private final ClientEventRepository clientEventRepository;
 	private final PollEventLogRepository pollEventLogRepository;
+	private final org.henbru.antidos.collector.storage.SubnetRollupRepository subnetRollupRepository;
+	private final org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService;
 
 	public ApiController(
 			HeartbeatRepository heartbeatRepository,
 			SlotSnapshotRepository slotSnapshotRepository,
 			ClientEventRepository clientEventRepository,
-			PollEventLogRepository pollEventLogRepository) {
+			PollEventLogRepository pollEventLogRepository,
+			org.henbru.antidos.collector.storage.SubnetRollupRepository subnetRollupRepository,
+			org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService) {
 		this.heartbeatRepository = heartbeatRepository;
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
 		this.pollEventLogRepository = pollEventLogRepository;
+		this.subnetRollupRepository = subnetRollupRepository;
+		this.rollupAggregationService = rollupAggregationService;
 	}
 
 	@GetMapping("/fleet")
@@ -118,5 +124,47 @@ public class ApiController {
 			@RequestParam(name = "serverId", required = false) String serverId,
 			@RequestParam(name = "limit", defaultValue = "50") int limit) {
 		return pollEventLogRepository.findRecent(beforeId, status, serverId, limit);
+	}
+
+	@GetMapping("/rollups/subnets")
+	public Map<String, Object> subnetRollups(
+			@RequestParam(name = "servers", required = false) List<String> servers,
+			@RequestParam(name = "valves", required = false) List<String> valves,
+			@RequestParam(name = "hours", defaultValue = "24") int hours,
+			@RequestParam(name = "subnetQuery", required = false) String subnetQuery,
+			@RequestParam(name = "asn", required = false) Long asn,
+			@RequestParam(name = "clientTypes", required = false) List<String> clientTypes,
+			@RequestParam(name = "limit", defaultValue = "50") int limit,
+			@RequestParam(name = "offset", defaultValue = "0") int offset) {
+
+		Instant to = Instant.now();
+		Instant from = to.minus(hours, ChronoUnit.HOURS);
+		List<org.henbru.antidos.collector.model.ClientSubnetRollup> rollups = subnetRollupRepository.findRollupsFiltered(
+				servers, valves, from, to, subnetQuery, asn, clientTypes, limit, offset
+		);
+		long total = subnetRollupRepository.countRollupsFiltered(
+				servers, valves, from, to, subnetQuery, asn, clientTypes
+		);
+
+		return Map.of(
+				"windowFrom", from.toString(),
+				"windowTo", to.toString(),
+				"totalCount", total,
+				"limit", limit,
+				"offset", offset,
+				"rollups", rollups
+		);
+	}
+
+	@org.springframework.web.bind.annotation.PostMapping("/rollups/subnets/aggregate")
+	public Map<String, Object> triggerRollupAggregation(
+			@RequestParam(name = "hours", defaultValue = "24") int hours) {
+		int count = rollupAggregationService.aggregateCatchUp(hours);
+		return Map.of(
+				"status", "SUCCESS",
+				"lookbackHours", hours,
+				"persistedRollups", count,
+				"executedAt", Instant.now().toString()
+		);
 	}
 }

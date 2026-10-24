@@ -95,17 +95,30 @@
                 </div>
             </div>
 
-            <!-- 3. Subnet / IP Search -->
+            <!-- 3. Client IP / Subnet & ASN (Combined Column) -->
             <div class="filter-field">
-                <label class="filter-label" for="clientQueryInput">Client IP / Subnet (CIDR)</label>
-                <input type="text"
-                       id="clientQueryInput"
-                       name="clientQuery"
-                       class="input-control"
-                       placeholder="e.g. 198.51.100.0/24 or 198.51.100."
-                       th:value="${clientQuery}">
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div>
+                        <label class="filter-label" for="clientQueryInput">Client IP / Subnet (CIDR)</label>
+                        <input type="text"
+                               id="clientQueryInput"
+                               name="clientQuery"
+                               class="input-control"
+                               placeholder="e.g. 198.51.100.0/24 or 198.51.100."
+                               th:value="${clientQuery}">
+                    </div>
+                    <div>
+                        <label class="filter-label" for="asnInput">Autonomous System (ASN)</label>
+                        <input type="text"
+                               id="asnInput"
+                               name="asn"
+                               class="input-control"
+                               placeholder="e.g. 3320 or AS15169"
+                               th:value="${selectedAsn}">
+                    </div>
+                </div>
                 <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-                    Matches single IPs, prefixes (192.168.1.), or CIDR ranges (/24, /16, /64).
+                    Matches single IPs, CIDR ranges (/24, /16, /64), or numeric ASN.
                 </div>
             </div>
 
@@ -184,21 +197,7 @@
                 </div>
             </div>
 
-            <!-- 6. Autonomous System (ASN) Filter -->
-            <div class="filter-field">
-                <label class="filter-label" for="asnInput">Autonomous System (ASN)</label>
-                <input type="text"
-                       id="asnInput"
-                       name="asn"
-                       class="input-control"
-                       placeholder="e.g. 3320 or AS15169"
-                       th:value="${selectedAsn}">
-                <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-                    Filter events matching this numeric ASN (optional 'AS' prefix accepted).
-                </div>
-            </div>
-
-            <!-- 7. Traffic Status Filter -->
+            <!-- 6. Traffic Status Filter -->
             <div class="filter-field">
                 <div class="filter-label">Traffic Status</div>
                 <div class="pills-group">

@@ -12,6 +12,7 @@ This document serves as the architectural reference and development guide for hu
 * **`config/`:** Configuration management for endpoints, database connection, retention policies, and application settings.
 * **`poller/`:** Scheduled polling engine utilizing Java 21 `HttpClient` and Virtual Threads. Handles endpoint polling, intermediate in-progress slot updates, and recovery of missed slots via `slotKey`.
 * **`enrichment/`:** Asynchronous IP metadata enrichment engine. Includes `MmdbEnrichmentProvider` (DB-IP / MaxMind MMDB), `AsnClassifierService` (layered defaults + custom overlay), `CrawlerSyncService` (dynamic JSON feed synchronizer with orphan cleanup), and `BackgroundEnrichmentWorker`.
+* **`aggregation/`:** Long-term time-window rollup engine (`RollupAggregationService`) computing persistent subnet bucket aggregates (`client_subnet_rollups`, `dim_user_agent`, `rollup_signatures`) with configurable window duration (`rollup-window-minutes`), automatic startup catch-up, and botnet/proxy cluster heuristics.
 * **`storage/`:** Data access layer backed by Spring Data / `JdbcTemplate` with Flyway migrations supporting both **SQLite** (default zero-ops) and **PostgreSQL** (production fleet scale).
 * **`web/`:** Web dashboard driven by Spring MVC, Thymeleaf, and **HTMX** for real-time reactivity without client-side JavaScript build tooling.
 * **`cli/`:** Command-line utilities (e.g. `test-endpoint`, `add-endpoint`) for operators to verify connectivity and generate configuration blocks.

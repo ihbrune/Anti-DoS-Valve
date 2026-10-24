@@ -19,7 +19,7 @@ The **Anti-DoS Collector** is a standalone management and analytics service desi
 * **Modern HTMX Dashboard & Specialized Forensics:**
   * Real-time fleet overview showing all connected servers and valves.
   * **Incident Explorer (`/events`):** Dedicated deep-dive view with multi-server and multi-valve selection, relative or exact custom date-time windows, CIDR range search matching both individual IPs and enclosing subnets, and rich ASN/Country/Bot classification badges (Datacenter, Residential, Search Engine, AI Bot, Mobile, Private Network).
-  * **Top Offender Analytics (`/offenders`):** Aggregation ranking with **Subnet Rollup mode** (`/24` & `/64`) and **ASN Rollup mode** (`groupBy=ASN`) with automated **Rotating Proxy Cluster detection** to unmask distributed residential proxy botnets across rotating IPs.
+  * **Top Offender Analytics (`/offenders`):** Aggregation ranking with **Subnet Rollup mode** (`/24` & `/64`), **ASN Rollup mode** (`groupBy=ASN`), and **Persistent Subnet Rollup Buckets** (`groupBy=ROLLUP`) with configurable window lengths (e.g. 15, 30, 60 minutes), multi-node origin attribution (`server_id`, `valve_name`), and heuristic residential proxy cluster detection.
   * **Verified Crawler & Bot Feed Manager (`/crawlers`):** Real-time status, automatic daily synchronization, and manual triggers for official search engine (Googlebot, Bingbot) and AI crawler (OpenAI GPTBot, Claude) IP ranges with automatic orphan pruning.
   * **Dark & Light Mode Support:** Fully responsive dark/light theme with instant header toggle, anti-FOUC (Flash of Unstyled Content) initialization, OS color scheme detection, and dual persistence via `localStorage` and cookies.
   * **Embedded Offline Documentation (`/help`):** The complete release guide, forensics manual, and configuration reference is bundled directly into the application JAR and accessible in the dashboard with live topic filtering and a sticky Table of Contents — 100% offline and air-gap ready without external network access or version drift.
@@ -356,13 +356,16 @@ collector:
   poll-log-retention-days: 1    # Retention for polling event audit log entries (default: 1 day)
   entity-retention-days: 60     # Retention for inactive unreferenced network entities (default: 60 days)
   slow-poll-threshold-ms: 1000  # Latency threshold before marking poll status as WARNING (default: 1000 ms)
+  rollup-window-minutes: 60     # Time bucket duration for persistent subnet rollups (default: 60 min, fully configurable)
+  rollup-retention-days: 180    # Retention for aggregated subnet rollups (default: 180 days)
+  rollup-enabled: true          # Enable background rollup aggregation and retention (default: true)
 ```
 
 ---
 
 ## Data Retention & Entity Hygiene Strategy
 
-To prevent unbounded database growth and remain compliant with IP data retention guidelines (e.g. MaxMind GeoLite2 EULA and GDPR data minimization), the Collector runs an automated daily cleanup job at **03:00 AM**:
+To prevent unbounded database growth and remain compliant with IP data retention guidelines (e.g. MaxMind GeoLite2 EULA and GDPR data minimization), the Collector runs automated daily cleanup jobs at **03:00 AM** and **03:30 AM**:
 
 1. **Telemetry & Incident Retention (`retention-days`, default: 30 days; `retention-days-active`, default: 7 days):**
    * High-resolution slot snapshots (`slot_snapshots`) and raw client events (`client_events`) older than `retention-days` (for blocked events) or `retention-days-active` (for active events) are permanently purged.
@@ -371,6 +374,8 @@ To prevent unbounded database growth and remain compliant with IP data retention
 3. **Orphan Entity Cleanup (`entity-retention-days`, default: 60 days):**
    * Client IP addresses and subnets are stored in a normalized `network_entity` table. When historic events age out and are deleted, older entities may no longer be referenced anywhere.
    * Entities that have not been seen for more than `entity-retention-days` **and** have zero associated event records in `client_events` are automatically deleted along with their feed matches (`network_entity_match`). Active entities with existing events are always preserved.
+4. **Persistent Subnet Rollups Retention (`rollup-retention-days`, default: 180 days):**
+   * Aggregated subnet time-bucket records (`client_subnet_rollups`) are retained for long-term trend analysis, ML modeling, and residential proxy cluster investigation for 180 days (cleaned up daily at 03:30 AM).
 
 ## IP Enrichment: ASN, Geo-Location & Verified Bots
 
@@ -813,6 +818,50 @@ To evaluate whether a client IP falls within a specific CIDR block or arbitrary 
 
 3. **In-Memory Intel Registry (`IntelRegistry`):**
    In addition to SQL range indexes, the active bot/crawler IP blocks from `intel_range` are pre-compiled in memory using an interval tree index, enabling sub-microsecond classification during background ingestion without issuing database read queries.
+
+---
+
+#### 11. `client_subnet_rollups` (Schema V7)
+Stores precomputed, persistent time-bucket aggregates per server, valve, and subnet group (/24 for IPv4, /64 for IPv6). This enables long-term historical analysis (up to 180 days) and automated residential proxy cluster detection without querying billions of raw request slots.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | `INTEGER` / `BIGSERIAL` | **PRIMARY KEY**, Auto-inc | Surrogate identifier for foreign key references. |
+| `bucket_start` | `TIMESTAMP` | `NOT NULL` | Window start boundary (inclusive). |
+| `bucket_end` | `TIMESTAMP` | `NOT NULL` | Window end boundary (exclusive). |
+| `bucket_minutes`| `INTEGER` | `NOT NULL` | Configured window length in minutes (default 60 min, fully configurable). |
+| `server_id` | `VARCHAR(100)` | `NOT NULL` | Contributing Tomcat server node. |
+| `valve_name` | `VARCHAR(100)` | `NOT NULL` | Contributing valve name. |
+| `subnet_group` | `VARCHAR(100)` | `NOT NULL` | Subnet CIDR partition (e.g. `198.51.100.0/24` or `2001:db8:1::/64`). |
+| `total_requests`| `BIGINT` | `NOT NULL` | Total requests seen from this subnet in the window. |
+| `active_requests`| `BIGINT` | `DEFAULT 0` | Requests from actively monitored (non-blocked) slots. |
+| `blocked_requests`| `BIGINT` | `DEFAULT 0` | Requests blocked (HTTP 429) from this subnet in the window. |
+| `distinct_clients`| `INTEGER` | `NOT NULL` | Number of distinct IP addresses participating in the subnet traffic. |
+| `min_requests_per_client` | `INTEGER` | `DEFAULT 0` | Minimum requests recorded for a single IP in this window. |
+| `max_requests_per_client` | `INTEGER` | `DEFAULT 0` | Maximum requests recorded for a single IP in this window. |
+| `slots_active_count` | `INTEGER` | `DEFAULT 0` | Number of distinct slot cycles where this subnet was active. |
+| `asn` | `BIGINT` | *Nullable* | Autonomous System Number. |
+| `as_org` | `VARCHAR(255)` | *Nullable* | Autonomous System Organization name. |
+| `country_code` | `VARCHAR(2)` | *Nullable* | Two-letter ISO country code. |
+| `client_type` | `VARCHAR(30)` | `DEFAULT 'UNKNOWN'` | Client classification category (`RESIDENTIAL`, `DATACENTER`, etc.). |
+| `created_at` | `TIMESTAMP` | `DEFAULT CURRENT_TIMESTAMP` | Ingestion timestamp. |
+
+* **Unique Key:** `uq_subnet_rollup (bucket_start, server_id, valve_name, subnet_group)`.
+* **Indexes:** `idx_subnet_rollups_time (bucket_start, bucket_end)`, `idx_subnet_rollups_group (subnet_group)`.
+
+---
+
+## REST & Forensics API
+
+The collector exposes a high-performance REST API for automated integrations, ML model feeding, and SIEM/firewall export:
+
+| Endpoint | Method | Parameters | Description |
+|---|---|---|---|
+| `/api/v1/fleet` | `GET` | - | Fleet overview: online/offline status, 24h request totals, and active valve count. |
+| `/api/v1/rollups/subnets` | `GET` | `servers`, `valves`, `hours` (default 24), `subnetQuery`, `asn`, `clientTypes`, `limit`, `offset` | Retrieve persistent subnet rollups with botnet heuristics, requests per IP, and origin breakdown. |
+| `/api/v1/rollups/subnets/aggregate` | `POST` | `hours` (default 24) | On-demand trigger to catch up and calculate completed rollup windows across the fleet. |
+| `/api/v1/reputation/blocked-ips` | `GET` | `hours` (default 24), `format` (`json` or `text`) | Export top blocked IP addresses as a plain text blocklist for firewall ingest or JSON. |
+| `/api/v1/poll-log` | `GET` | `beforeId`, `status`, `serverId`, `limit` | Paginated query of polling audit log entries. |
 
 
 

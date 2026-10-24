@@ -216,11 +216,30 @@ class DashboardControllerTest {
 	}
 
 	@Test
-	void testHelpFragmentLoads() throws Exception {
-		mockMvc.perform(get("/fragments/help"))
+	void testOffendersPageWithRollupModeLoads() throws Exception {
+		mockMvc.perform(get("/offenders").param("groupBy", "ROLLUP"))
 				.andExpect(status().isOk())
-				.andExpect(content().string(containsString("id=\"docContent\"")))
-				.andExpect(content().string(containsString("Anti-DoS Collector")));
+				.andExpect(content().string(containsString("Top Offender Analytics &amp; Subnet Rollup")))
+				.andExpect(content().string(containsString("Subnet Time Rollups (Long-Term)")));
+	}
+
+	@Test
+	void testOffendersFragmentWithRollupMode() throws Exception {
+		mockMvc.perform(get("/fragments/offenders-table").param("groupBy", "ROLLUP"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("id=\"offenders-table-container\"")));
+	}
+
+	@Test
+	void testApiRollupEndpoints() throws Exception {
+		mockMvc.perform(get("/api/v1/rollups/subnets"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.totalCount").exists())
+				.andExpect(jsonPath("$.rollups").isArray());
+
+		mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/rollups/subnets/aggregate").param("hours", "1"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("SUCCESS"));
 	}
 }
 

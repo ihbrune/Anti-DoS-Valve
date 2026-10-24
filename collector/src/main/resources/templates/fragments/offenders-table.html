@@ -4,90 +4,196 @@
 
 <!-- Fragment: offenderTable -->
 <div th:fragment="offenderTable" id="offenders-table-container">
-    <div th:if="${#lists.isEmpty(topOffenders)}" class="empty-state">
-        <p>No offending clients or subnets recorded in the selected filter window.</p>
-    </div>
 
-    <div th:unless="${#lists.isEmpty(topOffenders)}" class="table-responsive">
-        <table>
-            <thead>
-                <tr>
-                    <th th:if="${groupBy == 'ASN'}">Targeted Autonomous System (ASN)</th>
-                    <th th:if="${groupBy == 'SUBNET'}">Targeted Subnet (/24 or /64)</th>
-                    <th th:if="${groupBy != 'SUBNET' and groupBy != 'ASN'}">Client IP / Host</th>
-                    <th>Classification</th>
-                    <th>Total Incidents</th>
-                    <th>Requests Attempted</th>
-                    <th th:if="${groupBy == 'SUBNET' or groupBy == 'ASN'}">Rotating IPs</th>
-                    <th>Targeted Servers</th>
-                    <th>First Seen</th>
-                    <th>Last Seen</th>
-                    <th style="text-align: right;">Forensic Investigation</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr th:each="offender : ${topOffenders}">
-                    <td>
-                        <div style="display: flex; flex-direction: column; gap: 4px;">
-                            <div style="display: flex; align-items: center; gap: 6px;">
-                                <a th:href="@{/events(clientQuery=${offender.clientKey})}"
-                                   class="ip-mono"
-                                   style="text-decoration: underline; color: inherit; font-weight: 600;"
-                                   th:classappend="${groupBy == 'SUBNET' ? 'badge badge-warning' : (groupBy == 'ASN' ? 'badge badge-info' : '')}"
-                                   title="Inspect all individual blocking events for this client, subnet, or ASN"
-                                   th:text="${offender.clientKey}">198.51.100.42</a>
-                                <span th:if="${offender.countryCode != null}" class="badge badge-secondary" style="padding: 1px 5px; font-size: 10px;" th:text="${offender.countryCode}">DE</span>
-                                <a th:if="${offender.asn != null and groupBy != 'ASN'}" th:href="@{/events(asn=${offender.asn})}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px; text-decoration: none;" th:title="${offender.asOrg + ' - Click to view incidents'}" th:text="'AS' + ${offender.asn}">AS24940</a>
-                            </div>
-                            <span th:if="${offender.asOrg != null}" style="font-size: 11px; color: var(--text-muted);" th:text="${offender.asOrg}">Hetzner Online GmbH</span>
-                        </div>
-                    </td>
-                    <td>
-                        <a th:if="${offender.clientType != null and offender.clientType.name() == 'DATACENTER'}" th:href="@{/events(clientTypes='DATACENTER')}" class="badge badge-warning" style="text-decoration: none;" title="Hosting / Datacenter / Cloud - Click to view incidents">&#x1F3E2; Datacenter</a>
-                        <a th:if="${offender.clientType != null and offender.clientType.name() == 'SEARCH_ENGINE'}" th:href="@{/events(clientTypes='SEARCH_ENGINE')}" class="badge badge-success" style="text-decoration: none;" title="Verified Search Engine Crawler - Click to view incidents">&#x1F50D; Search Engine</a>
-                        <a th:if="${offender.clientType != null and offender.clientType.name() == 'AI_CRAWLER'}" th:href="@{/events(clientTypes='AI_CRAWLER')}" class="badge badge-purple" style="text-decoration: none;" title="Verified AI Bot / LLM Crawler - Click to view incidents">&#x1F916; AI Bot</a>
-                        <a th:if="${offender.clientType != null and offender.clientType.name() == 'RESIDENTIAL'}" th:href="@{/events(clientTypes='RESIDENTIAL')}" class="badge badge-secondary" style="text-decoration: none;" title="Consumer / Residential ISP - Click to view incidents">&#x1F3E0; Residential</a>
-                        <a th:if="${offender.clientType != null and offender.clientType.name() == 'MOBILE'}" th:href="@{/events(clientTypes='MOBILE')}" class="badge badge-info" style="text-decoration: none;" title="Mobile Carrier / CGNAT - Click to view incidents">&#x1F4F1; Mobile</a>
-                        <a th:if="${offender.clientType != null and offender.clientType.name() == 'PRIVATE_NETWORK'}" th:href="@{/events(clientTypes='PRIVATE_NETWORK')}" class="badge badge-info" style="text-decoration: none;" title="Private Intranet / RFC 1918 / Local Network - Click to view incidents">&#x1F512; Private Net</a>
-                        <a th:if="${offender.clientType != null and offender.clientType.name() == 'TOR_EXIT_NODE'}" th:href="@{/events(clientTypes='TOR_EXIT_NODE')}" class="badge badge-purple" style="text-decoration: none;" title="Tor Anonymization Exit Node - Click to view incidents">&#x1F9C5; Tor Exit Node</a>
-                        <a th:if="${offender.clientType == null or offender.clientType.name() == 'UNKNOWN'}" th:href="@{/events(clientTypes='UNKNOWN')}" class="badge badge-secondary" style="padding: 1px 6px; font-size: 9px; opacity: 0.75; text-decoration: none;" title="Unclassified / No ASN match - Click to view incidents">Unclassified</a>
-                    </td>
-                    <td>
-                        <span class="badge badge-danger" th:text="${offender.totalBlockIncidents}">12</span>
-                    </td>
-                    <td>
-                        <strong th:text="${#numbers.formatInteger(offender.totalBlockedRequests, 1, 'POINT')}">1,450</strong>
-                    </td>
-                    <td th:if="${groupBy == 'SUBNET' or groupBy == 'ASN'}">
-                        <span th:if="${offender.isRotatingProxyCluster()}" class="badge badge-danger" style="animation: pulse 2s infinite;" th:title="'High IP diversity: ' + ${offender.distinctClientsCount} + ' distinct IPs used with ~' + ${#numbers.formatDecimal(offender.requestsPerClient(), 1, 1)} + ' requests/IP'">
-                            &#x26A0;&#xFE0F; <strong th:text="${offender.distinctClientsCount}">45</strong> IPs (Rotating)
-                        </span>
-                        <span th:unless="${offender.isRotatingProxyCluster()}" class="badge badge-secondary" th:text="${offender.distinctClientsCount} + ' IPs'">
-                            1 IPs
-                        </span>
-                    </td>
-                    <td>
-                        <span class="badge badge-info" th:text="${offender.distinctServersTargeted} + ' Nodes'">1 Nodes</span>
-                    </td>
-                    <td th:text="${#temporals.format(offender.firstSeen, 'dd.MM HH:mm')}">11.10 08:30</td>
-                    <td th:text="${#temporals.format(offender.lastSeen, 'dd.MM HH:mm')}">11.10 09:45</td>
-                    <td style="text-align: right;">
-                        <a th:href="@{/events(clientQuery=${offender.clientKey})}"
-                           class="btn"
-                           style="padding: 2px 8px; font-size: 11px;"
-                           title="Inspect all individual blocking events for this client or subnet">
-                            View Incidents &rarr;
-                        </a>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-        
-        <div style="padding: 12px 18px; font-size: 12px; color: var(--text-muted); background: rgba(15, 23, 42, 0.5); border-top: 1px solid var(--border-color);">
-            Showing top <span th:text="${#lists.size(topOffenders)}">25</span> entries aggregated by 
-            <strong th:text="${groupBy == 'ASN' ? 'Autonomous System (ASN Rollup)' : (groupBy == 'SUBNET' ? 'Subnet Rollup (/24 & /64)' : 'Individual Client Key')}">Single Host</strong>.
+    <!-- Mode: ROLLUP (Persistent Subnet Time-Bucket Rollups) -->
+    <th:block th:if="${groupBy == 'ROLLUP'}">
+        <div th:if="${#lists.isEmpty(subnetRollups)}" class="empty-state">
+            <p>No persistent subnet rollups recorded in the selected filter window.</p>
         </div>
-    </div>
+
+        <div th:unless="${#lists.isEmpty(subnetRollups)}" class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time Bucket</th>
+                        <th>Node &amp; Valve</th>
+                        <th>Subnet Group</th>
+                        <th>Traffic Classification</th>
+                        <th>Requests (Total / Blocked)</th>
+                        <th>Unique IPs &amp; Spread</th>
+                        <th>Proxy / Botnet Heuristic</th>
+                        <th style="text-align: right;">Forensics</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="rollup : ${subnetRollups}">
+                        <td>
+                            <div style="font-weight: 600;" th:text="${#temporals.format(rollup.bucketStart(), 'dd.MM HH:mm') + ' - ' + #temporals.format(rollup.bucketEnd(), 'HH:mm')}">24.10 08:00 - 09:00</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                                <span class="badge badge-secondary" style="font-size: 10px; padding: 1px 5px;" th:text="${rollup.bucketMinutes() + ' min'}">60 min</span>
+                            </div>
+                        </td>
+                        <td>
+                            <div style="font-weight: 600;" th:text="${rollup.serverId()}">Demo-Edge-EU</div>
+                            <div style="font-size: 11px; color: var(--text-muted);" th:text="${rollup.valveName()}">Main-Rate-Limiter</div>
+                        </td>
+                        <td>
+                            <div style="display: flex; flex-direction: column; gap: 3px;">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <a th:href="@{/events(clientQuery=${rollup.subnetGroup()}, servers=${rollup.serverId()}, valves=${rollup.valveName()})}"
+                                       class="ip-mono badge badge-warning"
+                                       style="text-decoration: underline; font-weight: 600;"
+                                       th:text="${rollup.subnetGroup()}">198.51.100.0/24</a>
+                                    <span th:if="${rollup.countryCode() != null}" class="badge badge-secondary" style="padding: 1px 5px; font-size: 10px;" th:text="${rollup.countryCode()}">DE</span>
+                                    <a th:if="${rollup.asn() != null}" th:href="@{/events(asn=${rollup.asn()})}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px; text-decoration: none;" th:title="${rollup.asOrg()}" th:text="'AS' + ${rollup.asn()}">AS24940</a>
+                                </div>
+                                <span th:if="${rollup.asOrg() != null}" style="font-size: 11px; color: var(--text-muted);" th:text="${rollup.asOrg()}">Hetzner Online GmbH</span>
+                            </div>
+                        </td>
+                        <td>
+                            <span th:if="${rollup.clientType() != null and rollup.clientType().name() == 'RESIDENTIAL'}" class="badge badge-secondary">&#x1F3E0; Residential</span>
+                            <span th:if="${rollup.clientType() != null and rollup.clientType().name() == 'DATACENTER'}" class="badge badge-warning">&#x1F3E2; Datacenter</span>
+                            <span th:if="${rollup.clientType() != null and rollup.clientType().name() == 'SEARCH_ENGINE'}" class="badge badge-success">&#x1F50D; Search Engine</span>
+                            <span th:if="${rollup.clientType() != null and rollup.clientType().name() == 'AI_CRAWLER'}" class="badge badge-purple">&#x1F916; AI Bot</span>
+                            <span th:if="${rollup.clientType() != null and rollup.clientType().name() == 'MOBILE'}" class="badge badge-info">&#x1F4F1; Mobile</span>
+                            <span th:if="${rollup.clientType() != null and rollup.clientType().name() == 'PRIVATE_NETWORK'}" class="badge badge-info">&#x1F512; Private Net</span>
+                            <span th:if="${rollup.clientType() != null and rollup.clientType().name() == 'TOR_EXIT_NODE'}" class="badge badge-purple">&#x1F9C5; Tor Exit Node</span>
+                            <span th:if="${rollup.clientType() == null or rollup.clientType().name() == 'UNKNOWN'}" class="badge badge-secondary" style="padding: 1px 6px; font-size: 9px; opacity: 0.75;">Unclassified</span>
+                        </td>
+                        <td>
+                            <div>
+                                <strong th:text="${#numbers.formatInteger(rollup.totalRequests(), 1, 'POINT')}">1,250</strong>
+                                <span style="font-size: 11px; color: var(--text-muted);">reqs</span>
+                            </div>
+                            <div style="font-size: 11px;">
+                                <span th:if="${rollup.blockedRequests() > 0}" style="color: var(--color-danger); font-weight: 600;" th:text="${#numbers.formatInteger(rollup.blockedRequests(), 1, 'POINT') + ' blocked'}">500 blocked</span>
+                                <span th:if="${rollup.blockedRequests() > 0 and rollup.activeRequests() > 0}"> &bull; </span>
+                                <span th:if="${rollup.activeRequests() > 0}" style="color: var(--text-muted);" th:text="${#numbers.formatInteger(rollup.activeRequests(), 1, 'POINT') + ' active'}">750 active</span>
+                            </div>
+                        </td>
+                        <td>
+                            <div>
+                                <strong th:text="${rollup.distinctClients()}">45</strong>
+                                <span style="font-size: 11px; color: var(--text-muted);">distinct IPs</span>
+                            </div>
+                            <div style="font-size: 11px; color: var(--text-muted);">
+                                Avg <strong th:text="${#numbers.formatDecimal(rollup.averageRequestsPerClient(), 1, 1)}">1.8</strong> req/IP
+                                <span th:text="' [' + ${rollup.minRequestsPerClient()} + '..' + ${rollup.maxRequestsPerClient()} + ']'">[1..3]</span>
+                            </div>
+                        </td>
+                        <td>
+                            <span th:if="${rollup.isPotentialResidentialProxy()}" class="badge badge-danger" style="animation: pulse 2s infinite;" title="Cluster of residential IPs making only few requests each - characteristic of rotating residential proxy scraping!">
+                                &#x26A0;&#xFE0F; Residential Proxy Cluster
+                            </span>
+                            <span th:unless="${rollup.isPotentialResidentialProxy()}" class="badge badge-secondary" style="font-size: 11px;">
+                                Standard Flow
+                            </span>
+                        </td>
+                        <td style="text-align: right;">
+                            <a th:href="@{/events(clientQuery=${rollup.subnetGroup()}, servers=${rollup.serverId()}, valves=${rollup.valveName()})}"
+                               class="btn"
+                               style="padding: 2px 8px; font-size: 11px;"
+                               title="Inspect individual incident events for this rollup subnet">
+                                View Events &rarr;
+                            </a>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div style="padding: 12px 18px; font-size: 12px; color: var(--text-muted); background: rgba(15, 23, 42, 0.5); border-top: 1px solid var(--border-color);">
+                Showing <strong th:text="${#lists.size(subnetRollups)}">25</strong> of <strong th:text="${totalRollups}">120</strong> persistent subnet rollups across fleet.
+            </div>
+        </div>
+    </th:block>
+
+    <!-- Mode: CLIENT / SUBNET / ASN (Ad-hoc Grouping over recent raw events) -->
+    <th:block th:if="${groupBy != 'ROLLUP'}">
+        <div th:if="${#lists.isEmpty(topOffenders)}" class="empty-state">
+            <p>No offending clients or subnets recorded in the selected filter window.</p>
+        </div>
+
+        <div th:unless="${#lists.isEmpty(topOffenders)}" class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th th:if="${groupBy == 'ASN'}">Targeted Autonomous System (ASN)</th>
+                        <th th:if="${groupBy == 'SUBNET'}">Targeted Subnet (/24 or /64)</th>
+                        <th th:if="${groupBy != 'SUBNET' and groupBy != 'ASN'}">Client IP / Host</th>
+                        <th>Classification</th>
+                        <th>Total Incidents</th>
+                        <th>Requests Attempted</th>
+                        <th th:if="${groupBy == 'SUBNET' or groupBy == 'ASN'}">Rotating IPs</th>
+                        <th>Targeted Servers</th>
+                        <th>First Seen</th>
+                        <th>Last Seen</th>
+                        <th style="text-align: right;">Forensic Investigation</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="offender : ${topOffenders}">
+                        <td>
+                            <div style="display: flex; flex-direction: column; gap: 4px;">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <a th:href="@{/events(clientQuery=${offender.clientKey})}"
+                                       class="ip-mono"
+                                       style="text-decoration: underline; color: inherit; font-weight: 600;"
+                                       th:classappend="${groupBy == 'SUBNET' ? 'badge badge-warning' : (groupBy == 'ASN' ? 'badge badge-info' : '')}"
+                                       title="Inspect all individual blocking events for this client, subnet, or ASN"
+                                       th:text="${offender.clientKey}">198.51.100.42</a>
+                                    <span th:if="${offender.countryCode != null}" class="badge badge-secondary" style="padding: 1px 5px; font-size: 10px;" th:text="${offender.countryCode}">DE</span>
+                                    <a th:if="${offender.asn != null and groupBy != 'ASN'}" th:href="@{/events(asn=${offender.asn})}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px; text-decoration: none;" th:title="${offender.asOrg + ' - Click to view incidents'}" th:text="'AS' + ${offender.asn}">AS24940</a>
+                                </div>
+                                <span th:if="${offender.asOrg != null}" style="font-size: 11px; color: var(--text-muted);" th:text="${offender.asOrg}">Hetzner Online GmbH</span>
+                            </div>
+                        </td>
+                        <td>
+                            <a th:if="${offender.clientType != null and offender.clientType.name() == 'DATACENTER'}" th:href="@{/events(clientTypes='DATACENTER')}" class="badge badge-warning" style="text-decoration: none;" title="Hosting / Datacenter / Cloud - Click to view incidents">&#x1F3E2; Datacenter</a>
+                            <a th:if="${offender.clientType != null and offender.clientType.name() == 'SEARCH_ENGINE'}" th:href="@{/events(clientTypes='SEARCH_ENGINE')}" class="badge badge-success" style="text-decoration: none;" title="Verified Search Engine Crawler - Click to view incidents">&#x1F50D; Search Engine</a>
+                            <a th:if="${offender.clientType != null and offender.clientType.name() == 'AI_CRAWLER'}" th:href="@{/events(clientTypes='AI_CRAWLER')}" class="badge badge-purple" style="text-decoration: none;" title="Verified AI Bot / LLM Crawler - Click to view incidents">&#x1F916; AI Bot</a>
+                            <a th:if="${offender.clientType != null and offender.clientType.name() == 'RESIDENTIAL'}" th:href="@{/events(clientTypes='RESIDENTIAL')}" class="badge badge-secondary" style="text-decoration: none;" title="Consumer / Residential ISP - Click to view incidents">&#x1F3E0; Residential</a>
+                            <a th:if="${offender.clientType != null and offender.clientType.name() == 'MOBILE'}" th:href="@{/events(clientTypes='MOBILE')}" class="badge badge-info" style="text-decoration: none;" title="Mobile Carrier / CGNAT - Click to view incidents">&#x1F4F1; Mobile</a>
+                            <a th:if="${offender.clientType != null and offender.clientType.name() == 'PRIVATE_NETWORK'}" th:href="@{/events(clientTypes='PRIVATE_NETWORK')}" class="badge badge-info" style="text-decoration: none;" title="Private Intranet / RFC 1918 / Local Network - Click to view incidents">&#x1F512; Private Net</a>
+                            <a th:if="${offender.clientType != null and offender.clientType.name() == 'TOR_EXIT_NODE'}" th:href="@{/events(clientTypes='TOR_EXIT_NODE')}" class="badge badge-purple" style="text-decoration: none;" title="Tor Anonymization Exit Node - Click to view incidents">&#x1F9C5; Tor Exit Node</a>
+                            <a th:if="${offender.clientType == null or offender.clientType.name() == 'UNKNOWN'}" th:href="@{/events(clientTypes='UNKNOWN')}" class="badge badge-secondary" style="padding: 1px 6px; font-size: 9px; opacity: 0.75; text-decoration: none;" title="Unclassified / No ASN match - Click to view incidents">Unclassified</a>
+                        </td>
+                        <td>
+                            <span class="badge badge-danger" th:text="${offender.totalBlockIncidents}">12</span>
+                        </td>
+                        <td>
+                            <strong th:text="${#numbers.formatInteger(offender.totalBlockedRequests, 1, 'POINT')}">1,450</strong>
+                        </td>
+                        <td th:if="${groupBy == 'SUBNET' or groupBy == 'ASN'}">
+                            <span th:if="${offender.isRotatingProxyCluster()}" class="badge badge-danger" style="animation: pulse 2s infinite;" th:title="'High IP diversity: ' + ${offender.distinctClientsCount} + ' distinct IPs used with ~' + ${#numbers.formatDecimal(offender.requestsPerClient(), 1, 1)} + ' requests/IP'">
+                                &#x26A0;&#xFE0F; <strong th:text="${offender.distinctClientsCount}">45</strong> IPs (Rotating)
+                            </span>
+                            <span th:unless="${offender.isRotatingProxyCluster()}" class="badge badge-secondary" th:text="${offender.distinctClientsCount} + ' IPs'">
+                                1 IPs
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge badge-info" th:text="${offender.distinctServersTargeted} + ' Nodes'">1 Nodes</span>
+                        </td>
+                        <td th:text="${#temporals.format(offender.firstSeen, 'dd.MM HH:mm')}">11.10 08:30</td>
+                        <td th:text="${#temporals.format(offender.lastSeen, 'dd.MM HH:mm')}">11.10 09:45</td>
+                        <td style="text-align: right;">
+                            <a th:href="@{/events(clientQuery=${offender.clientKey})}"
+                               class="btn"
+                               style="padding: 2px 8px; font-size: 11px;"
+                               title="Inspect all individual blocking events for this client or subnet">
+                                View Incidents &rarr;
+                            </a>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div style="padding: 12px 18px; font-size: 12px; color: var(--text-muted); background: rgba(15, 23, 42, 0.5); border-top: 1px solid var(--border-color);">
+                Showing top <span th:text="${#lists.size(topOffenders)}">25</span> entries aggregated by 
+                <strong th:text="${groupBy == 'ASN' ? 'Autonomous System (ASN Rollup)' : (groupBy == 'SUBNET' ? 'Subnet Rollup (/24 & /64)' : 'Individual Client Key')}">Single Host</strong>.
+            </div>
+        </div>
+    </th:block>
 </div>
 
 </body>

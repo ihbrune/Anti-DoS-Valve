@@ -40,6 +40,7 @@ public class DashboardController {
 	private final SlotSnapshotRepository slotSnapshotRepository;
 	private final ClientEventRepository clientEventRepository;
 	private final PollEventLogRepository pollEventLogRepository;
+	private final org.henbru.antidos.collector.storage.SubnetRollupRepository subnetRollupRepository;
 	private final DocumentationService documentationService;
 	private final org.henbru.antidos.collector.config.CollectorProperties properties;
 	private final org.henbru.antidos.collector.config.ValveRuleResolver valveRuleResolver;
@@ -50,6 +51,7 @@ public class DashboardController {
 			SlotSnapshotRepository slotSnapshotRepository,
 			ClientEventRepository clientEventRepository,
 			PollEventLogRepository pollEventLogRepository,
+			org.henbru.antidos.collector.storage.SubnetRollupRepository subnetRollupRepository,
 			DocumentationService documentationService,
 			org.henbru.antidos.collector.config.CollectorProperties properties,
 			org.henbru.antidos.collector.config.ValveRuleResolver valveRuleResolver) {
@@ -57,6 +59,7 @@ public class DashboardController {
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
 		this.pollEventLogRepository = pollEventLogRepository;
+		this.subnetRollupRepository = subnetRollupRepository;
 		this.documentationService = documentationService;
 		this.properties = properties;
 		this.valveRuleResolver = valveRuleResolver != null ? valveRuleResolver : new org.henbru.antidos.collector.config.ValveRuleResolver(properties);
@@ -67,10 +70,11 @@ public class DashboardController {
 			SlotSnapshotRepository slotSnapshotRepository,
 			ClientEventRepository clientEventRepository,
 			PollEventLogRepository pollEventLogRepository,
+			org.henbru.antidos.collector.storage.SubnetRollupRepository subnetRollupRepository,
 			DocumentationService documentationService,
 			org.henbru.antidos.collector.config.CollectorProperties properties) {
 		this(heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
-				documentationService, properties, new org.henbru.antidos.collector.config.ValveRuleResolver(properties));
+				subnetRollupRepository, documentationService, properties, new org.henbru.antidos.collector.config.ValveRuleResolver(properties));
 	}
 
 	@org.springframework.web.bind.annotation.ModelAttribute("demoMode")
@@ -409,11 +413,25 @@ public class DashboardController {
 				? status.trim().toUpperCase()
 				: null;
 
-		String effectiveGroupBy = "ASN".equalsIgnoreCase(groupBy) ? "ASN" : ("SUBNET".equalsIgnoreCase(groupBy) ? "SUBNET" : "CLIENT");
-		List<TopOffenderSummary> topOffenders = clientEventRepository.findTopOffendersFiltered(
-				servers, valves, fromTime, toTime, clientQuery, clientTypes, parsedAsn, normalizedStatus, effectiveGroupBy, limit);
+		String effectiveGroupBy = "ROLLUP".equalsIgnoreCase(groupBy) ? "ROLLUP"
+				: ("ASN".equalsIgnoreCase(groupBy) ? "ASN" : ("SUBNET".equalsIgnoreCase(groupBy) ? "SUBNET" : "CLIENT"));
 
-		model.addAttribute("topOffenders", topOffenders);
+		if ("ROLLUP".equals(effectiveGroupBy)) {
+			List<org.henbru.antidos.collector.model.ClientSubnetRollup> subnetRollups = subnetRollupRepository.findRollupsFiltered(
+					servers, valves, fromTime, toTime, clientQuery, parsedAsn, clientTypes, limit, 0);
+			long totalRollups = subnetRollupRepository.countRollupsFiltered(
+					servers, valves, fromTime, toTime, clientQuery, parsedAsn, clientTypes);
+			model.addAttribute("subnetRollups", subnetRollups);
+			model.addAttribute("totalRollups", totalRollups);
+			model.addAttribute("topOffenders", List.of());
+		} else {
+			List<TopOffenderSummary> topOffenders = clientEventRepository.findTopOffendersFiltered(
+					servers, valves, fromTime, toTime, clientQuery, clientTypes, parsedAsn, normalizedStatus, effectiveGroupBy, limit);
+			model.addAttribute("topOffenders", topOffenders);
+			model.addAttribute("subnetRollups", List.of());
+			model.addAttribute("totalRollups", 0L);
+		}
+
 		model.addAttribute("groupBy", effectiveGroupBy);
 		model.addAttribute("limit", limit);
 
