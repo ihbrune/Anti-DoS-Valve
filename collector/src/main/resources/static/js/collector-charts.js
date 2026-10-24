@@ -21,6 +21,17 @@
     }
 
     function destroyChart(canvasId) {
+        const canvas = document.getElementById(canvasId);
+        if (canvas && typeof Chart !== 'undefined' && typeof Chart.getChart === 'function') {
+            try {
+                const existing = Chart.getChart(canvas);
+                if (existing) {
+                    existing.destroy();
+                }
+            } catch (e) {
+                console.warn('Could not destroy existing Chart.js instance on canvas:', canvasId, e);
+            }
+        }
         if (chartInstances.has(canvasId)) {
             try {
                 chartInstances.get(canvasId).destroy();
@@ -82,6 +93,7 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                resizeDelay: 50,
                 interaction: {
                     mode: 'index',
                     intersect: false
@@ -132,6 +144,7 @@
                     },
                     y: {
                         stacked: true,
+                        beginAtZero: true,
                         grid: { color: theme.gridColor },
                         ticks: {
                             color: theme.textColor,
@@ -190,6 +203,7 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                resizeDelay: 50,
                 cutout: '66%',
                 plugins: {
                     legend: {
@@ -301,6 +315,7 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                resizeDelay: 50,
                 onClick: function(e, elements) {
                     if (elements.length > 0) {
                         const el = elements[0];

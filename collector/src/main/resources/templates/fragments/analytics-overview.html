@@ -98,7 +98,7 @@
                     (<span style="color: var(--color-danger);" th:text="${analytics.totalBlocked} + ' blocked'">0 blocked</span>)
                 </div>
             </div>
-            <div style="flex: 1; min-height: 260px; position: relative;">
+            <div class="chart-container-box" style="height: 300px; max-height: 300px; position: relative; overflow: hidden;">
                 <canvas id="timelineChart"></canvas>
             </div>
         </div>
@@ -113,7 +113,7 @@
                     Categories
                 </div>
             </div>
-            <div style="flex: 1; min-height: 260px; position: relative;">
+            <div class="chart-container-box" style="height: 300px; max-height: 300px; position: relative; overflow: hidden;">
                 <canvas id="compositionChart"></canvas>
             </div>
         </div>
@@ -151,7 +151,7 @@
             </div>
         </div>
 
-        <div style="height: 380px; position: relative;">
+        <div class="chart-container-box" style="height: 380px; max-height: 380px; position: relative; overflow: hidden;">
             <canvas id="scatterChart"></canvas>
         </div>
     </div>
@@ -161,10 +161,11 @@
 
     <script>
         (function() {
-            function initCharts() {
+            let initTimer = null;
+
+            function doInitCharts() {
                 if (typeof window.AntiDoSCharts === 'undefined' || typeof Chart === 'undefined') {
-                    // Script still loading, retry shortly
-                    setTimeout(initCharts, 50);
+                    setTimeout(doInitCharts, 50);
                     return;
                 }
 
@@ -192,13 +193,18 @@
                 }
             }
 
-            initCharts();
+            function scheduleInit() {
+                if (initTimer) clearTimeout(initTimer);
+                initTimer = setTimeout(doInitCharts, 25);
+            }
+
+            scheduleInit();
 
             if (!window.__antiDoSChartsHtmxBound) {
                 window.__antiDoSChartsHtmxBound = true;
                 document.addEventListener('htmx:afterSwap', function(evt) {
                     if (evt.target && (evt.target.id === 'analytics-container' || (evt.target.querySelector && evt.target.querySelector('#analytics-container')))) {
-                        setTimeout(initCharts, 20);
+                        scheduleInit();
                     }
                 });
             }

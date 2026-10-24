@@ -1412,4 +1412,17 @@ html[data-theme="light"] .theme-icon-moon {
     background: #f8fafc;
 }
 
+/* Visual Telemetry Chart Containers */
+.chart-container-box {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+}
+
+.chart-container-box canvas {
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+}
+
 
