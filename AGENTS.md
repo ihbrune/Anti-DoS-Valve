@@ -9,7 +9,8 @@ This document serves as an onboarding and development guide for human developers
 **Anti-DoS-Valve Project** is a Maven multi-module project consisting of:
 1. **`valve/` (`anti-dos-valve`):** High-performance Apache Tomcat Valve protecting web applications against Denial-of-Service (DoS) and abusive request rates.
 2. **`collector/` (`anti-dos-collector`):** Standalone Spring Boot 3 & HTMX monitoring aggregator and analytics service collecting status from multiple Valve instances.
-3. **`docker/`:** Standalone demo Tomcat environment and integration test assets.
+3. **`benchmark/` (`anti-dos-benchmark`):** Standalone JMH performance harness and deterministic traffic load simulator evaluating Valve monitor concurrency.
+4. **`docker/`:** Standalone demo Tomcat environment and integration test assets.
 
 ### Core Architectural Components in `valve/`:
 * **`AntiDoSValve`:** The central Catalina valve (`ValveBase`). Intercepts incoming HTTP requests in Tomcat's request processing pipeline, extracts client IP addresses (handling proxies / headers), checks thresholds, and either forwards or blocks requests (HTTP 429).
@@ -18,8 +19,9 @@ This document serves as an onboarding and development guide for human developers
 * **`AntiDoSStatusRenderer`:** Generates the internal HTML monitoring dashboard (`/antidos-status`), secured via IP filtering and path rules.
 * **`AntiDoSLogThrottler`:** Prevents log-flooding during severe DoS incidents by rate-limiting log emission.
 
-### Core Architectural Components in `collector/`:
+### Core Architectural Components in `collector/` & `benchmark/`:
 * For dedicated Collector guidelines, data models, and commands, refer to [collector/AGENTS.md](collector/AGENTS.md) and [collector/README.md](collector/README.md).
+* For dedicated Benchmark guidelines, traffic profiles, and history tracking, refer to [benchmark/AGENTS.md](benchmark/AGENTS.md) and [benchmark/README.md](benchmark/README.md).
 
 ---
 
@@ -59,8 +61,11 @@ This document serves as an onboarding and development guide for human developers
 | `mvn test` | Runs all unit and concurrency tests across all modules. |
 | `mvn test -pl valve` | Runs only valve unit & concurrency tests (~1-2 seconds). |
 | `mvn test -pl collector` | Runs only collector unit & integration tests. |
-| `mvn package` | Compiles and packages both `valve` (including tomcat9 jar) and `collector` executable JAR. |
+| `mvn test -pl benchmark` | Runs benchmark unit tests (TrafficSimulator verification). |
+| `mvn package` | Compiles and packages `valve` (including tomcat9 jar), `collector` executable JAR, and `benchmark` uberjar. |
+| `mvn package -pl benchmark -DskipTests` | Packages standalone JMH uberjar (`benchmark/target/benchmarks.jar`). |
 | `mvn verify` | Runs all tests, packaging, and Docker integration tests (`AntiDoSValveDockerIT`). |
+| `java -cp benchmark/target/benchmarks.jar org.henbru.antidos.benchmark.BenchmarkRunner` | Runs baseline + monitor benchmarks and appends normalized scores to `.benchmarks/history.jsonl`. |
 
 ---
 

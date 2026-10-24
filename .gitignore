@@ -6,6 +6,7 @@
 
 # Maven
 target/
+dependency-reduced-pom.xml
 
 # Editor
 *~
@@ -20,4 +21,5 @@ custom-hosting-asns.txt
 *.db
 *.db-journal
 *.mmdb
-
+# Benchmarks history
+.benchmarks/

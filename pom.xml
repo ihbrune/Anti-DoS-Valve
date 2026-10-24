@@ -19,5 +19,6 @@
 	<modules>
 		<module>valve</module>
 		<module>collector</module>
+		<module>benchmark</module>
 	</modules>
 </project>
