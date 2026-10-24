@@ -169,6 +169,128 @@ public class SubnetRollupRepository {
 		return ts != null ? Optional.of(ts.toInstant()) : Optional.empty();
 	}
 
+	public List<org.henbru.antidos.collector.model.TimelinePoint> findTimeline(
+			List<String> servers,
+			List<String> valves,
+			Instant from,
+			Instant to
+	) {
+		StringBuilder sql = new StringBuilder("""
+				SELECT
+				    bucket_start,
+				    SUM(total_requests) AS total_reqs,
+				    SUM(active_requests) AS active_reqs,
+				    SUM(blocked_requests) AS blocked_reqs
+				FROM client_subnet_rollups
+				WHERE 1=1
+				""");
+		List<Object> params = new ArrayList<>();
+		appendFilterConditions(sql, params, servers, valves, from, to, null, null, null);
+		sql.append(" GROUP BY bucket_start ORDER BY bucket_start ASC");
+
+		return jdbcTemplate.query(Objects.requireNonNull(sql.toString()), (rs, rowNum) -> new org.henbru.antidos.collector.model.TimelinePoint(
+				rs.getTimestamp("bucket_start").toInstant(),
+				rs.getLong("total_reqs"),
+				rs.getLong("active_reqs"),
+				rs.getLong("blocked_reqs")
+		), params.toArray());
+	}
+
+	public record RawCompositionRow(
+			ClientType clientType,
+			long totalRequests,
+			long blockedRequests,
+			int subnetCount
+	) {}
+
+	public List<RawCompositionRow> findTrafficComposition(
+			List<String> servers,
+			List<String> valves,
+			Instant from,
+			Instant to
+	) {
+		StringBuilder sql = new StringBuilder("""
+				SELECT
+				    client_type,
+				    SUM(total_requests) AS total_reqs,
+				    SUM(blocked_requests) AS blocked_reqs,
+				    COUNT(DISTINCT subnet_group) AS subnets_cnt
+				FROM client_subnet_rollups
+				WHERE 1=1
+				""");
+		List<Object> params = new ArrayList<>();
+		appendFilterConditions(sql, params, servers, valves, from, to, null, null, null);
+		sql.append(" GROUP BY client_type ORDER BY SUM(total_requests) DESC");
+
+		return jdbcTemplate.query(Objects.requireNonNull(sql.toString()), (rs, rowNum) -> {
+			String rawType = rs.getString("client_type");
+			ClientType type = rawType != null ? ClientType.valueOf(rawType) : ClientType.UNKNOWN;
+			return new RawCompositionRow(
+					type,
+					rs.getLong("total_reqs"),
+					rs.getLong("blocked_reqs"),
+					rs.getInt("subnets_cnt")
+			);
+		}, params.toArray());
+	}
+
+	public record RawScatterCluster(
+			String subnetGroup,
+			long totalRequests,
+			long activeRequests,
+			long blockedRequests,
+			int distinctClients,
+			Long asn,
+			String asOrg,
+			String countryCode,
+			ClientType clientType
+	) {}
+
+	public List<RawScatterCluster> findScatterClusters(
+			List<String> servers,
+			List<String> valves,
+			Instant from,
+			Instant to,
+			int limit
+	) {
+		StringBuilder sql = new StringBuilder("""
+				SELECT
+				    subnet_group,
+				    SUM(total_requests) AS total_reqs,
+				    SUM(active_requests) AS active_reqs,
+				    SUM(blocked_requests) AS blocked_reqs,
+				    MAX(distinct_clients) AS max_distinct_clients,
+				    MAX(asn) AS asn,
+				    MAX(as_org) AS as_org,
+				    MAX(country_code) AS country_code,
+				    MAX(client_type) AS client_type
+				FROM client_subnet_rollups
+				WHERE 1=1
+				""");
+		List<Object> params = new ArrayList<>();
+		appendFilterConditions(sql, params, servers, valves, from, to, null, null, null);
+		sql.append(" GROUP BY subnet_group HAVING SUM(total_requests) > 0");
+		sql.append(" ORDER BY SUM(blocked_requests) DESC, SUM(total_requests) DESC LIMIT ?");
+		params.add(limit);
+
+		return jdbcTemplate.query(Objects.requireNonNull(sql.toString()), (rs, rowNum) -> {
+			Long asnVal = rs.getObject("asn") != null ? rs.getLong("asn") : null;
+			String rawType = rs.getString("client_type");
+			ClientType type = rawType != null ? ClientType.valueOf(rawType) : ClientType.UNKNOWN;
+			return new RawScatterCluster(
+					rs.getString("subnet_group"),
+					rs.getLong("total_reqs"),
+					rs.getLong("active_reqs"),
+					rs.getLong("blocked_reqs"),
+					rs.getInt("max_distinct_clients"),
+					asnVal,
+					rs.getString("as_org"),
+					rs.getString("country_code"),
+					type
+			);
+		}, params.toArray());
+	}
+
 	public int deleteOlderThan(Instant cutoff) {
 		String sql = "DELETE FROM client_subnet_rollups WHERE bucket_start < ?";
 		return jdbcTemplate.update(sql, Timestamp.from(cutoff));

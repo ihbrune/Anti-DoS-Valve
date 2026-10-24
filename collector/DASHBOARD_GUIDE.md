@@ -40,7 +40,18 @@ Each card represents a distinct Tomcat instance:
 * **Valve Breakdown:** Lists each active valve within that node, its current operating mode (`BLOCKING` or `MARKING`), slot length, and request throughput.
 * **Direct Navigation:** Click any server card header to open the dedicated **Server Node Detail View** (`/server/{serverId}`).
 
-### 3. Quick Top Offending Clients (Fleet-wide)
+### 3. Visual Telemetry & Attack Forensics Card
+A high-resolution visualization suite powered by standalone Chart.js:
+* **Traffic & Attack Timeline (Stacked Bar / Area):** Visualizes incoming request volume split into allowed requests (sky blue) and HTTP 429 blocked attacks (vivid danger red) over time (`1h`, `24h`, `7d`).
+* **Traffic Composition & Bot-Mix Donut:** Breaks down fleet traffic by verified category (Search Engines, AI Crawlers, Datacenter / Cloud, Residential ISP, Tor Anonymizers, Mobile Cellular, and Standard Clients) with percentage shares and block rates.
+* **Residential Proxy & Subnet Scatterplot (Cluster Forensics):** Maps subnet partitions on a 2D logarithmic coordinate system:
+  * **X-Axis:** Unique client IPs in the subnet.
+  * **Y-Axis:** Average requests per IP address.
+  * **Bubble Radius:** Proportional to total request volume.
+  * **Color Coding:** Outlines residential proxy clusters (red), datacenter scrapers (amber), Tor exit nodes (purple), and benign crawlers (green).
+  * **Interactive Drill-Down:** Clicking any bubble instantly filters the Top Offenders table for that specific CIDR prefix.
+
+### 4. Quick Top Offending Clients (Fleet-wide)
 A quick-look table showing top blocked IPs across all servers with one-click time horizon toggles (`1h`, `24h`, `7d`). For full forensic rollup analysis, use the dedicated Top Offenders view.
 
 ---

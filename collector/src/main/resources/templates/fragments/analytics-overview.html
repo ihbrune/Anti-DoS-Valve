@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- Telemetry Analytics Fragment -->
+<div th:fragment="analyticsCard" id="analytics-container" class="table-card" style="padding: 20px; margin-bottom: 28px;">
+    <!-- Analytics Header & Control Bar -->
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 20px;">
+        <div>
+            <div style="font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                <span>&#x1F4CA;</span> Visual Telemetry &amp; Attack Forensics
+                <span th:if="${analytics != null and analytics.totalBlocked > 0}"
+                      class="badge" style="background: var(--color-danger-glow); color: var(--color-danger); border: 1px solid var(--color-danger); font-size: 11px;">
+                    <span th:text="${analytics.blockedRatioPercent} + '% Attacks Blocked'">12.4% Attacks Blocked</span>
+                </span>
+            </div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 3px;">
+                Long-term aggregation and cluster analysis based on Subnet Rollups &amp; Telemetry Slots
+            </div>
+        </div>
+
+        <!-- Controls: Tab Switcher & Time Presets -->
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <!-- Tab Switcher -->
+            <div class="pills-group" style="margin-bottom: 0;">
+                <button type="button"
+                        class="btn"
+                        th:classappend="${activeTab == 'charts' ? 'btn-primary' : ''}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='charts')}"
+                        hx-target="#analytics-container"
+                        hx-swap="outerHTML"
+                        style="padding: 5px 12px; font-size: 12px;">
+                    <span>&#x1F4CA;</span> Timeline &amp; Bot-Mix
+                </button>
+                <button type="button"
+                        class="btn"
+                        th:classappend="${activeTab == 'scatter' ? 'btn-primary' : ''}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter')}"
+                        hx-target="#analytics-container"
+                        hx-swap="outerHTML"
+                        style="padding: 5px 12px; font-size: 12px;">
+                    <span>&#x1F3AF;</span> Subnet Scatterplot
+                </button>
+            </div>
+
+            <!-- Time Window Selector -->
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <button type="button" class="btn"
+                        th:classappend="${selectedHours == 1 ? 'btn-primary' : ''}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=1,tab=${activeTab})}"
+                        hx-target="#analytics-container"
+                        hx-swap="outerHTML"
+                        style="padding: 4px 10px; font-size: 11px;">1h</button>
+                <button type="button" class="btn"
+                        th:classappend="${selectedHours == 24 ? 'btn-primary' : ''}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=24,tab=${activeTab})}"
+                        hx-target="#analytics-container"
+                        hx-swap="outerHTML"
+                        style="padding: 4px 10px; font-size: 11px;">24h</button>
+                <button type="button" class="btn"
+                        th:classappend="${selectedHours == 168 ? 'btn-primary' : ''}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=168,tab=${activeTab})}"
+                        hx-target="#analytics-container"
+                        hx-swap="outerHTML"
+                        style="padding: 4px 10px; font-size: 11px;">7d</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Empty State -->
+    <div th:if="${analytics == null or (analytics.timeline.empty and analytics.composition.empty and analytics.scatterPoints.empty)}"
+         style="text-align: center; padding: 40px 20px; color: var(--text-muted);">
+        <div style="font-size: 32px; margin-bottom: 8px;">&#x1F4BE;</div>
+        <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">No Aggregated Rollups Yet</div>
+        <div style="font-size: 12px; max-width: 480px; margin: 0 auto 16px auto;">
+            Subnet rollups are automatically aggregated in background windows. You can wait for the next scheduled cycle or trigger an immediate catch-up.
+        </div>
+        <button type="button" class="btn btn-primary"
+                hx-post="/api/v1/rollups/subnets/aggregate?hours=24"
+                hx-swap="none"
+                hx-on::after-request="htmx.ajax('GET', '/fragments/analytics-overview?hours=24', '#analytics-container')">
+            <span>&#x26A1;</span> Trigger Rollup Catch-Up
+        </button>
+    </div>
+
+    <!-- View A: Timeline & Bot-Mix Charts (Step 1) -->
+    <div th:if="${analytics != null and (!analytics.timeline.empty or !analytics.composition.empty) and activeTab != 'scatter'}"
+         style="display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr); gap: 20px; align-items: stretch;">
+
+        <!-- Left Column: Traffic & Attack Timeline -->
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div style="font-weight: 600; font-size: 13px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                    <span>&#x1F4CA;</span> Traffic &amp; Attack Timeline
+                </div>
+                <div style="font-size: 11px; color: var(--text-muted);">
+                    <span th:text="${analytics.totalRequests} + ' requests'">0 requests</span>
+                    (<span style="color: var(--color-danger);" th:text="${analytics.totalBlocked} + ' blocked'">0 blocked</span>)
+                </div>
+            </div>
+            <div style="flex: 1; min-height: 260px; position: relative;">
+                <canvas id="timelineChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Right Column: Traffic Composition & Bot-Mix -->
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div style="font-weight: 600; font-size: 13px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                    <span>&#x1F916;</span> Traffic Composition &amp; Bot-Mix
+                </div>
+                <div style="font-size: 11px; color: var(--text-muted);" th:text="${analytics.composition.size()} + ' categories'">
+                    Categories
+                </div>
+            </div>
+            <div style="flex: 1; min-height: 260px; position: relative;">
+                <canvas id="compositionChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- View B: Residential Proxy & Subnet Scatterplot (Step 2) -->
+    <div th:if="${analytics != null and !analytics.scatterPoints.empty and activeTab == 'scatter'}"
+         style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px;">
+            <div>
+                <div style="font-weight: 600; font-size: 13px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                    <span>&#x1F3AF;</span> Residential Proxy &amp; Distributed Botnet Cluster Analysis
+                </div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                    Identifies distributed attacks where hundreds of residential IPs send low-frequency requests to bypass traditional single-IP rate limits.
+                </div>
+            </div>
+            <div class="badge" style="background: rgba(56, 189, 248, 0.12); color: var(--color-primary); font-size: 11px;">
+                <span th:text="${analytics.scatterPoints.size()} + ' Subnet Clusters Analyzed'">0 Clusters</span>
+            </div>
+        </div>
+
+        <!-- Explanatory Guide Box -->
+        <div style="display: flex; gap: 16px; flex-wrap: wrap; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 14px; margin-bottom: 12px; font-size: 11px;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #f43f5e;"></span>
+                <span><strong>Residential Proxy Attack:</strong> Many IPs (high X), low requests/IP (low Y), high block rate</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #f59e0b;"></span>
+                <span><strong>Datacenter Scrapers:</strong> Moderate IPs, high burst rate</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; color: var(--text-muted); margin-left: auto;">
+                <span>💡 Click on any bubble to inspect all matching clients in Offenders View</span>
+            </div>
+        </div>
+
+        <div style="height: 380px; position: relative;">
+            <canvas id="scatterChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Hidden Raw JSON container for safe chart initialization -->
+    <script type="application/json" id="analytics-data-payload" th:text="${analyticsJson}"></script>
+
+    <script>
+        (function() {
+            function initCharts() {
+                if (typeof window.AntiDoSCharts === 'undefined' || typeof Chart === 'undefined') {
+                    // Script still loading, retry shortly
+                    setTimeout(initCharts, 50);
+                    return;
+                }
+
+                const payloadEl = document.getElementById('analytics-data-payload');
+                if (!payloadEl || !payloadEl.textContent) return;
+
+                try {
+                    const data = JSON.parse(payloadEl.textContent);
+                    if (!data) return;
+
+                    if (document.getElementById('timelineChart') && data.timeline) {
+                        window.AntiDoSCharts.renderTimeline('timelineChart', data.timeline);
+                    }
+                    if (document.getElementById('compositionChart') && data.composition) {
+                        window.AntiDoSCharts.renderComposition('compositionChart', data.composition);
+                    }
+                    if (document.getElementById('scatterChart') && data.scatterPoints) {
+                        window.AntiDoSCharts.renderScatter('scatterChart', data.scatterPoints);
+                    }
+                } catch (e) {
+                    console.error('Failed to parse analytics payload:', e);
+                }
+            }
+
+            initCharts();
+        })();
+    </script>
+</div>
+
+</body>
+</html>

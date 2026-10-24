@@ -33,6 +33,7 @@ public class ApiController {
 	private final PollEventLogRepository pollEventLogRepository;
 	private final org.henbru.antidos.collector.storage.SubnetRollupRepository subnetRollupRepository;
 	private final org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService;
+	private final org.henbru.antidos.collector.aggregation.AnalyticsService analyticsService;
 
 	public ApiController(
 			HeartbeatRepository heartbeatRepository,
@@ -40,13 +41,15 @@ public class ApiController {
 			ClientEventRepository clientEventRepository,
 			PollEventLogRepository pollEventLogRepository,
 			org.henbru.antidos.collector.storage.SubnetRollupRepository subnetRollupRepository,
-			org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService) {
+			org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService,
+			org.henbru.antidos.collector.aggregation.AnalyticsService analyticsService) {
 		this.heartbeatRepository = heartbeatRepository;
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
 		this.pollEventLogRepository = pollEventLogRepository;
 		this.subnetRollupRepository = subnetRollupRepository;
 		this.rollupAggregationService = rollupAggregationService;
+		this.analyticsService = analyticsService;
 	}
 
 	@GetMapping("/fleet")
@@ -165,6 +168,38 @@ public class ApiController {
 				"lookbackHours", hours,
 				"persistedRollups", count,
 				"executedAt", Instant.now().toString()
-		);
+ 		);
+	}
+
+	@GetMapping("/analytics/overview")
+	public org.henbru.antidos.collector.model.AnalyticsDashboardDto analyticsOverview(
+			@RequestParam(name = "hours", defaultValue = "24") int hours,
+			@RequestParam(name = "servers", required = false) List<String> servers,
+			@RequestParam(name = "valves", required = false) List<String> valves) {
+		return analyticsService.getDashboardAnalytics(hours, servers, valves);
+	}
+
+	@GetMapping("/analytics/timeline")
+	public List<org.henbru.antidos.collector.model.TimelinePoint> analyticsTimeline(
+			@RequestParam(name = "hours", defaultValue = "24") int hours,
+			@RequestParam(name = "servers", required = false) List<String> servers,
+			@RequestParam(name = "valves", required = false) List<String> valves) {
+		return analyticsService.getDashboardAnalytics(hours, servers, valves).timeline();
+	}
+
+	@GetMapping("/analytics/composition")
+	public List<org.henbru.antidos.collector.model.TrafficCompositionPoint> analyticsComposition(
+			@RequestParam(name = "hours", defaultValue = "24") int hours,
+			@RequestParam(name = "servers", required = false) List<String> servers,
+			@RequestParam(name = "valves", required = false) List<String> valves) {
+		return analyticsService.getDashboardAnalytics(hours, servers, valves).composition();
+	}
+
+	@GetMapping("/analytics/scatter")
+	public List<org.henbru.antidos.collector.model.SubnetScatterPoint> analyticsScatter(
+			@RequestParam(name = "hours", defaultValue = "24") int hours,
+			@RequestParam(name = "servers", required = false) List<String> servers,
+			@RequestParam(name = "valves", required = false) List<String> valves) {
+		return analyticsService.getDashboardAnalytics(hours, servers, valves).scatterPoints();
 	}
 }

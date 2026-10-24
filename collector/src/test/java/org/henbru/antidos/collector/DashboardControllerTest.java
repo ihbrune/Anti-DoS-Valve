@@ -260,5 +260,32 @@ class DashboardControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.status").value("SUCCESS"));
 	}
+
+	@Test
+	void testStaticChartAssetsServed() throws Exception {
+		mockMvc.perform(get("/js/chart.umd.min.js"))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(get("/js/collector-charts.js"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("AntiDoSCharts")));
+	}
+
+	@Test
+	void testAnalyticsOverviewFragmentLoads() throws Exception {
+		mockMvc.perform(get("/fragments/analytics-overview").param("hours", "24"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("analytics-container")))
+				.andExpect(content().string(containsString("Visual Telemetry &amp; Attack Forensics")));
+	}
+
+	@Test
+	void testAnalyticsApiEndpoints() throws Exception {
+		mockMvc.perform(get("/api/v1/analytics/overview").param("hours", "24"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.timeline").isArray())
+				.andExpect(jsonPath("$.composition").isArray())
+				.andExpect(jsonPath("$.scatterPoints").isArray());
+	}
 }
 

@@ -114,7 +114,11 @@ public class EndpointConfig {
 		if (valveName == null) {
 			return false;
 		}
-		return valves.stream().anyMatch(v -> v != null && v.getName() != null && v.getName().trim().equalsIgnoreCase(valveName.trim()));
+		if (valves.stream().anyMatch(v -> v != null && v.getName() != null && v.getName().trim().equalsIgnoreCase(valveName.trim()))) {
+			return true;
+		}
+		String normalizedTarget = ValveRuleResolver.normalizeValveName(valveName);
+		return !normalizedTarget.isEmpty() && valves.stream().anyMatch(v -> v != null && v.getName() != null && ValveRuleResolver.normalizeValveName(v.getName()).equals(normalizedTarget));
 	}
 
 	/**
@@ -124,8 +128,18 @@ public class EndpointConfig {
 		if (valves == null || valveName == null) {
 			return Optional.empty();
 		}
-		return valves.stream()
+		Optional<EndpointValveConfig> exact = valves.stream()
 				.filter(v -> v != null && v.getName() != null && v.getName().trim().equalsIgnoreCase(valveName.trim()))
+				.findFirst();
+		if (exact.isPresent()) {
+			return exact;
+		}
+		String normalizedTarget = ValveRuleResolver.normalizeValveName(valveName);
+		if (normalizedTarget.isEmpty()) {
+			return Optional.empty();
+		}
+		return valves.stream()
+				.filter(v -> v != null && v.getName() != null && ValveRuleResolver.normalizeValveName(v.getName()).equals(normalizedTarget))
 				.findFirst();
 	}
 

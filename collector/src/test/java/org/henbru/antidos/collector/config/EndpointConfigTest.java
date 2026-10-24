@@ -39,4 +39,17 @@ class EndpointConfigTest {
 
 		assertNull(converter.convert("   "));
 	}
+
+	@Test
+	void testRelaxedValveMatching() {
+		EndpointConfig ep = new EndpointConfig(
+				"Test-Node", "http://test", null, false, true,
+				List.of(new EndpointValveConfig("SUBNET MONITORING", true, 2, "500"))
+		);
+
+		assertTrue(ep.isValveIncluded("SUBNETMONITORING"));
+		assertTrue(ep.isValveIncluded("subnet-monitoring"));
+		assertTrue(ep.findValveConfig("SUBNETMONITORING").isPresent());
+		assertEquals(2, ep.findValveConfig("SUBNETMONITORING").get().getActiveMinCount());
+	}
 }

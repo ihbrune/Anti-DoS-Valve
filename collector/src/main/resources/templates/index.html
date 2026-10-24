@@ -6,6 +6,8 @@
     <title>Anti-DoS Fleet Dashboard</title>
     <link rel="stylesheet" th:href="@{/css/collector.css}">
     <script th:src="@{/js/theme.js}"></script>
+    <script th:src="@{/js/chart.umd.min.js}"></script>
+    <script th:src="@{/js/collector-charts.js}"></script>
     <script th:src="@{/js/htmx.min.js}" defer></script>
     <script th:src="@{/js/htmx-lite.js}" defer></script>
 </head>
@@ -74,6 +76,9 @@
     <div hx-get="/fragments/stats-overview" hx-trigger="every 10s" hx-target="#stats-overview" hx-swap="outerHTML">
         <div th:replace="~{fragments/stats-overview :: statsOverview}"></div>
     </div>
+
+    <!-- Visual Telemetry & Attack Forensics (Timeline, Bot-Mix & Residential Scatterplot) -->
+    <div th:replace="~{fragments/analytics-overview :: analyticsCard}"></div>
 
     <!-- Fleet Status Section -->
     <section>

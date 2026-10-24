@@ -44,6 +44,8 @@ public class DashboardController {
 	private final DocumentationService documentationService;
 	private final org.henbru.antidos.collector.config.CollectorProperties properties;
 	private final org.henbru.antidos.collector.config.ValveRuleResolver valveRuleResolver;
+	private final org.henbru.antidos.collector.aggregation.AnalyticsService analyticsService;
+	private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
 	@org.springframework.beans.factory.annotation.Autowired
 	public DashboardController(
@@ -54,7 +56,11 @@ public class DashboardController {
 			org.henbru.antidos.collector.storage.SubnetRollupRepository subnetRollupRepository,
 			DocumentationService documentationService,
 			org.henbru.antidos.collector.config.CollectorProperties properties,
-			org.henbru.antidos.collector.config.ValveRuleResolver valveRuleResolver) {
+			org.henbru.antidos.collector.config.ValveRuleResolver valveRuleResolver,
+			@org.springframework.beans.factory.annotation.Autowired(required = false)
+			org.henbru.antidos.collector.aggregation.AnalyticsService analyticsService,
+			@org.springframework.beans.factory.annotation.Autowired(required = false)
+			com.fasterxml.jackson.databind.ObjectMapper objectMapper) {
 		this.heartbeatRepository = heartbeatRepository;
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
@@ -63,6 +69,21 @@ public class DashboardController {
 		this.documentationService = documentationService;
 		this.properties = properties;
 		this.valveRuleResolver = valveRuleResolver != null ? valveRuleResolver : new org.henbru.antidos.collector.config.ValveRuleResolver(properties);
+		this.analyticsService = analyticsService;
+		this.objectMapper = objectMapper != null ? objectMapper : new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
+	}
+
+	public DashboardController(
+			HeartbeatRepository heartbeatRepository,
+			SlotSnapshotRepository slotSnapshotRepository,
+			ClientEventRepository clientEventRepository,
+			PollEventLogRepository pollEventLogRepository,
+			org.henbru.antidos.collector.storage.SubnetRollupRepository subnetRollupRepository,
+			DocumentationService documentationService,
+			org.henbru.antidos.collector.config.CollectorProperties properties,
+			org.henbru.antidos.collector.config.ValveRuleResolver valveRuleResolver) {
+		this(heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
+				subnetRollupRepository, documentationService, properties, valveRuleResolver, null, null);
 	}
 
 	public DashboardController(
@@ -74,7 +95,7 @@ public class DashboardController {
 			DocumentationService documentationService,
 			org.henbru.antidos.collector.config.CollectorProperties properties) {
 		this(heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
-				subnetRollupRepository, documentationService, properties, new org.henbru.antidos.collector.config.ValveRuleResolver(properties));
+				subnetRollupRepository, documentationService, properties, new org.henbru.antidos.collector.config.ValveRuleResolver(properties), null, null);
 	}
 
 	@org.springframework.web.bind.annotation.ModelAttribute("demoMode")
@@ -125,6 +146,26 @@ public class DashboardController {
 		List<EndpointHeartbeat> heartbeats = heartbeatRepository.findAll();
 		model.addAttribute("fleetSummary", buildFleetSummary(heartbeats));
 		return "fragments/stats-overview :: statsOverview";
+	}
+
+	@GetMapping("/fragments/analytics-overview")
+	public String analyticsOverviewFragment(
+			@RequestParam(name = "hours", defaultValue = "24") int hours,
+			@RequestParam(name = "servers", required = false) List<String> servers,
+			@RequestParam(name = "valves", required = false) List<String> valves,
+			@RequestParam(name = "tab", defaultValue = "charts") String tab,
+			Model model) {
+		if (analyticsService != null) {
+			org.henbru.antidos.collector.model.AnalyticsDashboardDto analytics =
+					analyticsService.getDashboardAnalytics(hours, servers, valves);
+			model.addAttribute("analytics", analytics);
+			model.addAttribute("analyticsJson", toJson(analytics));
+		}
+		model.addAttribute("selectedHours", hours);
+		model.addAttribute("activeTab", tab);
+		model.addAttribute("selectedServers", servers != null ? servers : List.of());
+		model.addAttribute("selectedValves", valves != null ? valves : List.of());
+		return "fragments/analytics-overview :: analyticsCard";
 	}
 
 	@GetMapping("/fragments/fleet")
@@ -347,6 +388,15 @@ public class DashboardController {
 		model.addAttribute("topOffenders", topOffenders);
 		model.addAttribute("recentEvents", recentEvents);
 		model.addAttribute("recentSlots", recentSlots);
+
+		if (analyticsService != null) {
+			org.henbru.antidos.collector.model.AnalyticsDashboardDto analytics =
+					analyticsService.getDashboardAnalytics(24, null, null);
+			model.addAttribute("analytics", analytics);
+			model.addAttribute("analyticsJson", toJson(analytics));
+		}
+		model.addAttribute("selectedHours", 24);
+		model.addAttribute("activeTab", "charts");
 	}
 
 	private void populateEventsModel(
@@ -461,6 +511,25 @@ public class DashboardController {
 		model.addAttribute("selectedTypes", clientTypes != null ? clientTypes : List.of());
 		model.addAttribute("selectedAsn", asnStr != null ? asnStr : "");
 		model.addAttribute("selectedStatus", status != null ? status : "ALL");
+
+		if (analyticsService != null) {
+			int hours = (int) Math.max(1, ChronoUnit.HOURS.between(fromTime, toTime));
+			org.henbru.antidos.collector.model.AnalyticsDashboardDto analytics =
+					analyticsService.getDashboardAnalytics(hours, servers, valves);
+			model.addAttribute("analytics", analytics);
+			model.addAttribute("analyticsJson", toJson(analytics));
+			model.addAttribute("selectedHours", hours);
+		}
+		model.addAttribute("activeTab", "scatter");
+	}
+
+	private String toJson(Object obj) {
+		if (obj == null) return "{}";
+		try {
+			return objectMapper.writeValueAsString(obj);
+		} catch (Exception e) {
+			return "{}";
+		}
 	}
 
 	private List<String> getAvailableServerIds() {

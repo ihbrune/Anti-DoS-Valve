@@ -93,11 +93,34 @@ public class ValveRuleResolver {
 		if (properties.getValveRules() == null || properties.getValveRules().isEmpty() || valveName == null) {
 			return null;
 		}
+		// 1. Exact match (case-insensitive)
 		for (Map.Entry<String, ValveRuleConfig> entry : properties.getValveRules().entrySet()) {
 			if (entry.getKey() != null && entry.getKey().trim().equalsIgnoreCase(valveName.trim())) {
 				return entry.getValue();
 			}
 		}
+		// 2. Relaxed match: Spring Boot's YAML relaxed binder strips spaces and non-alphanumeric chars
+		// from unbracketed map keys (e.g. 'SUBNET MONITORING' -> 'SUBNETMONITORING').
+		// We normalize both sides by removing whitespace, hyphens, and underscores.
+		String normalizedTarget = normalizeValveName(valveName);
+		if (!normalizedTarget.isEmpty()) {
+			for (Map.Entry<String, ValveRuleConfig> entry : properties.getValveRules().entrySet()) {
+				if (entry.getKey() != null && normalizeValveName(entry.getKey()).equals(normalizedTarget)) {
+					return entry.getValue();
+				}
+			}
+		}
 		return null;
+	}
+
+	/**
+	 * Normalizes a valve name for relaxed matching by removing whitespace, hyphens, and underscores,
+	 * and converting to lower case.
+	 */
+	public static String normalizeValveName(String name) {
+		if (name == null) {
+			return "";
+		}
+		return name.replaceAll("[\\s-_]+", "").toLowerCase(java.util.Locale.ROOT);
 	}
 }

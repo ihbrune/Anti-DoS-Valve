@@ -70,6 +70,7 @@ public class DemoDataSeeder {
 	private final org.henbru.antidos.collector.storage.CrawlerFeedRepository crawlerFeedRepository;
 	private final JdbcTemplate jdbcTemplate;
 	private final org.henbru.antidos.collector.config.CollectorProperties properties;
+	private final org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService;
 
 	public DemoDataSeeder(
 			SlotSnapshotRepository slotSnapshotRepository,
@@ -78,7 +79,9 @@ public class DemoDataSeeder {
 			PollEventLogRepository pollEventLogRepository,
 			org.henbru.antidos.collector.storage.CrawlerFeedRepository crawlerFeedRepository,
 			JdbcTemplate jdbcTemplate,
-			org.henbru.antidos.collector.config.CollectorProperties properties) {
+			org.henbru.antidos.collector.config.CollectorProperties properties,
+			@org.springframework.beans.factory.annotation.Autowired(required = false)
+			org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService) {
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
 		this.heartbeatRepository = heartbeatRepository;
@@ -86,6 +89,7 @@ public class DemoDataSeeder {
 		this.crawlerFeedRepository = crawlerFeedRepository;
 		this.jdbcTemplate = jdbcTemplate;
 		this.properties = properties;
+		this.rollupAggregationService = rollupAggregationService;
 	}
 
 	@EventListener(ApplicationReadyEvent.class)
@@ -435,6 +439,15 @@ public class DemoDataSeeder {
 		long elapsed = System.currentTimeMillis() - start;
 		log.info("Historical demo seed complete in {} ms: Ingested {} slot snapshots, {} client block events, and {} poll audit logs.",
 				elapsed, snapshots.size(), events.size(), logs.size());
+
+		if (rollupAggregationService != null) {
+			try {
+				int rolledUp = rollupAggregationService.aggregateCatchUp(168);
+				log.info("Historical demo rollups generated: {} subnet time-buckets for 7-day lookback.", rolledUp);
+			} catch (Exception e) {
+				log.warn("Could not aggregate demo rollups: {}", e.getMessage());
+			}
+		}
 	}
 
 	private ClientEvent createEnrichedEvent(

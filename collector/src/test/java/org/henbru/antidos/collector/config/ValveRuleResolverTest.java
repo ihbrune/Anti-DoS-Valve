@@ -100,4 +100,49 @@ class ValveRuleResolverTest {
 		assertTrue(wanted.isIncluded());
 		assertFalse(unwanted.isIncluded());
 	}
+
+	@Test
+	void testGlobalValveRuleMatchesRelaxedWhenSpringBootStripsSpaces() {
+		// When a user configures 'SUBNET MONITORING:' in YAML without brackets,
+		// Spring Boot's relaxed binder strips the spaces, storing the key as 'SUBNETMONITORING'.
+		properties.getValveRules().put("SUBNETMONITORING", new ValveRuleConfig(true, 1, "2000"));
+
+		// The Tomcat valve reports its configured name with spaces: 'SUBNET MONITORING'
+		EffectiveValveRule rule = resolver.resolve(null, "SUBNET MONITORING");
+
+		assertTrue(rule.collectActive());
+		assertEquals(1, rule.activeMinCount());
+		assertEquals("2000", rule.activeLimit());
+		assertEquals(EffectiveValveRule.RuleSource.VALVE_RULE, rule.source());
+		assertEquals("SUBNET MONITORING", rule.valveName());
+	}
+
+	@Test
+	void testGlobalValveRuleMatchesRelaxedWithDashesAndUnderscores() {
+		properties.getValveRules().put("Subnet-24-Limiter", new ValveRuleConfig(true, 2, "3000"));
+
+		// Match with spaces
+		EffectiveValveRule ruleSpaces = resolver.resolve(null, "Subnet 24 Limiter");
+		assertEquals(EffectiveValveRule.RuleSource.VALVE_RULE, ruleSpaces.source());
+		assertEquals(2, ruleSpaces.activeMinCount());
+
+		// Match with underscores
+		EffectiveValveRule ruleUnderscores = resolver.resolve(null, "SUBNET_24_LIMITER");
+		assertEquals(EffectiveValveRule.RuleSource.VALVE_RULE, ruleUnderscores.source());
+		assertEquals(2, ruleUnderscores.activeMinCount());
+	}
+
+	@Test
+	void testExactMatchTakesPrecedenceOverRelaxedMatch() {
+		properties.getValveRules().put("SUBNETMONITORING", new ValveRuleConfig(true, 1, "1000"));
+		properties.getValveRules().put("SUBNET MONITORING", new ValveRuleConfig(true, 5, "5000"));
+
+		EffectiveValveRule exact = resolver.resolve(null, "SUBNET MONITORING");
+		assertEquals(5, exact.activeMinCount());
+		assertEquals("5000", exact.activeLimit());
+
+		EffectiveValveRule stripped = resolver.resolve(null, "SUBNETMONITORING");
+		assertEquals(1, stripped.activeMinCount());
+		assertEquals("1000", stripped.activeLimit());
+	}
 }

@@ -58,6 +58,10 @@ collector:
 
   # 2. Global Valve-Name Rules: applies across all servers in your fleet for the matching valve name.
   # Eliminates duplicate configuration in multi-node clusters!
+  # TIP: If a valve name contains spaces (e.g. 'SUBNET MONITORING'), Spring Boot's YAML binder
+  # strips spaces from unbracketed keys ('SUBNETMONITORING'). The Collector automatically matches
+  # both relaxed and exact names. You can also use bracket notation (e.g. "[SUBNET MONITORING]:")
+  # to preserve exact spaces in the System Status dashboard table.
   valve-rules:
     # Scenario A: Subnet Aggregator -> capture every subnet immediately from count 1
     "Subnet-24-Limiter":
