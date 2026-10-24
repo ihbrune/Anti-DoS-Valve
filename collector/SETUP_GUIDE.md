@@ -25,9 +25,9 @@ To test the collector without connecting live Tomcat instances:
 
 ```bash
 # Using the Fat-JAR:
-java -jar collector/target/anti-dos-collector-1.7.3.jar demo
+java -jar collector/target/anti-dos-collector-1.7.4.jar demo
 # Or with a larger fleet (e.g. 3 instances per server type = 9 total servers A, B, C):
-java -jar collector/target/anti-dos-collector-1.7.3.jar demo 3
+java -jar collector/target/anti-dos-collector-1.7.4.jar demo 3
 
 # Or using Maven:
 mvn spring-boot:run -pl collector -Dspring-boot.run.arguments="demo"
@@ -47,7 +47,7 @@ mvn spring-boot:run -pl collector -Dspring-boot.run.arguments="demo"
 ```bash
 mvn package -pl collector
 ```
-Produces the executable Spring Boot JAR in `collector/target/anti-dos-collector-1.7.3.jar`.
+Produces the executable Spring Boot JAR in `collector/target/anti-dos-collector-1.7.4.jar`.
 
 ### 2. Configure Monitored Endpoints
 ```bash
@@ -66,7 +66,7 @@ collector:
 
 ### 3. Verify an Endpoint via CLI
 ```bash
-java -jar collector/target/anti-dos-collector-1.7.3.jar test-endpoint \
+java -jar collector/target/anti-dos-collector-1.7.4.jar test-endpoint \
   --url "http://localhost:8080/antidos-status" \
   --token "secretToken1" \
   --name "Web-Node-1"
@@ -74,7 +74,7 @@ java -jar collector/target/anti-dos-collector-1.7.3.jar test-endpoint \
 
 ### 4. Run the Collector
 ```bash
-java -jar collector/target/anti-dos-collector-1.7.3.jar
+java -jar collector/target/anti-dos-collector-1.7.4.jar
 ```
 Dashboard available at **`http://localhost:8090`**.
 
@@ -150,7 +150,7 @@ collector:
 
 #### Step 3: Install the Executable Binary
 ```bash
-sudo cp collector/target/anti-dos-collector-1.7.3.jar /opt/antidos-collector/anti-dos-collector.jar
+sudo cp collector/target/anti-dos-collector-1.7.4.jar /opt/antidos-collector/anti-dos-collector.jar
 sudo chown antidos:antidos /opt/antidos-collector/anti-dos-collector.jar
 sudo chmod 750 /opt/antidos-collector/anti-dos-collector.jar
 ```

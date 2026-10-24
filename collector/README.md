@@ -50,7 +50,7 @@ Launch the collector in **Demo Mode** against a simulated multi-server fleet wit
 mvn package -pl collector -DskipTests
 
 # Run Demo Mode (pre-seeds 7 days of realistic attack waves and telemetry)
-java -jar collector/target/anti-dos-collector-1.7.3.jar demo
+java -jar collector/target/anti-dos-collector-1.7.4.jar demo
 ```
 
 Open **`http://localhost:8090`** in your browser.
