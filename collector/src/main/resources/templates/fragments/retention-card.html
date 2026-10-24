@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- Fragment: retentionCard -->
+<div th:fragment="retentionCard" class="sys-card" id="retention-card">
+    <div class="sys-card-header">
+        <div class="sys-card-title">
+            <span>&#x1F9F9;</span> Data Retention &amp; Housekeeping
+        </div>
+        <span class="badge badge-info">Automated</span>
+    </div>
+
+    <div class="sys-prop-list" style="margin-bottom: 20px;">
+        <div class="sys-prop-row">
+            <span class="sys-prop-key">Raw Snapshots &amp; Client Events</span>
+            <span class="sys-prop-val" th:text="${status.config.retentionDays} + ' days'">30 days</span>
+        </div>
+        <div class="sys-prop-row">
+            <span class="sys-prop-key">Audit / Poll-Event-Log</span>
+            <span class="sys-prop-val" th:text="${status.config.pollLogRetentionDays} + ' days'">1 days</span>
+        </div>
+        <div class="sys-prop-row">
+            <span class="sys-prop-key">Orphan Network Entities</span>
+            <span class="sys-prop-val" th:text="${status.config.entityRetentionDays} + ' days'">60 days</span>
+        </div>
+        <div class="sys-prop-row">
+            <span class="sys-prop-key">Subnet Rollup Retention</span>
+            <span class="sys-prop-val" th:text="${status.config.rollupRetentionDays} + ' days'">180 days</span>
+        </div>
+        <div class="sys-prop-row">
+            <span class="sys-prop-key">Threat Intel Enrichment TTL</span>
+            <span class="sys-prop-val" th:text="${status.intel.ttlDays} + ' days'">30 days</span>
+        </div>
+    </div>
+
+    <div style="margin-bottom: 14px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+        <div style="font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">
+            Daily Housekeeping Schedule (03:00 AM)
+        </div>
+        <div style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.4;"
+             th:text="'Last run: ' + ${status.schedulers.lastRetentionSummary}">
+            Purged 120 snapshots, 450 events in 35ms
+        </div>
+    </div>
+
+    <div style="margin-bottom: 16px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+        <div style="font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">
+            Subnet Rollup Aggregation (Every 15 min)
+        </div>
+        <div style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.4;"
+             th:text="'Last run: ' + ${status.schedulers.lastRollupSummary}">
+            Persisted 10 subnet rollups in 12ms
+        </div>
+    </div>
+
+    <!-- In-Card Action Feedback Banner directly above buttons -->
+    <div th:if="${actionMessage != null}"
+         th:class="${actionSuccess ? 'alert alert-success' : 'alert alert-danger'}"
+         style="margin-bottom: 16px; padding: 12px 14px; font-size: 12.5px; border-radius: var(--radius-md); animation: fadeIn 0.3s ease-in-out;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span th:if="${actionSuccess}" style="font-size: 16px;">&#x2705;</span>
+                <span th:unless="${actionSuccess}" style="font-size: 16px;">&#x26A0;&#xFE0F;</span>
+                <span th:text="${actionMessage}" style="font-weight: 600;">Action completed</span>
+            </div>
+            <button type="button" class="btn" style="padding: 2px 8px; font-size: 11px;" onclick="this.closest('.alert').remove()">
+                &#x2715;
+            </button>
+        </div>
+    </div>
+
+    <div style="margin-top: auto; display: flex; flex-direction: column; gap: 8px;">
+        <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 2px;">
+            Manual Maintenance Triggers:
+        </div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button type="button" class="btn"
+                    style="font-size: 12px; padding: 6px 12px;"
+                    hx-post="/system/retention-cleanup"
+                    hx-target="#retention-card"
+                    hx-swap="outerHTML"
+                    hx-disabled-elt="this">
+                <span>&#x1F9F9;</span> Run Retention Cleanup Now
+            </button>
+            <button type="button" class="btn"
+                    style="font-size: 12px; padding: 6px 12px;"
+                    hx-post="/system/rollup-catchup"
+                    hx-target="#retention-card"
+                    hx-swap="outerHTML"
+                    hx-disabled-elt="this">
+                <span>&#x1F4CA;</span> Catch Up Subnet Rollups
+            </button>
+            <button type="button" class="btn"
+                    style="font-size: 12px; padding: 6px 12px;"
+                    hx-post="/system/clear-cache"
+                    hx-target="#retention-card"
+                    hx-swap="outerHTML"
+                    hx-disabled-elt="this">
+                <span>&#x267B;&#xFE0F;</span> Clear Resolver Cache
+            </button>
+        </div>
+    </div>
+
+    <!-- Out-of-band Toast Notification -->
+    <div id="toast-container" hx-swap-oob="true">
+        <div th:if="${actionMessage != null}"
+             th:class="${actionSuccess ? 'toast-notification success' : 'toast-notification danger'}"
+             id="system-toast">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span th:if="${actionSuccess}" style="font-size: 16px;">&#x2705;</span>
+                <span th:unless="${actionSuccess}" style="font-size: 16px;">&#x26A0;&#xFE0F;</span>
+                <span th:text="${actionMessage}" style="font-size: 12.5px; font-weight: 500;">Action completed</span>
+            </div>
+            <button type="button" class="btn" style="padding: 2px 8px; font-size: 11px; margin-left: 8px;" onclick="this.closest('.toast-notification').remove()">
+                &#x2715;
+            </button>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

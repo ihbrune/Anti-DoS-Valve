@@ -114,7 +114,14 @@ public class CollectorPollerService {
 		}
 	}
 
+	private volatile Instant lastFleetPollTime;
+
+	public Instant getLastFleetPollTime() {
+		return lastFleetPollTime;
+	}
+
 	public void pollFleet() {
+		this.lastFleetPollTime = Instant.now();
 		List<EndpointConfig> enabledEndpoints = properties.getEndpoints().stream()
 				.filter(endpoint -> endpoint != null && endpoint.isEnabled())
 				.toList();

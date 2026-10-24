@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<div th:fragment="actionFeedback" id="action-feedback">
+    <div th:if="${actionMessage != null}"
+         th:class="${actionSuccess ? 'alert alert-success' : 'alert alert-danger'}"
+         style="margin-bottom: 24px; padding: 14px 18px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: space-between; gap: 12px; animation: fadeIn 0.3s ease-in-out;"
+         role="alert">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span th:if="${actionSuccess}" style="font-size: 18px;">&#x2705;</span>
+            <span th:unless="${actionSuccess}" style="font-size: 18px;">&#x26A0;&#xFE0F;</span>
+            <span th:text="${actionMessage}" style="font-size: 13.5px; font-weight: 500;">Action completed</span>
+        </div>
+        <button type="button" class="btn" style="padding: 4px 10px; font-size: 12px;" onclick="this.closest('#action-feedback').innerHTML=''">
+            Dismiss
+        </button>
+    </div>
+</div>
+
+</body>
+</html>

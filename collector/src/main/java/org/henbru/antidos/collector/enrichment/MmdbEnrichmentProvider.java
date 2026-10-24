@@ -67,6 +67,22 @@ public class MmdbEnrichmentProvider implements AutoCloseable {
 		return asnReader != null || countryReader != null;
 	}
 
+	public boolean hasAsnReader() {
+		return asnReader != null;
+	}
+
+	public boolean hasCountryReader() {
+		return countryReader != null;
+	}
+
+	public com.maxmind.db.Metadata getAsnMetadata() {
+		return asnReader != null ? asnReader.getMetadata() : null;
+	}
+
+	public com.maxmind.db.Metadata getCountryMetadata() {
+		return countryReader != null ? countryReader.getMetadata() : null;
+	}
+
 	public RawGeoAsn lookup(InetAddress address) {
 		if (address == null) {
 			return new RawGeoAsn(null, null, null);

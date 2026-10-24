@@ -68,12 +68,29 @@ public class CollectorScheduler {
 		}
 	}
 
+	public record RetentionCleanupResult(
+			Instant executedAt,
+			int deletedSlots,
+			int deletedEvents,
+			int deletedLogs,
+			int deletedEntities,
+			int expiredEntities,
+			long durationMs
+	) {}
+
+	private volatile RetentionCleanupResult lastRetentionResult;
+
+	public RetentionCleanupResult getLastRetentionResult() {
+		return lastRetentionResult;
+	}
+
 	/**
 	 * Daily retention cleanup: deletes snapshots, client events, and poll event logs older than configured retention days.
 	 * Also purges unreferenced/orphan network entities and marks stale enrichments (> TTL) for re-resolution.
 	 */
 	@Scheduled(cron = "0 0 3 * * *") // Daily at 03:00 AM
-	public void runRetentionCleanup() {
+	public RetentionCleanupResult runRetentionCleanup() {
+		long start = System.currentTimeMillis();
 		int days = properties.getRetentionDays() > 0 ? properties.getRetentionDays() : 30;
 		Instant cutoff = Instant.now().minus(days, ChronoUnit.DAYS);
 		log.info("Running daily data retention cleanup for records older than {} days (cutoff: {})", days, cutoff);
@@ -99,8 +116,15 @@ public class CollectorScheduler {
 			entityResolver.clearCache();
 		}
 
-		log.info("Retention cleanup completed: purged {} slot snapshots, {} client events, {} poll event logs, {} orphan entities, and expired {} stale entities for re-enrichment",
-				deletedSlots, deletedEvents, deletedLogs, deletedEntities, expiredEntities);
+		long durationMs = System.currentTimeMillis() - start;
+		RetentionCleanupResult result = new RetentionCleanupResult(
+				Instant.now(), deletedSlots, deletedEvents, deletedLogs, deletedEntities, expiredEntities, durationMs
+		);
+		this.lastRetentionResult = result;
+
+		log.info("Retention cleanup completed in {}ms: purged {} slot snapshots, {} client events, {} poll event logs, {} orphan entities, and expired {} stale entities for re-enrichment",
+				durationMs, deletedSlots, deletedEvents, deletedLogs, deletedEntities, expiredEntities);
+		return result;
 	}
 
 	/**

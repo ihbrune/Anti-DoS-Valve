@@ -81,6 +81,14 @@ public class IntelRegistry {
 		return v4Ranges.size() + v6Ranges.size();
 	}
 
+	public int getV4RangeCount() {
+		return v4Ranges.size();
+	}
+
+	public int getV6RangeCount() {
+		return v6Ranges.size();
+	}
+
 	/**
 	 * Looks up all matching intelligence ranges overlapping the specified IP or subnet clientKey.
 	 */

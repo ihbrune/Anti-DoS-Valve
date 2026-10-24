@@ -120,6 +120,20 @@ public class RollupAggregationService {
 
 		return rollups.size();
 	}
+	/**
+	 * Execution result of a subnet rollup aggregation run.
+	 */
+	public record RollupExecutionResult(
+			Instant executedAt,
+			int persistedRollups,
+			long durationMs
+	) {}
+
+	private volatile RollupExecutionResult lastRollupResult;
+
+	public RollupExecutionResult getLastRollupResult() {
+		return lastRollupResult;
+	}
 
 	/**
 	 * Scheduled aggregation job running every 15 minutes by default.
@@ -133,10 +147,22 @@ public class RollupAggregationService {
 
 		try {
 			// Catch up the last 6 hours of completed windows aligned to configured rollupWindowMinutes
-			aggregateCatchUp(6);
+			executeManualCatchUp(6);
 		} catch (Exception e) {
 			log.error("Error executing scheduled subnet rollup: {}", e.getMessage(), e);
 		}
+	}
+
+	/**
+	 * Manually executes a catch-up run for the specified lookback hours, recording execution metrics.
+	 */
+	public RollupExecutionResult executeManualCatchUp(int lookbackHours) {
+		long start = System.currentTimeMillis();
+		int persisted = aggregateCatchUp(lookbackHours);
+		long durationMs = System.currentTimeMillis() - start;
+		RollupExecutionResult result = new RollupExecutionResult(Instant.now(), persisted, durationMs);
+		this.lastRollupResult = result;
+		return result;
 	}
 
 	/**

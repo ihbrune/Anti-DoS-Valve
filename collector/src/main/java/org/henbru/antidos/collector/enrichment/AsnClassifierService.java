@@ -199,4 +199,8 @@ public class AsnClassifierService {
 
 		return ClientType.UNKNOWN;
 	}
+
+	public int getHostingAsnCount() {
+		return hostingAsns.size();
+	}
 }

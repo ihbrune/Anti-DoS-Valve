@@ -295,4 +295,12 @@ public class EntityResolver {
 		}
 		return s;
 	}
+
+	public int getCacheSize() {
+		return entityCache.size();
+	}
+
+	public int getMaxCacheEntries() {
+		return MAX_CACHE_ENTRIES;
+	}
 }
