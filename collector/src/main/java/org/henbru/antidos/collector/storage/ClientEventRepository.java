@@ -282,6 +282,7 @@ public class ClientEventRepository {
 			String clientQuery,
 			List<String> clientTypes,
 			Long asn,
+			String asOrg,
 			String status,
 			int limit,
 			int offset
@@ -289,7 +290,7 @@ public class ClientEventRepository {
 		StringBuilder sql = new StringBuilder("SELECT * FROM client_events WHERE 1=1 ");
 		List<Object> params = new ArrayList<>();
 
-		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn, status);
+		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn, asOrg, status);
 
 		sql.append("ORDER BY slot_time DESC LIMIT ? OFFSET ?");
 		params.add(Math.max(1, Math.min(limit, 500)));
@@ -306,10 +307,25 @@ public class ClientEventRepository {
 			String clientQuery,
 			List<String> clientTypes,
 			Long asn,
+			String status,
 			int limit,
 			int offset
 	) {
-		return findRecentEventsFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn, null, limit, offset);
+		return findRecentEventsFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn, null, status, limit, offset);
+	}
+
+	public List<ClientEvent> findRecentEventsFiltered(
+			List<String> serverIds,
+			List<String> valveNames,
+			Instant fromTime,
+			Instant toTime,
+			String clientQuery,
+			List<String> clientTypes,
+			Long asn,
+			int limit,
+			int offset
+	) {
+		return findRecentEventsFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn, null, null, limit, offset);
 	}
 
 	public List<ClientEvent> findRecentEventsFiltered(
@@ -321,7 +337,27 @@ public class ClientEventRepository {
 			int limit,
 			int offset
 	) {
-		return findRecentEventsFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, null, null, null, limit, offset);
+		return findRecentEventsFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, null, null, null, null, limit, offset);
+	}
+
+	public long countRecentEventsFiltered(
+			List<String> serverIds,
+			List<String> valveNames,
+			Instant fromTime,
+			Instant toTime,
+			String clientQuery,
+			List<String> clientTypes,
+			Long asn,
+			String asOrg,
+			String status
+	) {
+		StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM client_events WHERE 1=1 ");
+		List<Object> params = new ArrayList<>();
+
+		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn, asOrg, status);
+
+		Long count = jdbcTemplate.queryForObject(sql.toString(), Long.class, params.toArray());
+		return count != null ? count : 0L;
 	}
 
 	public long countRecentEventsFiltered(
@@ -334,13 +370,7 @@ public class ClientEventRepository {
 			Long asn,
 			String status
 	) {
-		StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM client_events WHERE 1=1 ");
-		List<Object> params = new ArrayList<>();
-
-		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn, status);
-
-		Long count = jdbcTemplate.queryForObject(sql.toString(), Long.class, params.toArray());
-		return count != null ? count : 0L;
+		return countRecentEventsFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn, null, status);
 	}
 
 	public long countRecentEventsFiltered(
@@ -350,7 +380,7 @@ public class ClientEventRepository {
 			Instant toTime,
 			String clientQuery
 	) {
-		return countRecentEventsFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, null, null, null);
+		return countRecentEventsFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, null, null, null, null);
 	}
 
 	/**
@@ -365,6 +395,7 @@ public class ClientEventRepository {
 			String clientQuery,
 			List<String> clientTypes,
 			Long asn,
+			String asOrg,
 			String status,
 			String groupBy,
 			int limit
@@ -395,7 +426,7 @@ public class ClientEventRepository {
 				.append("WHERE 1=1 ");
 
 		List<Object> params = new ArrayList<>();
-		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn, status);
+		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn, asOrg, status);
 
 		sql.append("GROUP BY ").append(groupCol).append(" ");
 		sql.append("ORDER BY total_requests DESC LIMIT ?");
@@ -431,10 +462,25 @@ public class ClientEventRepository {
 			String clientQuery,
 			List<String> clientTypes,
 			Long asn,
+			String status,
 			String groupBy,
 			int limit
 	) {
-		return findTopOffendersFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn, null, groupBy, limit);
+		return findTopOffendersFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn, null, status, groupBy, limit);
+	}
+
+	public List<TopOffenderSummary> findTopOffendersFiltered(
+			List<String> serverIds,
+			List<String> valveNames,
+			Instant fromTime,
+			Instant toTime,
+			String clientQuery,
+			List<String> clientTypes,
+			Long asn,
+			String groupBy,
+			int limit
+	) {
+		return findTopOffendersFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn, null, null, groupBy, limit);
 	}
 
 	public List<TopOffenderSummary> findTopOffendersFiltered(
@@ -446,7 +492,7 @@ public class ClientEventRepository {
 			String groupBy,
 			int limit
 	) {
-		return findTopOffendersFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, null, null, null, groupBy, limit);
+		return findTopOffendersFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, null, null, null, null, groupBy, limit);
 	}
 
 	private void appendFilterCriteria(
@@ -459,6 +505,7 @@ public class ClientEventRepository {
 			String clientQuery,
 			List<String> clientTypes,
 			Long asn,
+			String asOrg,
 			String status
 	) {
 		if (serverIds != null && !serverIds.isEmpty()) {
@@ -492,6 +539,9 @@ public class ClientEventRepository {
 		if (asn != null) {
 			sql.append("AND asn = ? ");
 			params.add(asn);
+		} else if (asOrg != null && !asOrg.isBlank()) {
+			sql.append("AND LOWER(as_org) LIKE LOWER(?) ");
+			params.add("%" + asOrg.trim() + "%");
 		}
 
 		if (status != null && !status.isBlank() && !"ALL".equalsIgnoreCase(status.trim())) {
@@ -539,7 +589,7 @@ public class ClientEventRepository {
 						params.add(criteria.rawQuery() + "%");
 					}
 				} else if (criteria.hasFilter()) {
-					sql.append("AND (client_key LIKE ? OR subnet_group LIKE ? OR as_org LIKE ?) ");
+					sql.append("AND (client_key LIKE ? OR subnet_group LIKE ? OR LOWER(as_org) LIKE LOWER(?)) ");
 					String likePattern = "%" + criteria.rawQuery() + "%";
 					params.add(likePattern);
 					params.add(likePattern);

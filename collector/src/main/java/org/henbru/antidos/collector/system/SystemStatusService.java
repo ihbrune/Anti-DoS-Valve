@@ -184,9 +184,9 @@ public class SystemStatusService {
 		tableCounts.put("slot_snapshots", countTable("slot_snapshots"));
 		tableCounts.put("client_events", countTable("client_events"));
 		tableCounts.put("client_subnet_rollups", countTable("client_subnet_rollups"));
-		tableCounts.put("network_entities", countTable("network_entities"));
+		tableCounts.put("network_entity", countTable("network_entity"));
 		tableCounts.put("poll_event_log", countTable("poll_event_log"));
-		tableCounts.put("intel_ranges", countTable("intel_ranges"));
+		tableCounts.put("intel_range", countTable("intel_range"));
 		tableCounts.put("crawler_feeds", countTable("crawler_feeds"));
 
 		SystemStatusDto.HikariPoolInfo hikariInfo = null;

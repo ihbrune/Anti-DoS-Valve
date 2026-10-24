@@ -280,7 +280,7 @@ Automated background schedules execute daily at **03:00 AM** and **03:30 AM**:
 
 ## Relational Database Schema & Data Model
 
-The database separates transient telemetry from normalized network entities:
+The database separates real-time transient telemetry, persistent subnet aggregations, and normalized network intelligence:
 
 ```
  +------------------------+             +------------------------+
@@ -309,28 +309,77 @@ The database separates transient telemetry from normalized network entities:
  | UQ (server_id, valve_name, slot_key, client_key)              |
  |    request_count, retained_count, is_locked, status           |
  |    ip_version, cidr_prefix, ip_v4_start/end, ip_v6_start/end   |
+ |    subnet_group, asn, as_org, country_code, client_type       |
  | FK entity_id -------------------------------------------+     |
- +---------------------------------------------------------|-----+
-                                                           |
-                                                           | N
-                                                           | 1
- +---------------------+             +---------------------v-----+
- |      asn_info       |             |      network_entity       |
- +---------------------+             +---------------------------+
- | PK asn              |<- - - - - - | PK id                     |
- |    as_org           |  (logical)  | UQ client_key             |
- |    category         |             +---------------------------+
- +---------------------+
+ +-----------+---------------------------------------------|-----+
+             |                                             |
+             | aggregated into                             | N
+             | (15/60 min windows)                         | 1
+             v                                             v
+ +-----------------------------------+     +---------------------+
+ |       client_subnet_rollups       |     |   network_entity    |
+ +-----------------------------------+     +---------------------+
+ | PK id                             |     | PK id               |
+ | UQ (bucket_start, server, valve,  |     | UQ client_key       |
+ |     subnet_group)                 |     |    ip_v4_start/end  |
+ |    total/active/blocked_requests  |     |    subnet_group     |
+ |    distinct/min/max_clients       |     |    asn, as_org      |
+ |    asn, as_org, client_type       |     |    client_type      |
+ +-----------+-----------------------+     +----------+----------+
+             | 1                                      | 1
+             |                                        |
+             | N                                      | N
+ +-----------v------------+                +----------v----------+
+ |   rollup_signatures    |                | network_entity_match|
+ +------------------------+                +---------------------+
+ | PK id                  |                | PK id               |
+ | FK rollup_id           |                | FK entity_id        |
+ |    ua_id, req_count    |                | FK range_id         |
+ +------------------------+                +----------+----------+
+                                                      | N
+                                                      |
+                                                      | 1
+ +---------------------+                   +----------v----------+
+ |      asn_info       |                   |     intel_range     |
+ +---------------------+                   +---------------------+
+ | PK asn              |                   | PK id               |
+ |    as_org           |                   | FK source_key       |
+ |    category         |                   |    cidr, category   |
+ +---------------------+                   +----------+----------+
+                                                      | N
+                                                      |
+ +------------------------+                           | 1
+ |     crawler_feeds      |                +----------v----------+
+ +------------------------+                |    intel_source     |
+ | PK id                  |                +---------------------+
+ |    feed_name, status   |                | PK source_key       |
+ |    etag, last_synced_at|                |    display_name     |
+ +-----------+------------+                |    category, feed_url|
+             | 1                           +---------------------+
+             |
+             | N
+ +-----------v------------+
+ |     bot_ip_ranges      |
+ +------------------------+
+ | PK id                  |
+ | FK feed_id             |
+ |    bot_name, cidr      |
+ |    ip_v4/v6_start/end  |
+ +------------------------+
 ```
 
 ### Key Tables Overview
-1. **`endpoint_heartbeats`:** Real-time health, latency, and online/offline tracking per server.
-2. **`slot_snapshots`:** Completed and in-progress time-slots per server and valve.
-3. **`client_events`:** Individual rate-limit block records with numeric IPv4 boundaries (`ip_v4_start`, `ip_v4_end`) for sub-millisecond range lookups.
-4. **`network_entity`:** Normalized IP/subnet directory with ASN, country, and bot categorization.
-5. **`intel_source` & `intel_range`:** Automated verified crawler feed directory (Googlebot, Bingbot, OpenAI, Tor exit relays).
-6. **`client_subnet_rollups`:** Persistent 1-hour time-bucket aggregations per `/24` or `/64` for residential proxy cluster detection.
-7. **`poll_event_log`:** Diagnostic audit trail tracking background ingestion cycles.
+1. **`endpoint_heartbeats`:** Real-time health, latency, online/offline status, and valve discovery per monitored server node.
+2. **`slot_snapshots`:** Completed and active 1-minute time slots per server and valve instance with total request and client counts.
+3. **`client_events`:** Granular rate-limit events (both blocked attacks and tracked active clients) with numeric IPv4/IPv6 boundaries (`ip_v4_start`, `ip_v4_end`) for sub-millisecond range lookups.
+4. **`client_subnet_rollups`:** Persistent 1-hour time-bucket aggregations per `/24` (IPv4) or `/64` (IPv6) subnet partition with distinct client tracking, request percentiles, and botnet heuristic metrics.
+5. **`rollup_signatures`:** Optional User-Agent and client signature dimensions linked to subnet rollups for distributed fingerprinting.
+6. **`network_entity`:** Normalized directory of enriched client IPs and subnets with ASN, geolocation, threat classification, and first/last seen timestamps.
+7. **`network_entity_match`:** Cross-reference junction table linking detected network entities to specific matched threat intelligence ranges.
+8. **`intel_source` & `intel_range`:** Threat intelligence directory containing verified CIDR blocks from search engine bots, commercial AI scrapers, and Tor exit relays.
+9. **`asn_info`:** Autonomous System catalog caching organization names and datacenter / hosting provider classifications.
+10. **`crawler_feeds` & `bot_ip_ranges`:** Automatic synchronization catalog for official bot feeds (Googlebot, Bingbot, OpenAI, Anthropic) with versioning and orphan pruning.
+11. **`poll_event_log`:** Diagnostic audit trail tracking background ingestion cycles, communication latency, warnings, and recovery gap-fills.
 
 ---
 

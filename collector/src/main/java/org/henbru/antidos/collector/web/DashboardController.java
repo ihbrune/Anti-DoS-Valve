@@ -148,12 +148,33 @@ public class DashboardController {
 		return "fragments/stats-overview :: statsOverview";
 	}
 
+	@GetMapping("/analytics")
+	public String analyticsPage(
+			@RequestParam(name = "servers", required = false) List<String> servers,
+			@RequestParam(name = "valves", required = false) List<String> valves,
+			@RequestParam(name = "hours", defaultValue = "24") int hours,
+			@RequestParam(name = "tab", defaultValue = "charts") String tab,
+			Model model) {
+		populateAnalyticsModel(servers, valves, hours, tab, model);
+		return "analytics";
+	}
+
 	@GetMapping("/fragments/analytics-overview")
 	public String analyticsOverviewFragment(
 			@RequestParam(name = "hours", defaultValue = "24") int hours,
 			@RequestParam(name = "servers", required = false) List<String> servers,
 			@RequestParam(name = "valves", required = false) List<String> valves,
 			@RequestParam(name = "tab", defaultValue = "charts") String tab,
+			Model model) {
+		populateAnalyticsModel(servers, valves, hours, tab, model);
+		return "fragments/analytics-overview :: analyticsCard";
+	}
+
+	private void populateAnalyticsModel(
+			List<String> servers,
+			List<String> valves,
+			int hours,
+			String tab,
 			Model model) {
 		if (analyticsService != null) {
 			org.henbru.antidos.collector.model.AnalyticsDashboardDto analytics =
@@ -162,10 +183,11 @@ public class DashboardController {
 			model.addAttribute("analyticsJson", toJson(analytics));
 		}
 		model.addAttribute("selectedHours", hours);
-		model.addAttribute("activeTab", tab);
+		model.addAttribute("activeTab", tab != null ? tab : "charts");
+		model.addAttribute("availableServers", getAvailableServerIds());
+		model.addAttribute("availableValves", getAvailableValveNames(servers));
 		model.addAttribute("selectedServers", servers != null ? servers : List.of());
 		model.addAttribute("selectedValves", valves != null ? valves : List.of());
-		return "fragments/analytics-overview :: analyticsCard";
 	}
 
 	@GetMapping("/fragments/fleet")
@@ -275,7 +297,18 @@ public class DashboardController {
 			Model model) {
 		EndpointHeartbeat hb = heartbeatRepository.findByServerId(serverId).orElse(null);
 		List<SlotSnapshot> recentSlots = slotSnapshotRepository.findRecent(serverId, valve, 50);
-		List<ClientEvent> recentEvents = clientEventRepository.findRecentEvents(serverId, null, 100);
+		List<ClientEvent> recentEvents = clientEventRepository.findRecentEventsFiltered(
+				List.of(serverId),
+				valve != null ? List.of(valve) : null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				null,
+				"BLOCKED",
+				100,
+				0);
 
 		Instant minStartTime = recentSlots.isEmpty() ? null : recentSlots.get(recentSlots.size() - 1).startTime();
 		List<ClientEvent> slotEvents = (minStartTime != null)
@@ -285,6 +318,10 @@ public class DashboardController {
 						minStartTime,
 						null,
 						null,
+						null,
+						null,
+						null,
+						"BLOCKED",
 						500,
 						0)
 				: recentEvents;
@@ -422,14 +459,15 @@ public class DashboardController {
 		}
 
 		Long parsedAsn = parseAsn(asnStr);
+		String asOrgQuery = (parsedAsn == null && asnStr != null && !asnStr.isBlank()) ? asnStr.trim() : null;
 		String normalizedStatus = (status != null && !status.isBlank() && !"ALL".equalsIgnoreCase(status.trim()))
 				? status.trim().toUpperCase()
 				: null;
 
 		List<ClientEvent> events = clientEventRepository.findRecentEventsFiltered(
-				servers, valves, fromTime, toTime, clientQuery, clientTypes, parsedAsn, normalizedStatus, limit, offset);
+				servers, valves, fromTime, toTime, clientQuery, clientTypes, parsedAsn, asOrgQuery, normalizedStatus, limit, offset);
 		long totalCount = clientEventRepository.countRecentEventsFiltered(
-				servers, valves, fromTime, toTime, clientQuery, clientTypes, parsedAsn, normalizedStatus);
+				servers, valves, fromTime, toTime, clientQuery, clientTypes, parsedAsn, asOrgQuery, normalizedStatus);
 
 		boolean hasMore = (offset + events.size()) < totalCount;
 		int nextOffset = offset + limit;
@@ -475,6 +513,7 @@ public class DashboardController {
 		}
 
 		Long parsedAsn = parseAsn(asnStr);
+		String asOrgQuery = (parsedAsn == null && asnStr != null && !asnStr.isBlank()) ? asnStr.trim() : null;
 		String normalizedStatus = (status != null && !status.isBlank() && !"ALL".equalsIgnoreCase(status.trim()))
 				? status.trim().toUpperCase()
 				: null;
@@ -484,15 +523,15 @@ public class DashboardController {
 
 		if ("ROLLUP".equals(effectiveGroupBy)) {
 			List<org.henbru.antidos.collector.model.ClientSubnetRollup> subnetRollups = subnetRollupRepository.findRollupsFiltered(
-					servers, valves, fromTime, toTime, clientQuery, parsedAsn, clientTypes, limit, 0);
+					servers, valves, fromTime, toTime, clientQuery, parsedAsn, asOrgQuery, clientTypes, limit, 0);
 			long totalRollups = subnetRollupRepository.countRollupsFiltered(
-					servers, valves, fromTime, toTime, clientQuery, parsedAsn, clientTypes);
+					servers, valves, fromTime, toTime, clientQuery, parsedAsn, asOrgQuery, clientTypes);
 			model.addAttribute("subnetRollups", subnetRollups);
 			model.addAttribute("totalRollups", totalRollups);
 			model.addAttribute("topOffenders", List.of());
 		} else {
 			List<TopOffenderSummary> topOffenders = clientEventRepository.findTopOffendersFiltered(
-					servers, valves, fromTime, toTime, clientQuery, clientTypes, parsedAsn, normalizedStatus, effectiveGroupBy, limit);
+					servers, valves, fromTime, toTime, clientQuery, clientTypes, parsedAsn, asOrgQuery, normalizedStatus, effectiveGroupBy, limit);
 			model.addAttribute("topOffenders", topOffenders);
 			model.addAttribute("subnetRollups", List.of());
 			model.addAttribute("totalRollups", 0L);
@@ -511,16 +550,6 @@ public class DashboardController {
 		model.addAttribute("selectedTypes", clientTypes != null ? clientTypes : List.of());
 		model.addAttribute("selectedAsn", asnStr != null ? asnStr : "");
 		model.addAttribute("selectedStatus", status != null ? status : "ALL");
-
-		if (analyticsService != null) {
-			int hours = (int) Math.max(1, ChronoUnit.HOURS.between(fromTime, toTime));
-			org.henbru.antidos.collector.model.AnalyticsDashboardDto analytics =
-					analyticsService.getDashboardAnalytics(hours, servers, valves);
-			model.addAttribute("analytics", analytics);
-			model.addAttribute("analyticsJson", toJson(analytics));
-			model.addAttribute("selectedHours", hours);
-		}
-		model.addAttribute("activeTab", "scatter");
 	}
 
 	private String toJson(Object obj) {

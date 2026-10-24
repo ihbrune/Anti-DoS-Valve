@@ -281,6 +281,8 @@ body {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
+    white-space: nowrap;
+    line-height: 1.2;
 }
 
 .badge-success {
@@ -317,6 +319,73 @@ body {
     background: rgba(168, 85, 247, 0.15);
     color: #c084fc;
     border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+/* Event Total & Inline Status Cell */
+.event-total-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.event-total-count {
+    font-size: 13px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.event-total-count.count-active {
+    color: var(--color-primary);
+}
+
+.event-total-count.count-blocked {
+    color: var(--color-danger);
+}
+
+.badge-status {
+    padding: 2px 7px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    gap: 5px;
+    vertical-align: middle;
+}
+
+.status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.status-dot-active {
+    background-color: currentColor;
+    box-shadow: 0 0 5px currentColor;
+    animation: status-pulse 2s infinite ease-in-out;
+}
+
+@keyframes status-pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.45;
+        transform: scale(0.85);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .status-dot-active {
+        animation: none;
+    }
+}
+
+.status-icon {
+    flex-shrink: 0;
+    display: inline-block;
 }
 
 .log-err-text {

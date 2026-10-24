@@ -21,6 +21,7 @@ custom-hosting-asns.txt
 *.db
 *.db-journal
 *.db-shm
+*.db-wal
 *.mmdb
 # Benchmarks history
 .benchmarks/

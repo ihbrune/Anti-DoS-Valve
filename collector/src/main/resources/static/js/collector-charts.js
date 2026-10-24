@@ -38,6 +38,7 @@
         if (typeof Chart === 'undefined') return;
         const canvas = document.getElementById(canvasId);
         if (!canvas) return;
+        if (!timelineData || !Array.isArray(timelineData) || timelineData.length === 0) return;
 
         destroyChart(canvasId);
         const theme = getThemeColors();
@@ -154,19 +155,20 @@
         if (typeof Chart === 'undefined') return;
         const canvas = document.getElementById(canvasId);
         if (!canvas) return;
+        if (!compData || !Array.isArray(compData) || compData.length === 0) return;
 
         destroyChart(canvasId);
         const theme = getThemeColors();
 
         const colorMap = {
-            'HUMAN_BROWSER': { bg: '#38bdf8', label: 'Human / Browser' },
             'SEARCH_ENGINE': { bg: '#10b981', label: 'Search Engine' },
             'AI_CRAWLER': { bg: '#6366f1', label: 'AI Crawler' },
             'RESIDENTIAL': { bg: '#f59e0b', label: 'Residential ISP' },
             'DATACENTER': { bg: '#ec4899', label: 'Datacenter / Cloud' },
+            'MOBILE': { bg: '#0ea5e9', label: 'Mobile Network' },
             'TOR_EXIT_NODE': { bg: '#a855f7', label: 'Tor Anonymizer' },
             'PRIVATE_NETWORK': { bg: '#64748b', label: 'Private Network' },
-            'UNKNOWN': { bg: '#94a3b8', label: 'Unclassified' }
+            'UNKNOWN': { bg: '#94a3b8', label: 'Standard / Unclassified' }
         };
 
         const labels = compData.map(c => `${c.icon} ${c.label}`);
@@ -233,6 +235,7 @@
         if (typeof Chart === 'undefined') return;
         const canvas = document.getElementById(canvasId);
         if (!canvas) return;
+        if (!points || !Array.isArray(points) || points.length === 0) return;
 
         destroyChart(canvasId);
         const theme = getThemeColors();

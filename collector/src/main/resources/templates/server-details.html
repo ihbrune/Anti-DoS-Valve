@@ -22,6 +22,9 @@
             <a th:href="@{'/events?servers=' + ${serverId}}" class="btn" title="View Incident Explorer filtered for this node">
                 <span>&#x1F4CB;</span> Node Incidents
             </a>
+            <a th:href="@{'/analytics?servers=' + ${serverId}}" class="btn" title="Visual Telemetry &amp; Scatterplot filtered for this node">
+                <span>&#x1F4CA;</span> Node Analytics
+            </a>
             <a th:href="@{'/poll-log?serverId=' + ${serverId}}" class="btn" title="View polling event logs for this node">
                 <span>&#x1F4DC;</span> Node Poll Log
             </a>
@@ -239,8 +242,7 @@
                             <th>Client IP / Forensics</th>
                             <th>Requests</th>
                             <th>Retained</th>
-                            <th>Total</th>
-                            <th>State</th>
+                            <th style="min-width: 140px;">Total</th>
                             <th style="text-align: right;">Forensics</th>
                         </tr>
                     </thead>
@@ -273,10 +275,20 @@
                             </td>
                             <td th:text="${event.requestCount}">15</td>
                             <td th:text="${event.retainedCount}">5</td>
-                            <td><strong style="color:var(--color-danger);" th:text="${event.totalEffectiveCount}">20</strong></td>
                             <td>
-                                <span th:if="${event.completed}" class="badge badge-danger">LOCKED</span>
-                                <span th:unless="${event.completed}" class="badge badge-warning">IN PROGRESS</span>
+                                <div class="event-total-cell">
+                                    <strong class="event-total-count" th:classappend="${event.status == 'ACTIVE' ? 'count-active' : 'count-blocked'}"
+                                            th:text="${#numbers.formatInteger(event.totalEffectiveCount, 1, 'POINT')}">20</strong>
+                                    <span th:if="${event.status == 'ACTIVE'}" class="badge badge-info badge-status" title="Monitored active client within rate limits">
+                                        <span class="status-dot status-dot-active"></span>Active
+                                    </span>
+                                    <span th:if="${event.status != 'ACTIVE' and event.completed}" class="badge badge-danger badge-status" title="Rate-limit exceeded - Locked in completed slot">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" class="status-icon"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>Locked
+                                    </span>
+                                    <span th:if="${event.status != 'ACTIVE' and !event.completed}" class="badge badge-warning badge-status" title="Rate-limit exceeded - Currently blocked (429)">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" class="status-icon"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 6h2v6h-2V7zm0 8h2v2h-2v-2z"/></svg>Blocked
+                                    </span>
+                                </div>
                             </td>
                             <td style="text-align: right;">
                                 <a th:href="@{/events(clientQuery=${event.clientKey})}"

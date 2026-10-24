@@ -156,8 +156,8 @@
         </div>
     </div>
 
-    <!-- Hidden Raw JSON container for safe chart initialization -->
-    <script type="application/json" id="analytics-data-payload" th:text="${analyticsJson}"></script>
+    <!-- Hidden Raw JSON container for safe chart initialization (must use th:utext to avoid HTML entity encoding &quot; in script tags) -->
+    <script type="application/json" class="analytics-data-payload" id="analytics-data-payload" th:utext="${analyticsJson != null ? analyticsJson : '{}'}"></script>
 
     <script>
         (function() {
@@ -168,8 +168,11 @@
                     return;
                 }
 
-                const payloadEl = document.getElementById('analytics-data-payload');
-                if (!payloadEl || !payloadEl.textContent) return;
+                const container = document.getElementById('analytics-container');
+                const payloadEl = container
+                    ? (container.querySelector('.analytics-data-payload') || container.querySelector('#analytics-data-payload'))
+                    : document.getElementById('analytics-data-payload');
+                if (!payloadEl || !payloadEl.textContent || !payloadEl.textContent.trim()) return;
 
                 try {
                     const data = JSON.parse(payloadEl.textContent);
@@ -190,6 +193,15 @@
             }
 
             initCharts();
+
+            if (!window.__antiDoSChartsHtmxBound) {
+                window.__antiDoSChartsHtmxBound = true;
+                document.addEventListener('htmx:afterSwap', function(evt) {
+                    if (evt.target && (evt.target.id === 'analytics-container' || (evt.target.querySelector && evt.target.querySelector('#analytics-container')))) {
+                        setTimeout(initCharts, 20);
+                    }
+                });
+            }
         })();
     </script>
 </div>

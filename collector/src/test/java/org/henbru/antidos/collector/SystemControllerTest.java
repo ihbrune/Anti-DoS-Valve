@@ -87,6 +87,11 @@ class SystemControllerTest {
 		assertTrue(dto.database().tableCounts().containsKey("slot_snapshots"));
 		assertTrue(dto.database().tableCounts().containsKey("client_events"));
 		assertTrue(dto.database().tableCounts().containsKey("client_subnet_rollups"));
+		assertTrue(dto.database().tableCounts().containsKey("network_entity"));
+		assertTrue(dto.database().tableCounts().containsKey("intel_range"));
+		assertFalse(dto.database().tableCounts().containsKey("network_entities"));
+		assertFalse(dto.database().tableCounts().containsKey("intel_ranges"));
+		assertTrue(dto.database().tableCounts().get("intel_range") > 0);
 		assertNotNull(dto.runtime().javaVersion());
 		assertTrue(dto.runtime().availableProcessors() > 0);
 

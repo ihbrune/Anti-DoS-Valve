@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visual Analytics &amp; Cluster Forensics - Anti-DoS Collector</title>
+    <link rel="stylesheet" th:href="@{/css/collector.css}">
+    <script th:src="@{/js/theme.js}"></script>
+    <script th:src="@{/js/chart.umd.min.js}"></script>
+    <script th:src="@{/js/collector-charts.js}"></script>
+    <script th:src="@{/js/htmx.min.js}" defer></script>
+    <script th:src="@{/js/htmx-lite.js}" defer></script>
+</head>
+<body>
+
+<div class="app-container">
+    <!-- Navbar -->
+    <header class="navbar">
+        <a href="/" class="brand">
+            <div class="brand-icon">&#x1F6E1;</div>
+            <div>
+                <div class="brand-title">Anti-DoS Fleet Manager</div>
+                <div class="brand-subtitle">Visual Telemetry &amp; Cluster Analytics</div>
+            </div>
+        </a>
+        <div class="nav-actions">
+            <a href="/" class="btn">
+                <span>&#x2190;</span> Dashboard
+            </a>
+            <a href="/offenders" class="btn" title="Detailed Top Offender & Subnet Rollup Tables">
+                <span>&#x26A0;</span> Top Offenders
+            </a>
+            <a href="/events" class="btn" title="Multi-Server Incident Explorer with advanced filtering">
+                <span>&#x1F4CB;</span> Incident Explorer
+            </a>
+            <a href="/poll-log" class="btn" title="View data collection event log and diagnostics">
+                <span>&#x1F4DC;</span> Event Log
+            </a>
+            <a href="/crawlers" class="btn" title="Verified Search Engine & AI Crawler IP Range Feeds">
+                <span>&#x1F916;</span> Crawlers &amp; Bots
+            </a>
+            <a href="/system" class="btn" title="System status, telemetry rules &amp; configuration">
+                <span>&#x2699;</span> System &amp; Config
+            </a>
+            <button type="button" class="btn"
+                    hx-get="/fragments/help?doc=ui&section=visual-analytics-cluster-forensics"
+                    hx-target="#help-drawer-content"
+                    onclick="openHelpDrawer()"
+                    title="Open Visual Analytics &amp; Cluster Forensics Help Guide">
+                <span>&#x2753;</span> Guide
+            </button>
+            <a href="/help" class="btn" title="Full offline documentation repository">
+                <span>&#x1F4D6;</span> Docs
+            </a>
+            <button type="button" class="btn btn-theme-toggle" onclick="toggleTheme()" title="Switch Light / Dark Theme" aria-label="Toggle theme">
+                <span class="theme-icon-sun">&#x2600;&#xFE0F;</span>
+                <span class="theme-icon-moon">&#x1F319;</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Header & Title -->
+    <div class="section-header" style="margin-bottom: 20px;">
+        <div>
+            <div class="section-title">
+                <span>&#x1F4CA;</span> Visual Telemetry &amp; Cluster Forensics
+            </div>
+            <div style="font-size: 13px; color: var(--text-muted); margin-top: 3px;">
+                Interactive trend curves, bot-mix categorization, and 2D residential proxy cluster analysis
+            </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <a href="/offenders" class="btn" style="border-color: var(--border-accent); color: var(--color-primary);" title="Jump to tabular Top Offenders view">
+                <span>&#x26A0;</span> Inspect Offenders Table &rarr;
+            </a>
+        </div>
+    </div>
+
+    <!-- Filter Panel specifically controlling the Visual Analytics -->
+    <form id="analytics-filter-form"
+          hx-get="/fragments/analytics-overview"
+          hx-target="#analytics-container"
+          hx-swap="outerHTML"
+          hx-push-url="true"
+          class="filter-panel">
+
+        <div class="filter-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
+            <!-- 1. Target Servers -->
+            <div class="filter-field">
+                <div class="filter-label" style="display: flex; justify-content: space-between;">
+                    <span>Target Servers</span>
+                    <a href="javascript:void(0);" onclick="toggleCheckboxes('server-cb', true)" style="color: var(--color-primary); text-decoration: none; font-size: 10px;">Select All</a>
+                </div>
+                <div class="pills-group">
+                    <label th:each="srv : ${availableServers}" class="pill-label">
+                        <input type="checkbox" name="servers" th:value="${srv}"
+                               class="server-cb"
+                               th:checked="${selectedServers != null and #lists.contains(selectedServers, srv)}"
+                               onchange="htmx.trigger('#analytics-filter-form', 'submit');">
+                        <span th:text="${srv}">Node-1</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 2. Target Valves -->
+            <div class="filter-field">
+                <div class="filter-label" style="display: flex; justify-content: space-between;">
+                    <span>Valves</span>
+                    <a href="javascript:void(0);" onclick="toggleCheckboxes('valve-cb', true)" style="color: var(--color-primary); text-decoration: none; font-size: 10px;">Select All</a>
+                </div>
+                <div class="pills-group">
+                    <label th:each="v : ${availableValves}" class="pill-label">
+                        <input type="checkbox" name="valves" th:value="${v}"
+                               class="valve-cb"
+                               th:checked="${selectedValves != null and #lists.contains(selectedValves, v)}"
+                               onchange="htmx.trigger('#analytics-filter-form', 'submit');">
+                        <span th:text="${v}">Primary</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 3. Time Horizon Preset -->
+            <div class="filter-field">
+                <div class="filter-label">Time Horizon Preset</div>
+                <div class="pills-group">
+                    <label class="pill-label">
+                        <input type="radio" name="hours" value="1" th:checked="${selectedHours == 1}"
+                               onchange="htmx.trigger('#analytics-filter-form', 'submit');">
+                        <span>1 Hour</span>
+                    </label>
+                    <label class="pill-label">
+                        <input type="radio" name="hours" value="6" th:checked="${selectedHours == 6}"
+                               onchange="htmx.trigger('#analytics-filter-form', 'submit');">
+                        <span>6 Hours</span>
+                    </label>
+                    <label class="pill-label">
+                        <input type="radio" name="hours" value="24" th:checked="${selectedHours == 24 or selectedHours == null}"
+                               onchange="htmx.trigger('#analytics-filter-form', 'submit');">
+                        <span>24 Hours (Default)</span>
+                    </label>
+                    <label class="pill-label">
+                        <input type="radio" name="hours" value="168" th:checked="${selectedHours == 168}"
+                               onchange="htmx.trigger('#analytics-filter-form', 'submit');">
+                        <span>7 Days</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 4. Visualization Focus Mode -->
+            <div class="filter-field">
+                <div class="filter-label">Visualization Focus Mode</div>
+                <div class="pills-group">
+                    <label class="pill-label">
+                        <input type="radio" name="tab" value="charts" th:checked="${activeTab == 'charts' or activeTab == null}"
+                               onchange="htmx.trigger('#analytics-filter-form', 'submit');">
+                        <span>&#x1F4CA; Traffic Timeline &amp; Bot-Mix</span>
+                    </label>
+                    <label class="pill-label">
+                        <input type="radio" name="tab" value="scatter" th:checked="${activeTab == 'scatter'}"
+                               onchange="htmx.trigger('#analytics-filter-form', 'submit');">
+                        <span>&#x1F3AF; Residential Proxy Scatterplot</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter Actions Bar -->
+        <div class="filter-actions">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button type="submit" class="btn btn-primary">
+                    <span>&#x1F50E;</span> Apply Analytics Filter
+                </button>
+                <a href="/analytics" class="btn">
+                    Reset
+                </a>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button type="button" class="btn"
+                        hx-post="/api/v1/rollups/subnets/aggregate?hours=24"
+                        hx-swap="none"
+                        hx-on::after-request="htmx.ajax('GET', '/fragments/analytics-overview?hours=24', '#analytics-container')"
+                        title="Force immediate rollup aggregation catch-up across all nodes">
+                    <span>&#x26A1;</span> Refresh Subnet Rollups
+                </button>
+                <a href="/api/v1/analytics/overview" target="_blank" class="btn" title="Raw JSON payload of timeline, composition, and cluster metrics">
+                    Raw JSON API
+                </a>
+            </div>
+        </div>
+    </form>
+
+    <!-- Visual Telemetry & Attack Forensics Card (Updates seamlessly with filter above) -->
+    <div th:replace="~{fragments/analytics-overview :: analyticsCard}"></div>
+
+    <!-- Contextual Help Drawer -->
+    <div th:replace="~{fragments/help-drawer :: helpDrawer}"></div>
+</div>
+
+<script>
+    function toggleCheckboxes(className, check) {
+        document.querySelectorAll('.' + className).forEach(cb => cb.checked = check);
+        htmx.trigger('#analytics-filter-form', 'submit');
+    }
+</script>
+
+</body>
+</html>

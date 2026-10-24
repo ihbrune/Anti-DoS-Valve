@@ -129,6 +129,7 @@ public class SubnetRollupRepository {
 			Instant to,
 			String subnetQuery,
 			Long asn,
+			String asOrg,
 			List<String> clientTypes,
 			int limit,
 			int offset
@@ -136,13 +137,46 @@ public class SubnetRollupRepository {
 		StringBuilder sql = new StringBuilder("SELECT * FROM client_subnet_rollups WHERE 1=1 ");
 		List<Object> params = new ArrayList<>();
 
-		appendFilterConditions(sql, params, servers, valves, from, to, subnetQuery, asn, clientTypes);
+		appendFilterConditions(sql, params, servers, valves, from, to, subnetQuery, asn, asOrg, clientTypes);
 
 		sql.append(" ORDER BY bucket_start DESC, total_requests DESC LIMIT ? OFFSET ?");
 		params.add(limit);
 		params.add(offset);
 
 		return jdbcTemplate.query(Objects.requireNonNull(sql.toString()), ROW_MAPPER, params.toArray());
+	}
+
+	public List<ClientSubnetRollup> findRollupsFiltered(
+			List<String> servers,
+			List<String> valves,
+			Instant from,
+			Instant to,
+			String subnetQuery,
+			Long asn,
+			List<String> clientTypes,
+			int limit,
+			int offset
+	) {
+		return findRollupsFiltered(servers, valves, from, to, subnetQuery, asn, null, clientTypes, limit, offset);
+	}
+
+	public long countRollupsFiltered(
+			List<String> servers,
+			List<String> valves,
+			Instant from,
+			Instant to,
+			String subnetQuery,
+			Long asn,
+			String asOrg,
+			List<String> clientTypes
+	) {
+		StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM client_subnet_rollups WHERE 1=1 ");
+		List<Object> params = new ArrayList<>();
+
+		appendFilterConditions(sql, params, servers, valves, from, to, subnetQuery, asn, asOrg, clientTypes);
+
+		Long count = jdbcTemplate.queryForObject(Objects.requireNonNull(sql.toString()), Long.class, params.toArray());
+		return count != null ? count : 0L;
 	}
 
 	public long countRollupsFiltered(
@@ -154,13 +188,7 @@ public class SubnetRollupRepository {
 			Long asn,
 			List<String> clientTypes
 	) {
-		StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM client_subnet_rollups WHERE 1=1 ");
-		List<Object> params = new ArrayList<>();
-
-		appendFilterConditions(sql, params, servers, valves, from, to, subnetQuery, asn, clientTypes);
-
-		Long count = jdbcTemplate.queryForObject(Objects.requireNonNull(sql.toString()), Long.class, params.toArray());
-		return count != null ? count : 0L;
+		return countRollupsFiltered(servers, valves, from, to, subnetQuery, asn, null, clientTypes);
 	}
 
 	public Optional<Instant> findLatestBucketEnd(String serverId, String valveName) {
@@ -307,6 +335,21 @@ public class SubnetRollupRepository {
 			Long asn,
 			List<String> clientTypes
 	) {
+		appendFilterConditions(sql, params, servers, valves, from, to, subnetQuery, asn, null, clientTypes);
+	}
+
+	private void appendFilterConditions(
+			StringBuilder sql,
+			List<Object> params,
+			List<String> servers,
+			List<String> valves,
+			Instant from,
+			Instant to,
+			String subnetQuery,
+			Long asn,
+			String asOrg,
+			List<String> clientTypes
+	) {
 		if (servers != null && !servers.isEmpty()) {
 			sql.append(" AND server_id IN (")
 					.append(String.join(",", Collections.nCopies(servers.size(), "?")))
@@ -328,12 +371,16 @@ public class SubnetRollupRepository {
 			params.add(Timestamp.from(to));
 		}
 		if (subnetQuery != null && !subnetQuery.trim().isEmpty()) {
-			sql.append(" AND subnet_group LIKE ?");
+			sql.append(" AND (subnet_group LIKE ? OR LOWER(as_org) LIKE LOWER(?))");
+			params.add("%" + subnetQuery.trim() + "%");
 			params.add("%" + subnetQuery.trim() + "%");
 		}
 		if (asn != null) {
 			sql.append(" AND asn = ?");
 			params.add(asn);
+		} else if (asOrg != null && !asOrg.isBlank()) {
+			sql.append(" AND LOWER(as_org) LIKE LOWER(?)");
+			params.add("%" + asOrg.trim() + "%");
 		}
 		if (clientTypes != null && !clientTypes.isEmpty()) {
 			sql.append(" AND client_type IN (")

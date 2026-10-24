@@ -6,8 +6,6 @@
     <title>Top Offender Analytics - Anti-DoS Collector</title>
     <link rel="stylesheet" th:href="@{/css/collector.css}">
     <script th:src="@{/js/theme.js}"></script>
-    <script th:src="@{/js/chart.umd.min.js}"></script>
-    <script th:src="@{/js/collector-charts.js}"></script>
     <script th:src="@{/js/htmx.min.js}" defer></script>
     <script th:src="@{/js/htmx-lite.js}" defer></script>
 </head>
@@ -26,6 +24,9 @@
         <div class="nav-actions">
             <a href="/" class="btn">
                 <span>&#x2190;</span> Dashboard
+            </a>
+            <a href="/analytics" class="btn" title="Visual timeline, bot-mix, and residential proxy cluster scatterplot">
+                <span>&#x1F4CA;</span> Analytics
             </a>
             <a href="/events" class="btn" title="View individual incident events log">
                 <span>&#x1F4CB;</span> Incident Explorer
@@ -120,17 +121,17 @@
                                th:value="${clientQuery}">
                     </div>
                     <div>
-                        <label class="filter-label" for="asnInput">Autonomous System (ASN)</label>
+                        <label class="filter-label" for="asnInput">Autonomous System (ASN) / Provider</label>
                         <input type="text"
                                id="asnInput"
                                name="asn"
                                class="input-control"
-                               placeholder="e.g. 3320 or AS15169"
+                               placeholder="e.g. 3320, AS13335 or Cloudflare"
                                th:value="${selectedAsn}">
                     </div>
                 </div>
                 <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-                    Filter offenders by IP, CIDR subnet, or Autonomous System number.
+                    Filter offenders by IP, CIDR subnet, ASN number (e.g. AS13335), or provider name (e.g. Amazon, Cloudflare).
                 </div>
             </div>
 
@@ -264,15 +265,15 @@
                         <option value="100" th:selected="${limit == 100}">100</option>
                     </select>
                 </label>
+                <a href="/analytics" class="btn" style="border-color: var(--border-accent); color: var(--color-primary);" title="Open visual trend curves, bot-mix, and residential cluster scatterplot">
+                    <span>&#x1F4CA;</span> Visual Analytics &amp; Scatterplot &rarr;
+                </a>
                 <a th:href="@{/api/v1/reputation/blocked-ips(format='text')}" target="_blank" class="btn" title="Export top offenders as firewall-compatible blocklist">
                     Export Blocklist (TXT)
                 </a>
             </div>
         </div>
     </form>
-
-    <!-- Visual Telemetry & Subnet Cluster Analytics -->
-    <div th:replace="~{fragments/analytics-overview :: analyticsCard}"></div>
 
     <!-- Offenders Table Card -->
     <div class="table-card">

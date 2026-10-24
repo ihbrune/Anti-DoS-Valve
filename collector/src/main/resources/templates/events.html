@@ -25,6 +25,9 @@
             <a href="/" class="btn">
                 <span>&#x2190;</span> Dashboard
             </a>
+            <a href="/analytics" class="btn" title="Visual trend curves, bot-mix, and residential proxy cluster scatterplot">
+                <span>&#x1F4CA;</span> Analytics
+            </a>
             <a href="/offenders" class="btn" title="View aggregated Top Offender and Subnet Analytics">
                 <span>&#x26A0;</span> Top Offenders
             </a>
@@ -118,17 +121,17 @@
                                th:value="${clientQuery}">
                     </div>
                     <div>
-                        <label class="filter-label" for="asnInput">Autonomous System (ASN)</label>
+                        <label class="filter-label" for="asnInput">Autonomous System (ASN) / Provider</label>
                         <input type="text"
                                id="asnInput"
                                name="asn"
                                class="input-control"
-                               placeholder="e.g. 3320 or AS15169"
+                               placeholder="e.g. 3320, AS13335 or Cloudflare"
                                th:value="${selectedAsn}">
                     </div>
                 </div>
                 <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-                    Matches single IPs, CIDR ranges (/24, /16, /64), or numeric ASN.
+                    Matches single IPs, CIDR ranges (/24, /16, /64), ASN numbers, or provider names (e.g. Amazon, Cloudflare).
                 </div>
             </div>
 

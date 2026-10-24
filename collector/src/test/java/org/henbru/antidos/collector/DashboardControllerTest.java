@@ -133,6 +133,11 @@ class DashboardControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("Tor Exit Node")));
 
+		mockMvc.perform(get("/events")
+						.param("asn", "Cloudflare"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Multi-Server Incident Explorer")));
+
 		mockMvc.perform(get("/fragments/events-table")
 						.param("clientQuery", "198.51.100.")
 						.param("clientTypes", "TOR_EXIT_NODE")
@@ -156,6 +161,11 @@ class DashboardControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("ASN Rollup (Fleet Autonomous System)")));
 
+		mockMvc.perform(get("/offenders")
+						.param("asn", "Amazon"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Top Offender Analytics &amp; Subnet Rollup")));
+
 		mockMvc.perform(get("/fragments/offenders-table")
 						.param("groupBy", "SUBNET")
 						.param("limit", "25"))
@@ -178,15 +188,26 @@ class DashboardControllerTest {
 				now.minusSeconds(60), now, 1250L, 10, 2, true, now
 		));
 
-		clientEventRepository.batchUpsert(List.of(new org.henbru.antidos.collector.model.ClientEvent(
-				null, "Demo-Server", "TEST-VALVE", 55555L,
-				now.minusSeconds(60), "198.51.100.42",
-				4, 32, null, null, null, null, "198.51.100.0/24",
-				15, 0, false, org.henbru.antidos.collector.model.ClientEvent.STATUS_BLOCKED, true, now,
-				8075L, "OpenAI / Microsoft", "US",
-				org.henbru.antidos.collector.model.ClientType.AI_CRAWLER,
-				org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
-		)));
+		clientEventRepository.batchUpsert(List.of(
+				new org.henbru.antidos.collector.model.ClientEvent(
+						null, "Demo-Server", "TEST-VALVE", 55555L,
+						now.minusSeconds(60), "198.51.100.42",
+						4, 32, null, null, null, null, "198.51.100.0/24",
+						15, 0, false, org.henbru.antidos.collector.model.ClientEvent.STATUS_BLOCKED, true, now,
+						8075L, "OpenAI / Microsoft", "US",
+						org.henbru.antidos.collector.model.ClientType.AI_CRAWLER,
+						org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+				),
+				new org.henbru.antidos.collector.model.ClientEvent(
+						null, "Demo-Server", "TEST-VALVE", 55555L,
+						now.minusSeconds(60), "198.51.100.99",
+						4, 32, null, null, null, null, "198.51.100.0/24",
+						5, 0, false, org.henbru.antidos.collector.model.ClientEvent.STATUS_ACTIVE, true, now,
+						8075L, "OpenAI / Microsoft", "US",
+						org.henbru.antidos.collector.model.ClientType.AI_CRAWLER,
+						org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+				)
+		));
 
 		mockMvc.perform(get("/server/Demo-Server"))
 				.andExpect(status().isOk())
@@ -199,6 +220,8 @@ class DashboardControllerTest {
 				.andExpect(content().string(containsString("TEST-VALVE")))
 				.andExpect(content().string(containsString("AI Bot")))
 				.andExpect(content().string(containsString("AS8075")))
+				.andExpect(content().string(containsString("198.51.100.42")))
+				.andExpect(content().string(not(containsString("198.51.100.99"))))
 				.andExpect(content().string(containsString("View Incidents &rarr;")));
 	}
 
@@ -276,7 +299,15 @@ class DashboardControllerTest {
 		mockMvc.perform(get("/fragments/analytics-overview").param("hours", "24"))
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("analytics-container")))
-				.andExpect(content().string(containsString("Visual Telemetry &amp; Attack Forensics")));
+				.andExpect(content().string(containsString("Visual Telemetry &amp; Attack Forensics")))
+				.andExpect(content().string(containsString("id=\"analytics-data-payload\">{\"")))
+				.andExpect(content().string(not(containsString("id=\"analytics-data-payload\">{&quot;"))));
+
+		mockMvc.perform(get("/analytics"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("analytics-container")))
+				.andExpect(content().string(containsString("id=\"analytics-data-payload\">{\"")))
+				.andExpect(content().string(not(containsString("id=\"analytics-data-payload\">{&quot;"))));
 	}
 
 	@Test

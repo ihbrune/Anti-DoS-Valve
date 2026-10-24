@@ -15,6 +15,7 @@ The Collector interface is built around high-throughput, real-time observability
 * **Top Navigation Bar:**
   * **Dashboard (`/`):** Real-time fleet overview, health cards, and top offenders.
   * **Top Offenders (`/offenders`):** Multi-server aggregation ranking, Subnet Rollup (`/24` & `/64`), and ASN cluster detection.
+  * **Analytics (`/analytics`):** Dedicated visual telemetry cockpit, attack timelines, bot-mix composition, and 2D residential proxy cluster scatterplots.
   * **Incident Explorer (`/events`):** High-resolution log search with CIDR subnets, exact time horizons, and classification tags.
   * **Event Log (`/poll-log`):** Background collection audit trail, latency tracking, and automatic recovery events.
   * **Crawlers & Bots (`/crawlers`):** Official search engine and AI scraper IP ranges with synchronization metrics.
@@ -40,19 +41,144 @@ Each card represents a distinct Tomcat instance:
 * **Valve Breakdown:** Lists each active valve within that node, its current operating mode (`BLOCKING` or `MARKING`), slot length, and request throughput.
 * **Direct Navigation:** Click any server card header to open the dedicated **Server Node Detail View** (`/server/{serverId}`).
 
-### 3. Visual Telemetry & Attack Forensics Card
-A high-resolution visualization suite powered by standalone Chart.js:
-* **Traffic & Attack Timeline (Stacked Bar / Area):** Visualizes incoming request volume split into allowed requests (sky blue) and HTTP 429 blocked attacks (vivid danger red) over time (`1h`, `24h`, `7d`).
-* **Traffic Composition & Bot-Mix Donut:** Breaks down fleet traffic by verified category (Search Engines, AI Crawlers, Datacenter / Cloud, Residential ISP, Tor Anonymizers, Mobile Cellular, and Standard Clients) with percentage shares and block rates.
-* **Residential Proxy & Subnet Scatterplot (Cluster Forensics):** Maps subnet partitions on a 2D logarithmic coordinate system:
-  * **X-Axis:** Unique client IPs in the subnet.
-  * **Y-Axis:** Average requests per IP address.
-  * **Bubble Radius:** Proportional to total request volume.
-  * **Color Coding:** Outlines residential proxy clusters (red), datacenter scrapers (amber), Tor exit nodes (purple), and benign crawlers (green).
-  * **Interactive Drill-Down:** Clicking any bubble instantly filters the Top Offenders table for that specific CIDR prefix.
+### 3. Quick Visual Telemetry Summary
+The fleet dashboard embeds a high-level visual summary of incoming traffic and rate-limiting blocks. For dedicated filter controls, interactive category focus pills, logarithmic zooming, and full residential cluster drilldowns, switch to the dedicated **[Visual Analytics & Cluster Forensics](/analytics)** view.
 
 ### 4. Quick Top Offending Clients (Fleet-wide)
 A quick-look table showing top blocked IPs across all servers with one-click time horizon toggles (`1h`, `24h`, `7d`). For full forensic rollup analysis, use the dedicated Top Offenders view.
+
+---
+
+## Visual Analytics & Cluster Forensics (/analytics)
+
+Accessible via `/analytics`. A dedicated visual observability cockpit designed for deep telemetry analysis, pattern recognition, and cluster forensics across long time horizons (`1h`, `6h`, `24h`, `7d`).
+
+Powered by local, self-contained Chart.js (`chart.umd.min.js`), this view delivers high-throughput client-side rendering with logarithmic scaling, dynamic tooltips, and interactive click-to-filter drilldowns without external CDN or npm dependencies.
+
+### 1. View Controls & Dedicated Filter Bar
+Unlike search tables that focus on individual log records, the `/analytics` filter bar directly controls the aggregated time buckets and cluster matrices:
+* **Server Node Selection:** Multi-select checkboxes to isolate specific Tomcat nodes or compare multi-region deployments.
+* **Valve Selector:** Select a specific rate-limiter instance (`Primary-Limiter`, `Subnet-Guard`) or evaluate all valves combined.
+* **Time Horizon Presets:**
+  * `1 Hour`: High-resolution real-time monitoring of active incidents and sudden traffic surges.
+  * `6 Hours`: Shift-level analysis covering recent peak or off-peak business cycles.
+  * `24 Hours`: Comprehensive daily telemetry baseline identifying diurnal cycles and recurring scraper waves.
+  * `7 Days`: Long-term trend analysis, baseline traffic growth, and persistent botnet activity.
+* **Category Focus Pills:** Instantly isolate or highlight specific traffic classifications:
+  * `All Categories`: Complete fleet-wide telemetry blend.
+  * `Residential Proxies`: Focus on distributed residential ISP clusters and suspect botnets.
+  * `Datacenter Scraping`: Highlight commercial cloud providers and VPS scrapers.
+  * `Anonymizer / Tor`: Isolate Tor exit nodes and VPN proxies.
+  * `Verified Crawlers`: Verify that legitimate search engines (Googlebot, Bingbot) and AI indexing bots operate unimpeded.
+* **Reactive HTMX Integration:** Switching any filter triggers an asynchronous HTMX request (`hx-get="/fragments/analytics-overview"`) targeting `#analytics-container`. Chart.js instances are cleanly destroyed and re-instantiated with zero screen flicker and no full-page reloads.
+
+---
+
+### 2. Traffic & Attack Timeline (Stacked Bar / Area Chart)
+
+Visualizes the temporal evolution of fleet traffic by stacking allowed requests against enforced rate-limiting blocks.
+
+#### Chart Anatomy & Metrics:
+* **X-Axis (Time):** Chronological bucket timestamps automatically adjusted to the selected horizon (minute intervals for `1h`, hourly intervals for `24h`/`7d`).
+* **Y-Axis (Requests / Blocks):** Dynamic linear scale showing HTTP transaction volume per time slice.
+* **Allowed Requests (Sky Blue / Cyan):** Total HTTP requests passed cleanly through the Valve to the upstream application.
+* **Blocked Attacks (Vivid Danger Red):** HTTP 429 (`Too Many Requests`) blocks enforced by the Valve against abusive IPs or subnets.
+
+#### Forensic Interpretation & Signature Patterns:
+* **Organic Traffic Baseline:** A healthy application exhibits smooth diurnal curves (rising during business hours, dipping at night) where the red block line remains near zero or represents a tiny, stable fraction (< 0.5%).
+* **Volumetric Layer-7 Flood (DDoS):** Marked by an abrupt vertical spike in red blocks while the blue line remains capped at the application's capacity threshold. The Valve successfully absorbs the spike, protecting backend Tomcat threads and database connection pools from exhaustion.
+* **Scheduled Scraper Cron Job:** Sharp, periodic block spikes appearing at exact clock intervals (e.g., every hour at :00, or daily at midnight UTC). Typically driven by automated price scrapers, competitor bots, or vulnerability scanners.
+* **Low-and-Slow Attack Waves:** Steady, elevated block rates persisting across days without dramatic volume peaks. Indicates distributed crawlers attempting to harvest data just below aggressive throttling limits.
+
+---
+
+### 3. Traffic Composition & Bot-Mix (Donut Chart)
+
+Provides an immediate forensic breakdown of who is consuming your application's resources and what proportion of each category is being rate-limited.
+
+#### Intelligence Categories:
+1. **`SEARCH_ENGINE` (Green):** Verified search engine crawlers (Googlebot, Bingbot, Yandex) authenticated against official published IP ranges. Crucial for SEO health monitoring; block rates here should ideally be 0%.
+2. **`AI_CRAWLER` (Purple):** Commercial AI scrapers and dataset miners (OpenAI GPTBot/ChatGPT-User, Anthropic ClaudeBot, PerplexityBot, Common Crawl, Bytespider).
+3. **`DATACENTER` (Amber / Orange):** Traffic originating from cloud hosting facilities and VPS providers (AWS, Hetzner, DigitalOcean, OVH, Azure). Rarely genuine human end-users; high rates here indicate automated crawlers, headless browser automation, or attack vectors.
+4. **`RESIDENTIAL` (Blue):** Legitimate consumer broadband and fiber ISPs (Comcast, Deutsche Telekom, Orange, Vodafone). High block rates in this category demand scrutiny (see Scatterplot below).
+5. **`TOR_EXIT_NODE` (Deep Purple):** Relays from the public Tor anonymity network. Frequently abused for credential stuffing, automated registration, and vulnerability probes.
+6. **`MOBILE` (Teal):** Cellular 4G / 5G carrier gateways (CGNAT). Because hundreds of mobile handsets share a single carrier IPv4 address, moderate block rates may occur during peak mobile usage.
+7. **`PRIVATE_NET` (Slate Gray):** Internal RFC 1918 traffic (`10.0.0.0/8`, `192.168.0.0/16`, `127.0.0.1`) from upstream load balancers, health checkers, or container meshes.
+8. **`UNKNOWN` (Muted Gray):** Standard client traffic without specific intelligence tags or unclassified ASNs.
+
+#### Interactive Forensic Capabilities:
+* **Percentage Share:** Shows volume distribution at a glance.
+* **Hover Tooltips:** Hovering over any segment displays total requests, blocked count, and the specific **Block Rate Percentage** for that category.
+* **Click to Filter:** Clicking a donut segment automatically activates the corresponding category filter, narrowing down the timeline and cluster views.
+
+---
+
+### 4. Residential Proxy & Subnet Scatterplot (2D Cluster Visualizer)
+
+The most advanced forensic instrument in the Anti-DoS Collector, engineered specifically to uncover distributed botnets and commercial proxy networks.
+
+#### The "Residential Proxy" Evasion Dilemma:
+Traditional rate-limiting relies on counting requests per IP address. Attackers bypass this by utilizing commercial residential proxy networks (e.g., Bright Data, Oxylabs, Smartproxy) consisting of millions of compromised consumer routers and IoT devices. An attacker distributes 100,000 scraping requests across 50,000 distinct IP addresses—each IP sends only 2 requests, easily staying below per-IP thresholds!
+
+The Scatterplot solves this by mapping traffic aggregated across enclosing **Subnet Partitions** (`/24` for IPv4, `/64` for IPv6) over time.
+
+#### Coordinate Space & Aesthetics:
+* **X-Axis (Distinct Client IPs - Logarithmic):** Measures the width of the attack footprint within the subnet (from 1 IP up to 256 IPs for a `/24`).
+* **Y-Axis (Average Requests per IP - Logarithmic):** Measures how aggressively each individual IP in that subnet acted.
+* **Bubble Radius ($R$):** Proportional to the total aggregated volume sent by the subnet:
+  $$\text{Radius} = \max\left(4, \, \min\left(28, \, \frac{\sqrt{\text{Total Requests}}}{2}\right)\right)$$
+* **Logarithmic Scaling:** Employs logarithmic $X$ and $Y$ scales so that single rogue IPs ($X=1, Y=10{,}000$) and massive distributed clusters ($X=200, Y=3$) are visible simultaneously without clustering at the axes.
+
+#### Cluster Quadrant Analysis:
+```
+           High Avg Reqs / IP
+                   ▲
+   [Traditional Brute-Force]   │   [Heavy Datacenter Scraper]
+   Few IPs, huge volume each   │   Dense subnet, high throughput
+   (Single-IP limiter catches) │   (Easy to block via /24 CIDR)
+───────────────────────────────┼───────────────────────────────
+   [Organic Consumer Noise]    │   🔴 [DISTRIBUTED RESIDENTIAL BOTNET]
+   Few IPs, low volume         │   Massive number of distinct IPs,
+   (Normal browsing)           │   each staying below per-IP limits!
+                   ▼
+           Low Avg Reqs / IP ────────► High Distinct IPs
+```
+
+* **Quadrant 1 (Top-Left - Traditional Single-Source Floods):** Low distinct IPs ($X \le 2$), very high requests per IP ($Y > 500$). Handled effectively by standard Anti-DoS Valve client IP limits.
+* **Quadrant 4 (Bottom-Right - Distributed Botnets & Rotating Proxies):** High distinct IPs ($X \ge 10$), low requests per IP ($Y < 50$). **This is the smoking gun of residential proxy attacks.** Even though no single IP exceeded rate limits, the subnet as a whole executed a synchronized distributed campaign!
+
+#### Cluster Risk Ratings & Color Legend:
+* 🔴 **Crimson Red (`CRITICAL` / `HIGH`):** Heuristically flagged **Residential Proxy Cluster**. High distinct IP count in consumer ISP subnets with low average requests per IP.
+* 🟠 **Amber Orange (`MEDIUM`):** Datacenter / Cloud scraper cluster. Subnets originating from hosting ASNs.
+* 🟣 **Purple (`ELEVATED`):** Tor exit nodes or commercial VPN gateways.
+* 🟢 **Emerald Green (`BENIGN`):** Verified crawler subnets (e.g. Googlebot IP ranges).
+* 🔵 **Sky Blue (`LOW`):** Standard unclassified or mobile CGNAT traffic.
+
+#### Interactive Click-to-Drilldown:
+Clicking any bubble in the scatterplot instantly captures the clicked subnet prefix (e.g., `198.51.100.0/24`) and navigates directly to:
+```
+/offenders?subnet=198.51.100.0/24&groupBy=ROLLUP
+```
+This automatically displays all member IPs, block counts, and Autonomous System details, providing immediate evidence for firewall rules or Valve configuration tuning.
+
+---
+
+### 5. Practical Investigation Workflows
+
+#### Workflow A: Unmasking a Stealth Residential Scraping Wave
+1. Navigate to `/analytics` and select the **24 Hours** or **7 Days** time horizon.
+2. Click the **Residential Proxies** focus pill.
+3. Observe the **Residential Proxy Scatterplot**: Look for crimson bubbles positioned in the bottom-right quadrant ($X \ge 10\text{ IPs}$, $Y \le 30\text{ reqs/IP}$).
+4. Hover over the bubble to view the tooltip: Subnet CIDR, Autonomous System (e.g., `AS7922 Comcast`), total request volume, and heuristic risk rating.
+5. Click the bubble: The dashboard transfers you to `/offenders` filtered for that subnet.
+6. Verify the incident timeline in `/events`. If abusive intent is confirmed, add the subnet prefix to your perimeter WAF or tune the Valve's `retainedSubnetSlots` threshold.
+
+#### Workflow B: Verifying Zero Disruption to Search Engines (SEO Safeguard)
+1. Navigate to `/analytics` and select **7 Days**.
+2. Click the **Verified Crawlers** focus pill.
+3. In the **Traffic & Attack Timeline**, inspect the red blocked bars. Blocked requests for verified crawlers should be zero or negligible.
+4. If blocks appear, check the **Donut Chart** block rate for `SEARCH_ENGINE`.
+5. Drill down into `/events?clientType=SEARCH_ENGINE` to verify whether legitimate Googlebot or Bingbot IPs are triggering rate limits, and adjust Valve `clientThreshold` or whitelist settings accordingly.
 
 ---
 
@@ -162,7 +288,14 @@ Accessible via `/system`. The administrative and telemetry health center of the 
 * **Database Engine & File Storage:** Active engine (SQLite or PostgreSQL), disk space consumption, WAL journal status, and sanitized JDBC connection string.
 * **Flyway Migration Version:** Current schema version and applied migration scripts.
 * **HikariCP Connection Pool:** Active, idle, and maximum database connections.
-* **Table Record Counts:** Real-time row counts for `slot_snapshots`, `blocked_client_events`, `subnet_rollup_buckets`, and `poll_event_log`.
+* **Table Record Counts:** Real-time row counts for all database tables:
+  * `slot_snapshots`: Historical telemetry slot summaries per valve.
+  * `client_events`: Recorded client incidents (both blocked rate-limit events and high-volume active clients).
+  * `client_subnet_rollups`: Aggregated subnet-level time-bucket records (/24 for IPv4, /64 for IPv6). Generated periodically for completed time windows (default: 60 minutes).
+  * `network_entity`: Normalized directory of enriched client IPs and subnets with ASN, geolocation, and threat classifications.
+  * `poll_event_log`: Background ingestion audit diagnostics.
+  * `intel_range`: Verified CIDR intelligence ranges for legitimate crawlers, commercial AI scrapers, and Tor exit relays.
+  * `crawler_feeds`: Registered crawler intelligence feeds and sync states.
 
 ### 2. Polling Rules & Concurrency
 * **Polling Interval:** Global frequency of status polling (default: 15s).
@@ -170,9 +303,9 @@ Accessible via `/system`. The administrative and telemetry health center of the 
 * **Config File Location:** Displays the loaded configuration path (e.g. `/etc/antidos/collector-config.yaml`).
 
 ### 3. Telemetry Cascade & Rollup Rules
-* **Rollup Window Interval:** Bucketing granularity for background aggregation (e.g. 15, 30, or 60 minutes).
-* **Lookback Horizon:** Number of past days evaluated during scheduled rollups (default: 7 days).
-* **Min Incident Threshold:** Noise filter threshold preventing single isolated blocks from cluttering subnet aggregations.
+* **Rollup Window Interval:** Bucketing granularity for background aggregation (default: 60 minutes). Scheduled background aggregation evaluates completed windows every 15 minutes; in-flight traffic for the current ongoing window is preserved in `client_events` and committed to `client_subnet_rollups` once the window closes.
+* **Lookback Horizon:** Number of past hours evaluated during scheduled rollups (default: 6 hours catch-up window).
+* **Retention Cleanup:** Daily cleanup at 03:30 AM purging rollups older than the configured retention horizon (default: 180 days).
 
 ### 4. Threat Intelligence & MMDB Status
 * **ASN Lookup Engine:** GeoLite2 / MaxMind ASN database path and status.

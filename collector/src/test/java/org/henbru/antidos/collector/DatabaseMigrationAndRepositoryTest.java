@@ -270,6 +270,22 @@ class DatabaseMigrationAndRepositoryTest {
 		assertEquals(1, msEvents.size());
 		assertEquals("203.0.113.10", msEvents.getFirst().clientKey());
 
+		// 3b. Filter by asOrg query string "telekom" (case-insensitive provider search)
+		List<ClientEvent> telekomOrgEvents = clientEventRepository.findRecentEventsFiltered(
+				null, null, now.minus(1, ChronoUnit.HOURS), now, null,
+				null, null, "telekom", null, 50, 0
+		);
+		assertEquals(2, telekomOrgEvents.size());
+		assertTrue(telekomOrgEvents.stream().allMatch(e -> e.asOrg() != null && e.asOrg().contains("Telekom")));
+
+		// 3c. Filter by asOrg query string "MICROSOFT" (case-insensitive provider search)
+		List<ClientEvent> msOrgEvents = clientEventRepository.findRecentEventsFiltered(
+				null, null, now.minus(1, ChronoUnit.HOURS), now, null,
+				null, null, "MICROSOFT", null, 50, 0
+		);
+		assertEquals(1, msOrgEvents.size());
+		assertEquals("203.0.113.10", msOrgEvents.getFirst().clientKey());
+
 		// 4. Top Offenders Rollup by ASN
 		List<TopOffenderSummary> asnRollup = clientEventRepository.findTopOffendersFiltered(
 				null, null, now.minus(1, ChronoUnit.HOURS), now, null,

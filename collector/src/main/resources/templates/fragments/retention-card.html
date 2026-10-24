@@ -46,10 +46,10 @@
 
     <div style="margin-bottom: 16px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
         <div style="font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">
-            Subnet Rollup Aggregation (Every 15 min)
+            Subnet Rollup Aggregation (<span th:text="${status.config.rollupWindowMinutes} + ' min windows'">60 min windows</span>, checked every 15 min)
         </div>
         <div style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.4;"
-             th:text="'Last run: ' + ${status.schedulers.lastRollupSummary}">
+             th:text="'Last run: ' + (${status.schedulers.lastRollupRun != null} ? ${#temporals.format(status.schedulers.lastRollupRun, 'HH:mm:ss')} + ' - ' : '') + ${status.schedulers.lastRollupSummary}">
             Persisted 10 subnet rollups in 12ms
         </div>
     </div>

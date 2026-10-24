@@ -200,7 +200,7 @@ public class RollupAggregationService {
 			Thread.ofVirtual().name("rollup-startup-catchup").start(() -> {
 				try {
 					Thread.sleep(5000);
-					aggregateCatchUp(24);
+					executeManualCatchUp(24);
 				} catch (InterruptedException e) {
 					Thread.currentThread().interrupt();
 				} catch (Exception e) {
