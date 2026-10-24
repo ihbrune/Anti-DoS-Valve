@@ -59,6 +59,26 @@
         </div>
     </div>
 
+    <!-- Document Guide Switcher Tabs -->
+    <div style="display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; align-items: center;">
+        <span style="font-size: 13px; font-weight: 700; color: var(--text-muted); margin-right: 4px;">Manual:</span>
+        <a th:href="@{/help(doc='ui')}" class="btn"
+           th:classappend="${activeDoc == 'ui' or activeDoc == null ? 'btn-primary' : ''}"
+           title="User interface, views, filters, and forensics investigation guide">
+            <span>&#x1F5A5;</span> Dashboard &amp; Forensics Guide
+        </a>
+        <a th:href="@{/help(doc='setup')}" class="btn"
+           th:classappend="${activeDoc == 'setup' ? 'btn-primary' : ''}"
+           title="DevOps installation, systemd deployment, database config, and architecture">
+            <span>&#x2699;</span> Setup &amp; Operations Reference
+        </a>
+        <a th:href="@{/help(doc='readme')}" class="btn"
+           th:classappend="${activeDoc == 'readme' ? 'btn-primary' : ''}"
+           title="High-level project overview and architecture highlights">
+            <span>&#x1F4C4;</span> Overview
+        </a>
+    </div>
+
     <!-- Main Documentation Layout: Sidebar + Document Content -->
     <div class="doc-layout">
         <!-- Sticky Table of Contents Sidebar -->
@@ -106,7 +126,7 @@
                     </span>
                 </div>
                 <div style="font-size: 12px; color: var(--text-muted);">
-                    Source: <code>collector/README.md</code>
+                    Source: <code th:text="${activeDoc == 'setup' ? 'collector/SETUP_GUIDE.md' : (activeDoc == 'readme' ? 'collector/README.md' : 'collector/DASHBOARD_GUIDE.md')}">collector/DASHBOARD_GUIDE.md</code>
                 </div>
             </div>
 

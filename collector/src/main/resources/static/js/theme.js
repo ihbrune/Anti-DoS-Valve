@@ -36,4 +36,24 @@
             console.warn('Theme switch error:', e);
         }
     };
+
+    window.openHelpDrawer = function() {
+        var drawer = document.getElementById('help-drawer');
+        var backdrop = document.getElementById('help-drawer-backdrop');
+        if (drawer) drawer.classList.add('open');
+        if (backdrop) backdrop.classList.add('open');
+    };
+
+    window.closeHelpDrawer = function() {
+        var drawer = document.getElementById('help-drawer');
+        var backdrop = document.getElementById('help-drawer-backdrop');
+        if (drawer) drawer.classList.remove('open');
+        if (backdrop) backdrop.classList.remove('open');
+    };
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            window.closeHelpDrawer();
+        }
+    });
 })();

@@ -37,8 +37,15 @@
             <a href="/system" class="btn" title="System status, telemetry rules &amp; configuration">
                 <span>&#x2699;</span> System &amp; Config
             </a>
-            <a href="/help" class="btn" title="Documentation, configuration reference & forensics guide">
-                <span>&#x2753;</span> Help &amp; Guide
+            <button type="button" class="btn"
+                    hx-get="/fragments/help?doc=ui&section=incident-explorer-forensic-log-search"
+                    hx-target="#help-drawer-content"
+                    onclick="openHelpDrawer()"
+                    title="Open Incident Explorer Help Guide">
+                <span>&#x2753;</span> Guide
+            </button>
+            <a href="/help" class="btn" title="Full offline documentation repository">
+                <span>&#x1F4D6;</span> Docs
             </a>
             <button type="button" class="btn btn-theme-toggle" onclick="toggleTheme()" title="Switch Light / Dark Theme" aria-label="Toggle theme">
                 <span class="theme-icon-sun">&#x2600;&#xFE0F;</span>
@@ -257,6 +264,9 @@
     <div class="table-card">
         <th:block th:replace="~{fragments/events-table :: eventsTable}"></th:block>
     </div>
+
+    <!-- Contextual Help Drawer -->
+    <div th:replace="~{fragments/help-drawer :: helpDrawer}"></div>
 </div>
 
 <script>

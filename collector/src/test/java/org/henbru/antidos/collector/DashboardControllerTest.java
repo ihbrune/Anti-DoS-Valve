@@ -203,16 +203,35 @@ class DashboardControllerTest {
 	}
 
 	@Test
-	void testHelpPageLoads() throws Exception {
+	void testHelpPageLoadsUiGuideByDefault() throws Exception {
 		mockMvc.perform(get("/help"))
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("Anti-DoS Fleet Manager")))
 				.andExpect(content().string(containsString("Documentation &amp; Forensics Guide")))
 				.andExpect(content().string(containsString("Contents &amp; Topics")))
-				.andExpect(content().string(containsString("Release Embedded Manual")))
-				.andExpect(content().string(containsString("100% Offline &amp; Air-Gap Ready")))
-				.andExpect(content().string(containsString("Zero-Configuration Demo Mode")))
+				.andExpect(content().string(containsString("Dashboard &amp; Forensics Guide")))
+				.andExpect(content().string(containsString("Setup &amp; Operations Reference")))
+				.andExpect(content().string(containsString("id=\"fleet-overview-dashboard\"")))
+				.andExpect(content().string(containsString("id=\"system-status--configuration\"")));
+	}
+
+	@Test
+	void testHelpPageLoadsSetupGuide() throws Exception {
+		mockMvc.perform(get("/help").param("doc", "setup"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Anti-DoS Fleet Manager")))
+				.andExpect(content().string(containsString("Production Setup")))
+				.andExpect(content().string(containsString("Database Configuration")))
 				.andExpect(content().string(containsString("id=\"zero-configuration-demo-mode\"")));
+	}
+
+	@Test
+	void testHelpFragmentWithSectionReturnsDrawerSection() throws Exception {
+		mockMvc.perform(get("/fragments/help").param("doc", "ui").param("section", "system-status-configuration"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("System Status &amp; Configuration")))
+				.andExpect(content().string(containsString("Runtime &amp; Database Telemetry")))
+				.andExpect(content().string(containsString("Operational Maintenance Triggers")));
 	}
 
 	@Test

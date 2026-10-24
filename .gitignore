@@ -20,6 +20,7 @@ collector/collector-config.yml
 custom-hosting-asns.txt
 *.db
 *.db-journal
+*.db-shm
 *.mmdb
 # Benchmarks history
 .benchmarks/

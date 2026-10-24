@@ -89,16 +89,32 @@ public class DashboardController {
 	}
 
 	@GetMapping("/help")
-	public String helpPage(Model model) {
-		DocumentationService.DocumentationPayload payload = documentationService.getDocumentation();
+	public String helpPage(
+			@RequestParam(name = "doc", defaultValue = "ui") String docKey,
+			Model model) {
+		DocumentationService.DocumentationPayload payload = documentationService.getDocumentation(docKey);
+		model.addAttribute("activeDoc", payload.docKey());
+		model.addAttribute("docTitle", payload.title());
 		model.addAttribute("docHtml", payload.html());
 		model.addAttribute("docToc", payload.tableOfContents());
 		return "help";
 	}
 
 	@GetMapping("/fragments/help")
-	public String helpFragment(Model model) {
-		DocumentationService.DocumentationPayload payload = documentationService.getDocumentation();
+	public String helpFragment(
+			@RequestParam(name = "doc", defaultValue = "ui") String docKey,
+			@RequestParam(name = "section", required = false) String section,
+			Model model) {
+		if (section != null && !section.isBlank()) {
+			String sectionHtml = documentationService.getSectionHtml(docKey, section);
+			model.addAttribute("docHtml", sectionHtml);
+			model.addAttribute("activeDoc", docKey);
+			model.addAttribute("sectionAnchor", section);
+			return "fragments/help-drawer :: drawerContent";
+		}
+		DocumentationService.DocumentationPayload payload = documentationService.getDocumentation(docKey);
+		model.addAttribute("activeDoc", payload.docKey());
+		model.addAttribute("docTitle", payload.title());
 		model.addAttribute("docHtml", payload.html());
 		model.addAttribute("docToc", payload.tableOfContents());
 		return "help :: docContent";

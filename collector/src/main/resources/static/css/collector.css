@@ -1246,4 +1246,101 @@ html[data-theme="light"] .theme-icon-moon {
     }
 }
 
+/* ==========================================================================
+   Slide-Over Help Drawer & Backdrop
+   ========================================================================== */
+.drawer-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 9998;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+.drawer-backdrop.open {
+    opacity: 1;
+    visibility: visible;
+}
+
+.drawer-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 620px;
+    max-width: 92vw;
+    height: 100vh;
+    background: var(--bg-surface);
+    border-left: 1px solid var(--border-color);
+    box-shadow: -10px 0 36px rgba(0, 0, 0, 0.65);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.drawer-panel.open {
+    transform: translateX(0);
+}
+
+.drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-card);
+}
+
+.drawer-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.drawer-close-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 26px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+    border-radius: var(--radius-sm);
+    transition: color 0.15s ease;
+}
+
+.drawer-close-btn:hover {
+    color: var(--color-danger);
+}
+
+.drawer-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 28px;
+}
+
+.drawer-body.doc-content h2:first-child {
+    margin-top: 0;
+}
+
+[data-theme="light"] .drawer-panel {
+    background: #ffffff;
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.18);
+}
+
+[data-theme="light"] .drawer-header {
+    background: #f8fafc;
+}
+
 

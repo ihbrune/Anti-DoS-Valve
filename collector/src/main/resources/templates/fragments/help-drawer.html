@@ -1,0 +1,31 @@
+<div th:fragment="helpDrawer" xmlns:th="http://www.thymeleaf.org">
+    <!-- Semi-transparent backdrop for in-page contextual help drawer -->
+    <div id="help-drawer-backdrop" class="drawer-backdrop" onclick="closeHelpDrawer()"></div>
+
+    <!-- Slide-Over Help Drawer Panel -->
+    <aside id="help-drawer" class="drawer-panel" role="dialog" aria-modal="true" aria-label="Contextual Help Guide">
+        <div class="drawer-header">
+            <div class="drawer-title">
+                <span>&#x2753;</span> In-App Guide
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <a th:href="@{/help(doc=${activeDoc != null ? activeDoc : 'ui'})}"
+                   target="_blank" class="btn" style="font-size: 11.5px; padding: 4px 10px;"
+                   title="Open full manual in a new browser tab">
+                    Full Manual &#x2197;
+                </a>
+                <button type="button" class="drawer-close-btn" onclick="closeHelpDrawer()" aria-label="Close Help Drawer" title="Close Help Drawer (Esc)">
+                    &times;
+                </button>
+            </div>
+        </div>
+
+        <div id="help-drawer-content" class="drawer-body doc-content">
+            <div th:fragment="drawerContent" th:utext="${docHtml}">
+                <div style="padding: 24px; text-align: center; color: var(--text-muted);">
+                    Loading guide section...
+                </div>
+            </div>
+        </div>
+    </aside>
+</div>
