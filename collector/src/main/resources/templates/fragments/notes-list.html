@@ -5,40 +5,6 @@
 <!-- Fragment: notesList -->
 <div th:fragment="notesList" id="notes-list-container">
 
-    <!-- KPI / Stats Cards -->
-    <div class="stats-overview" style="margin-bottom: 24px;">
-        <div class="stat-card" style="border-left: 4px solid var(--color-primary);">
-            <div class="stat-title">Total Notes</div>
-            <div class="stat-value" th:text="${totalCount}">0</div>
-            <div class="stat-desc">Persistent operator knowledge records</div>
-        </div>
-        <div class="stat-card" style="border-left: 4px solid #10b981;">
-            <div class="stat-title">🟢 Legitimate</div>
-            <div class="stat-value" style="color: #34d399;" th:text="${verdictCounts.get(T(org.henbru.antidos.collector.model.AnnotationVerdict).LEGITIMATE)}">0</div>
-            <div class="stat-desc">Partners, approved bots, CDNs</div>
-        </div>
-        <div class="stat-card" style="border-left: 4px solid #38bdf8;">
-            <div class="stat-title">🔵 Internal Network</div>
-            <div class="stat-value" style="color: #38bdf8;" th:text="${verdictCounts.get(T(org.henbru.antidos.collector.model.AnnotationVerdict).INTERNAL)}">0</div>
-            <div class="stat-desc">Intranet, VPN, monitoring</div>
-        </div>
-        <div class="stat-card" style="border-left: 4px solid #f59e0b;">
-            <div class="stat-title">🟡 Suspicious</div>
-            <div class="stat-value" style="color: #fbbf24;" th:text="${verdictCounts.get(T(org.henbru.antidos.collector.model.AnnotationVerdict).SUSPICIOUS)}">0</div>
-            <div class="stat-desc">Under observation, threshold edge</div>
-        </div>
-        <div class="stat-card" style="border-left: 4px solid #f43f5e;">
-            <div class="stat-title">🔴 Malicious</div>
-            <div class="stat-value" style="color: #fb7185;" th:text="${verdictCounts.get(T(org.henbru.antidos.collector.model.AnnotationVerdict).MALICIOUS)}">0</div>
-            <div class="stat-desc">Attackers, scrapers, botnets</div>
-        </div>
-        <div class="stat-card" style="border-left: 4px solid #94a3b8;">
-            <div class="stat-title">⚪ Info</div>
-            <div class="stat-value" style="color: #cbd5e1;" th:text="${verdictCounts.get(T(org.henbru.antidos.collector.model.AnnotationVerdict).INFO)}">0</div>
-            <div class="stat-desc">Neutral background notes</div>
-        </div>
-    </div>
-
     <!-- Filter & Search Toolbar -->
     <div class="card" style="margin-bottom: 24px; padding: 18px 20px;">
         <form hx-get="/notes/fragment" hx-target="#notes-list-container" hx-swap="outerHTML" class="notes-filter-form">
