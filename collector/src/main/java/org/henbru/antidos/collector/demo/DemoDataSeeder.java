@@ -72,6 +72,7 @@ public class DemoDataSeeder {
 	private final org.henbru.antidos.collector.config.CollectorProperties properties;
 	private final org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService;
 	private final org.henbru.antidos.collector.annotation.NetworkAnnotationService annotationService;
+	private final org.henbru.antidos.collector.aggregation.SubnetProfileService subnetProfileService;
 
 	public DemoDataSeeder(
 			SlotSnapshotRepository slotSnapshotRepository,
@@ -84,7 +85,9 @@ public class DemoDataSeeder {
 			@org.springframework.beans.factory.annotation.Autowired(required = false)
 			org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService,
 			@org.springframework.beans.factory.annotation.Autowired(required = false)
-			org.henbru.antidos.collector.annotation.NetworkAnnotationService annotationService) {
+			org.henbru.antidos.collector.annotation.NetworkAnnotationService annotationService,
+			@org.springframework.beans.factory.annotation.Autowired(required = false)
+			org.henbru.antidos.collector.aggregation.SubnetProfileService subnetProfileService) {
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
 		this.heartbeatRepository = heartbeatRepository;
@@ -94,6 +97,7 @@ public class DemoDataSeeder {
 		this.properties = properties;
 		this.rollupAggregationService = rollupAggregationService;
 		this.annotationService = annotationService;
+		this.subnetProfileService = subnetProfileService;
 	}
 
 	@EventListener(ApplicationReadyEvent.class)
@@ -450,8 +454,12 @@ public class DemoDataSeeder {
 			try {
 				int rolledUp = rollupAggregationService.aggregateCatchUp(168);
 				log.info("Historical demo rollups generated: {} subnet time-buckets for 7-day lookback.", rolledUp);
+				if (subnetProfileService != null) {
+					int profCount = subnetProfileService.refreshProfiles();
+					log.info("Historical demo subnet profiles generated: {} baselines and surge indicators computed.", profCount);
+				}
 			} catch (Exception e) {
-				log.warn("Could not aggregate demo rollups: {}", e.getMessage());
+				log.warn("Could not aggregate demo rollups or profiles: {}", e.getMessage());
 			}
 		}
 

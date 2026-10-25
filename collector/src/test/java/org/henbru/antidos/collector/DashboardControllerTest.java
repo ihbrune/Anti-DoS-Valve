@@ -419,5 +419,32 @@ class DashboardControllerTest {
 				.andExpect(jsonPath("$.composition").isArray())
 				.andExpect(jsonPath("$.scatterPoints").isArray());
 	}
+
+	@Test
+	void testOffendersPageWithProfilesModeLoads() throws Exception {
+		mockMvc.perform(get("/offenders").param("groupBy", "PROFILES").param("activityPattern", "SURGE"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Subnet Baselines &amp; Surge Radar")))
+				.andExpect(content().string(containsString("Subnet Activity &amp; Anomaly Filter")));
+	}
+
+	@Test
+	void testOffendersFragmentWithProfilesMode() throws Exception {
+		mockMvc.perform(get("/fragments/offenders-table").param("groupBy", "PROFILES"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("id=\"offenders-table-container\"")));
+	}
+
+	@Test
+	void testApiSubnetProfileEndpoints() throws Exception {
+		mockMvc.perform(get("/api/v1/rollups/subnets/profiles"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.total").exists())
+				.andExpect(jsonPath("$.profiles").isArray());
+
+		mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/rollups/subnets/profiles/refresh"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("SUCCESS"));
+	}
 }
 

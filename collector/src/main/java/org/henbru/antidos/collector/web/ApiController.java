@@ -35,8 +35,8 @@ public class ApiController {
 	private final org.henbru.antidos.collector.storage.SubnetRollupRepository subnetRollupRepository;
 	private final org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService;
 	private final org.henbru.antidos.collector.aggregation.AnalyticsService analyticsService;
-
 	private final org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository;
+	private final org.henbru.antidos.collector.aggregation.SubnetProfileService subnetProfileService;
 
 	@org.springframework.beans.factory.annotation.Autowired
 	public ApiController(
@@ -47,7 +47,8 @@ public class ApiController {
 			org.henbru.antidos.collector.storage.SubnetRollupRepository subnetRollupRepository,
 			org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService,
 			org.henbru.antidos.collector.aggregation.AnalyticsService analyticsService,
-			org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository) {
+			org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository,
+			@org.springframework.beans.factory.annotation.Autowired(required = false) org.henbru.antidos.collector.aggregation.SubnetProfileService subnetProfileService) {
 		this.heartbeatRepository = heartbeatRepository;
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
@@ -56,6 +57,7 @@ public class ApiController {
 		this.rollupAggregationService = rollupAggregationService;
 		this.analyticsService = analyticsService;
 		this.monitoredValveRepository = monitoredValveRepository;
+		this.subnetProfileService = subnetProfileService;
 	}
 
 	public ApiController(
@@ -67,7 +69,7 @@ public class ApiController {
 			org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService,
 			org.henbru.antidos.collector.aggregation.AnalyticsService analyticsService) {
 		this(heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
-				subnetRollupRepository, rollupAggregationService, analyticsService, null);
+				subnetRollupRepository, rollupAggregationService, analyticsService, null, null);
 	}
 
 	@GetMapping("/fleet")
@@ -187,6 +189,56 @@ public class ApiController {
 				"persistedRollups", count,
 				"executedAt", Instant.now().toString()
  		);
+	}
+
+	@org.springframework.web.bind.annotation.PostMapping("/rollups/subnets/profiles/refresh")
+	public Map<String, Object> refreshSubnetProfiles() {
+		if (subnetProfileService == null) {
+			return Map.of("status", "UNAVAILABLE", "message", "SubnetProfileService is not available");
+		}
+		int count = subnetProfileService.refreshProfiles();
+		return Map.of(
+				"status", "SUCCESS",
+				"refreshedProfiles", count,
+				"executedAt", Instant.now().toString()
+		);
+	}
+
+	@GetMapping("/rollups/subnets/profiles")
+	public Map<String, Object> getSubnetProfiles(
+			@RequestParam(name = "pattern", required = false, defaultValue = "ALL") String pattern,
+			@RequestParam(name = "minRequests", required = false) Long minRequests,
+			@RequestParam(name = "query", required = false) String query,
+			@RequestParam(name = "asn", required = false) Long asn,
+			@RequestParam(name = "asOrg", required = false) String asOrg,
+			@RequestParam(name = "clientTypes", required = false) List<String> clientTypes,
+			@RequestParam(name = "sortBy", required = false, defaultValue = "SURGE") String sortBy,
+			@RequestParam(name = "limit", defaultValue = "50") int limit,
+			@RequestParam(name = "offset", defaultValue = "0") int offset) {
+		if (subnetProfileService == null) {
+			return Map.of("total", 0, "profiles", List.of());
+		}
+		List<org.henbru.antidos.collector.model.SubnetProfile> profiles = subnetProfileService.findProfilesFiltered(
+				pattern, minRequests, query, asn, asOrg, clientTypes, sortBy, limit, offset);
+		long total = subnetProfileService.countProfilesFiltered(
+				pattern, minRequests, query, asn, asOrg, clientTypes);
+		return Map.of(
+				"total", total,
+				"limit", limit,
+				"offset", offset,
+				"profiles", profiles
+		);
+	}
+
+	@GetMapping("/rollups/subnets/profiles/{subnetGroup}")
+	public ResponseEntity<org.henbru.antidos.collector.model.SubnetProfile> getSubnetProfile(
+			@PathVariable(name = "subnetGroup") String subnetGroup) {
+		if (subnetProfileService == null) {
+			return ResponseEntity.notFound().build();
+		}
+		return subnetProfileService.findBySubnetGroup(subnetGroup)
+				.map(ResponseEntity::ok)
+				.orElseGet(() -> ResponseEntity.notFound().build());
 	}
 
 	@GetMapping("/analytics/overview")

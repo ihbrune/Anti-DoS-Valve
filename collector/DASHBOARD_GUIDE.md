@@ -275,6 +275,13 @@ Accessible via `/offenders`. The premier forensic tool for identifying volumetri
   * IPv4 addresses are grouped into standard **`/24` subnets** (256 addresses).
   * IPv6 addresses are grouped into **`/64` subscriber blocks**.
   * **Why Subnet Rollup is essential:** Modern botnets rotate between dozens or hundreds of sequential IP addresses within the same cloud or residential subnet. Individual IP counters stay below rate-limit thresholds, but Subnet Rollup instantly reveals the cluster.
+  * Displays real-time baseline badges (`⚡ Surge`, `💤 Dormancy Break`, `✨ New`) if historical profiles have been calculated.
+* **Subnet Baselines & Surge Radar Mode (`groupBy=PROFILES`):**
+  A high-performance state table evaluating long-term subnet behavior against recent traffic:
+  * **30-Day Daily Baseline:** Calculates normal daily volume over prior weeks.
+  * **24h Surge Factor:** Measures sudden multiplication of request rates (`⚡ 15.2x Surge`).
+  * **First Seen & Dormancy Tracking:** Detects brand-new subnets (`✨ New`) and breakouts from prolonged periods of zero/minimal activity (`💤 28d Dormancy Break`).
+  * **Pattern Filtering:** Rapid one-click triage by pattern (`⚡ High Surge (≥5x)`, `✨ New (<7d)`, `💤 Dormancy Break (≥14d)`, or `🔄 Residential IP Pool Rotation`).
 * **ASN Rollup Mode (`groupBy=ASN`):**
   Groups all incidents by Autonomous System Number (e.g., `AS16509 Amazon.com`, `AS14061 DigitalOcean`, `AS8075 Microsoft`).
   Unmasks whether an attack wave originates from bulletproof hosters, cheap cloud providers, or compromised consumer ISPs.

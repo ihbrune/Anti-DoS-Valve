@@ -27,16 +27,27 @@ public class RollupAggregationService {
 	private final JdbcTemplate jdbcTemplate;
 	private final SubnetRollupRepository rollupRepository;
 	private final CollectorProperties properties;
+	private final SubnetProfileService subnetProfileService;
 
 	@Autowired
 	public RollupAggregationService(
 			JdbcTemplate jdbcTemplate,
 			SubnetRollupRepository rollupRepository,
-			CollectorProperties properties
+			CollectorProperties properties,
+			@Autowired(required = false) SubnetProfileService subnetProfileService
 	) {
 		this.jdbcTemplate = jdbcTemplate;
 		this.rollupRepository = rollupRepository;
 		this.properties = properties;
+		this.subnetProfileService = subnetProfileService;
+	}
+
+	public RollupAggregationService(
+			JdbcTemplate jdbcTemplate,
+			SubnetRollupRepository rollupRepository,
+			CollectorProperties properties
+	) {
+		this(jdbcTemplate, rollupRepository, properties, null);
 	}
 
 	/**
@@ -159,6 +170,13 @@ public class RollupAggregationService {
 	public RollupExecutionResult executeManualCatchUp(int lookbackHours) {
 		long start = System.currentTimeMillis();
 		int persisted = aggregateCatchUp(lookbackHours);
+		if (subnetProfileService != null && persisted > 0) {
+			try {
+				subnetProfileService.refreshProfiles();
+			} catch (Exception e) {
+				log.warn("Subnet profiles refresh failed after rollup catchup: {}", e.getMessage());
+			}
+		}
 		long durationMs = System.currentTimeMillis() - start;
 		RollupExecutionResult result = new RollupExecutionResult(Instant.now(), persisted, durationMs);
 		this.lastRollupResult = result;

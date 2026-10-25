@@ -229,7 +229,7 @@
                 <div class="pills-group">
                     <label class="pill-label">
                         <input type="radio" name="groupBy" value="CLIENT"
-                               th:checked="${groupBy != 'SUBNET' and groupBy != 'ASN' and groupBy != 'ROLLUP'}"
+                               th:checked="${groupBy != 'SUBNET' and groupBy != 'ASN' and groupBy != 'ROLLUP' and groupBy != 'PROFILES'}"
                                onchange="htmx.trigger('#offenders-filter-form', 'submit');">
                         <span>Individual Clients / IPs</span>
                     </label>
@@ -251,9 +251,63 @@
                                onchange="htmx.trigger('#offenders-filter-form', 'submit');">
                         <span>&#x1F4BE; Subnet Time Rollups (Long-Term)</span>
                     </label>
+                    <label class="pill-label">
+                        <input type="radio" name="groupBy" value="PROFILES"
+                               th:checked="${groupBy == 'PROFILES'}"
+                               onchange="htmx.trigger('#offenders-filter-form', 'submit');">
+                        <span>&#x26A1; Subnet Baselines &amp; Surge Radar</span>
+                    </label>
                 </div>
                 <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-                    Select client level, ad-hoc subnet/ASN grouping, or persistent time rollups.
+                    Select client level, ad-hoc subnet/ASN grouping, time rollups, or long-term baseline &amp; surge profiles.
+                </div>
+            </div>
+
+            <!-- 7. Subnet Baselines & Anomaly Filters -->
+            <div class="filter-field">
+                <div class="filter-label">Subnet Activity &amp; Anomaly Filter</div>
+                <div class="pills-group">
+                    <label class="pill-label">
+                        <input type="radio" name="activityPattern" value="ALL"
+                               th:checked="${activityPattern == null or activityPattern == 'ALL'}"
+                               onchange="htmx.trigger('#offenders-filter-form', 'submit');">
+                        <span>All Patterns</span>
+                    </label>
+                    <label class="pill-label">
+                        <input type="radio" name="activityPattern" value="SURGE"
+                               th:checked="${activityPattern == 'SURGE'}"
+                               onchange="htmx.trigger('#offenders-filter-form', 'submit');">
+                        <span>&#x26A1; High Surge (&ge;5x)</span>
+                    </label>
+                    <label class="pill-label">
+                        <input type="radio" name="activityPattern" value="NEW"
+                               th:checked="${activityPattern == 'NEW'}"
+                               onchange="htmx.trigger('#offenders-filter-form', 'submit');">
+                        <span>&#x2728; New Subnets (&lt;7d)</span>
+                    </label>
+                    <label class="pill-label">
+                        <input type="radio" name="activityPattern" value="DORMANT"
+                               th:checked="${activityPattern == 'DORMANT'}"
+                               onchange="htmx.trigger('#offenders-filter-form', 'submit');">
+                        <span>&#x1F4A4; Dormancy Break (&ge;14d)</span>
+                    </label>
+                    <label class="pill-label">
+                        <input type="radio" name="activityPattern" value="PROXY_POOL"
+                               th:checked="${activityPattern == 'PROXY_POOL'}"
+                               onchange="htmx.trigger('#offenders-filter-form', 'submit');">
+                        <span>&#x1F504; Residential IP Rotation</span>
+                    </label>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap;">
+                    <input type="number" name="minRequests" class="input-control" style="font-size: 11px; padding: 4px 8px; width: 140px;" placeholder="Min. 24h reqs (e.g. 10)" th:value="${minRequests != null and minRequests > 0 ? minRequests : ''}">
+                    <select name="sortBy" class="input-control" style="font-size: 11px; padding: 4px 8px; width: 160px;" onchange="htmx.trigger('#offenders-filter-form', 'submit');">
+                        <option value="SURGE" th:selected="${sortBy == 'SURGE'}">Sort: 24h Surge Multiplier</option>
+                        <option value="REQUESTS" th:selected="${sortBy == 'REQUESTS'}">Sort: 24h Request Volume</option>
+                        <option value="DISTINCT_IPS" th:selected="${sortBy == 'DISTINCT_IPS'}">Sort: Distinct IP Count</option>
+                        <option value="DORMANT" th:selected="${sortBy == 'DORMANT'}">Sort: Dormancy Days</option>
+                        <option value="FIRST_SEEN" th:selected="${sortBy == 'FIRST_SEEN'}">Sort: First Seen Date</option>
+                        <option value="LAST_SEEN" th:selected="${sortBy == 'LAST_SEEN'}">Sort: Last Seen Date</option>
+                    </select>
                 </div>
             </div>
         </div>
