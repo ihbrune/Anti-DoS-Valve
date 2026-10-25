@@ -96,7 +96,11 @@
           hx-push-url="true"
           class="filter-panel">
 
-        <div class="filter-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
+        <!-- Hidden inputs preserving the active time window & tab mode -->
+        <input type="hidden" name="hours" id="filter-hours" th:value="${selectedHours != null ? selectedHours : 24}">
+        <input type="hidden" name="tab" id="filter-tab" th:value="${activeTab != null ? activeTab : 'charts'}">
+
+        <div class="filter-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">
             <!-- 1. Target Servers -->
             <div class="filter-field">
                 <div class="filter-label" style="display: flex; justify-content: space-between;">
@@ -127,50 +131,6 @@
                                th:checked="${selectedValves != null and #lists.contains(selectedValves, v)}"
                                onchange="htmx.trigger('#analytics-filter-form', 'submit');">
                         <span th:text="${v}">Primary</span>
-                    </label>
-                </div>
-            </div>
-
-            <!-- 3. Time Horizon Preset -->
-            <div class="filter-field">
-                <div class="filter-label">Time Horizon Preset</div>
-                <div class="pills-group">
-                    <label class="pill-label">
-                        <input type="radio" name="hours" value="1" th:checked="${selectedHours == 1}"
-                               onchange="htmx.trigger('#analytics-filter-form', 'submit');">
-                        <span>1 Hour</span>
-                    </label>
-                    <label class="pill-label">
-                        <input type="radio" name="hours" value="6" th:checked="${selectedHours == 6}"
-                               onchange="htmx.trigger('#analytics-filter-form', 'submit');">
-                        <span>6 Hours</span>
-                    </label>
-                    <label class="pill-label">
-                        <input type="radio" name="hours" value="24" th:checked="${selectedHours == 24 or selectedHours == null}"
-                               onchange="htmx.trigger('#analytics-filter-form', 'submit');">
-                        <span>24 Hours (Default)</span>
-                    </label>
-                    <label class="pill-label">
-                        <input type="radio" name="hours" value="168" th:checked="${selectedHours == 168}"
-                               onchange="htmx.trigger('#analytics-filter-form', 'submit');">
-                        <span>7 Days</span>
-                    </label>
-                </div>
-            </div>
-
-            <!-- 4. Visualization Focus Mode -->
-            <div class="filter-field">
-                <div class="filter-label">Visualization Focus Mode</div>
-                <div class="pills-group">
-                    <label class="pill-label">
-                        <input type="radio" name="tab" value="charts" th:checked="${activeTab == 'charts' or activeTab == null}"
-                               onchange="htmx.trigger('#analytics-filter-form', 'submit');">
-                        <span>&#x1F4CA; Traffic Timeline &amp; Bot-Mix</span>
-                    </label>
-                    <label class="pill-label">
-                        <input type="radio" name="tab" value="scatter" th:checked="${activeTab == 'scatter'}"
-                               onchange="htmx.trigger('#analytics-filter-form', 'submit');">
-                        <span>&#x1F3AF; Residential Proxy Scatterplot</span>
                     </label>
                 </div>
             </div>

@@ -56,21 +56,24 @@ Accessible via `/analytics`. A dedicated visual observability cockpit designed f
 
 Powered by local, self-contained Chart.js (`chart.umd.min.js`), this view delivers high-throughput client-side rendering with logarithmic scaling, dynamic tooltips, and interactive click-to-filter drilldowns without external CDN or npm dependencies.
 
-### 1. View Controls & Dedicated Filter Bar
-Unlike search tables that focus on individual log records, the `/analytics` filter bar directly controls the aggregated time buckets and cluster matrices:
-* **Server Node Selection:** Multi-select checkboxes to isolate specific Tomcat nodes or compare multi-region deployments.
-* **Valve Selector:** Select a specific rate-limiter instance (`Primary-Limiter`, `Subnet-Guard`) or evaluate all valves combined.
-* **Time Horizon Presets:**
-  * `1 Hour`: High-resolution real-time monitoring of active incidents and sudden traffic surges.
-  * `6 Hours`: Shift-level analysis covering recent peak or off-peak business cycles.
-  * `24 Hours`: Comprehensive daily telemetry baseline identifying diurnal cycles and recurring scraper waves.
-  * `7 Days`: Long-term trend analysis, baseline traffic growth, and persistent botnet activity.
-* **Category Focus Pills:** Instantly isolate or highlight specific traffic classifications:
-  * `All Categories`: Complete fleet-wide telemetry blend.
-  * `Residential Proxies`: Focus on distributed residential ISP clusters and suspect botnets.
-  * `Datacenter Scraping`: Highlight commercial cloud providers and VPS scrapers.
-  * `Anonymizer / Tor`: Isolate Tor exit nodes and VPN proxies.
-  * `Verified Crawlers`: Verify that legitimate search engines (Googlebot, Bingbot) and AI indexing bots operate unimpeded.
+### 1. View Controls & Streamlined Scope Filter
+To provide an uncluttered forensic workflow, controls are logically partitioned between the top **Scope Filter Form** and the **Chart Card Header**:
+
+* **Top Scope Filter Form (Node & Valve Selection):**
+  * **Target Servers:** Multi-select checkboxes to isolate specific Tomcat nodes or compare multi-region deployments.
+  * **Valves:** Multi-select checkboxes to isolate specific rate-limiter instances (`Primary-Limiter`, `Subnet-Guard`) or evaluate all valves combined.
+  * **One-Click Auto-Submit:** Toggling any server or valve immediately applies the filter via reactive HTMX (`#analytics-filter-form`), while preserving the currently selected time window and focus mode tab.
+* **Chart Card Header (Focus Mode & Time Presets):**
+  Positioned directly above the charts, these controls provide immediate context and switch views seamlessly without requiring a form submission:
+  * **Focus Mode Tabs:**
+    * `Timeline & Bot-Mix`: Dual view featuring the stacked Traffic & Attack Timeline alongside the Bot-Mix Donut.
+    * `Subnet Scatterplot`: 2D cluster forensic map identifying distributed residential proxy networks.
+  * **Time Horizon Selector (`1h`, `6h`, `24h`, `7d`):**
+    * `1h`: High-resolution real-time monitoring of active incidents and sudden traffic surges.
+    * `6h`: Shift-level analysis covering recent peak or off-peak business cycles.
+    * `24h` (Default): Comprehensive daily baseline identifying diurnal cycles and recurring scraper waves.
+    * `7d`: Long-term trend analysis, baseline traffic growth, and persistent botnet activity.
+* **Unified State Synchronization:** Switching time horizons or tabs via the chart card header automatically updates the hidden state in the top filter form. Subsequent server/valve filter changes faithfully preserve the active time horizon and focus mode.
 * **Reactive HTMX Integration:** Switching any filter triggers an asynchronous HTMX request (`hx-get="/fragments/analytics-overview"`) targeting `#analytics-container`. Chart.js instances are cleanly destroyed and re-instantiated with zero screen flicker and no full-page reloads.
 
 ---

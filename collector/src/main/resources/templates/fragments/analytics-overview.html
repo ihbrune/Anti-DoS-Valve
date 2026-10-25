@@ -3,7 +3,8 @@
 <body>
 
 <!-- Telemetry Analytics Fragment -->
-<div th:fragment="analyticsCard" id="analytics-container" class="table-card" style="padding: 20px; margin-bottom: 28px;">
+<div th:fragment="analyticsCard" id="analytics-container" class="table-card" style="padding: 20px; margin-bottom: 28px;"
+     th:attr="data-selected-hours=${selectedHours},data-active-tab=${activeTab}">
     <!-- Analytics Header & Control Bar -->
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 20px;">
         <div>
@@ -26,7 +27,7 @@
                 <button type="button"
                         class="btn"
                         th:classappend="${activeTab == 'charts' ? 'btn-primary' : ''}"
-                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='charts')}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='charts',servers=${selectedServers},valves=${selectedValves})}"
                         hx-target="#analytics-container"
                         hx-swap="outerHTML"
                         style="padding: 5px 12px; font-size: 12px;">
@@ -35,7 +36,7 @@
                 <button type="button"
                         class="btn"
                         th:classappend="${activeTab == 'scatter' ? 'btn-primary' : ''}"
-                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter')}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',servers=${selectedServers},valves=${selectedValves})}"
                         hx-target="#analytics-container"
                         hx-swap="outerHTML"
                         style="padding: 5px 12px; font-size: 12px;">
@@ -47,19 +48,25 @@
             <div style="display: flex; align-items: center; gap: 6px;">
                 <button type="button" class="btn"
                         th:classappend="${selectedHours == 1 ? 'btn-primary' : ''}"
-                        th:attr="hx-get=@{/fragments/analytics-overview(hours=1,tab=${activeTab})}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=1,tab=${activeTab},servers=${selectedServers},valves=${selectedValves})}"
                         hx-target="#analytics-container"
                         hx-swap="outerHTML"
                         style="padding: 4px 10px; font-size: 11px;">1h</button>
                 <button type="button" class="btn"
+                        th:classappend="${selectedHours == 6 ? 'btn-primary' : ''}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=6,tab=${activeTab},servers=${selectedServers},valves=${selectedValves})}"
+                        hx-target="#analytics-container"
+                        hx-swap="outerHTML"
+                        style="padding: 4px 10px; font-size: 11px;">6h</button>
+                <button type="button" class="btn"
                         th:classappend="${selectedHours == 24 ? 'btn-primary' : ''}"
-                        th:attr="hx-get=@{/fragments/analytics-overview(hours=24,tab=${activeTab})}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=24,tab=${activeTab},servers=${selectedServers},valves=${selectedValves})}"
                         hx-target="#analytics-container"
                         hx-swap="outerHTML"
                         style="padding: 4px 10px; font-size: 11px;">24h</button>
                 <button type="button" class="btn"
                         th:classappend="${selectedHours == 168 ? 'btn-primary' : ''}"
-                        th:attr="hx-get=@{/fragments/analytics-overview(hours=168,tab=${activeTab})}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=168,tab=${activeTab},servers=${selectedServers},valves=${selectedValves})}"
                         hx-target="#analytics-container"
                         hx-swap="outerHTML"
                         style="padding: 4px 10px; font-size: 11px;">7d</button>
@@ -193,7 +200,23 @@
                 }
             }
 
+            function syncFilterInputs() {
+                const container = document.getElementById('analytics-container');
+                if (!container) return;
+                const hours = container.getAttribute('data-selected-hours');
+                const tab = container.getAttribute('data-active-tab');
+                const filterHours = document.getElementById('filter-hours');
+                if (filterHours && hours) {
+                    filterHours.value = hours;
+                }
+                const filterTab = document.getElementById('filter-tab');
+                if (filterTab && tab) {
+                    filterTab.value = tab;
+                }
+            }
+
             function scheduleInit() {
+                syncFilterInputs();
                 if (initTimer) clearTimeout(initTimer);
                 initTimer = setTimeout(doInitCharts, 25);
             }
