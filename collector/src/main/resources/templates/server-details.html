@@ -19,6 +19,9 @@
             </div>
         </a>
         <div class="nav-actions">
+            <a href="/" class="btn" title="Return to Fleet Overview Dashboard">
+                <span>&#x2190;</span> Dashboard
+            </a>
             <a th:href="@{'/events?servers=' + ${serverId}}" class="btn" title="View Incident Explorer filtered for this node">
                 <span>&#x1F4CB;</span> Node Incidents
             </a>
@@ -27,6 +30,9 @@
             </a>
             <a th:href="@{'/poll-log?serverId=' + ${serverId}}" class="btn" title="View polling event logs for this node">
                 <span>&#x1F4DC;</span> Node Poll Log
+            </a>
+            <a href="/notes" class="btn" title="Investigative Annotations &amp; Network Notes">
+                <span>&#x1F4DD;</span> Notes
             </a>
             <a href="/system" class="btn" title="System status, telemetry rules &amp; configuration">
                 <span>&#x2699;</span> System &amp; Config
@@ -41,7 +47,6 @@
             <a href="/help" class="btn" title="Full offline documentation repository">
                 <span>&#x1F4D6;</span> Docs
             </a>
-            <a href="/" class="btn">&larr; Back to Fleet Overview</a>
             <button type="button" class="btn btn-theme-toggle" onclick="toggleTheme()" title="Switch Light / Dark Theme" aria-label="Toggle theme">
                 <span class="theme-icon-sun">&#x2600;&#xFE0F;</span>
                 <span class="theme-icon-moon">&#x1F319;</span>

@@ -12,4 +12,10 @@ public record IpNetworkInfo(
 		String v6End,
 		String subnetGroup
 ) {
+	public int ipVersion() { return version; }
+	public int cidrPrefix() { return prefix; }
+	public Long ipV4Start() { return v4Start; }
+	public Long ipV4End() { return v4End; }
+	public String ipV6Start() { return v6Start; }
+	public String ipV6End() { return v6End; }
 }

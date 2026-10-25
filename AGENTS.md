@@ -51,6 +51,11 @@ This document serves as an onboarding and development guide for human developers
    * All schema migrations managed via versioned Flyway SQL scripts.
 3. **No Heavy Frontend Frameworks:**
    * Uses server-side Thymeleaf templates with HTMX for real-time reactivity without Node.js/npm dependencies.
+4. **Third-Party Open Source Compliance & Vendoring:**
+   * Whenever vendored frontend assets (e.g., Chart.js, HTMX) in `collector/src/main/resources/static/js/` are added or updated, ensure strict open-source license compliance:
+     * Always preserve or prepend license and copyright comment banners (`/*! ... */`) at the top of minified files.
+     * Place the full license text in a corresponding `.LICENSE.txt` file next to each vendored script (e.g. `htmx.min.js.LICENSE.txt`, `chart.umd.min.js.LICENSE.txt`).
+     * Keep [NOTICE.md](NOTICE.md) in the project root synchronized with all component versions, copyrights, and license texts.
 
 ---
 

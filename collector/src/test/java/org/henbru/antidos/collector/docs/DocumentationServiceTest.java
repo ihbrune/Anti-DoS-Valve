@@ -81,6 +81,14 @@ class DocumentationServiceTest {
 		assertTrue(systemSectionHtml.contains("System Status &amp; Configuration") || systemSectionHtml.contains("System Status & Configuration"));
 		assertTrue(systemSectionHtml.contains("Runtime &amp; Database Telemetry") || systemSectionHtml.contains("Runtime & Database Telemetry"));
 		assertTrue(systemSectionHtml.contains("Operational Maintenance Triggers"));
+
+		// Extract section for Server Node Detail View
+		String serverSectionHtml = service.getSectionHtml(DocumentationService.DOC_UI, "server-node-detail-view");
+		assertNotNull(serverSectionHtml);
+		assertTrue(serverSectionHtml.contains("Server Node Detail View"));
+		assertTrue(serverSectionHtml.contains("Discovered Valve Runtime Configurations"));
+		assertTrue(serverSectionHtml.contains("Monitored Valves &amp; Active Tracking Configuration") || serverSectionHtml.contains("Monitored Valves & Active Tracking Configuration"));
+		assertTrue(serverSectionHtml.contains("Rate Limit Threshold Card"));
 	}
 
 	@Test

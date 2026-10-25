@@ -34,6 +34,7 @@ The documentation is organized by role and responsibility:
 
 * **Multi-Server & Multi-Valve Telemetry:** Periodically pulls compact `/antidos-status` JSON endpoints across one or more Tomcat servers using Java 21 Virtual Threads.
 * **Smart Slot Polling & Recovery:** Immutable finalized slots are pulled only once; missed slots after network interruptions are backfilled automatically without data loss.
+* **Persistent Operator Knowledge & Network Notes (`/notes`):** Annotate ASNs and Subnets with Markdown notes and verdict badges (Legitimate, Internal, Suspicious, Malicious, Info) that remain completely immune to data retention cleanups.
 * **Specialized Threat Forensics:** Real-time CIDR range filtering, Subnet Rollup (`/24` and `/64`), and heuristic residential proxy botnet cluster detection.
 * **Dual Database Architecture:** Out-of-the-box embedded SQLite with WAL journal mode, or PostgreSQL for high-volume enterprise deployments, managed via automated Flyway migrations.
 * **In-App Offline Documentation (`/help`):** Full user and operations manuals bundled directly into the application JAR with in-page contextual slide-over drawers — 100% air-gap ready without external internet dependencies.

@@ -1412,17 +1412,267 @@ html[data-theme="light"] .theme-icon-moon {
     background: #f8fafc;
 }
 
-/* Visual Telemetry Chart Containers */
-.chart-container-box {
-    position: relative;
-    width: 100%;
-    overflow: hidden;
+
+/* ==========================================================================
+   Network Notes & Forensic Annotations Styles
+   ========================================================================== */
+
+.notes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 20px;
 }
 
-.chart-container-box canvas {
-    display: block !important;
-    width: 100% !important;
-    height: 100% !important;
+@media (max-width: 640px) {
+    .notes-grid {
+        grid-template-columns: 1fr;
+    }
 }
+
+.note-card {
+    display: flex;
+    flex-direction: column;
+    padding: 20px 22px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    border-radius: var(--radius-lg);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+}
+
+.note-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+    border-color: rgba(56, 189, 248, 0.35);
+}
+
+.note-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.note-target-pill {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--color-primary);
+    background: rgba(56, 189, 248, 0.12);
+    border: 1px solid rgba(56, 189, 248, 0.28);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    letter-spacing: 0.02em;
+}
+
+.note-card-meta {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    margin-top: 10px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.note-card-body {
+    flex: 1;
+    font-size: 13.5px;
+    line-height: 1.6;
+    margin-bottom: 16px;
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.note-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+    margin-top: auto;
+}
+
+/* Modal Dialog Styles */
+.note-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: fadeIn 0.15s ease-out;
+}
+
+.note-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(3, 7, 18, 0.78);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.note-modal-dialog {
+    position: relative;
+    z-index: 10001;
+    width: 640px;
+    max-width: 95vw;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 24px 56px rgba(0, 0, 0, 0.75);
+    overflow: hidden;
+    animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.note-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-card);
+}
+
+.note-modal-title {
+    font-size: 16.5px;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.note-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 22px 24px;
+}
+
+.note-modal-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-card);
+}
+
+/* Verdict Picker */
+.verdict-picker {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.verdict-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    background: rgba(15, 23, 42, 0.4);
+    cursor: pointer;
+    font-size: 12.5px;
+    transition: all 0.15s ease;
+}
+
+.verdict-option:hover {
+    border-color: var(--color-primary);
+    background: rgba(56, 189, 248, 0.08);
+}
+
+.verdict-option input[type="radio"] {
+    accent-color: var(--color-primary);
+    margin: 0;
+}
+
+/* Inline Note Badges in Tables */
+.badge-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 6px;
+    font-size: 10px;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: 1px solid transparent;
+}
+
+.badge-note:hover {
+    transform: scale(1.05);
+    filter: brightness(1.15);
+}
+
+.btn-add-note {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-muted);
+    border: 1px dashed var(--border-color);
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.15s ease;
+}
+
+.btn-add-note:hover {
+    background: rgba(56, 189, 248, 0.15);
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+    border-style: solid;
+}
+
+/* Light Theme Overrides for Notes & Modals */
+[data-theme="light"] .note-card {
+    background: #ffffff;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .note-card:hover {
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="light"] .note-modal-dialog {
+    background: #ffffff;
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.22);
+}
+
+[data-theme="light"] .note-modal-header,
+[data-theme="light"] .note-modal-footer {
+    background: #f8fafc;
+}
+
+[data-theme="light"] .verdict-option {
+    background: #f8fafc;
+}
+
+[data-theme="light"] .note-modal-backdrop {
+    background: rgba(15, 23, 42, 0.5);
+}
+
 
 

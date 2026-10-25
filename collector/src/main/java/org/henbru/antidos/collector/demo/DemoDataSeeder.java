@@ -71,6 +71,7 @@ public class DemoDataSeeder {
 	private final JdbcTemplate jdbcTemplate;
 	private final org.henbru.antidos.collector.config.CollectorProperties properties;
 	private final org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService;
+	private final org.henbru.antidos.collector.annotation.NetworkAnnotationService annotationService;
 
 	public DemoDataSeeder(
 			SlotSnapshotRepository slotSnapshotRepository,
@@ -81,7 +82,9 @@ public class DemoDataSeeder {
 			JdbcTemplate jdbcTemplate,
 			org.henbru.antidos.collector.config.CollectorProperties properties,
 			@org.springframework.beans.factory.annotation.Autowired(required = false)
-			org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService) {
+			org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService,
+			@org.springframework.beans.factory.annotation.Autowired(required = false)
+			org.henbru.antidos.collector.annotation.NetworkAnnotationService annotationService) {
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
 		this.heartbeatRepository = heartbeatRepository;
@@ -90,6 +93,7 @@ public class DemoDataSeeder {
 		this.jdbcTemplate = jdbcTemplate;
 		this.properties = properties;
 		this.rollupAggregationService = rollupAggregationService;
+		this.annotationService = annotationService;
 	}
 
 	@EventListener(ApplicationReadyEvent.class)
@@ -102,6 +106,7 @@ public class DemoDataSeeder {
 		if (!slotSnapshotRepository.findRecentFleet(1).isEmpty()) {
 			log.info("Demo database already contains historical telemetry. Updating any legacy un-enriched demo events...");
 			enrichLegacyDemoEventsIfAny();
+			seedDemoAnnotationsIfEmpty();
 			return;
 		}
 
@@ -448,6 +453,8 @@ public class DemoDataSeeder {
 				log.warn("Could not aggregate demo rollups: {}", e.getMessage());
 			}
 		}
+
+		seedDemoAnnotationsIfEmpty();
 	}
 
 	private ClientEvent createEnrichedEvent(
@@ -558,4 +565,67 @@ public class DemoDataSeeder {
 			log.warn("Could not backfill legacy demo events: {}", e.getMessage());
 		}
 	}
+
+	private void seedDemoAnnotationsIfEmpty() {
+		if (annotationService == null || annotationService.getTotalCount() > 0) {
+			return;
+		}
+		try {
+			annotationService.saveAnnotation(
+					null,
+					org.henbru.antidos.collector.model.AnnotationTargetType.ASN,
+					"AS14061",
+					org.henbru.antidos.collector.model.AnnotationVerdict.SUSPICIOUS,
+					"""
+					### DigitalOcean Cloud Scanner & Proxy
+					- Repeated scans observed against `/api/v1/auth` and port probing.
+					- Multiple rotating VPS instances originating from Frankfurt and Amsterdam.
+					- **Recommendation:** Do not block wholesale, but keep strict threshold in Valve.
+					"""
+			);
+
+			annotationService.saveAnnotation(
+					null,
+					org.henbru.antidos.collector.model.AnnotationTargetType.SUBNET,
+					"185.246.221.0/24",
+					org.henbru.antidos.collector.model.AnnotationVerdict.SUSPICIOUS,
+					"""
+					### Suspicious Residential Proxy Cluster
+					- Conspicuous cluster of end-user IPs (`.84`, `.85`, `.86`), each issuing only 2–3 requests.
+					- Typical signature of distributed web scraping via residential proxy networks.
+					- Investigated in ticket **#SEC-512**.
+					"""
+			);
+
+			annotationService.saveAnnotation(
+					null,
+					org.henbru.antidos.collector.model.AnnotationTargetType.ASN,
+					"AS15169",
+					org.henbru.antidos.collector.model.AnnotationVerdict.LEGITIMATE,
+					"""
+					### Official Googlebot Crawler Cluster
+					- Verified Google Search Engine IP ranges.
+					- Requests are expected and welcome for web indexing.
+					- Already synchronized via automated crawler feeds.
+					"""
+			);
+
+			annotationService.saveAnnotation(
+					null,
+					org.henbru.antidos.collector.model.AnnotationTargetType.SUBNET,
+					"198.51.100.0/24",
+					org.henbru.antidos.collector.model.AnnotationVerdict.INTERNAL,
+					"""
+					### Management & Monitoring Gateway
+					- Internal VPN and Prometheus/Pingdom health check probes.
+					- Should be configured under `alwaysAllowedIps` in the Valve.
+					"""
+			);
+
+			log.info("Demo network annotations seeded: 4 investigative notes created (ASNs & Subnets).");
+		} catch (Exception e) {
+			log.warn("Could not seed demo annotations: {}", e.getMessage());
+		}
+	}
 }
+

@@ -730,5 +730,103 @@ class DatabaseMigrationAndRepositoryTest {
 		List<String> distinct = monitoredValveRepository.findDistinctValveNames();
 		assertTrue(distinct.contains("Primary-Rate-Limiter"));
 	}
+
+	@Autowired
+	private org.henbru.antidos.collector.storage.NetworkAnnotationRepository networkAnnotationRepository;
+
+	@Test
+	void testNetworkAnnotationRepositoryUpsertAndQuery() {
+		Instant now = Instant.now();
+		org.henbru.antidos.collector.model.NetworkAnnotation asnNote = new org.henbru.antidos.collector.model.NetworkAnnotation(
+				null,
+				org.henbru.antidos.collector.model.AnnotationTargetType.ASN,
+				"AS24940",
+				24940L,
+				null,
+				4,
+				32,
+				null,
+				null,
+				null,
+				null,
+				org.henbru.antidos.collector.model.AnnotationVerdict.SUSPICIOUS,
+				"### Hetzner Scanners\n- Test markdown note",
+				now,
+				now
+		);
+
+		networkAnnotationRepository.upsert(asnNote);
+
+		Optional<org.henbru.antidos.collector.model.NetworkAnnotation> foundAsn =
+				networkAnnotationRepository.findByTarget(org.henbru.antidos.collector.model.AnnotationTargetType.ASN, "AS24940");
+		assertTrue(foundAsn.isPresent());
+		assertEquals(24940L, foundAsn.get().asn());
+		assertEquals(org.henbru.antidos.collector.model.AnnotationVerdict.SUSPICIOUS, foundAsn.get().verdict());
+		assertEquals("### Hetzner Scanners\n- Test markdown note", foundAsn.get().noteMarkdown());
+
+		// Test Subnet annotation
+		org.henbru.antidos.collector.model.NetworkAnnotation subnetNote = new org.henbru.antidos.collector.model.NetworkAnnotation(
+				null,
+				org.henbru.antidos.collector.model.AnnotationTargetType.SUBNET,
+				"198.51.100.0/24",
+				null,
+				"198.51.100.0/24",
+				4,
+				24,
+				3325256704L,
+				3325256959L,
+				null,
+				null,
+				org.henbru.antidos.collector.model.AnnotationVerdict.LEGITIMATE,
+				"- Partner API range",
+				now,
+				now
+		);
+		networkAnnotationRepository.upsert(subnetNote);
+
+		Optional<org.henbru.antidos.collector.model.NetworkAnnotation> foundSubnet =
+				networkAnnotationRepository.findBySubnet("198.51.100.0/24");
+		assertTrue(foundSubnet.isPresent());
+		assertEquals("198.51.100.0/24", foundSubnet.get().subnetGroup());
+		assertEquals(org.henbru.antidos.collector.model.AnnotationVerdict.LEGITIMATE, foundSubnet.get().verdict());
+
+		// Test upsert update
+		Instant later = now.plusSeconds(60);
+		org.henbru.antidos.collector.model.NetworkAnnotation updatedAsnNote = new org.henbru.antidos.collector.model.NetworkAnnotation(
+				foundAsn.get().id(),
+				org.henbru.antidos.collector.model.AnnotationTargetType.ASN,
+				"AS24940",
+				24940L,
+				null,
+				4,
+				32,
+				null,
+				null,
+				null,
+				null,
+				org.henbru.antidos.collector.model.AnnotationVerdict.MALICIOUS,
+				"### Upgraded to Malicious\n- Coordinated bot attack detected",
+				now,
+				later
+		);
+		networkAnnotationRepository.upsert(updatedAsnNote);
+
+		Optional<org.henbru.antidos.collector.model.NetworkAnnotation> afterUpdate =
+				networkAnnotationRepository.findByTarget(org.henbru.antidos.collector.model.AnnotationTargetType.ASN, "AS24940");
+		assertTrue(afterUpdate.isPresent());
+		assertEquals(org.henbru.antidos.collector.model.AnnotationVerdict.MALICIOUS, afterUpdate.get().verdict());
+		assertTrue(afterUpdate.get().noteMarkdown().contains("Upgraded to Malicious"));
+
+		// Test count by verdict
+		Map<org.henbru.antidos.collector.model.AnnotationVerdict, Long> counts = networkAnnotationRepository.countByVerdict();
+		assertEquals(1L, counts.get(org.henbru.antidos.collector.model.AnnotationVerdict.MALICIOUS));
+		assertEquals(1L, counts.get(org.henbru.antidos.collector.model.AnnotationVerdict.LEGITIMATE));
+
+		// Test delete
+		boolean deleted = networkAnnotationRepository.deleteById(foundSubnet.get().id());
+		assertTrue(deleted);
+		assertFalse(networkAnnotationRepository.findBySubnet("198.51.100.0/24").isPresent());
+	}
 }
+
 

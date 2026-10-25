@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- Fragment: noteModal -->
+<div th:fragment="noteModal" id="note-modal-wrapper" class="note-modal-overlay">
+    <div class="note-modal-backdrop" onclick="closeNoteModal()"></div>
+
+    <div class="note-modal-dialog" role="dialog" aria-modal="true">
+        <!-- ========================================== -->
+        <!-- VIEW MODE                                  -->
+        <!-- ========================================== -->
+        <th:block th:if="${mode == 'VIEW'}">
+            <div class="note-modal-header">
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <span class="note-target-pill" th:text="${annotation.displayTitle()}">AS24940</span>
+                    <span class="badge" th:classappend="${annotation.verdict().badgeClass()}"
+                          th:text="${annotation.verdict().icon() + ' ' + annotation.verdict().displayName()}">🟢 Legitimate</span>
+                    <span class="badge badge-secondary" style="font-size: 11px;" th:text="${annotation.targetType().displayName()}">ASN</span>
+                </div>
+                <button type="button" class="drawer-close-btn" onclick="closeNoteModal()" aria-label="Close" title="Close (Esc)">&times;</button>
+            </div>
+
+            <div class="note-modal-body">
+                <div th:if="${actionMessage != null}" class="alert alert-success" style="margin-bottom: 16px; font-size: 13px; padding: 10px 14px;">
+                    <span th:text="${actionMessage}">Note saved.</span>
+                </div>
+
+                <div class="note-meta-bar" style="margin-bottom: 16px; font-size: 12px; color: var(--text-muted); display: flex; gap: 16px; flex-wrap: wrap;">
+                    <div>Updated: <strong style="color: var(--text-secondary);" th:text="${#temporals.format(annotation.updatedAt(), 'dd.MM.yyyy HH:mm')}">24.10.2026 14:30</strong></div>
+                    <div>Created: <span th:text="${#temporals.format(annotation.createdAt(), 'dd.MM.yyyy HH:mm')}">20.10.2026 10:15</span></div>
+                </div>
+
+                <!-- Markdown Content -->
+                <div class="doc-content note-rendered-content" th:utext="${renderedHtml}">
+                    <p>Note content...</p>
+                </div>
+
+                <!-- Forensics Link Box -->
+                <div class="note-forensics-box" style="margin-top: 24px; padding: 14px 18px; background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.18); border-radius: var(--radius-md);">
+                    <div style="font-size: 11.5px; font-weight: 700; text-transform: uppercase; color: var(--color-primary); margin-bottom: 8px;">
+                        <span>&#x1F50D;</span> Live Forensics in Incident Explorer
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <a th:if="${annotation.isAsn()}"
+                           th:href="@{/events(asn=${annotation.asn()})}"
+                           class="btn" style="font-size: 12px; padding: 4px 10px;">
+                            <span>&#x1F4DC;</span> Events for AS<span th:text="${annotation.asn()}"></span> &rarr;
+                        </a>
+                        <a th:if="${annotation.isSubnet()}"
+                           th:href="@{/events(clientQuery=${annotation.targetKey()})}"
+                           class="btn" style="font-size: 12px; padding: 4px 10px;">
+                            <span>&#x1F4DC;</span> Events for <span th:text="${annotation.targetKey()}"></span> &rarr;
+                        </a>
+                        <a th:href="@{/offenders(groupBy=${annotation.isAsn() ? 'ASN' : 'SUBNET'})}"
+                           class="btn" style="font-size: 12px; padding: 4px 10px;">
+                            <span>&#x26A0;</span> Top Offenders &rarr;
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="note-modal-footer">
+                <button type="button" class="btn btn-danger"
+                        th:hx-delete="@{'/notes/' + ${annotation.id()}}"
+                        hx-confirm="Are you sure you want to permanently delete this note?"
+                        hx-target="#notes-list-container"
+                        onclick="closeNoteModal()"
+                        title="Delete note">
+                    <span>&#x1F5D1;</span> Delete
+                </button>
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" class="btn"
+                            th:hx-get="@{'/notes/modal/edit/' + ${annotation.id()}}"
+                            hx-target="#note-modal-container">
+                        <span>&#x270F;&#xFE0F;</span> Edit
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="closeNoteModal()">Close</button>
+                </div>
+            </div>
+        </th:block>
+
+        <!-- ========================================== -->
+        <!-- CREATE / EDIT MODE                         -->
+        <!-- ========================================== -->
+        <th:block th:if="${mode == 'CREATE' or mode == 'EDIT'}">
+            <div class="note-modal-header">
+                <div class="note-modal-title">
+                    <span th:text="${mode == 'EDIT' ? '&#x270F;&#xFE0F; Edit Note' : '&#x1F4DD; New Network Note'}">&#x1F4DD; New Note</span>
+                </div>
+                <button type="button" class="drawer-close-btn" onclick="closeNoteModal()" aria-label="Close" title="Close (Esc)">&times;</button>
+            </div>
+
+            <form hx-post="/notes" hx-target="#notes-list-container" hx-swap="outerHTML" onsubmit="setTimeout(closeNoteModal, 150)">
+                <input type="hidden" name="id" th:value="${id}">
+                <input type="hidden" name="context" value="list">
+
+                <div class="note-modal-body">
+                    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 14px; margin-bottom: 16px;">
+                        <div>
+                            <label class="form-label" for="targetTypeSelect">Scope / Target Type</label>
+                            <select id="targetTypeSelect" name="targetType" class="form-select" required
+                                    onchange="updateTargetPlaceholder(this.value)">
+                                <option th:each="t : ${targetTypes}"
+                                        th:value="${t.name()}"
+                                        th:selected="${t == targetType}"
+                                        th:text="${t.displayName()}">Subnet</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label" for="targetKeyInput">Target (ASN or Subnet CIDR)</label>
+                            <input id="targetKeyInput" type="text" name="targetKey" class="form-input ip-mono"
+                                   th:value="${targetKey}"
+                                   placeholder="e.g. 198.51.100.0/24 or AS24940"
+                                   required autocomplete="off">
+                            <div id="targetHelpText" style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+                                Subnet e.g. <code>198.51.100.0/24</code> or IPv6 <code>2001:db8::/64</code>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 16px;">
+                        <label class="form-label">Categorization Verdict</label>
+                        <div class="verdict-picker">
+                            <label th:each="v : ${verdicts}" class="verdict-option">
+                                <input type="radio" name="verdict" th:value="${v.name()}"
+                                       th:checked="${v == verdict}">
+                                <span class="badge" th:classappend="${v.badgeClass()}"
+                                      th:text="${v.icon() + ' ' + v.displayName()}">🟢 Legitimate</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 6px;">
+                        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
+                            <label class="form-label" for="noteMarkdownTextarea" style="margin-bottom: 0;">Note (Markdown supported)</label>
+                            <span style="font-size: 11px; color: var(--text-muted);">Lists, links, code blocks, tables</span>
+                        </div>
+                        <textarea id="noteMarkdownTextarea" name="noteMarkdown" class="form-textarea" rows="8"
+                                  placeholder="e.g.:
+- Investigated on Oct 24 after DoS traffic spike
+- Belongs to partner API cluster (Ticket #SEC-442)
+- Contains occasional individual scanners (e.g. 198.51.100.42), but overall range is legitimate"
+                                  required th:text="${noteMarkdown}"></textarea>
+                    </div>
+                </div>
+
+                <div class="note-modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeNoteModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <span>&#x1F4BE;</span> Save Note
+                    </button>
+                </div>
+            </form>
+        </th:block>
+
+        <!-- ========================================== -->
+        <!-- NOT FOUND MODE                             -->
+        <!-- ========================================== -->
+        <th:block th:if="${mode == 'NOT_FOUND'}">
+            <div class="note-modal-header">
+                <div class="note-modal-title">Note Not Found</div>
+                <button type="button" class="drawer-close-btn" onclick="closeNoteModal()">&times;</button>
+            </div>
+            <div class="note-modal-body">
+                <p style="color: var(--text-muted);">The requested note no longer exists or was deleted.</p>
+            </div>
+            <div class="note-modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeNoteModal()">Close</button>
+            </div>
+        </th:block>
+    </div>
+</div>
+
+<!-- Fragment: noteNotFound -->
+<div th:fragment="noteNotFound" class="note-modal-overlay">
+    <div class="note-modal-backdrop" onclick="closeNoteModal()"></div>
+    <div class="note-modal-dialog">
+        <div class="note-modal-header">
+            <div class="note-modal-title">Note Not Found</div>
+            <button type="button" class="drawer-close-btn" onclick="closeNoteModal()">&times;</button>
+        </div>
+        <div class="note-modal-body">
+            <p style="color: var(--text-muted);">The requested note no longer exists.</p>
+        </div>
+        <div class="note-modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeNoteModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

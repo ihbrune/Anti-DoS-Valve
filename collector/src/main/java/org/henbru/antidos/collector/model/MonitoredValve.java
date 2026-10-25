@@ -44,6 +44,10 @@ public record MonitoredValve(
 		return (slotLength * numberOfSlots) + "s (" + numberOfSlots + " x " + slotLength + "s)";
 	}
 
+	public String formattedSubnetMasks() {
+		return "/" + ipv4SubnetMask + " (IPv4) &bull; /" + ipv6SubnetMask + " (IPv6)";
+	}
+
 	public boolean hasPathFilters() {
 		return (relevantPaths != null && !relevantPaths.isBlank())
 				|| (nonRelevantPaths != null && !nonRelevantPaths.isBlank());

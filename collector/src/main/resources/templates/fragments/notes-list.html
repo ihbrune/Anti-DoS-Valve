@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- Fragment: notesList -->
+<div th:fragment="notesList" id="notes-list-container">
+
+    <!-- KPI / Stats Cards -->
+    <div class="stats-overview" style="margin-bottom: 24px;">
+        <div class="stat-card" style="border-left: 4px solid var(--color-primary);">
+            <div class="stat-title">Total Notes</div>
+            <div class="stat-value" th:text="${totalCount}">0</div>
+            <div class="stat-desc">Persistent operator knowledge records</div>
+        </div>
+        <div class="stat-card" style="border-left: 4px solid #10b981;">
+            <div class="stat-title">🟢 Legitimate</div>
+            <div class="stat-value" style="color: #34d399;" th:text="${verdictCounts.get(T(org.henbru.antidos.collector.model.AnnotationVerdict).LEGITIMATE)}">0</div>
+            <div class="stat-desc">Partners, approved bots, CDNs</div>
+        </div>
+        <div class="stat-card" style="border-left: 4px solid #38bdf8;">
+            <div class="stat-title">🔵 Internal Network</div>
+            <div class="stat-value" style="color: #38bdf8;" th:text="${verdictCounts.get(T(org.henbru.antidos.collector.model.AnnotationVerdict).INTERNAL)}">0</div>
+            <div class="stat-desc">Intranet, VPN, monitoring</div>
+        </div>
+        <div class="stat-card" style="border-left: 4px solid #f59e0b;">
+            <div class="stat-title">🟡 Suspicious</div>
+            <div class="stat-value" style="color: #fbbf24;" th:text="${verdictCounts.get(T(org.henbru.antidos.collector.model.AnnotationVerdict).SUSPICIOUS)}">0</div>
+            <div class="stat-desc">Under observation, threshold edge</div>
+        </div>
+        <div class="stat-card" style="border-left: 4px solid #f43f5e;">
+            <div class="stat-title">🔴 Malicious</div>
+            <div class="stat-value" style="color: #fb7185;" th:text="${verdictCounts.get(T(org.henbru.antidos.collector.model.AnnotationVerdict).MALICIOUS)}">0</div>
+            <div class="stat-desc">Attackers, scrapers, botnets</div>
+        </div>
+        <div class="stat-card" style="border-left: 4px solid #94a3b8;">
+            <div class="stat-title">⚪ Info</div>
+            <div class="stat-value" style="color: #cbd5e1;" th:text="${verdictCounts.get(T(org.henbru.antidos.collector.model.AnnotationVerdict).INFO)}">0</div>
+            <div class="stat-desc">Neutral background notes</div>
+        </div>
+    </div>
+
+    <!-- Filter & Search Toolbar -->
+    <div class="card" style="margin-bottom: 24px; padding: 18px 20px;">
+        <form hx-get="/notes/fragment" hx-target="#notes-list-container" hx-swap="outerHTML" class="notes-filter-form">
+            <div style="display: flex; gap: 14px; flex-wrap: wrap; align-items: center; justify-content: space-between;">
+                <!-- Search Input -->
+                <div style="flex: 1; min-width: 240px; position: relative;">
+                    <input type="text" name="q" class="form-input" th:value="${searchQuery}"
+                           placeholder="🔍 Search notes (text, ASN, subnet)..."
+                           hx-get="/notes/fragment"
+                           hx-trigger="keyup changed delay:300ms, search"
+                           hx-target="#notes-list-container"
+                           hx-swap="outerHTML"
+                           hx-include=".notes-filter-form">
+                </div>
+
+                <!-- Target Type Filter -->
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">Type:</span>
+                    <select name="targetType" class="form-select" style="width: auto; padding: 6px 12px; font-size: 13px;"
+                            hx-get="/notes/fragment" hx-target="#notes-list-container" hx-swap="outerHTML" hx-include=".notes-filter-form">
+                        <option value="" th:selected="${selectedTargetType == null}">All Types</option>
+                        <option th:each="t : ${targetTypes}"
+                                th:value="${t.name()}"
+                                th:selected="${selectedTargetType == t}"
+                                th:text="${t.displayName()}">ASN</option>
+                    </select>
+                </div>
+
+                <!-- Verdict Filter -->
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">Verdict:</span>
+                    <select name="verdict" class="form-select" style="width: auto; padding: 6px 12px; font-size: 13px;"
+                            hx-get="/notes/fragment" hx-target="#notes-list-container" hx-swap="outerHTML" hx-include=".notes-filter-form">
+                        <option value="" th:selected="${selectedVerdict == null}">All Verdicts</option>
+                        <option th:each="v : ${verdicts}"
+                                th:value="${v.name()}"
+                                th:selected="${selectedVerdict == v}"
+                                th:text="${v.icon() + ' ' + v.displayName()}">🟢 Legitimate</option>
+                    </select>
+                </div>
+
+                <!-- Sort Order -->
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">Sort:</span>
+                    <select name="sortBy" class="form-select" style="width: auto; padding: 6px 12px; font-size: 13px;"
+                            hx-get="/notes/fragment" hx-target="#notes-list-container" hx-swap="outerHTML" hx-include=".notes-filter-form">
+                        <option value="updated_desc" th:selected="${sortBy == 'updated_desc'}">Last Updated (Newest First)</option>
+                        <option value="updated_asc" th:selected="${sortBy == 'updated_asc'}">Last Updated (Oldest First)</option>
+                        <option value="created_desc" th:selected="${sortBy == 'created_desc'}">Date Created (Newest First)</option>
+                        <option value="target" th:selected="${sortBy == 'target'}">Target (Alphabetical)</option>
+                        <option value="verdict" th:selected="${sortBy == 'verdict'}">Verdict Category</option>
+                    </select>
+                </div>
+
+                <!-- Add Note Button -->
+                <div>
+                    <button type="button" class="btn btn-primary"
+                            hx-get="/notes/modal/new"
+                            hx-target="#note-modal-container"
+                            title="Create new network note">
+                        <span>&#x2795;</span> New Note
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Empty State -->
+    <div th:if="${#lists.isEmpty(annotations)}" class="empty-state card" style="padding: 48px 24px; text-align: center;">
+        <div style="font-size: 42px; margin-bottom: 12px; opacity: 0.85;">&#x1F4DD;</div>
+        <h3 style="font-size: 18px; margin-bottom: 8px; color: var(--text-primary);">No notes found</h3>
+        <p th:if="${searchQuery != null and !searchQuery.isBlank()}" style="color: var(--text-muted); max-width: 500px; margin: 0 auto 20px auto;">
+            No saved notes match your current search query &bdquo;<span th:text="${searchQuery}"></span>&ldquo;.
+        </p>
+        <p th:unless="${searchQuery != null and !searchQuery.isBlank()}" style="color: var(--text-muted); max-width: 500px; margin: 0 auto 20px auto;">
+            No notes have been recorded yet for ASNs or subnets. Keep track of key findings on network blocks &ndash; they remain permanently intact and immune to data retention cleanup!
+        </p>
+        <button type="button" class="btn btn-primary"
+                hx-get="/notes/modal/new"
+                hx-target="#note-modal-container">
+            <span>&#x2795;</span> Create First Note
+        </button>
+    </div>
+
+    <!-- Grid of Note Cards -->
+    <div th:unless="${#lists.isEmpty(annotations)}" class="notes-grid">
+        <div th:each="a : ${annotations}" class="note-card card" th:id="'note-card-' + ${a.id()}">
+            <!-- Card Header -->
+            <div class="note-card-header">
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <span class="note-target-pill" th:text="${a.displayTitle()}">AS24940</span>
+                    <span class="badge" th:classappend="${a.verdict().badgeClass()}"
+                          th:text="${a.verdict().icon() + ' ' + a.verdict().displayName()}">🟢 Legitimate</span>
+                    <span class="badge badge-secondary" style="font-size: 10px; padding: 2px 6px;" th:text="${a.targetType().displayName()}">ASN</span>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                    <button type="button" class="btn btn-icon"
+                            th:hx-get="@{'/notes/modal/edit/' + ${a.id()}}"
+                            hx-target="#note-modal-container"
+                            title="Edit note">
+                        <span>&#x270F;&#xFE0F;</span>
+                    </button>
+                    <button type="button" class="btn btn-icon"
+                            th:hx-delete="@{'/notes/' + ${a.id()}}"
+                            hx-confirm="Are you sure you want to permanently delete this note?"
+                            hx-target="#notes-list-container"
+                            title="Delete note">
+                        <span style="color: var(--color-danger);">&#x1F5D1;</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Card Timestamp -->
+            <div class="note-card-meta">
+                <span>Last updated: <strong th:text="${#temporals.format(a.updatedAt(), 'dd.MM.yyyy HH:mm')}">24.10.2026 14:30</strong></span>
+                <span th:if="${!a.updatedAt().equals(a.createdAt())}" style="opacity: 0.75;"
+                      th:title="'Created on ' + ${#temporals.format(a.createdAt(), 'dd.MM.yyyy HH:mm')}">
+                    (created: <span th:text="${#temporals.format(a.createdAt(), 'dd.MM')}"></span>)
+                </span>
+            </div>
+
+            <!-- Card Body (Rendered Markdown) -->
+            <div class="note-card-body doc-content" th:utext="${renderedHtmlMap.get(a.id())}">
+                <p>Note content...</p>
+            </div>
+
+            <!-- Card Footer (Forensics Quick-Links) -->
+            <div class="note-card-footer">
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; font-size: 11px;">
+                    <a th:if="${a.isAsn()}"
+                       th:href="@{/events(asn=${a.asn()})}"
+                       class="btn" style="padding: 2px 8px; font-size: 11px;"
+                       title="Filter live incidents for this AS in Incident Explorer">
+                        <span>&#x1F50D;</span> AS<span th:text="${a.asn()}"></span> Events
+                    </a>
+                    <a th:if="${a.isSubnet()}"
+                       th:href="@{/events(clientQuery=${a.targetKey()})}"
+                       class="btn" style="padding: 2px 8px; font-size: 11px;"
+                       title="Filter live incidents for this subnet in Incident Explorer">
+                        <span>&#x1F50D;</span> <span th:text="${a.targetKey()}"></span> Events
+                    </a>
+                    <a th:href="@{/offenders(groupBy=${a.isAsn() ? 'ASN' : 'SUBNET'})}"
+                       class="btn" style="padding: 2px 8px; font-size: 11px;"
+                       title="View aggregated Top Offenders">
+                        <span>&#x26A0;</span> Top Offenders
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer Counter -->
+    <div th:unless="${#lists.isEmpty(annotations)}" style="margin-top: 18px; font-size: 12px; color: var(--text-muted); text-align: right;">
+        Showing <strong th:text="${#lists.size(annotations)}">0</strong> of <strong th:text="${totalCount}">0</strong> saved network notes.
+    </div>
+
+</div>
+
+</body>
+</html>

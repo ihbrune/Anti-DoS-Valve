@@ -26,6 +26,9 @@ class DashboardControllerTest {
 	@Autowired
 	private org.henbru.antidos.collector.storage.ClientEventRepository clientEventRepository;
 
+	@Autowired
+	private org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository;
+
 	@Test
 	void testIndexPageLoads() throws Exception {
 		mockMvc.perform(get("/"))
@@ -209,6 +212,15 @@ class DashboardControllerTest {
 				)
 		));
 
+		monitoredValveRepository.upsert(new org.henbru.antidos.collector.model.MonitoredValve(
+				"Demo-Server", "TEST-VALVE", "Primary edge rate limiter", 1,
+				"BLOCKING", false, false, 429,
+				100, 60, 5, 0.8f,
+				32, 64, 10000, 5000,
+				"/api/*", "*.css", "127.0.0.1", "198.51.100.0/24",
+				"/antidos-status", "127.0.0.1", now, 12345
+		));
+
 		mockMvc.perform(get("/server/Demo-Server"))
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("Demo-Server")))
@@ -222,7 +234,13 @@ class DashboardControllerTest {
 				.andExpect(content().string(containsString("AS8075")))
 				.andExpect(content().string(containsString("198.51.100.42")))
 				.andExpect(content().string(not(containsString("198.51.100.99"))))
-				.andExpect(content().string(containsString("View Incidents &rarr;")));
+				.andExpect(content().string(containsString("View Incidents &rarr;")))
+				.andExpect(content().string(containsString("Discovered Valve Runtime Configurations")))
+				.andExpect(content().string(containsString("Primary edge rate limiter")))
+				.andExpect(content().string(containsString("/32 (IPv4) &bull; /64 (IPv6)")))
+				.andExpect(content().string(containsString("100 req / 60s")))
+				.andExpect(content().string(containsString("Window: 300s (5 x 60s)")))
+				.andExpect(content().string(containsString("Decay: 80%")));
 	}
 
 	@Test

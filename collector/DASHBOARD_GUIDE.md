@@ -17,6 +17,7 @@ The Collector interface is built around high-throughput, real-time observability
   * **Top Offenders (`/offenders`):** Multi-server aggregation ranking, Subnet Rollup (`/24` & `/64`), and ASN cluster detection.
   * **Analytics (`/analytics`):** Dedicated visual telemetry cockpit, attack timelines, bot-mix composition, and 2D residential proxy cluster scatterplots.
   * **Incident Explorer (`/events`):** High-resolution log search with CIDR subnets, exact time horizons, and classification tags.
+  * **Network Notes (`/notes`):** Persistent operator knowledge archive and forensic memory for ASNs and Subnets, completely immune to data retention cleanups.
   * **Event Log (`/poll-log`):** Background collection audit trail, latency tracking, and automatic recovery events.
   * **Crawlers & Bots (`/crawlers`):** Official search engine and AI scraper IP ranges with synchronization metrics.
   * **System & Config (`/system`):** Retention policies, database internals, polling cascades, and manual maintenance triggers.
@@ -184,11 +185,55 @@ This automatically displays all member IPs, block counts, and Autonomous System 
 
 ## Server Node Detail View
 
-Accessible by clicking a server name or visiting `/server/{serverId}`.
+Accessible by clicking any server card header in the fleet dashboard or visiting `/server/{serverId}`. This view provides a deep-dive forensic inspection of an individual Tomcat node, its live Valve pipeline, discovered runtime rate-limiting configurations, slot timeline, and recent blocking incidents.
 
-* **Node Telemetry Summary:** Displays host URL, online state, detected JVM/Tomcat environment, and slot durations.
-* **Valve Pipeline Status:** Details each valve configured in Tomcat's `server.xml` pipeline, including threshold ratios, retained former request weighting, and active memory counters.
-* **Node-Specific Recent Incidents:** Lists the most recent rate-limiting events originating specifically from this node with one-click drilldown into the Incident Explorer.
+### 1. Node Telemetry & Environment Header
+* **Connection Status:** Displays current node availability (`ONLINE` in green or `OFFLINE` in red with the last detected failure reason).
+* **Target Endpoint URL:** Base URL queried by the Collector poller (e.g., `http://tomcat-node-01:8080/antidos-status`).
+* **Runtime Platform:** Operating system name, architecture, Java runtime version, and detected Tomcat Catalina container version.
+* **Polling Diagnostics:** Last successful synchronization timestamp and HTTP response latency.
+
+### 2. Monitored Valves & Active Tracking Configuration
+Summarizes all Valve instances configured on the node and how the Collector ingests client-level telemetry:
+* **Valve Name & Status Badges:** Displays the valve name alongside runtime enforcement indicators:
+  * `BLOCKING (429)` (Red): Actively rejects abusive clients with the configured HTTP status code.
+  * `MARKING` (Purple): Audit mode — flags offenders and records metrics without dropping connections.
+  * `SIMULATION` (Orange): Simulates threshold evaluations for dry-run testing.
+  * **Configured Threshold:** Quick summary of allowed request volume (e.g., `50 req / 60s`).
+* **Polling Scope (`INCLUDED` / `EXCLUDED`):** Shows whether the Valve is actively scraped or skipped via endpoint valve regex filters.
+* **Active Tracking (`ENABLED` / `DISABLED`):** Indicates whether non-blocked active client counters are pulled.
+* **Min-Count Threshold & Safety Limits:** Minimum request count required to retain client telemetry (`count >= X`) and maximum client entries ingested per poll (`activeLimit`).
+* **Configuration Source:** Displays where polling rules were resolved (`Endpoint Override`, `Global Valve Rule`, `Global Default`, or `System Default`).
+* **Filter Slots Action:** One-click filtering to isolate the timeline and incident tables to a single Valve in multi-valve pipelines.
+
+### 3. Discovered Valve Runtime Configurations
+Automatically discovered and synchronized from the live Valve JSON API (`?format=json`) into the Collector database without requiring manual configuration. An in-memory hash check guarantees zero redundant database writes during steady-state polling.
+
+* **Pipeline Order & Mode Badges:** Displays pipeline placement (`#1 IN PIPELINE`), operational mode (`BLOCKING` or `MARKING`), simulation flags, and server-wide blocking flags.
+* **Valve Description:** Custom operational description configured directly in Tomcat's `server.xml`.
+* **Rate Limit Threshold Card:**
+  * **Allowed Volume:** Requests permitted per time slice (e.g., `100 req / 60s`).
+  * **Sliding Window:** Total observation window and slot breakdown (e.g., `Window: 300s (5 x 60s)`).
+  * **Decay Percentage:** Proportion of previous requests carried forward into subsequent slots (e.g., `Decay: 80%`).
+* **Subnet Masking Partition Card:**
+  * Grouping masks applied to client IP addresses before evaluating counters (e.g., `/32 (IPv4) • /64 (IPv6)`).
+  * Informs security teams whether rate limits protect individual hosts or aggregate abusive `/24` or `/64` network blocks.
+* **Cache Bounds (LRU Capacity) Card:**
+  * Displays maximum capacity limits for active tracking and blocked IP caches (e.g., `10.000 active • 10.000 blocked`), ensuring Valve memory safety under volumetric SYN/HTTP floods.
+* **Status Dashboard URI Card:**
+  * Internal status path (e.g., `/antidos-status`) and allowed client IP ranges configured for administrative access.
+* **Configured Path Filters & IP Lists (Collapsible):**
+  * **Relevant Paths:** White-listed path patterns subject to rate limiting (e.g., `/api/*`, `/login`).
+  * **Non-Relevant Paths:** Static assets or bypass routes exempt from counter tracking (e.g., `*.css`, `*.js`, `*.png`).
+  * **Always Allowed IPs:** Whitelisted IP ranges immune to rate limiting (e.g., corporate proxies, monitoring probes).
+  * **Always Forbidden IPs:** Permanently blacklisted IP addresses or malicious subnets dropped immediately.
+* **Direct JSON Export:** Click the `{ } JSON` badge in the section title to retrieve discovered runtime configurations directly via the REST API (`/api/v1/valves?serverId={id}`).
+
+### 4. Slot History & Timeline
+Historical sliding-window slot snapshots collected from this node. Displays slot sequence numbers, absolute time windows, total requests evaluated, active clients tracked, blocked clients detected, and finalization status.
+
+### 5. Node-Specific Blocked Incidents
+Chronological log of all rate-limiting incidents detected specifically on this server node. Features full threat intelligence enrichment (client classification badges, country flags, ASN names), request count breakdown (current slot vs. retained history), and one-click navigation to explore incidents across the fleet.
 
 ---
 
@@ -241,6 +286,31 @@ Accessible via `/events`. Provides deep-dive, granular search across every recor
 
 ### 2. High-Performance Server-Side Pagination
 Events are streamed with configurable limits (`25`, `50`, `100`, `250`) and offset pagination. The URL dynamically reflects active filters via HTMX `hx-push-url="true"`, allowing links to specific forensic queries to be bookmarked or shared with team members.
+
+---
+
+## Network Notes & Forensics Memory (/notes)
+
+Accessible via `/notes`. A persistent operator knowledge repository that acts as the team's long-term memory for investigated autonomous systems and network subnets.
+
+### 1. Retention Immunity & Operator Memory
+During busy operations, incident responders frequently analyze abusive traffic, look up WHOIS/BGP records, and identify hosting clusters or partner APIs. Without persistent notes, this intelligence is lost when daily data retention jobs prune old events.
+* **Completely Immune to Retention:** Network notes are stored independently in `network_annotations` and are never touched by daily database cleanups (`CollectorScheduler.runRetentionCleanup()`).
+* **Automatic Re-Activation:** Even if a subnet or ASN has not produced traffic for months and its temporary events have been pruned, the Collector instantly remembers your previous analysis and displays your note the moment traffic reappears.
+
+### 2. Status Verdicts & Color Coding
+Every note includes a structured categorization verdict:
+* **🟢 Legitimate (`LEGITIMATE`):** Verified business partners, customer API clusters, approved CDNs, or whitelisted crawlers.
+* **🔵 Internal Network (`INTERNAL`):** Corporate VPN gateways, intranet subnets, or health-check probes.
+* **🟡 Suspicious (`SUSPICIOUS`):** Under observation, frequent threshold crossings, or rotating proxy characteristics.
+* **🔴 Malicious (`MALICIOUS`):** Confirmed DoS attack sources, aggressive scraping farms, or brute-force botnets.
+* **⚪ Info (`INFO`):** Neutral documentation, ticket cross-references, or general network background.
+
+### 3. Interactive Modals & Inline Table Integration
+* **Central Directory (`/notes`):** Search, filter by verdict or target type (ASN vs. Subnet), sort by modification timestamp, and read notes rendered directly with Markdown (lists, code blocks, tables, links).
+* **Forensic Table Badges:** In `/events` and `/offenders`, interactive note badges appear right beside ASNs and Subnets:
+  * Click any existing badge to view the note and jump directly into filtered incident logs.
+  * Click `+📝` to immediately record a new note with target and ASN pre-filled.
 
 ---
 

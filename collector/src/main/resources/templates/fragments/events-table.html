@@ -53,13 +53,47 @@
                                 <a th:if="${event.clientType != null and event.clientType.name() == 'PRIVATE_NETWORK'}" th:href="@{/events(clientTypes='PRIVATE_NETWORK')}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px; text-decoration: none;" title="Private Intranet / RFC 1918 / Local Network - Click to filter">&#x1F512; Private Net</a>
                                 <a th:if="${event.clientType != null and event.clientType.name() == 'TOR_EXIT_NODE'}" th:href="@{/events(clientTypes='TOR_EXIT_NODE')}" class="badge badge-purple" style="padding: 1px 6px; font-size: 9px; text-decoration: none;" title="Tor Anonymization Exit Node - Click to filter">&#x1F9C5; Tor Exit Node</a>
                                 <a th:if="${event.clientType != null and event.clientType.name() == 'UNKNOWN'}" th:href="@{/events(clientTypes='UNKNOWN')}" class="badge badge-secondary" style="padding: 1px 6px; font-size: 9px; opacity: 0.75; text-decoration: none;" title="Unclassified / No ASN match - Click to filter">Unclassified</a>
-                                <a th:if="${event.asn != null}" th:href="@{/events(asn=${event.asn})}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px; text-decoration: none;" th:title="${event.asOrg + ' - Click to filter by ASN'}" th:text="'AS' + ${event.asn}">AS24940</a>
+                                <span th:if="${event.asn != null}" style="display: inline-flex; align-items: center; gap: 3px;">
+                                    <a th:href="@{/events(asn=${event.asn})}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px; text-decoration: none;" th:title="${event.asOrg + ' - Click to filter by ASN'}" th:text="'AS' + ${event.asn}">AS24940</a>
+                                    <th:block th:if="${asnAnnotations != null and asnAnnotations.containsKey(event.asn)}">
+                                        <span th:with="a=${asnAnnotations.get(event.asn)}"
+                                              class="badge-note"
+                                              th:classappend="${a.verdict().badgeClass()}"
+                                              th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${event.asn})}"
+                                              hx-target="#note-modal-container"
+                                              th:title="'ASN Note: ' + ${a.verdict().displayName()}"
+                                              th:text="${a.verdict().icon()}">🟢</span>
+                                    </th:block>
+                                    <th:block th:if="${asnAnnotations == null or !asnAnnotations.containsKey(event.asn)}">
+                                        <span class="btn-add-note"
+                                              th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${event.asn})}"
+                                              hx-target="#note-modal-container"
+                                              title="Add note for this ASN">+📝</span>
+                                    </th:block>
+                                </span>
                                 <span th:if="${event.asn == null and event.asOrg != null}" style="font-size: 10px; color: var(--text-muted);" th:text="${event.asOrg}">Private Network</span>
                             </div>
                         </div>
                     </td>
                     <td>
-                        <span class="badge badge-warning ip-mono" th:text="${event.subnetGroup}">198.51.100.0/24</span>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span class="badge badge-warning ip-mono" th:text="${event.subnetGroup}">198.51.100.0/24</span>
+                            <th:block th:if="${event.subnetGroup != null and subnetAnnotations != null and subnetAnnotations.containsKey(event.subnetGroup)}">
+                                <span th:with="a=${subnetAnnotations.get(event.subnetGroup)}"
+                                      class="badge-note"
+                                      th:classappend="${a.verdict().badgeClass()}"
+                                      th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${event.subnetGroup})}"
+                                      hx-target="#note-modal-container"
+                                      th:title="'Subnet Note: ' + ${a.verdict().displayName()}"
+                                      th:text="${a.verdict().icon()}">🟢</span>
+                            </th:block>
+                            <th:block th:if="${event.subnetGroup != null and (subnetAnnotations == null or !subnetAnnotations.containsKey(event.subnetGroup))}">
+                                <span class="btn-add-note"
+                                      th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${event.subnetGroup})}"
+                                      hx-target="#note-modal-container"
+                                      title="Add note for this subnet">+📝</span>
+                            </th:block>
+                        </div>
                     </td>
                     <td th:text="${#numbers.formatInteger(event.requestCount, 1, 'POINT')}">120</td>
                     <td th:text="${event.retainedCount}">15</td>

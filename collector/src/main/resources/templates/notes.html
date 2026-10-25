@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Notes &amp; Memory - Anti-DoS Collector</title>
+    <link rel="stylesheet" th:href="@{/css/collector.css}">
+    <script th:src="@{/js/theme.js}"></script>
+    <script th:src="@{/js/htmx.min.js}" defer></script>
+    <script th:src="@{/js/htmx-lite.js}" defer></script>
+</head>
+<body>
+
+<div class="app-container">
+    <!-- Navbar -->
+    <header class="navbar">
+        <a href="/" class="brand">
+            <div class="brand-icon">&#x1F6E1;</div>
+            <div>
+                <div class="brand-title">Anti-DoS Fleet Manager</div>
+                <div class="brand-subtitle">Network Notes &amp; Forensics Memory</div>
+            </div>
+        </a>
+        <div class="nav-actions">
+            <a href="/" class="btn">
+                <span>&#x2190;</span> Dashboard
+            </a>
+            <a href="/events" class="btn" title="View individual incident events">
+                <span>&#x1F4DC;</span> Incidents
+            </a>
+            <a href="/analytics" class="btn" title="Visual trend curves, bot-mix, and residential proxy cluster scatterplot">
+                <span>&#x1F4CA;</span> Analytics
+            </a>
+            <a href="/offenders" class="btn" title="View aggregated Top Offender and Subnet Analytics">
+                <span>&#x26A0;</span> Top Offenders
+            </a>
+            <a href="/notes" class="btn btn-primary" title="Investigative Annotations &amp; Network Notes">
+                <span>&#x1F4DD;</span> Notes
+            </a>
+            <a href="/poll-log" class="btn" title="View polling event audit log">
+                <span>&#x1F4DC;</span> Event Log
+            </a>
+            <a href="/crawlers" class="btn" title="Verified Search Engine &amp; AI Crawler IP Range Feeds">
+                <span>&#x1F916;</span> Crawlers &amp; Bots
+            </a>
+            <a href="/system" class="btn" title="System status, telemetry rules &amp; configuration">
+                <span>&#x2699;</span> System &amp; Config
+            </a>
+            <button type="button" class="btn"
+                    hx-get="/fragments/help?doc=ui&section=incident-explorer-forensic-log-search"
+                    hx-target="#help-drawer-content"
+                    onclick="openHelpDrawer()"
+                    title="Open Help Guide">
+                <span>&#x2753;</span> Guide
+            </button>
+            <a href="/help" class="btn" title="Full offline documentation repository">
+                <span>&#x1F4D6;</span> Docs
+            </a>
+            <button type="button" class="btn btn-theme-toggle" onclick="toggleTheme()" title="Switch Light / Dark Theme" aria-label="Toggle theme">
+                <span class="theme-icon-sun">&#x2600;&#xFE0F;</span>
+                <span class="theme-icon-moon">&#x1F319;</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Header & Title -->
+    <div class="page-header" style="margin-bottom: 24px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap;">
+            <div>
+                <h1 style="font-size: 26px; font-weight: 800; margin-bottom: 6px; display: flex; align-items: center; gap: 10px;">
+                    <span>&#x1F4DD;</span> Network Notes &amp; Forensic Memory
+                </h1>
+                <p style="color: var(--text-muted); font-size: 14px; margin: 0;">
+                    Persistent operator intelligence on ASNs and subnets &ndash; completely immune to data retention cleanups.
+                </p>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button type="button" class="btn btn-primary"
+                        hx-get="/notes/modal/new"
+                        hx-target="#note-modal-container">
+                    <span>&#x2795;</span> New Note
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content: Notes List Fragment -->
+    <div th:replace="~{fragments/notes-list :: notesList}"></div>
+
+    <!-- Modal Target Container -->
+    <div id="note-modal-container"></div>
+
+    <!-- Contextual Slide-Over Help Drawer -->
+    <div th:replace="~{fragments/help-drawer :: helpDrawer}"></div>
+</div>
+
+<script>
+    function closeNoteModal() {
+        const c = document.getElementById('note-modal-container');
+        if (c) c.innerHTML = '';
+    }
+
+    function updateTargetPlaceholder(targetType) {
+        const input = document.getElementById('targetKeyInput');
+        const help = document.getElementById('targetHelpText');
+        if (!input || !help) return;
+
+        if (targetType === 'ASN') {
+            input.placeholder = 'e.g. AS24940 or 24940';
+            help.innerHTML = 'ASN format: e.g. <code>AS24940</code> (Hetzner), <code>AS16276</code> (OVH)';
+        } else {
+            input.placeholder = 'e.g. 198.51.100.0/24 or 2001:db8::/64';
+            help.innerHTML = 'Subnet CIDR e.g. <code>198.51.100.0/24</code> or IPv6 <code>2001:db8::/64</code>';
+        }
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeNoteModal();
+        }
+    });
+</script>
+
+</body>
+</html>

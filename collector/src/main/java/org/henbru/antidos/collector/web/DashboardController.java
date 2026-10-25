@@ -47,6 +47,7 @@ public class DashboardController {
 	private final org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository;
 	private final org.henbru.antidos.collector.aggregation.AnalyticsService analyticsService;
 	private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+	private final org.henbru.antidos.collector.annotation.NetworkAnnotationService annotationService;
 
 	@org.springframework.beans.factory.annotation.Autowired
 	public DashboardController(
@@ -63,7 +64,9 @@ public class DashboardController {
 			@org.springframework.beans.factory.annotation.Autowired(required = false)
 			org.henbru.antidos.collector.aggregation.AnalyticsService analyticsService,
 			@org.springframework.beans.factory.annotation.Autowired(required = false)
-			com.fasterxml.jackson.databind.ObjectMapper objectMapper) {
+			com.fasterxml.jackson.databind.ObjectMapper objectMapper,
+			@org.springframework.beans.factory.annotation.Autowired(required = false)
+			org.henbru.antidos.collector.annotation.NetworkAnnotationService annotationService) {
 		this.heartbeatRepository = heartbeatRepository;
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
@@ -75,6 +78,7 @@ public class DashboardController {
 		this.monitoredValveRepository = monitoredValveRepository;
 		this.analyticsService = analyticsService;
 		this.objectMapper = objectMapper != null ? objectMapper : new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
+		this.annotationService = annotationService;
 	}
 
 	public DashboardController(
@@ -87,7 +91,7 @@ public class DashboardController {
 			org.henbru.antidos.collector.config.CollectorProperties properties,
 			org.henbru.antidos.collector.config.ValveRuleResolver valveRuleResolver) {
 		this(heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
-				subnetRollupRepository, documentationService, properties, valveRuleResolver, null, null, null);
+				subnetRollupRepository, documentationService, properties, valveRuleResolver, null, null, null, null);
 	}
 
 	public DashboardController(
@@ -99,12 +103,22 @@ public class DashboardController {
 			DocumentationService documentationService,
 			org.henbru.antidos.collector.config.CollectorProperties properties) {
 		this(heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
-				subnetRollupRepository, documentationService, properties, new org.henbru.antidos.collector.config.ValveRuleResolver(properties), null, null, null);
+				subnetRollupRepository, documentationService, properties, new org.henbru.antidos.collector.config.ValveRuleResolver(properties), null, null, null, null);
 	}
 
 	@org.springframework.web.bind.annotation.ModelAttribute("demoMode")
 	public boolean demoMode() {
 		return properties.isDemoMode();
+	}
+
+	@org.springframework.web.bind.annotation.ModelAttribute("asnAnnotations")
+	public Map<Long, org.henbru.antidos.collector.model.NetworkAnnotation> asnAnnotations() {
+		return annotationService != null ? annotationService.getAsnAnnotationMap() : Map.of();
+	}
+
+	@org.springframework.web.bind.annotation.ModelAttribute("subnetAnnotations")
+	public Map<String, org.henbru.antidos.collector.model.NetworkAnnotation> subnetAnnotations() {
+		return annotationService != null ? annotationService.getSubnetAnnotationMap() : Map.of();
 	}
 
 	@GetMapping("/")

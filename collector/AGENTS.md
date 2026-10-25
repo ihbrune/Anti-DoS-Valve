@@ -13,6 +13,7 @@ This document serves as the architectural reference and development guide for hu
 * **`poller/`:** Scheduled polling engine utilizing Java 21 `HttpClient` and Virtual Threads. Handles endpoint polling, intermediate in-progress slot updates, and recovery of missed slots via `slotKey`.
 * **`enrichment/`:** Asynchronous IP metadata enrichment engine. Includes `MmdbEnrichmentProvider` (DB-IP / MaxMind MMDB), `AsnClassifierService` (layered defaults + custom overlay), `CrawlerSyncService` (dynamic JSON feed synchronizer with orphan cleanup), and `BackgroundEnrichmentWorker`.
 * **`aggregation/`:** Long-term time-window rollup engine (`RollupAggregationService`) computing persistent subnet bucket aggregates (`client_subnet_rollups`, `dim_user_agent`, `rollup_signatures`) with configurable window duration (`rollup-window-minutes`), automatic startup catch-up, and botnet/proxy cluster heuristics.
+* **`annotation/`:** Persistent operator knowledge archive and forensic memory (`NetworkAnnotationService`, `AnnotationMarkdownService`, `NetworkAnnotationRepository`). Stores Markdown notes with categorization verdicts (`LEGITIMATE`, `INTERNAL`, `SUSPICIOUS`, `MALICIOUS`, `INFO`) for ASNs and Subnets, entirely immune to data retention cleanups.
 * **`storage/`:** Data access layer backed by Spring Data / `JdbcTemplate` with Flyway migrations supporting both **SQLite** (default zero-ops) and **PostgreSQL** (production fleet scale).
 * **`web/`:** Web dashboard driven by Spring MVC, Thymeleaf, and **HTMX** for real-time reactivity without client-side JavaScript build tooling.
 * **`cli/`:** Command-line utilities (e.g. `test-endpoint`, `add-endpoint`) for operators to verify connectivity and generate configuration blocks.
@@ -46,6 +47,10 @@ This document serves as the architectural reference and development guide for hu
    * **Multi-Source Intelligence & Entity Normalization:** IP and subnet metadata is centralized in `network_entity`, referenced by events via `entity_id`. The high-throughput in-memory interval index (`IntelRegistry`) resolves multi-source classifications (`intel_source`, `intel_range`) with microsecond lookup performance.
    * **Crawler & Anonymizer Feed Management:** Verified search engine, AI crawler, and Tor exit node IP ranges periodically updated from remote feeds with automatic orphan cleanup upon configuration changes, manageable via `/crawlers`.
    * **View Separation:** The root dashboard (`/`) is an executive overview. Advanced filtering belongs in `/events` (Incident Explorer), `/offenders` (Top Offender Analytics), and `/crawlers` (Bot Feeds).
+5. **Third-Party Open Source Compliance & Vendoring:**
+   * Preserved copies of external JS libraries (`static/js/`) must retain/include their copyright and license header comments (`/*! ... */`).
+   * Accompany every vendored script with its corresponding `.LICENSE.txt` file (e.g. `htmx.min.js.LICENSE.txt`, `chart.umd.min.js.LICENSE.txt`).
+   * Keep the project-wide `NOTICE.md` updated whenever adding or updating vendored packages.
 
 ---
 
