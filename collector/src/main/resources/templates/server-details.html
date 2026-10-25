@@ -498,5 +498,16 @@
     <div id="note-modal-container"></div>
 </div>
 
+<script>
+    function closeNoteModal() {
+        const c = document.getElementById('note-modal-container');
+        if (c) c.innerHTML = '';
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeNoteModal();
+    });
+</script>
+
 </body>
 </html>

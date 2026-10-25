@@ -174,6 +174,15 @@
 </div>
 
 <script>
+    function closeNoteModal() {
+        const c = document.getElementById('note-modal-container');
+        if (c) c.innerHTML = '';
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeNoteModal();
+    });
+
     function toggleCheckboxes(className, check) {
         document.querySelectorAll('.' + className).forEach(cb => cb.checked = check);
         htmx.trigger('#analytics-filter-form', 'submit');

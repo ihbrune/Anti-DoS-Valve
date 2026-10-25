@@ -51,9 +51,29 @@
         if (backdrop) backdrop.classList.remove('open');
     };
 
+    window.closeNoteModal = function() {
+        var c = document.getElementById('note-modal-container');
+        if (c) c.innerHTML = '';
+    };
+
+    window.updateTargetPlaceholder = function(targetType) {
+        var input = document.getElementById('targetKeyInput');
+        var help = document.getElementById('targetHelpText');
+        if (!input || !help) return;
+
+        if (targetType === 'ASN') {
+            input.placeholder = 'e.g. AS24940 or 24940';
+            help.innerHTML = 'ASN format: e.g. <code>AS24940</code> (Hetzner), <code>AS16276</code> (OVH)';
+        } else {
+            input.placeholder = 'e.g. 198.51.100.0/24 or 2001:db8::/64';
+            help.innerHTML = 'Subnet CIDR e.g. <code>198.51.100.0/24</code> or IPv6 <code>2001:db8::/64</code>';
+        }
+    };
+
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
             window.closeHelpDrawer();
+            window.closeNoteModal();
         }
     });
 })();
