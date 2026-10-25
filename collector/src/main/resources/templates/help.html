@@ -22,37 +22,50 @@
             </div>
         </a>
         <div class="nav-actions">
-            <a href="/" class="btn">
-                <span>&#x2190;</span> Dashboard
-            </a>
-            <a href="/offenders" class="btn" title="View aggregated Top Offender and Subnet Analytics">
-                <span>&#x26A0;</span> Top Offenders
-            </a>
-            <a href="/analytics" class="btn" title="Visual Telemetry, Attack Timelines &amp; Residential Cluster Scatterplot">
-                <span>&#x1F4CA;</span> Analytics
-            </a>
-            <a href="/events" class="btn" title="Multi-Server Incident Explorer with advanced filtering">
-                <span>&#x1F4CB;</span> Incident Explorer
-            </a>
-            <a href="/notes" class="btn" title="Investigative Annotations &amp; Network Notes">
-                <span>&#x1F4DD;</span> Notes
-            </a>
-            <a href="/poll-log" class="btn" title="View polling event audit log">
-                <span>&#x1F4DC;</span> Event Log
-            </a>
-            <a href="/crawlers" class="btn" title="Verified Search Engine & AI Crawler IP Range Feeds">
-                <span>&#x1F916;</span> Crawlers &amp; Bots
-            </a>
-            <a href="/system" class="btn" title="System status, telemetry rules &amp; configuration">
-                <span>&#x2699;</span> System &amp; Config
-            </a>
-            <a href="/help" class="btn btn-primary" title="In-App Documentation & Architecture Reference">
-                <span>&#x2753;</span> Help &amp; Guide
-            </a>
-            <button type="button" class="btn btn-theme-toggle" onclick="toggleTheme()" title="Switch Light / Dark Theme" aria-label="Toggle theme">
-                <span class="theme-icon-sun">&#x2600;&#xFE0F;</span>
-                <span class="theme-icon-moon">&#x1F319;</span>
-            </button>
+            <div class="nav-links">
+                <a href="/" class="btn" title="Return to Fleet Overview Dashboard">
+                    <span>&#x2190;</span> Dashboard
+                </a>
+                <a href="/analytics" class="btn" title="Visual Telemetry, Attack Timelines &amp; Residential Cluster Scatterplot">
+                    <span>&#x1F4CA;</span> Analytics
+                </a>
+                <a href="/offenders" class="btn" title="View aggregated Top Offender and Subnet Analytics">
+                    <span>&#x26A0;</span> Top Offenders
+                </a>
+                <a href="/events" class="btn" title="Multi-Server Incident Explorer with advanced filtering">
+                    <span>&#x1F4CB;</span> Incidents
+                </a>
+                <a href="/notes" class="btn" title="Investigative Annotations &amp; Network Notes">
+                    <span>&#x1F4DD;</span> Notes
+                </a>
+                <a href="/poll-log" class="btn" title="View polling event audit log">
+                    <span>&#x1F4DC;</span> Event Log
+                </a>
+                <a href="/crawlers" class="btn" title="Verified Search Engine &amp; AI Crawler IP Range Feeds">
+                    <span>&#x1F916;</span> Crawlers
+                </a>
+            </div>
+            <div class="nav-divider"></div>
+            <div class="nav-utilities">
+                <a href="/system" class="nav-util-btn" title="System status, telemetry rules &amp; configuration" aria-label="System &amp; Configuration">
+                    <span>&#x2699;</span>
+                </a>
+                <button type="button" class="nav-util-btn"
+                        hx-get="/fragments/help?doc=ui&section=dashboard-forensics-guide"
+                        hx-target="#help-drawer-content"
+                        onclick="openHelpDrawer()"
+                        title="Open Help Guide Drawer"
+                        aria-label="Help Guide">
+                    <span>&#x2753;</span>
+                </button>
+                <a href="/help" class="nav-util-btn active" title="In-App Documentation &amp; Architecture Reference" aria-label="Documentation">
+                    <span>&#x1F4D6;</span>
+                </a>
+                <button type="button" class="nav-util-btn btn-theme-toggle" onclick="toggleTheme()" title="Switch Light / Dark Theme" aria-label="Toggle theme">
+                    <span class="theme-icon-sun">&#x2600;&#xFE0F;</span>
+                    <span class="theme-icon-moon">&#x1F319;</span>
+                </button>
+            </div>
         </div>
     </header>
 

@@ -21,38 +21,44 @@
             </div>
         </a>
         <div class="nav-actions">
-            <a href="/" class="btn" title="Return to Fleet Overview Dashboard">
-                <span>&#x2190;</span> Dashboard
-            </a>
-            <a th:href="@{'/events?servers=' + ${serverId}}" class="btn" title="View Incident Explorer filtered for this node">
-                <span>&#x1F4CB;</span> Node Incidents
-            </a>
-            <a th:href="@{'/analytics?servers=' + ${serverId}}" class="btn" title="Visual Telemetry &amp; Scatterplot filtered for this node">
-                <span>&#x1F4CA;</span> Node Analytics
-            </a>
-            <a th:href="@{'/poll-log?serverId=' + ${serverId}}" class="btn" title="View polling event logs for this node">
-                <span>&#x1F4DC;</span> Node Poll Log
-            </a>
-            <a href="/notes" class="btn" title="Investigative Annotations &amp; Network Notes">
-                <span>&#x1F4DD;</span> Notes
-            </a>
-            <a href="/system" class="btn" title="System status, telemetry rules &amp; configuration">
-                <span>&#x2699;</span> System &amp; Config
-            </a>
-            <button type="button" class="btn"
-                    hx-get="/fragments/help?doc=ui&section=server-node-detail-view"
-                    hx-target="#help-drawer-content"
-                    onclick="openHelpDrawer()"
-                    title="Open Server Node Details Help Guide">
-                <span>&#x2753;</span> Guide
-            </button>
-            <a href="/help" class="btn" title="Full offline documentation repository">
-                <span>&#x1F4D6;</span> Docs
-            </a>
-            <button type="button" class="btn btn-theme-toggle" onclick="toggleTheme()" title="Switch Light / Dark Theme" aria-label="Toggle theme">
-                <span class="theme-icon-sun">&#x2600;&#xFE0F;</span>
-                <span class="theme-icon-moon">&#x1F319;</span>
-            </button>
+            <div class="nav-links">
+                <a href="/" class="btn" title="Return to Fleet Overview Dashboard">
+                    <span>&#x2190;</span> Dashboard
+                </a>
+                <a th:href="@{'/events?servers=' + ${serverId}}" class="btn" title="View Incident Explorer filtered for this node">
+                    <span>&#x1F4CB;</span> Node Incidents
+                </a>
+                <a th:href="@{'/analytics?servers=' + ${serverId}}" class="btn" title="Visual Telemetry &amp; Scatterplot filtered for this node">
+                    <span>&#x1F4CA;</span> Node Analytics
+                </a>
+                <a th:href="@{'/poll-log?serverId=' + ${serverId}}" class="btn" title="View polling event logs for this node">
+                    <span>&#x1F4DC;</span> Node Poll Log
+                </a>
+                <a href="/notes" class="btn" title="Investigative Annotations &amp; Network Notes">
+                    <span>&#x1F4DD;</span> Notes
+                </a>
+            </div>
+            <div class="nav-divider"></div>
+            <div class="nav-utilities">
+                <a href="/system" class="nav-util-btn" title="System status, telemetry rules &amp; configuration" aria-label="System &amp; Configuration">
+                    <span>&#x2699;</span>
+                </a>
+                <button type="button" class="nav-util-btn"
+                        hx-get="/fragments/help?doc=ui&section=server-node-detail-view"
+                        hx-target="#help-drawer-content"
+                        onclick="openHelpDrawer()"
+                        title="Open Server Node Details Help Guide"
+                        aria-label="Help Guide">
+                    <span>&#x2753;</span>
+                </button>
+                <a href="/help" class="nav-util-btn" title="Full offline documentation repository" aria-label="Documentation">
+                    <span>&#x1F4D6;</span>
+                </a>
+                <button type="button" class="nav-util-btn btn-theme-toggle" onclick="toggleTheme()" title="Switch Light / Dark Theme" aria-label="Toggle theme">
+                    <span class="theme-icon-sun">&#x2600;&#xFE0F;</span>
+                    <span class="theme-icon-moon">&#x1F319;</span>
+                </button>
+            </div>
         </div>
     </header>
 
