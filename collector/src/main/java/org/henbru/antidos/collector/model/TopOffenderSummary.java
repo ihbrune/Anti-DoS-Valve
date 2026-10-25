@@ -56,4 +56,21 @@ public record TopOffenderSummary(
 	public double requestsPerClient() {
 		return distinctClientsCount > 0 ? (double) totalBlockedRequests / distinctClientsCount : 0.0;
 	}
+
+	/**
+	 * Returns the canonical subnet partition (/24 for IPv4, /64 for IPv6) if this is an IP key.
+	 */
+	public String subnetGroup() {
+		if (clientKey == null || clientKey.isBlank()) {
+			return "";
+		}
+		if (clientKey.contains("/")) {
+			return clientKey;
+		}
+		if (clientKey.startsWith("AS")) {
+			return "";
+		}
+		org.henbru.antidos.collector.model.IpNetworkInfo info = org.henbru.antidos.collector.util.IpNetworkUtil.parse(clientKey);
+		return info.subnetGroup() != null ? info.subnetGroup() : "";
+	}
 }

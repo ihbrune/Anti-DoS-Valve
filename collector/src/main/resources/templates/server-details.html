@@ -299,6 +299,24 @@
                                                style="font-size: 11px; text-decoration: underline; color: inherit; font-weight: 600;"
                                                title="Filter incidents for this client"
                                                th:text="${ev.clientKey}">198.51.100.42</a>
+                                            <!-- Subnet Note -->
+                                            <th:block th:if="${ev.subnetGroup != null and !ev.subnetGroup.isBlank()}">
+                                                <th:block th:if="${subnetAnnotations != null and subnetAnnotations.containsKey(ev.subnetGroup)}">
+                                                    <span th:with="a=${subnetAnnotations.get(ev.subnetGroup)}"
+                                                          class="badge-note"
+                                                          th:classappend="${a.verdict().badgeClass()}"
+                                                          th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${ev.subnetGroup}, context='table')}"
+                                                          hx-target="#note-modal-container"
+                                                          th:title="'Subnet Note: ' + ${a.verdict().displayName()}"
+                                                          th:text="${a.verdict().icon()}">🟢</span>
+                                                </th:block>
+                                                <th:block th:if="${subnetAnnotations == null or !subnetAnnotations.containsKey(ev.subnetGroup)}">
+                                                    <span class="btn-add-note"
+                                                          th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${ev.subnetGroup}, context='table')}"
+                                                          hx-target="#note-modal-container"
+                                                          title="Add note for this subnet">+📝</span>
+                                                </th:block>
+                                            </th:block>
                                             <span th:if="${ev.countryCode != null}" class="badge badge-secondary" style="padding: 1px 4px; font-size: 9px;" th:text="${ev.countryCode}">DE</span>
                                             <span th:if="${ev.clientType != null and ev.clientType.name() == 'DATACENTER'}" class="badge badge-warning" style="padding: 1px 5px; font-size: 9px;" title="Hosting / Datacenter / Cloud">&#x1F3E2; Datacenter</span>
                                             <span th:if="${ev.clientType != null and ev.clientType.name() == 'SEARCH_ENGINE'}" class="badge badge-success" style="padding: 1px 5px; font-size: 9px;" title="Verified Search Engine Crawler">&#x1F50D; Search Engine</span>
@@ -307,7 +325,24 @@
                                             <span th:if="${ev.clientType != null and ev.clientType.name() == 'MOBILE'}" class="badge badge-info" style="padding: 1px 5px; font-size: 9px;" title="Mobile Carrier / CGNAT">&#x1F4F1; Mobile</span>
                                             <span th:if="${ev.clientType != null and ev.clientType.name() == 'PRIVATE_NETWORK'}" class="badge badge-info" style="padding: 1px 5px; font-size: 9px;" title="Private Intranet / RFC 1918 / Local Network">&#x1F512; Private Net</span>
                                             <span th:if="${ev.clientType != null and ev.clientType.name() == 'UNKNOWN'}" class="badge badge-secondary" style="padding: 1px 5px; font-size: 9px; opacity: 0.75;" title="Unclassified">Unclassified</span>
-                                            <span th:if="${ev.asn != null}" class="badge badge-info" style="padding: 1px 5px; font-size: 9px;" th:title="${ev.asOrg}" th:text="'AS' + ${ev.asn}">AS24940</span>
+                                            <span th:if="${ev.asn != null}" style="display: inline-flex; align-items: center; gap: 3px;">
+                                                <a th:href="@{/events(asn=${ev.asn})}" class="badge badge-info" style="padding: 1px 5px; font-size: 9px; text-decoration: none;" th:title="${ev.asOrg + ' - Click to filter incidents'}" th:text="'AS' + ${ev.asn}">AS24940</a>
+                                                <th:block th:if="${asnAnnotations != null and asnAnnotations.containsKey(ev.asn)}">
+                                                    <span th:with="a=${asnAnnotations.get(ev.asn)}"
+                                                          class="badge-note"
+                                                          th:classappend="${a.verdict().badgeClass()}"
+                                                          th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${ev.asn}, context='table')}"
+                                                          hx-target="#note-modal-container"
+                                                          th:title="'ASN Note: ' + ${a.verdict().displayName()}"
+                                                          th:text="${a.verdict().icon()}">🟢</span>
+                                                </th:block>
+                                                <th:block th:if="${asnAnnotations == null or !asnAnnotations.containsKey(ev.asn)}">
+                                                    <span class="btn-add-note"
+                                                          th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${ev.asn}, context='table')}"
+                                                          hx-target="#note-modal-container"
+                                                          title="Add note for this ASN">+📝</span>
+                                                </th:block>
+                                            </span>
                                         </div>
                                         <span th:if="${slotEventsMap[slot.valveName + '_' + slot.slotKey].size() > 3}"
                                               style="font-size: 10px; color: var(--text-muted);"
@@ -374,6 +409,24 @@
                                            style="text-decoration: underline; color: inherit; font-weight: 600;"
                                            title="View all incidents for this client"
                                            th:text="${event.clientKey}">192.168.1.100</a>
+                                        <!-- Subnet Note -->
+                                        <th:block th:if="${event.subnetGroup != null and !event.subnetGroup.isBlank()}">
+                                            <th:block th:if="${subnetAnnotations != null and subnetAnnotations.containsKey(event.subnetGroup)}">
+                                                <span th:with="a=${subnetAnnotations.get(event.subnetGroup)}"
+                                                      class="badge-note"
+                                                      th:classappend="${a.verdict().badgeClass()}"
+                                                      th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${event.subnetGroup}, context='table')}"
+                                                      hx-target="#note-modal-container"
+                                                      th:title="'Subnet Note: ' + ${a.verdict().displayName()}"
+                                                      th:text="${a.verdict().icon()}">🟢</span>
+                                            </th:block>
+                                            <th:block th:if="${subnetAnnotations == null or !subnetAnnotations.containsKey(event.subnetGroup)}">
+                                                <span class="btn-add-note"
+                                                      th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${event.subnetGroup}, context='table')}"
+                                                      hx-target="#note-modal-container"
+                                                      title="Add note for this subnet">+📝</span>
+                                            </th:block>
+                                        </th:block>
                                         <span th:if="${event.countryCode != null}" class="badge badge-secondary" style="padding: 1px 5px; font-size: 10px;" th:text="${event.countryCode}">DE</span>
                                     </div>
                                     <div style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center;">
@@ -384,7 +437,24 @@
                                         <span th:if="${event.clientType != null and event.clientType.name() == 'MOBILE'}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px;" title="Mobile Carrier / CGNAT">&#x1F4F1; Mobile</span>
                                         <span th:if="${event.clientType != null and event.clientType.name() == 'PRIVATE_NETWORK'}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px;" title="Private Intranet / RFC 1918 / Local Network">&#x1F512; Private Net</span>
                                         <span th:if="${event.clientType != null and event.clientType.name() == 'UNKNOWN'}" class="badge badge-secondary" style="padding: 1px 6px; font-size: 9px; opacity: 0.75;" title="Unclassified">Unclassified</span>
-                                        <span th:if="${event.asn != null}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px;" th:title="${event.asOrg}" th:text="'AS' + ${event.asn}">AS24940</span>
+                                        <span th:if="${event.asn != null}" style="display: inline-flex; align-items: center; gap: 3px;">
+                                            <a th:href="@{/events(asn=${event.asn})}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px; text-decoration: none;" th:title="${event.asOrg + ' - Click to filter incidents'}" th:text="'AS' + ${event.asn}">AS24940</a>
+                                            <th:block th:if="${asnAnnotations != null and asnAnnotations.containsKey(event.asn)}">
+                                                <span th:with="a=${asnAnnotations.get(event.asn)}"
+                                                      class="badge-note"
+                                                      th:classappend="${a.verdict().badgeClass()}"
+                                                      th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${event.asn}, context='table')}"
+                                                      hx-target="#note-modal-container"
+                                                      th:title="'ASN Note: ' + ${a.verdict().displayName()}"
+                                                      th:text="${a.verdict().icon()}">🟢</span>
+                                            </th:block>
+                                            <th:block th:if="${asnAnnotations == null or !asnAnnotations.containsKey(event.asn)}">
+                                                <span class="btn-add-note"
+                                                      th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${event.asn}, context='table')}"
+                                                      hx-target="#note-modal-container"
+                                                      title="Add note for this ASN">+📝</span>
+                                            </th:block>
+                                        </span>
                                         <span th:if="${event.asn == null and event.asOrg != null}" style="font-size: 10px; color: var(--text-muted);" th:text="${event.asOrg}">Private Network</span>
                                     </div>
                                 </div>
@@ -423,6 +493,9 @@
 
     <!-- Contextual Help Drawer -->
     <div th:replace="~{fragments/help-drawer :: helpDrawer}"></div>
+
+    <!-- Note Editor & Viewer Modal (loaded dynamically via HTMX) -->
+    <div id="note-modal-container"></div>
 </div>
 
 </body>

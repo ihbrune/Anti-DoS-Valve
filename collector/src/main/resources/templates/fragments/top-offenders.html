@@ -3,7 +3,10 @@
 <body>
 
 <!-- Fragment: offenderTable -->
-<div th:fragment="offenderTable" class="table-responsive" id="offender-container">
+<div th:fragment="offenderTable" class="table-responsive" id="offender-container"
+     hx-trigger="annotationChanged from:body"
+     th:hx-get="@{/fragments/top-offenders(hours=${selectedHours != null ? selectedHours : 24})}"
+     hx-swap="outerHTML">
     <div th:if="${#lists.isEmpty(topOffenders)}" class="empty-state">
         <p>No blocked clients recorded in the selected time window.</p>
     </div>
@@ -31,8 +34,43 @@
                                style="text-decoration: underline; color: inherit; font-weight: 600;"
                                title="View all incidents for this client or subnet"
                                th:text="${offender.clientKey}">192.168.1.100</a>
+                            <!-- Subnet Note (matches canonical /24 or /64 prefix) -->
+                            <th:block th:if="${offender.subnetGroup != null and !offender.subnetGroup.isBlank()}">
+                                <th:block th:if="${subnetAnnotations != null and subnetAnnotations.containsKey(offender.subnetGroup)}">
+                                    <span th:with="a=${subnetAnnotations.get(offender.subnetGroup)}"
+                                          class="badge-note"
+                                          th:classappend="${a.verdict().badgeClass()}"
+                                          th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${offender.subnetGroup}, context='table')}"
+                                          hx-target="#note-modal-container"
+                                          th:title="'Subnet Note: ' + ${a.verdict().displayName()}"
+                                          th:text="${a.verdict().icon()}">🟢</span>
+                                </th:block>
+                                <th:block th:if="${subnetAnnotations == null or !subnetAnnotations.containsKey(offender.subnetGroup)}">
+                                    <span class="btn-add-note"
+                                          th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${offender.subnetGroup}, context='table')}"
+                                          hx-target="#note-modal-container"
+                                          title="Add note for this subnet">+📝</span>
+                                </th:block>
+                            </th:block>
                             <span th:if="${offender.countryCode != null}" class="badge badge-secondary" style="padding: 1px 5px; font-size: 10px;" th:text="${offender.countryCode}">DE</span>
-                            <span th:if="${offender.asn != null}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px;" th:title="${offender.asOrg}" th:text="'AS' + ${offender.asn}">AS24940</span>
+                            <span th:if="${offender.asn != null}" style="display: inline-flex; align-items: center; gap: 3px;">
+                                <a th:href="@{/events(asn=${offender.asn})}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px; text-decoration: none;" th:title="${offender.asOrg + ' - Click to filter incidents'}" th:text="'AS' + ${offender.asn}">AS24940</a>
+                                <th:block th:if="${asnAnnotations != null and asnAnnotations.containsKey(offender.asn)}">
+                                    <span th:with="a=${asnAnnotations.get(offender.asn)}"
+                                          class="badge-note"
+                                          th:classappend="${a.verdict().badgeClass()}"
+                                          th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${offender.asn}, context='table')}"
+                                          hx-target="#note-modal-container"
+                                          th:title="'ASN Note: ' + ${a.verdict().displayName()}"
+                                          th:text="${a.verdict().icon()}">🟢</span>
+                                </th:block>
+                                <th:block th:if="${asnAnnotations == null or !asnAnnotations.containsKey(offender.asn)}">
+                                    <span class="btn-add-note"
+                                          th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${offender.asn}, context='table')}"
+                                          hx-target="#note-modal-container"
+                                          title="Add note for this ASN">+📝</span>
+                                </th:block>
+                            </span>
                         </div>
                         <span th:if="${offender.asOrg != null}" style="font-size: 11px; color: var(--text-muted);" th:text="${offender.asOrg}">Hetzner Online GmbH</span>
                     </div>

@@ -257,7 +257,7 @@
         // Separate points by classification groups for distinct legend items
         const groups = {
             'HIGH_RISK_RESIDENTIAL': {
-                label: '🚨 High Risk Residential Cluster',
+                label: '🚨 Residential Proxy Evasion (High IP Spread, Low Reqs/IP)',
                 bg: 'rgba(244, 63, 94, 0.75)',
                 border: '#f43f5e',
                 data: []

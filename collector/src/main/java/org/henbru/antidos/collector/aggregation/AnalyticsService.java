@@ -94,7 +94,7 @@ public class AnalyticsService {
 			boolean isResidential = (c.clientType() == ClientType.RESIDENTIAL || distinctClients >= 5) && avgReqs < 50.0;
 
 			String classification;
-			if (isResidential && c.blockedRequests() > 0) {
+			if (isResidential && (distinctClients >= 5 || c.blockedRequests() > 0)) {
 				classification = "HIGH_RISK_RESIDENTIAL";
 			} else if (c.clientType() == ClientType.DATACENTER) {
 				classification = "DATACENTER_CLUSTER";

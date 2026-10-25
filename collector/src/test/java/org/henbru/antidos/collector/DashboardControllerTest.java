@@ -41,7 +41,8 @@ class DashboardControllerTest {
 				.andExpect(content().string(containsString("/js/htmx.min.js")))
 				.andExpect(content().string(not(containsString("unpkg.com"))))
 				.andExpect(content().string(containsString("hx-target=\"#stats-overview\" hx-swap=\"outerHTML\"")))
-				.andExpect(content().string(containsString("hx-target=\"#fleet-container\" hx-swap=\"outerHTML\"")));
+				.andExpect(content().string(containsString("hx-target=\"#fleet-container\" hx-swap=\"outerHTML\"")))
+				.andExpect(content().string(containsString("id=\"note-modal-container\"")));
 	}
 
 	@Test
@@ -70,14 +71,16 @@ class DashboardControllerTest {
 	void testTopOffendersFragment() throws Exception {
 		mockMvc.perform(get("/fragments/top-offenders").param("hours", "24"))
 				.andExpect(status().isOk())
-				.andExpect(content().string(containsString("offender-container")));
+				.andExpect(content().string(containsString("offender-container")))
+				.andExpect(content().string(containsString("annotationChanged from:body")));
 	}
 
 	@Test
 	void testRecentEventsFragment() throws Exception {
 		mockMvc.perform(get("/fragments/recent-events"))
 				.andExpect(status().isOk())
-				.andExpect(content().string(containsString("events-container")));
+				.andExpect(content().string(containsString("events-container")))
+				.andExpect(content().string(containsString("annotationChanged from:body")));
 	}
 
 	@Test
@@ -190,31 +193,19 @@ class DashboardControllerTest {
 	void testOffendersAsnRollupNoteIntegration() throws Exception {
 		annotationService.saveAnnotation(null,
 				org.henbru.antidos.collector.model.AnnotationTargetType.ASN,
-				"AS8075",
+				"AS24940",
 				org.henbru.antidos.collector.model.AnnotationVerdict.SUSPICIOUS,
-				"Hosting Scanners");
-
-		java.time.Instant now = java.time.Instant.now();
-		clientEventRepository.batchUpsert(List.of(
-				new org.henbru.antidos.collector.model.ClientEvent(
-						null, "Demo-Server", "TEST-VALVE", 55555L,
-						now.minusSeconds(30), "198.51.100.99",
-						4, 32, null, null, null, null, "198.51.100.0/24",
-						25, 0, false, org.henbru.antidos.collector.model.ClientEvent.STATUS_BLOCKED, true, now,
-						8075L, "Microsoft Corp", "US",
-						org.henbru.antidos.collector.model.ClientType.DATACENTER, null
-				)
-		));
+				"Hetzner Scanners");
 
 		mockMvc.perform(get("/fragments/offenders-table")
 						.param("groupBy", "ASN")
 						.param("limit", "25"))
 				.andExpect(status().isOk())
-				.andExpect(content().string(containsString("AS8075")))
+				.andExpect(content().string(containsString("AS24940")))
 				.andExpect(content().string(containsString("targetType=ASN")))
-				.andExpect(content().string(containsString("targetKey=AS8075")))
+				.andExpect(content().string(containsString("targetKey=AS24940")))
 				.andExpect(content().string(containsString("ASN Note: Suspicious")))
-				.andExpect(content().string(containsString("href=\"/events?asn=8075\"")));
+				.andExpect(content().string(containsString("href=\"/events?asn=24940\"")));
 	}
 
 	@Test
@@ -276,7 +267,9 @@ class DashboardControllerTest {
 				.andExpect(content().string(containsString("Window: 300s (5 x 60s)")))
 				.andExpect(content().string(containsString("Decay: 80%")))
 				.andExpect(content().string(containsString("/js/htmx.min.js")))
-				.andExpect(content().string(containsString("/js/htmx-lite.js")));
+				.andExpect(content().string(containsString("/js/htmx-lite.js")))
+				.andExpect(content().string(containsString("id=\"note-modal-container\"")))
+				.andExpect(content().string(containsString("targetType=ASN")));
 	}
 
 	@Test
