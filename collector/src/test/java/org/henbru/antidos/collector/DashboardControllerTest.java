@@ -240,7 +240,9 @@ class DashboardControllerTest {
 				.andExpect(content().string(containsString("/32 (IPv4) &bull; /64 (IPv6)")))
 				.andExpect(content().string(containsString("100 req / 60s")))
 				.andExpect(content().string(containsString("Window: 300s (5 x 60s)")))
-				.andExpect(content().string(containsString("Decay: 80%")));
+				.andExpect(content().string(containsString("Decay: 80%")))
+				.andExpect(content().string(containsString("/js/htmx.min.js")))
+				.andExpect(content().string(containsString("/js/htmx-lite.js")));
 	}
 
 	@Test
@@ -273,6 +275,15 @@ class DashboardControllerTest {
 				.andExpect(content().string(containsString("System Status &amp; Configuration")))
 				.andExpect(content().string(containsString("Runtime &amp; Database Telemetry")))
 				.andExpect(content().string(containsString("Operational Maintenance Triggers")));
+	}
+
+	@Test
+	void testHelpFragmentWithServerDetailsSectionReturnsDrawerSection() throws Exception {
+		mockMvc.perform(get("/fragments/help").param("doc", "ui").param("section", "server-node-detail-view"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Server Node Detail View")))
+				.andExpect(content().string(containsString("Discovered Valve Runtime Configurations")))
+				.andExpect(content().string(containsString("Rate Limit Threshold Card")));
 	}
 
 	@Test
