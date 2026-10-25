@@ -44,11 +44,28 @@ public class CollectorPollerService {
 	private final SlotSnapshotRepository slotSnapshotRepository;
 	private final ClientEventRepository clientEventRepository;
 	private final PollEventLogRepository pollEventLogRepository;
+	private final org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository;
 	private final EntityResolver entityResolver;
 	private final ValveRuleResolver valveRuleResolver;
 	private final ExecutorService pollerExecutor;
 
+	private final java.util.concurrent.ConcurrentMap<String, Integer> knownConfigHashes = new java.util.concurrent.ConcurrentHashMap<>();
+
 	@Autowired
+	public CollectorPollerService(
+			CollectorProperties properties,
+			ValveStatusClient statusClient,
+			HeartbeatRepository heartbeatRepository,
+			SlotSnapshotRepository slotSnapshotRepository,
+			ClientEventRepository clientEventRepository,
+			PollEventLogRepository pollEventLogRepository,
+			org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository,
+			EntityResolver entityResolver,
+			ValveRuleResolver valveRuleResolver) {
+		this(properties, statusClient, heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
+				monitoredValveRepository, entityResolver, valveRuleResolver, Executors.newVirtualThreadPerTaskExecutor());
+	}
+
 	public CollectorPollerService(
 			CollectorProperties properties,
 			ValveStatusClient statusClient,
@@ -59,7 +76,7 @@ public class CollectorPollerService {
 			EntityResolver entityResolver,
 			ValveRuleResolver valveRuleResolver) {
 		this(properties, statusClient, heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
-				entityResolver, valveRuleResolver, Executors.newVirtualThreadPerTaskExecutor());
+				null, entityResolver, valveRuleResolver, Executors.newVirtualThreadPerTaskExecutor());
 	}
 
 	public CollectorPollerService(
@@ -72,7 +89,7 @@ public class CollectorPollerService {
 			EntityResolver entityResolver,
 			ExecutorService pollerExecutor) {
 		this(properties, statusClient, heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
-				entityResolver, new ValveRuleResolver(properties), pollerExecutor);
+				null, entityResolver, new ValveRuleResolver(properties), pollerExecutor);
 	}
 
 	public CollectorPollerService(
@@ -82,6 +99,7 @@ public class CollectorPollerService {
 			SlotSnapshotRepository slotSnapshotRepository,
 			ClientEventRepository clientEventRepository,
 			PollEventLogRepository pollEventLogRepository,
+			org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository,
 			EntityResolver entityResolver,
 			ValveRuleResolver valveRuleResolver,
 			ExecutorService pollerExecutor) {
@@ -91,6 +109,7 @@ public class CollectorPollerService {
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
 		this.pollEventLogRepository = pollEventLogRepository;
+		this.monitoredValveRepository = monitoredValveRepository;
 		this.entityResolver = entityResolver;
 		this.valveRuleResolver = valveRuleResolver != null ? valveRuleResolver : new ValveRuleResolver(properties);
 		this.pollerExecutor = pollerExecutor != null ? pollerExecutor : Executors.newVirtualThreadPerTaskExecutor();
@@ -104,7 +123,7 @@ public class CollectorPollerService {
 			ClientEventRepository clientEventRepository,
 			PollEventLogRepository pollEventLogRepository) {
 		this(properties, statusClient, heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
-				null, new ValveRuleResolver(properties), Executors.newVirtualThreadPerTaskExecutor());
+				null, null, new ValveRuleResolver(properties), Executors.newVirtualThreadPerTaskExecutor());
 	}
 
 	@PreDestroy
@@ -187,6 +206,7 @@ public class CollectorPollerService {
 						continue;
 					}
 					valvesPolled++;
+					updateValveConfigIfChanged(endpoint.getName(), v, now);
 					IngestResult result = ingestValve(endpoint, v, now);
 					slotsIngested += result.slotsIngested();
 					eventsIngested += result.eventsIngested();
@@ -432,6 +452,54 @@ public class CollectorPollerService {
 			}
 		}
 		return 0;
+	}
+
+	private void updateValveConfigIfChanged(String serverId, ValveOverviewDto.ValveSummaryDto v, Instant now) {
+		if (monitoredValveRepository == null) {
+			return;
+		}
+		String key = serverId + "#" + v.monitorName();
+		int currentHash = v.configHashCode();
+		Integer previousHash = knownConfigHashes.get(key);
+		if (previousHash == null || previousHash != currentHash) {
+			monitoredValveRepository.upsert(toMonitoredValve(serverId, v, now, currentHash));
+			knownConfigHashes.put(key, currentHash);
+			log.info("Ingested updated valve configuration for '{}/{}' (configHash: {})", serverId, v.monitorName(), currentHash);
+		}
+	}
+
+	private org.henbru.antidos.collector.model.MonitoredValve toMonitoredValve(
+			String serverId, ValveOverviewDto.ValveSummaryDto v, Instant now, int configHash) {
+		return new org.henbru.antidos.collector.model.MonitoredValve(
+				serverId,
+				v.monitorName(),
+				v.description(),
+				v.pipelineOrder(),
+				v.monitorMode() != null ? v.monitorMode() : "BLOCKING",
+				v.simulationMode(),
+				v.serverWideBlocking(),
+				v.httpStatusCode() > 0 ? v.httpStatusCode() : 429,
+				v.allowedRequestsPerSlot(),
+				v.slotLength(),
+				v.numberOfSlots(),
+				v.shareOfRetainedFormerRequests(),
+				v.ipv4SubnetMask() > 0 ? v.ipv4SubnetMask() : 32,
+				v.ipv6SubnetMask() > 0 ? v.ipv6SubnetMask() : 64,
+				v.maxIPCacheSize() > 0 ? v.maxIPCacheSize() : 10000,
+				v.maxBlockedIPCacheSize() > 0 ? v.maxBlockedIPCacheSize() : 10000,
+				v.relevantPaths(),
+				v.nonRelevantPaths(),
+				v.alwaysAllowedIPs(),
+				v.alwaysForbiddenIPs(),
+				v.statusUri(),
+				v.statusAllowedIPs(),
+				now,
+				configHash
+		);
+	}
+
+	public void clearConfigHashes() {
+		this.knownConfigHashes.clear();
 	}
 
 	private record SlotIngestResult(int slotsCount, int eventsCount, String warning) {}

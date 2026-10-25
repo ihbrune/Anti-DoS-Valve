@@ -213,13 +213,27 @@ public class MockValveSimulator {
 		long cumulative = 240_000L + offset + (currentKey % 50_000L) * 1100L;
 		return new ValveOverviewDto.ValveSummaryDto(
 				"Primary-Rate-Limiter",
+				"Primary per-IP sliding window rate limiter protecting web assets and API endpoints.",
 				order,
 				"BLOCKING",
 				false,
 				false,
+				429,
 				120,
 				SLOT_LENGTH_SECONDS,
 				NUMBER_OF_SLOTS,
+				0.8f,
+				32,
+				64,
+				20000,
+				10000,
+				null,
+				"*.css, *.js, *.png, *.ico, *.svg, *.woff2",
+				"127.0.0.1, 10.0.0.0/8, 192.168.0.0/16",
+				null,
+				"/antidos-status",
+				"127.0.0.1, 10.0.0.0/8",
+				0L,
 				cur.activeCounters(),
 				cur.blockedCounters(),
 				currentKey,
@@ -227,7 +241,10 @@ public class MockValveSimulator {
 				cumulative,
 				prev.totalRequests(),
 				prev.activeCounters(),
-				prev.blockedCounters()
+				prev.blockedCounters(),
+				NUMBER_OF_SLOTS,
+				true,
+				true
 		);
 	}
 
@@ -239,13 +256,27 @@ public class MockValveSimulator {
 		long cumulative = 310_000L + offset + (currentKey % 50_000L) * 1400L;
 		return new ValveOverviewDto.ValveSummaryDto(
 				"Subnet-Guard",
+				"Subnet-level DDoS traffic partition absorbing distributed botnet clusters across /24 and /48 prefixes.",
 				order,
 				"BLOCKING",
 				false,
 				false,
+				429,
 				250,
 				SLOT_LENGTH_SECONDS,
 				NUMBER_OF_SLOTS,
+				0.75f,
+				24,
+				48,
+				15000,
+				10000,
+				null,
+				null,
+				"127.0.0.1, 10.0.0.0/8",
+				null,
+				"/antidos-status",
+				null,
+				0L,
 				cur.activeCounters(),
 				cur.blockedCounters(),
 				currentKey,
@@ -253,7 +284,10 @@ public class MockValveSimulator {
 				cumulative,
 				prev.totalRequests(),
 				prev.activeCounters(),
-				prev.blockedCounters()
+				prev.blockedCounters(),
+				NUMBER_OF_SLOTS,
+				false,
+				false
 		);
 	}
 
@@ -265,13 +299,27 @@ public class MockValveSimulator {
 		long cumulative = 180_000L + offset + (currentKey % 50_000L) * 900L;
 		return new ValveOverviewDto.ValveSummaryDto(
 				"IPv6-Rate-Limiter",
+				"Dedicated IPv6 subnet rate limiter guarding against rotating privacy extension prefixes.",
 				order,
 				"BLOCKING",
 				false,
 				false,
+				429,
 				120,
 				SLOT_LENGTH_SECONDS,
 				NUMBER_OF_SLOTS,
+				0.8f,
+				32,
+				64,
+				10000,
+				10000,
+				null,
+				null,
+				"::1, fe80::/10",
+				null,
+				"/antidos-status",
+				null,
+				0L,
 				cur.activeCounters(),
 				cur.blockedCounters(),
 				currentKey,
@@ -279,7 +327,10 @@ public class MockValveSimulator {
 				cumulative,
 				prev.totalRequests(),
 				prev.activeCounters(),
-				prev.blockedCounters()
+				prev.blockedCounters(),
+				NUMBER_OF_SLOTS,
+				false,
+				false
 		);
 	}
 
@@ -291,13 +342,27 @@ public class MockValveSimulator {
 		long cumulative = 1_850_000L + offset + (currentKey % 50_000L) * 5200L;
 		return new ValveOverviewDto.ValveSummaryDto(
 				"API-DoS-Shield",
+				"Strict API gateway rate limiter enforcing tight quotas on backend REST endpoints.",
 				order,
 				"BLOCKING",
 				false,
 				true,
+				429,
 				60,
 				SLOT_LENGTH_SECONDS,
 				NUMBER_OF_SLOTS,
+				0.85f,
+				32,
+				64,
+				25000,
+				15000,
+				"/api/*, /v1/*, /graphql",
+				null,
+				"127.0.0.1, 10.0.0.0/8",
+				"198.51.100.99",
+				"/antidos-status",
+				"127.0.0.1",
+				0L,
 				cur.activeCounters(),
 				cur.blockedCounters(),
 				currentKey,
@@ -305,7 +370,10 @@ public class MockValveSimulator {
 				cumulative,
 				prev.totalRequests(),
 				prev.activeCounters(),
-				prev.blockedCounters()
+				prev.blockedCounters(),
+				NUMBER_OF_SLOTS,
+				true,
+				true
 		);
 	}
 
@@ -317,13 +385,27 @@ public class MockValveSimulator {
 		long cumulative = 45_000L + offset + (currentKey % 50_000L) * 85L;
 		return new ValveOverviewDto.ValveSummaryDto(
 				"Staging-Limiter",
+				"Staging environment limiter operating in marking simulation mode.",
 				order,
-				"BLOCKING",
+				"MARKING",
+				true,
 				false,
-				false,
+				429,
 				80,
 				SLOT_LENGTH_SECONDS,
 				NUMBER_OF_SLOTS,
+				0.8f,
+				32,
+				64,
+				5000,
+				5000,
+				null,
+				null,
+				"127.0.0.1",
+				null,
+				"/antidos-status",
+				null,
+				0L,
 				cur.activeCounters(),
 				cur.blockedCounters(),
 				currentKey,
@@ -331,7 +413,10 @@ public class MockValveSimulator {
 				cumulative,
 				prev.totalRequests(),
 				prev.activeCounters(),
-				prev.blockedCounters()
+				prev.blockedCounters(),
+				NUMBER_OF_SLOTS,
+				true,
+				true
 		);
 	}
 

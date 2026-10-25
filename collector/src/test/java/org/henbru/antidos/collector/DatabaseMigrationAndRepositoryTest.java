@@ -626,5 +626,109 @@ class DatabaseMigrationAndRepositoryTest {
 		);
 		assertEquals(1, activeNewAfterCleanup.size(), "Recent active event must remain intact");
 	}
+
+	@Autowired
+	private org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository;
+
+	@Test
+	void testMonitoredValveRepositoryUpsertAndFind() {
+		Instant now = Instant.now();
+		org.henbru.antidos.collector.model.MonitoredValve valve1 = new org.henbru.antidos.collector.model.MonitoredValve(
+				"VALVE-NODE-1",
+				"Primary-Rate-Limiter",
+				"Test rate limiter",
+				1,
+				"BLOCKING",
+				false,
+				false,
+				429,
+				100,
+				60,
+				5,
+				0.8f,
+				32,
+				64,
+				15000,
+				10000,
+				"/api/*",
+				"*.css, *.js",
+				"127.0.0.1, 10.0.0.0/8",
+				"198.51.100.22",
+				"/antidos-status",
+				"127.0.0.1",
+				now,
+				12345
+		);
+
+		monitoredValveRepository.upsert(valve1);
+
+		Optional<org.henbru.antidos.collector.model.MonitoredValve> foundOpt =
+				monitoredValveRepository.findByServerIdAndValveName("VALVE-NODE-1", "Primary-Rate-Limiter");
+		assertTrue(foundOpt.isPresent());
+		org.henbru.antidos.collector.model.MonitoredValve found = foundOpt.get();
+		assertEquals("VALVE-NODE-1", found.serverId());
+		assertEquals("Primary-Rate-Limiter", found.valveName());
+		assertEquals("Test rate limiter", found.description());
+		assertEquals("BLOCKING", found.monitorMode());
+		assertTrue(found.isBlocking());
+		assertEquals(100, found.allowedRequestsPerSlot());
+		assertEquals(60, found.slotLength());
+		assertEquals(5, found.numberOfSlots());
+		assertEquals(32, found.ipv4SubnetMask());
+		assertEquals(64, found.ipv6SubnetMask());
+		assertEquals("/api/*", found.relevantPaths());
+		assertEquals("*.css, *.js", found.nonRelevantPaths());
+		assertEquals("127.0.0.1, 10.0.0.0/8", found.alwaysAllowedIPs());
+		assertEquals("198.51.100.22", found.alwaysForbiddenIPs());
+		assertEquals(12345, found.configHash());
+		assertTrue(found.hasPathFilters());
+		assertTrue(found.hasIpLists());
+
+		// Test update on conflict
+		org.henbru.antidos.collector.model.MonitoredValve updated = new org.henbru.antidos.collector.model.MonitoredValve(
+				"VALVE-NODE-1",
+				"Primary-Rate-Limiter",
+				"Updated description",
+				1,
+				"MARKING",
+				true,
+				false,
+				429,
+				150,
+				60,
+				5,
+				0.8f,
+				32,
+				64,
+				20000,
+				10000,
+				"/api/*",
+				"*.css",
+				"127.0.0.1",
+				null,
+				"/antidos-status",
+				null,
+				now.plusSeconds(10),
+				99999
+		);
+		monitoredValveRepository.upsert(updated);
+
+		Optional<org.henbru.antidos.collector.model.MonitoredValve> afterUpdate =
+				monitoredValveRepository.findByServerIdAndValveName("VALVE-NODE-1", "Primary-Rate-Limiter");
+		assertTrue(afterUpdate.isPresent());
+		assertEquals("Updated description", afterUpdate.get().description());
+		assertEquals("MARKING", afterUpdate.get().monitorMode());
+		assertFalse(afterUpdate.get().isBlocking());
+		assertTrue(afterUpdate.get().simulationMode());
+		assertEquals(150, afterUpdate.get().allowedRequestsPerSlot());
+		assertEquals(99999, afterUpdate.get().configHash());
+
+		List<org.henbru.antidos.collector.model.MonitoredValve> serverValves =
+				monitoredValveRepository.findByServerId("VALVE-NODE-1");
+		assertEquals(1, serverValves.size());
+
+		List<String> distinct = monitoredValveRepository.findDistinctValveNames();
+		assertTrue(distinct.contains("Primary-Rate-Limiter"));
+	}
 }
 

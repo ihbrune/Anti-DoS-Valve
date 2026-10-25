@@ -15,13 +15,27 @@ public record ValveOverviewDto(
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	public record ValveSummaryDto(
 			String monitorName,
+			String description,
 			int pipelineOrder,
 			String monitorMode,
 			boolean simulationMode,
 			boolean serverWideBlocking,
+			int httpStatusCode,
 			int allowedRequestsPerSlot,
 			int slotLength,
 			int numberOfSlots,
+			float shareOfRetainedFormerRequests,
+			int ipv4SubnetMask,
+			int ipv6SubnetMask,
+			int maxIPCacheSize,
+			int maxBlockedIPCacheSize,
+			String relevantPaths,
+			String nonRelevantPaths,
+			String alwaysAllowedIPs,
+			String alwaysForbiddenIPs,
+			String statusUri,
+			String statusAllowedIPs,
+			long alwaysForbiddenBlockedRequests,
 			int currentActiveCounters,
 			int currentBlockedCounters,
 			long currentSlotKey,
@@ -29,7 +43,81 @@ public record ValveOverviewDto(
 			long totalRequests,
 			long previousTotalRequests,
 			int previousActiveCounters,
-			int previousBlockedCounters
+			int previousBlockedCounters,
+			int activeSlots,
+			boolean isStatusHost,
+			boolean isCurrentHost
 	) {
+		/**
+		 * Overloaded constructor for backwards compatibility with tests and concise mock instantiation.
+		 */
+		public ValveSummaryDto(
+				String monitorName,
+				int pipelineOrder,
+				String monitorMode,
+				boolean simulationMode,
+				boolean serverWideBlocking,
+				int allowedRequestsPerSlot,
+				int slotLength,
+				int numberOfSlots,
+				int currentActiveCounters,
+				int currentBlockedCounters,
+				long currentSlotKey,
+				long lastCompletedSlotKey,
+				long totalRequests,
+				long previousTotalRequests,
+				int previousActiveCounters,
+				int previousBlockedCounters
+		) {
+			this(
+					monitorName,
+					null,
+					pipelineOrder,
+					monitorMode != null ? monitorMode : "BLOCKING",
+					simulationMode,
+					serverWideBlocking,
+					429,
+					allowedRequestsPerSlot,
+					slotLength,
+					numberOfSlots,
+					0.8f,
+					32,
+					64,
+					10000,
+					10000,
+					null,
+					null,
+					null,
+					null,
+					null,
+					null,
+					0L,
+					currentActiveCounters,
+					currentBlockedCounters,
+					currentSlotKey,
+					lastCompletedSlotKey,
+					totalRequests,
+					previousTotalRequests,
+					previousActiveCounters,
+					previousBlockedCounters,
+					numberOfSlots,
+					false,
+					false
+			);
+		}
+
+		/**
+		 * Computes an in-memory hash of configuration parameters (excluding transient traffic counters)
+		 * to detect configuration drift and prevent redundant database writes.
+		 */
+		public int configHashCode() {
+			return java.util.Objects.hash(
+					monitorName, description, pipelineOrder, monitorMode, simulationMode, serverWideBlocking,
+					httpStatusCode, allowedRequestsPerSlot, slotLength, numberOfSlots,
+					Float.floatToIntBits(shareOfRetainedFormerRequests), ipv4SubnetMask, ipv6SubnetMask,
+					maxIPCacheSize, maxBlockedIPCacheSize, relevantPaths, nonRelevantPaths,
+					alwaysAllowedIPs, alwaysForbiddenIPs, statusUri, statusAllowedIPs
+			);
+		}
 	}
 }

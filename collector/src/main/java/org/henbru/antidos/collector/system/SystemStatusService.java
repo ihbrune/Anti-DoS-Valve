@@ -188,6 +188,7 @@ public class SystemStatusService {
 		tableCounts.put("poll_event_log", countTable("poll_event_log"));
 		tableCounts.put("intel_range", countTable("intel_range"));
 		tableCounts.put("crawler_feeds", countTable("crawler_feeds"));
+		tableCounts.put("monitored_valves", countTable("monitored_valves"));
 
 		SystemStatusDto.HikariPoolInfo hikariInfo = null;
 		if (dataSource instanceof HikariDataSource hikari) {

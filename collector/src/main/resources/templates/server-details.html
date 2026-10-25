@@ -100,6 +100,12 @@
                         <tr th:each="v : ${configuredValves}">
                             <td>
                                 <strong style="font-size: 13px;" th:text="${v.valveName}">Primary-Rate-Limiter</strong>
+                                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px;" th:if="${runtimeValvesMap != null and runtimeValvesMap[v.valveName] != null}">
+                                    <span th:if="${runtimeValvesMap[v.valveName].isBlocking()}" class="badge badge-danger" style="font-size: 9.5px; padding: 1px 5px;" th:text="'BLOCKING (' + ${runtimeValvesMap[v.valveName].httpStatusCode} + ')'">BLOCKING (429)</span>
+                                    <span th:unless="${runtimeValvesMap[v.valveName].isBlocking()}" class="badge badge-purple" style="font-size: 9.5px; padding: 1px 5px;">MARKING</span>
+                                    <span th:if="${runtimeValvesMap[v.valveName].simulationMode}" class="badge badge-warning" style="font-size: 9.5px; padding: 1px 5px;">SIMULATION</span>
+                                    <span style="font-size: 11px; color: var(--text-muted);" th:text="${runtimeValvesMap[v.valveName].allowedRequestsPerSlot} + ' req / ' + ${runtimeValvesMap[v.valveName].slotLength} + 's'">50 req / 60s</span>
+                                </div>
                             </td>
                             <td>
                                 <span th:if="${v.isIncluded}" class="badge badge-success">&#x2714; INCLUDED</span>
@@ -134,6 +140,103 @@
                         </tr>
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- Valve Runtime Configurations (Discovered Telemetry) -->
+    <section style="margin-bottom: 28px;">
+        <div class="section-header">
+            <div class="section-title">&#x2699;&#xFE0F; Discovered Valve Runtime Configurations</div>
+            <div style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 8px;" th:if="${!#lists.isEmpty(runtimeValves)}">
+                <span>Synchronized from Valve JSON API &bull; </span>
+                <a th:href="@{'/api/v1/valves?serverId=' + ${serverId}}" target="_blank" class="btn" style="padding: 2px 8px; font-size: 11px;">{ } JSON</a>
+            </div>
+        </div>
+
+        <div th:if="${#lists.isEmpty(runtimeValves)}" class="table-card">
+            <div class="empty-state">
+                <p>No live runtime configuration discovered yet for this node. Valve configurations are automatically synchronized on successful telemetry polls.</p>
+            </div>
+        </div>
+
+        <div th:unless="${#lists.isEmpty(runtimeValves)}" style="display: flex; flex-direction: column; gap: 16px;">
+            <div th:each="rv : ${runtimeValves}" class="table-card" style="padding: 18px 22px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 14px;">
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <span style="font-size: 16px; font-weight: 700; color: var(--text-primary);" th:text="${rv.valveName}">Primary-Rate-Limiter</span>
+                        <span class="badge badge-info" th:text="'#' + ${rv.pipelineOrder} + ' IN PIPELINE'">#1 IN PIPELINE</span>
+                        <span th:if="${rv.isBlocking()}" class="badge badge-danger" th:text="'MODE: BLOCKING (' + ${rv.httpStatusCode} + ')'">MODE: BLOCKING (429)</span>
+                        <span th:unless="${rv.isBlocking()}" class="badge badge-purple">MODE: MARKING</span>
+                        <span th:if="${rv.simulationMode}" class="badge badge-warning">SIMULATION MODE</span>
+                        <span th:if="${rv.serverWideBlocking}" class="badge badge-warning">SERVER-WIDE BLOCKING</span>
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-muted);">
+                        Last Synced: <span style="font-weight: 600; color: var(--text-secondary);" th:text="${rv.lastUpdatedAt != null ? #temporals.format(rv.lastUpdatedAt, 'dd.MM.yyyy HH:mm:ss') : 'Unknown'}">24.10 22:30:00</span>
+                    </div>
+                </div>
+
+                <div th:if="${rv.description != null and !rv.description.isBlank()}"
+                     style="font-size: 12px; color: var(--text-secondary); background: rgba(56, 189, 248, 0.06); border-left: 3px solid var(--color-primary); padding: 8px 12px; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; margin-bottom: 14px; line-height: 1.4;"
+                     th:text="${rv.description}">
+                    Primary Rate Limiter description.
+                </div>
+
+                <!-- Parameters Grid -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 14px;">
+                    <div style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
+                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Rate Limit Threshold</div>
+                        <div style="font-size: 14px; font-weight: 700; color: var(--color-primary);" th:text="${rv.allowedRequestsPerSlot} + ' req / ' + ${rv.slotLength} + 's'">50 req / 60s</div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;" th:text="'Window: ' + ${rv.formattedWindow()} + ' &bull; Decay: ' + ${rv.formattedDecay()}">Window: 300s &bull; Decay: 80%</div>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
+                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Subnet Masking Partition</div>
+                        <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);" th:utext="${rv.formattedSubnetMasks()}">/32 (IPv4) &bull; /64 (IPv6)</div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;">Traffic grouped by subnet prefix</div>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
+                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Cache Bounds (LRU Capacity)</div>
+                        <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);">
+                            <span th:text="${#numbers.formatInteger(rv.maxIPCacheSize, 1, 'POINT')}">10.000</span> <span style="font-size: 11px; font-weight: 400; color: var(--text-muted);">active</span> &bull;
+                            <span th:text="${#numbers.formatInteger(rv.maxBlockedIPCacheSize, 1, 'POINT')}">10.000</span> <span style="font-size: 11px; font-weight: 400; color: var(--text-muted);">blocked</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;">Max concurrent tracked IPs</div>
+                    </div>
+
+                    <div th:if="${rv.statusUri != null and !rv.statusUri.isBlank()}"
+                         style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
+                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Status Dashboard URI</div>
+                        <div style="font-size: 13px; font-weight: 600; font-family: ui-monospace, monospace; color: var(--text-primary);" th:text="${rv.statusUri}">/antidos-status</div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;" th:text="${rv.statusAllowedIPs != null and !rv.statusAllowedIPs.isBlank() ? 'Allowed: ' + rv.statusAllowedIPs : 'IP restrictions: none'}">Allowed: 127.0.0.1</div>
+                    </div>
+                </div>
+
+                <!-- Path & IP Filters (Collapsible Details) -->
+                <details th:if="${rv.hasPathFilters() or rv.hasIpLists()}" style="margin-top: 8px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 14px; background: rgba(0,0,0,0.1);">
+                    <summary style="font-size: 12px; font-weight: 600; color: var(--color-primary); cursor: pointer;">
+                        &#x1F50D; View Configured Path Filters &amp; IP Lists
+                    </summary>
+                    <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
+                        <div th:if="${rv.relevantPaths != null and !rv.relevantPaths.isBlank()}" style="display: flex; gap: 8px; align-items: baseline;">
+                            <span style="min-width: 150px; font-weight: 600; color: var(--text-muted);">Relevant Paths:</span>
+                            <code style="word-break: break-all;" th:text="${rv.relevantPaths}">/api/*</code>
+                        </div>
+                        <div th:if="${rv.nonRelevantPaths != null and !rv.nonRelevantPaths.isBlank()}" style="display: flex; gap: 8px; align-items: baseline;">
+                            <span style="min-width: 150px; font-weight: 600; color: var(--text-muted);">Non-Relevant Paths:</span>
+                            <code style="word-break: break-all;" th:text="${rv.nonRelevantPaths}">*.css, *.js, *.png</code>
+                        </div>
+                        <div th:if="${rv.alwaysAllowedIPs != null and !rv.alwaysAllowedIPs.isBlank()}" style="display: flex; gap: 8px; align-items: baseline;">
+                            <span style="min-width: 150px; font-weight: 600; color: var(--text-muted);">Always Allowed IPs:</span>
+                            <code style="word-break: break-all; color: var(--color-success);" th:text="${rv.alwaysAllowedIPs}">127.0.0.1, 10.0.0.0/8</code>
+                        </div>
+                        <div th:if="${rv.alwaysForbiddenIPs != null and !rv.alwaysForbiddenIPs.isBlank()}" style="display: flex; gap: 8px; align-items: baseline;">
+                            <span style="min-width: 150px; font-weight: 600; color: var(--text-muted);">Always Forbidden IPs:</span>
+                            <code style="word-break: break-all; color: var(--color-danger);" th:text="${rv.alwaysForbiddenIPs}">198.51.100.0/24</code>
+                        </div>
+                    </div>
+                </details>
             </div>
         </div>
     </section>

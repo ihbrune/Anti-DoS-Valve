@@ -1,5 +1,6 @@
 package org.henbru.antidos.collector;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.henbru.antidos.collector.config.EndpointConfig;
@@ -45,6 +46,9 @@ class CollectorPollerServiceTest {
 	private PollEventLogRepository pollEventLogRepository;
 
 	@Autowired
+	private org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository;
+
+	@Autowired
 	private JdbcTemplate jdbcTemplate;
 
 	@BeforeEach
@@ -53,6 +57,8 @@ class CollectorPollerServiceTest {
 		jdbcTemplate.update("DELETE FROM slot_snapshots");
 		jdbcTemplate.update("DELETE FROM poll_event_log");
 		jdbcTemplate.update("DELETE FROM endpoint_heartbeats");
+		jdbcTemplate.update("DELETE FROM monitored_valves");
+		pollerService.clearConfigHashes();
 	}
 
 	@Test
@@ -267,4 +273,158 @@ class CollectorPollerServiceTest {
 		verify(statusClient, times(1)).fetchSlotDetails(any(), eq("SUBNET-VALVE"), eq("previous"), eq("all"), eq("all"), eq("2000"), isNull(), isNull(), eq(1));
 		customPoller.shutdown();
 	}
+
+	@Test
+	void testPollerInMemoryConfigDirtyCheck() throws Exception {
+		EndpointConfig endpoint = new EndpointConfig("DIRTY-CHECK-NODE", "http://localhost:8080/antidos-status", "tok", false, true);
+
+		ValveOverviewDto.ValveSummaryDto v1 = new ValveOverviewDto.ValveSummaryDto(
+				"RATE_LIMITER",
+				"Description 1",
+				1,
+				"BLOCKING",
+				false,
+				false,
+				429,
+				50,
+				60,
+				5,
+				0.8f,
+				32,
+				64,
+				10000,
+				10000,
+				"/api/*",
+				"*.css",
+				"127.0.0.1",
+				null,
+				"/antidos-status",
+				"127.0.0.1",
+				0L,
+				10,
+				0,
+				500L,
+				499L,
+				1000L,
+				100L,
+				10,
+				0,
+				5,
+				true,
+				true
+		);
+		when(statusClient.fetchOverview(any())).thenReturn(new ValveOverviewDto("2026-10-18T10:00:00Z", List.of(v1), null));
+
+		ValveDetailsDto.SelectedSlotDto slotDto = new ValveDetailsDto.SelectedSlotDto(
+				"previous", 4, 499L, false, "2026-10-18T09:59:00Z", "2026-10-18T10:00:00Z", 100L, 10, 0
+		);
+		when(statusClient.fetchSlotDetails(any(), any(), any(), any(), any(), any())).thenReturn(
+				new ValveDetailsDto("2026-10-18T10:00:00Z", null, slotDto, 0, "all", List.of(), null)
+		);
+
+		// 1. First poll -> Must write to monitored_valves
+		pollerService.pollEndpoint(endpoint);
+
+		var valveOpt1 = monitoredValveRepository.findByServerIdAndValveName("DIRTY-CHECK-NODE", "RATE_LIMITER");
+		assertTrue(valveOpt1.isPresent());
+		assertEquals(50, valveOpt1.get().allowedRequestsPerSlot());
+		assertEquals("Description 1", valveOpt1.get().description());
+		Instant firstUpdated = valveOpt1.get().lastUpdatedAt();
+
+		// Wait briefly to ensure timestamps would differ if written
+		Thread.sleep(50);
+
+		// 2. Second poll with SAME config (only transient traffic counter changed, e.g. totalRequests = 1200)
+		ValveOverviewDto.ValveSummaryDto v1SameConfig = new ValveOverviewDto.ValveSummaryDto(
+				"RATE_LIMITER",
+				"Description 1",
+				1,
+				"BLOCKING",
+				false,
+				false,
+				429,
+				50,
+				60,
+				5,
+				0.8f,
+				32,
+				64,
+				10000,
+				10000,
+				"/api/*",
+				"*.css",
+				"127.0.0.1",
+				null,
+				"/antidos-status",
+				"127.0.0.1",
+				0L,
+				15, // traffic counter changed
+				0,
+				500L,
+				499L,
+				1200L, // traffic counter changed
+				100L,
+				10,
+				0,
+				5,
+				true,
+				true
+		);
+		when(statusClient.fetchOverview(any())).thenReturn(new ValveOverviewDto("2026-10-18T10:00:15Z", List.of(v1SameConfig), null));
+
+		pollerService.pollEndpoint(endpoint);
+
+		var valveOpt2 = monitoredValveRepository.findByServerIdAndValveName("DIRTY-CHECK-NODE", "RATE_LIMITER");
+		assertTrue(valveOpt2.isPresent());
+		// In-Memory Dirty Check: Timestamp must be EXACTLY the same, meaning 0 DB writes occurred!
+		assertEquals(firstUpdated, valveOpt2.get().lastUpdatedAt());
+
+		// 3. Third poll with CHANGED config (allowedRequestsPerSlot = 80, description = "Updated Description")
+		Thread.sleep(50);
+		ValveOverviewDto.ValveSummaryDto v2ChangedConfig = new ValveOverviewDto.ValveSummaryDto(
+				"RATE_LIMITER",
+				"Updated Description",
+				1,
+				"BLOCKING",
+				false,
+				false,
+				429,
+				80, // changed!
+				60,
+				5,
+				0.8f,
+				32,
+				64,
+				10000,
+				10000,
+				"/api/*",
+				"*.css",
+				"127.0.0.1",
+				null,
+				"/antidos-status",
+				"127.0.0.1",
+				0L,
+				15,
+				0,
+				500L,
+				499L,
+				1250L,
+				100L,
+				10,
+				0,
+				5,
+				true,
+				true
+		);
+		when(statusClient.fetchOverview(any())).thenReturn(new ValveOverviewDto("2026-10-18T10:00:30Z", List.of(v2ChangedConfig), null));
+
+		pollerService.pollEndpoint(endpoint);
+
+		var valveOpt3 = monitoredValveRepository.findByServerIdAndValveName("DIRTY-CHECK-NODE", "RATE_LIMITER");
+		assertTrue(valveOpt3.isPresent());
+		assertEquals(80, valveOpt3.get().allowedRequestsPerSlot());
+		assertEquals("Updated Description", valveOpt3.get().description());
+		assertNotEquals(firstUpdated, valveOpt3.get().lastUpdatedAt());
+	}
 }
+

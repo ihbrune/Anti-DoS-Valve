@@ -44,6 +44,7 @@ public class DashboardController {
 	private final DocumentationService documentationService;
 	private final org.henbru.antidos.collector.config.CollectorProperties properties;
 	private final org.henbru.antidos.collector.config.ValveRuleResolver valveRuleResolver;
+	private final org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository;
 	private final org.henbru.antidos.collector.aggregation.AnalyticsService analyticsService;
 	private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
@@ -58,6 +59,8 @@ public class DashboardController {
 			org.henbru.antidos.collector.config.CollectorProperties properties,
 			org.henbru.antidos.collector.config.ValveRuleResolver valveRuleResolver,
 			@org.springframework.beans.factory.annotation.Autowired(required = false)
+			org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository,
+			@org.springframework.beans.factory.annotation.Autowired(required = false)
 			org.henbru.antidos.collector.aggregation.AnalyticsService analyticsService,
 			@org.springframework.beans.factory.annotation.Autowired(required = false)
 			com.fasterxml.jackson.databind.ObjectMapper objectMapper) {
@@ -69,6 +72,7 @@ public class DashboardController {
 		this.documentationService = documentationService;
 		this.properties = properties;
 		this.valveRuleResolver = valveRuleResolver != null ? valveRuleResolver : new org.henbru.antidos.collector.config.ValveRuleResolver(properties);
+		this.monitoredValveRepository = monitoredValveRepository;
 		this.analyticsService = analyticsService;
 		this.objectMapper = objectMapper != null ? objectMapper : new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
 	}
@@ -83,7 +87,7 @@ public class DashboardController {
 			org.henbru.antidos.collector.config.CollectorProperties properties,
 			org.henbru.antidos.collector.config.ValveRuleResolver valveRuleResolver) {
 		this(heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
-				subnetRollupRepository, documentationService, properties, valveRuleResolver, null, null);
+				subnetRollupRepository, documentationService, properties, valveRuleResolver, null, null, null);
 	}
 
 	public DashboardController(
@@ -95,7 +99,7 @@ public class DashboardController {
 			DocumentationService documentationService,
 			org.henbru.antidos.collector.config.CollectorProperties properties) {
 		this(heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
-				subnetRollupRepository, documentationService, properties, new org.henbru.antidos.collector.config.ValveRuleResolver(properties), null, null);
+				subnetRollupRepository, documentationService, properties, new org.henbru.antidos.collector.config.ValveRuleResolver(properties), null, null, null);
 	}
 
 	@org.springframework.web.bind.annotation.ModelAttribute("demoMode")
@@ -349,6 +353,14 @@ public class DashboardController {
 		List<String> distinctValves = slotSnapshotRepository.findDistinctValvesForServer(serverId);
 		valveNames.addAll(distinctValves);
 
+		List<org.henbru.antidos.collector.model.MonitoredValve> runtimeValves =
+				(monitoredValveRepository != null) ? monitoredValveRepository.findByServerId(serverId) : List.of();
+		java.util.Map<String, org.henbru.antidos.collector.model.MonitoredValve> runtimeValvesMap = new java.util.LinkedHashMap<>();
+		for (org.henbru.antidos.collector.model.MonitoredValve mv : runtimeValves) {
+			runtimeValvesMap.put(mv.valveName(), mv);
+			valveNames.add(mv.valveName());
+		}
+
 		List<org.henbru.antidos.collector.config.EffectiveValveRule> configuredValves = new ArrayList<>();
 		for (String vName : valveNames) {
 			configuredValves.add(valveRuleResolver.resolve(endpoint, vName));
@@ -358,6 +370,8 @@ public class DashboardController {
 		model.addAttribute("serverId", serverId);
 		model.addAttribute("endpointConfig", endpoint);
 		model.addAttribute("configuredValves", configuredValves);
+		model.addAttribute("runtimeValves", runtimeValves);
+		model.addAttribute("runtimeValvesMap", runtimeValvesMap);
 		model.addAttribute("selectedValve", valve);
 		model.addAttribute("recentSlots", recentSlots);
 		model.addAttribute("recentEvents", recentEvents);

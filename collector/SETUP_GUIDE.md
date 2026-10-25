@@ -388,6 +388,8 @@ The database separates real-time transient telemetry, persistent subnet aggregat
 | Endpoint | Method | Parameters | Description |
 |---|---|---|---|
 | `/api/v1/fleet` | `GET` | - | Fleet overview: online status, 24h request totals, active valves. |
+| `/api/v1/valves` | `GET` | `serverId` (optional) | Query live and persisted Valve runtime configurations across the fleet or filtered by node. |
+| `/api/v1/valves/{valveName}` | `GET` | `serverId` (required) | Query detailed runtime configuration for a specific named Valve on a specific server node. |
 | `/api/v1/rollups/subnets` | `GET` | `servers`, `valves`, `hours`, `subnetQuery`, `asn`, `clientTypes`, `limit`, `offset` | Retrieve persistent subnet rollups with botnet heuristics. |
 | `/api/v1/rollups/subnets/aggregate` | `POST` | `hours` | On-demand trigger to calculate completed rollup buckets. |
 | `/api/v1/reputation/blocked-ips` | `GET` | `hours`, `format` (`json` or `text`) | Export blocked IP addresses as a plain text blocklist for firewall ingest or JSON. |

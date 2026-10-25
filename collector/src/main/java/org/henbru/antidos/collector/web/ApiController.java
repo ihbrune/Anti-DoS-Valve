@@ -15,6 +15,7 @@ import org.henbru.antidos.collector.storage.SlotSnapshotRepository;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -35,6 +36,28 @@ public class ApiController {
 	private final org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService;
 	private final org.henbru.antidos.collector.aggregation.AnalyticsService analyticsService;
 
+	private final org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository;
+
+	@org.springframework.beans.factory.annotation.Autowired
+	public ApiController(
+			HeartbeatRepository heartbeatRepository,
+			SlotSnapshotRepository slotSnapshotRepository,
+			ClientEventRepository clientEventRepository,
+			PollEventLogRepository pollEventLogRepository,
+			org.henbru.antidos.collector.storage.SubnetRollupRepository subnetRollupRepository,
+			org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService,
+			org.henbru.antidos.collector.aggregation.AnalyticsService analyticsService,
+			org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository) {
+		this.heartbeatRepository = heartbeatRepository;
+		this.slotSnapshotRepository = slotSnapshotRepository;
+		this.clientEventRepository = clientEventRepository;
+		this.pollEventLogRepository = pollEventLogRepository;
+		this.subnetRollupRepository = subnetRollupRepository;
+		this.rollupAggregationService = rollupAggregationService;
+		this.analyticsService = analyticsService;
+		this.monitoredValveRepository = monitoredValveRepository;
+	}
+
 	public ApiController(
 			HeartbeatRepository heartbeatRepository,
 			SlotSnapshotRepository slotSnapshotRepository,
@@ -43,13 +66,8 @@ public class ApiController {
 			org.henbru.antidos.collector.storage.SubnetRollupRepository subnetRollupRepository,
 			org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService,
 			org.henbru.antidos.collector.aggregation.AnalyticsService analyticsService) {
-		this.heartbeatRepository = heartbeatRepository;
-		this.slotSnapshotRepository = slotSnapshotRepository;
-		this.clientEventRepository = clientEventRepository;
-		this.pollEventLogRepository = pollEventLogRepository;
-		this.subnetRollupRepository = subnetRollupRepository;
-		this.rollupAggregationService = rollupAggregationService;
-		this.analyticsService = analyticsService;
+		this(heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
+				subnetRollupRepository, rollupAggregationService, analyticsService, null);
 	}
 
 	@GetMapping("/fleet")
@@ -201,5 +219,29 @@ public class ApiController {
 			@RequestParam(name = "servers", required = false) List<String> servers,
 			@RequestParam(name = "valves", required = false) List<String> valves) {
 		return analyticsService.getDashboardAnalytics(hours, servers, valves).scatterPoints();
+	}
+
+	@GetMapping("/valves")
+	public List<org.henbru.antidos.collector.model.MonitoredValve> listValves(
+			@RequestParam(name = "serverId", required = false) String serverId) {
+		if (monitoredValveRepository == null) {
+			return List.of();
+		}
+		if (serverId != null && !serverId.isBlank()) {
+			return monitoredValveRepository.findByServerId(serverId.trim());
+		}
+		return monitoredValveRepository.findAll();
+	}
+
+	@GetMapping("/valves/{valveName}")
+	public ResponseEntity<org.henbru.antidos.collector.model.MonitoredValve> getValve(
+			@RequestParam(name = "serverId") String serverId,
+			@PathVariable(name = "valveName") String valveName) {
+		if (monitoredValveRepository == null) {
+			return ResponseEntity.notFound().build();
+		}
+		return monitoredValveRepository.findByServerIdAndValveName(serverId, valveName)
+				.map(ResponseEntity::ok)
+				.orElseGet(() -> ResponseEntity.notFound().build());
 	}
 }
