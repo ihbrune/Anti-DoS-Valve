@@ -1149,7 +1149,6 @@ public class AntiDoSValve extends ValveBase {
 		}
 
 		// 3. Authorized (valid token): Render dashboard (NOT blocked, NOT counted in monitor)
-		touchCollectorLease();
 		String token = request.getParameter("token");
 		if (token == null || token.isEmpty()) {
 			String authHeader = request.getHeader("Authorization");
@@ -1176,6 +1175,7 @@ public class AntiDoSValve extends ValveBase {
 		String activeMinCount = request.getParameter("activeMinCount");
 
 		if (isJson) {
+			touchCollectorLease();
 			statusRenderer.renderStatusJson(response, filterValve, view, slot, limit, blockedLimit, activeLimit,
 					sinceBlockedOrder, sinceActiveOrder, activeMinCount);
 		} else {

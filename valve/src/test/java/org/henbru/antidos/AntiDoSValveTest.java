@@ -551,7 +551,7 @@ class AntiDoSValveTest {
 	}
 
 	@Test
-	void testCollectorIntegrationConfigurationAndLifecycleValidation() throws LifecycleException {
+	void testCollectorIntegrationConfigurationAndLifecycleValidation() throws Exception {
 		AntiDoSValve valve = new AntiDoSValve();
 		setValidAntiDoSMonitorconfiguration(valve, "COLLECTOR_INTEG_TEST");
 
@@ -577,6 +577,33 @@ class AntiDoSValveTest {
 		valve.touchCollectorLease();
 		assertTrue(valve.isCollectorLeaseActive());
 		assertTrue(valve.isExtendedMetricsActive());
+
+		// Verify HTML status request does NOT touch lease, but JSON status request DOES
+		AntiDoSValve statusValve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(statusValve, "LEASE_TRIGGER_TEST");
+		statusValve.setStatusUri("/antidos-status");
+		statusValve.setStatusPassword("statusSecret");
+		statusValve.setCollectorIntegration("auto");
+		statusValve.start();
+
+		assertFalse(statusValve.isCollectorLeaseActive());
+
+		// 1. HTML status request -> lease remains inactive
+		TestRequest htmlReq = new TestRequest("/antidos-status", "127.0.0.1");
+		htmlReq.setParameter("token", "statusSecret");
+		TestResponse htmlResp = new TestResponse();
+		statusValve.invoke(htmlReq, htmlResp);
+		assertFalse(statusValve.isCollectorLeaseActive());
+
+		// 2. JSON status request -> lease is activated!
+		TestRequest jsonReq = new TestRequest("/antidos-status", "127.0.0.1");
+		jsonReq.setParameter("token", "statusSecret");
+		jsonReq.setParameter("format", "json");
+		TestResponse jsonResp = new TestResponse();
+		statusValve.invoke(jsonReq, jsonResp);
+		assertTrue(statusValve.isCollectorLeaseActive());
+
+		statusValve.stop();
 
 		// Invalid configuration
 		valve.setCollectorIntegration("invalid");
