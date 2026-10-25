@@ -12,7 +12,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(properties = "collector.enrichment.crawler-sync-retry-backoff-ms=1")
 @AutoConfigureMockMvc
 @SuppressWarnings("null")
 class CrawlerControllerTest {

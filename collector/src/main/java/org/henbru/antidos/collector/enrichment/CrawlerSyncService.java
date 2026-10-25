@@ -67,6 +67,10 @@ public class CrawlerSyncService {
 				.connectTimeout(Duration.ofSeconds(10))
 				.followRedirects(HttpClient.Redirect.NORMAL)
 				.build();
+		if (properties != null && properties.getEnrichment() != null) {
+			this.maxAttempts = properties.getEnrichment().getCrawlerSyncMaxAttempts();
+			this.retryBackoffMs = properties.getEnrichment().getCrawlerSyncRetryBackoffMs();
+		}
 	}
 
 	public CrawlerSyncService(
@@ -120,6 +124,17 @@ public class CrawlerSyncService {
 		return false;
 	}
 
+	private static final int DEFAULT_MAX_ATTEMPTS = 3;
+	private static final long DEFAULT_RETRY_BACKOFF_MS = 5000L;
+
+	private int maxAttempts = DEFAULT_MAX_ATTEMPTS;
+	private long retryBackoffMs = DEFAULT_RETRY_BACKOFF_MS;
+
+	void configureRetry(int maxAttempts, long retryBackoffMs) {
+		this.maxAttempts = maxAttempts;
+		this.retryBackoffMs = retryBackoffMs;
+	}
+
 	public boolean syncFeed(CrawlerFeedConfig config) {
 		if (config == null) {
 			return false;
@@ -138,6 +153,24 @@ public class CrawlerSyncService {
 					"Feed is disabled in configuration"
 			));
 			botIpRangeRepository.replaceRangesForFeed(config.getKey(), List.of());
+			if (intelRangeRepository != null && intelSourceRepository != null) {
+				intelRangeRepository.replaceRangesForSource(config.getKey(), List.of());
+				intelSourceRepository.upsert(new IntelSource(
+						config.getKey(),
+						"FEED",
+						config.getName(),
+						config.getNormalizedCategory(),
+						config.getUrl(),
+						1,
+						Instant.now(),
+						"DISABLED",
+						0,
+						"Feed is disabled in configuration"
+				));
+				if (intelRegistry != null) {
+					intelRegistry.reload();
+				}
+			}
 			return false;
 		}
 
@@ -156,6 +189,24 @@ public class CrawlerSyncService {
 					error
 			));
 			botIpRangeRepository.replaceRangesForFeed(config.getKey(), List.of());
+			if (intelRangeRepository != null && intelSourceRepository != null) {
+				intelRangeRepository.replaceRangesForSource(config.getKey(), List.of());
+				intelSourceRepository.upsert(new IntelSource(
+						config.getKey(),
+						"FEED",
+						config.getName(),
+						config.getNormalizedCategory(),
+						config.getUrl(),
+						1,
+						Instant.now(),
+						"INVALID_CONFIG",
+						0,
+						error
+				));
+				if (intelRegistry != null) {
+					intelRegistry.reload();
+				}
+			}
 			return false;
 		}
 
@@ -173,104 +224,182 @@ public class CrawlerSyncService {
 				null
 		));
 
-		try {
-			HttpRequest request = HttpRequest.newBuilder()
-					.uri(URI.create(config.getUrl()))
-					.timeout(Duration.ofSeconds(15))
-					.header("User-Agent", "AntiDoS-Collector/1.7 (+https://github.com/henbru/Anti-DoS-Valve)")
-					.GET()
-					.build();
+		int attempts = this.maxAttempts;
+		HttpResponse<String> response = null;
+		Exception lastException = null;
 
-			HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+		for (int attempt = 1; attempt <= attempts; attempt++) {
+			try {
+				HttpRequest request = HttpRequest.newBuilder()
+						.uri(URI.create(config.getUrl()))
+						.timeout(Duration.ofSeconds(15))
+						.header("User-Agent", "AntiDoS-Collector/1.7 (+https://github.com/henbru/Anti-DoS-Valve)")
+						.GET()
+						.build();
 
-			if (response.statusCode() < 200 || response.statusCode() >= 300) {
-				String error = "HTTP " + response.statusCode();
-				crawlerFeedRepository.updateSyncStatus(config.getKey(), "FAILED", 0, error, Instant.now());
-				log.warn("Failed to download crawler feed '{}': {}", config.getName(), error);
-				return false;
-			}
+				response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
-			List<String> cidrs = extractCidrs(response.body());
-			if (cidrs.isEmpty()) {
-				String error = "Feed returned 0 valid CIDR prefixes or IP addresses";
-				crawlerFeedRepository.updateSyncStatus(config.getKey(), "FAILED", 0, error, Instant.now());
-				return false;
-			}
-
-			List<BotIpRange> ranges = new ArrayList<>();
-			for (String cidr : cidrs) {
-				IpNetworkInfo net = IpNetworkUtil.parse(cidr);
-				ranges.add(new BotIpRange(
-						null,
-						config.getKey(),
-						cidr,
-						net.version(),
-						net.v4Start(),
-						net.v4End(),
-						net.v6Start(),
-						net.v6End(),
-						Instant.now()
-				));
-			}
-
-			botIpRangeRepository.replaceRangesForFeed(config.getKey(), ranges);
-			crawlerFeedRepository.updateSyncStatus(config.getKey(), "SUCCESS", ranges.size(), null, Instant.now());
-
-			if (intelRangeRepository != null && intelSourceRepository != null) {
-				List<IntelRange> intelRanges = new ArrayList<>(ranges.size());
-				for (BotIpRange r : ranges) {
-					IpNetworkInfo net = IpNetworkUtil.parse(r.cidr());
-					intelRanges.add(new IntelRange(
-							null,
-							config.getKey(),
-							r.cidr(),
-							r.ipVersion(),
-							net.prefix(),
-							r.ipV4Start(),
-							r.ipV4End(),
-							r.ipV6Start(),
-							r.ipV6End(),
-							null,
-							null,
-							config.getNormalizedCategory(),
-							config.getName(),
-							1,
-							Instant.now()
-					));
+				if (response.statusCode() >= 200 && response.statusCode() < 300) {
+					if (attempt > 1) {
+						log.info("Crawler feed '{}' recovered and succeeded on attempt {}/{}",
+								config.getName(), attempt, attempts);
+					}
+					lastException = null;
+					break;
 				}
-				intelRangeRepository.replaceRangesForSource(config.getKey(), intelRanges);
-				intelSourceRepository.upsert(new IntelSource(
-						config.getKey(),
-						"FEED",
-						config.getName(),
-						config.getNormalizedCategory(),
-						config.getUrl(),
-						1,
-						Instant.now(),
-						"SUCCESS",
-						intelRanges.size(),
-						null
-				));
-				if (intelRegistry != null) {
-					intelRegistry.reload();
+
+				log.warn("Attempt {}/{} to download crawler feed '{}' returned HTTP {}",
+						attempt, attempts, config.getName(), response.statusCode());
+
+			} catch (java.io.IOException | InterruptedException | RuntimeException e) {
+				lastException = e;
+				log.warn("Attempt {}/{} to download crawler feed '{}' failed: {}",
+						attempt, attempts, config.getName(), e.getMessage());
+				if (e instanceof InterruptedException) {
+					Thread.currentThread().interrupt();
+					break;
 				}
 			}
 
-			log.info("Successfully updated crawler feed '{}': {} prefixes stored", config.getName(), ranges.size());
-			return true;
+			if (attempt < attempts) {
+				try {
+					Thread.sleep(retryBackoffMs * attempt);
+				} catch (InterruptedException ie) {
+					Thread.currentThread().interrupt();
+					break;
+				}
+			}
+		}
 
-		} catch (java.io.IOException | InterruptedException | RuntimeException e) {
-			String error = e.getClass().getSimpleName() + ": " + e.getMessage();
-			crawlerFeedRepository.updateSyncStatus(config.getKey(), "FAILED", 0, error, Instant.now());
+		if (response == null || response.statusCode() < 200 || response.statusCode() >= 300) {
+			String error = response != null
+					? "HTTP " + response.statusCode()
+					: (lastException != null ? lastException.getClass().getSimpleName() + ": " + lastException.getMessage() : "Request failed");
+			log.warn("All {} attempts to download crawler feed '{}' failed: {}. Retaining previously cached IP ranges.",
+					attempts, config.getName(), error);
+			crawlerFeedRepository.recordSyncFailure(config.getKey(), error);
 			if (intelSourceRepository != null) {
-				intelSourceRepository.updateSyncStatus(config.getKey(), "FAILED", 0, error, Instant.now());
-			}
-			log.warn("Exception during sync of crawler feed '{}': {}", config.getName(), error);
-			if (e instanceof InterruptedException) {
-				Thread.currentThread().interrupt();
+				intelSourceRepository.recordSyncFailure(config.getKey(), error);
 			}
 			return false;
 		}
+
+		List<String> cidrs = extractCidrs(response.body());
+		if (cidrs.isEmpty()) {
+			String error = "Feed returned 0 valid CIDR prefixes or IP addresses";
+			log.warn("Crawler feed '{}' returned 0 valid prefixes: {}. Retaining previously cached IP ranges.",
+					config.getName(), error);
+			crawlerFeedRepository.recordSyncFailure(config.getKey(), error);
+			if (intelSourceRepository != null) {
+				intelSourceRepository.recordSyncFailure(config.getKey(), error);
+			}
+			return false;
+		}
+
+		List<BotIpRange> ranges = new ArrayList<>();
+		for (String cidr : cidrs) {
+			IpNetworkInfo net = IpNetworkUtil.parse(cidr);
+			ranges.add(new BotIpRange(
+					null,
+					config.getKey(),
+					cidr,
+					net.version(),
+					net.v4Start(),
+					net.v4End(),
+					net.v6Start(),
+					net.v6End(),
+					Instant.now()
+			));
+		}
+
+		botIpRangeRepository.replaceRangesForFeed(config.getKey(), ranges);
+		crawlerFeedRepository.updateSyncStatus(config.getKey(), "SUCCESS", ranges.size(), null, Instant.now());
+
+		if (intelRangeRepository != null && intelSourceRepository != null) {
+			List<IntelRange> intelRanges = new ArrayList<>(ranges.size());
+			for (BotIpRange r : ranges) {
+				IpNetworkInfo net = IpNetworkUtil.parse(r.cidr());
+				intelRanges.add(new IntelRange(
+						null,
+						config.getKey(),
+						r.cidr(),
+						r.ipVersion(),
+						net.prefix(),
+						r.ipV4Start(),
+						r.ipV4End(),
+						r.ipV6Start(),
+						r.ipV6End(),
+						null,
+						null,
+						config.getNormalizedCategory(),
+						config.getName(),
+						1,
+						Instant.now()
+				));
+			}
+			intelRangeRepository.replaceRangesForSource(config.getKey(), intelRanges);
+			intelSourceRepository.upsert(new IntelSource(
+					config.getKey(),
+					"FEED",
+					config.getName(),
+					config.getNormalizedCategory(),
+					config.getUrl(),
+					1,
+					Instant.now(),
+					"SUCCESS",
+					intelRanges.size(),
+					null
+			));
+			if (intelRegistry != null) {
+				intelRegistry.reload();
+			}
+		}
+
+		log.info("Successfully updated crawler feed '{}': {} prefixes stored", config.getName(), ranges.size());
+		return true;
+	}
+
+	/**
+	 * Retries synchronization for any enabled crawler feeds currently in FAILED state.
+	 *
+	 * @return the number of feeds that successfully recovered
+	 */
+	public int syncFailedFeeds() {
+		if (!properties.getEnrichment().isEnabled() || !properties.getEnrichment().isCrawlerSyncEnabled()) {
+			return 0;
+		}
+
+		List<CrawlerFeed> allFeeds = crawlerFeedRepository.findAll();
+		List<CrawlerFeedConfig> configs = properties.getEnrichment().getCrawlerFeedsList();
+		if (configs == null || configs.isEmpty() || allFeeds.isEmpty()) {
+			return 0;
+		}
+
+		java.util.Map<String, CrawlerFeedConfig> configMap = new java.util.HashMap<>();
+		for (CrawlerFeedConfig c : configs) {
+			if (c.getKey() != null) {
+				configMap.put(c.getKey().toLowerCase(), c);
+			}
+		}
+
+		int recovered = 0;
+		for (CrawlerFeed feed : allFeeds) {
+			if ("FAILED".equalsIgnoreCase(feed.status())) {
+				CrawlerFeedConfig cfg = configMap.get(feed.feedKey().toLowerCase());
+				if (cfg != null && cfg.isEnabled()) {
+					log.info("Executing automatic catch-up sync for failed crawler feed '{}'...", cfg.getName());
+					try {
+						if (syncFeed(cfg)) {
+							recovered++;
+							log.info("Failed crawler feed '{}' successfully recovered during catch-up sync", cfg.getName());
+						}
+					} catch (Exception e) {
+						log.warn("Catch-up sync for feed '{}' failed: {}", cfg.getName(), e.getMessage());
+					}
+				}
+			}
+		}
+		return recovered;
 	}
 
 	/**

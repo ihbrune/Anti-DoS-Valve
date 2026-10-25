@@ -138,4 +138,22 @@ public class CollectorScheduler {
 			log.error("Unexpected error in scheduled crawler synchronization: {}", e.getMessage(), e);
 		}
 	}
+
+	/**
+	 * Hourly catch-up synchronization for crawler feeds that previously failed.
+	 */
+	@Scheduled(cron = "${collector.enrichment.crawler-retry-cron:0 15 * * * *}")
+	public void runScheduledCrawlerRetry() {
+		if (crawlerSyncService == null) {
+			return;
+		}
+		try {
+			int recovered = crawlerSyncService.syncFailedFeeds();
+			if (recovered > 0) {
+				log.info("Scheduled crawler catch-up sync recovered {} previously failed feed(s)", recovered);
+			}
+		} catch (Exception e) {
+			log.error("Unexpected error in scheduled crawler retry synchronization: {}", e.getMessage(), e);
+		}
+	}
 }

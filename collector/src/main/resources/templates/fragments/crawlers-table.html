@@ -41,6 +41,7 @@
                     <td>
                         <span th:if="${feed.status == 'SUCCESS'}" class="badge badge-success">&#x2713; SYNCHRONIZED</span>
                         <span th:if="${feed.status == 'FAILED'}" class="badge badge-danger">&#x2717; FAILED</span>
+                        <span th:if="${feed.status == 'FAILED' and feed.prefixCount > 0}" class="badge badge-warning" style="margin-left: 2px;" title="Retaining existing IP prefixes from previous successful sync">&#x26A0;&#xFE0F; Stale Cache</span>
                         <span th:if="${feed.status == 'SYNCING'}" class="badge badge-warning">&#x23F3; SYNCING</span>
                         <span th:if="${feed.status == 'PENDING'}" class="badge badge-secondary">PENDING</span>
                         <span th:if="${feed.status == 'DISABLED'}" class="badge badge-secondary" style="opacity: 0.75;">DISABLED</span>
@@ -50,6 +51,7 @@
                     <td>
                         <strong th:text="${#numbers.formatInteger(feed.prefixCount, 1, 'POINT')}">240</strong>
                         <span style="font-size: 11px; color: var(--text-muted);">CIDRs</span>
+                        <div th:if="${feed.status == 'FAILED' and feed.prefixCount > 0}" style="font-size: 10px; color: var(--color-warning);" title="Previous IP list remains active until next successful sync">Retained fallback</div>
                     </td>
                     <td>
                         <span th:if="${feed.lastSyncedAt != null}" th:text="${#temporals.format(feed.lastSyncedAt, 'dd.MM HH:mm:ss')}">18.10 04:00:15</span>

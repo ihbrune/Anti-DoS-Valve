@@ -80,6 +80,16 @@ public class IntelSourceRepository {
 		jdbcTemplate.update(sql, status, prefixCount, error, syncedAt != null ? Timestamp.from(syncedAt) : null, sourceKey);
 	}
 
+	public void recordSyncFailure(String sourceKey, String error) {
+		String sql = """
+				UPDATE intel_source SET
+				    status = 'FAILED',
+				    last_error = ?
+				WHERE source_key = ?
+				""";
+		jdbcTemplate.update(sql, error, sourceKey);
+	}
+
 	public Optional<IntelSource> findByKey(String sourceKey) {
 		List<IntelSource> list = jdbcTemplate.query(
 				"SELECT * FROM intel_source WHERE source_key = ? LIMIT 1",

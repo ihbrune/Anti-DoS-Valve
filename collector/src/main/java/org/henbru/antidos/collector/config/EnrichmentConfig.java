@@ -17,6 +17,9 @@ public class EnrichmentConfig {
 	private List<Long> customDatacenterAsns = new ArrayList<>();
 	private boolean crawlerSyncEnabled = true;
 	private String crawlerSyncCron = "0 0 4 * * *"; // Daily at 04:00 AM
+	private String crawlerRetryCron = "0 15 * * * *"; // Hourly catch-up at :15 for failed feeds
+	private int crawlerSyncMaxAttempts = 3;
+	private long crawlerSyncRetryBackoffMs = 5000L;
 	private int ttlDays = 30; // MaxMind GeoLite2 compliance and metadata freshness TTL in days
 	private Map<String, CrawlerFeedConfig> crawlerFeeds = createDefaultCrawlerFeeds();
 
@@ -105,6 +108,30 @@ public class EnrichmentConfig {
 
 	public void setCrawlerSyncCron(String crawlerSyncCron) {
 		this.crawlerSyncCron = crawlerSyncCron;
+	}
+
+	public String getCrawlerRetryCron() {
+		return crawlerRetryCron;
+	}
+
+	public void setCrawlerRetryCron(String crawlerRetryCron) {
+		this.crawlerRetryCron = crawlerRetryCron;
+	}
+
+	public int getCrawlerSyncMaxAttempts() {
+		return crawlerSyncMaxAttempts;
+	}
+
+	public void setCrawlerSyncMaxAttempts(int crawlerSyncMaxAttempts) {
+		this.crawlerSyncMaxAttempts = crawlerSyncMaxAttempts;
+	}
+
+	public long getCrawlerSyncRetryBackoffMs() {
+		return crawlerSyncRetryBackoffMs;
+	}
+
+	public void setCrawlerSyncRetryBackoffMs(long crawlerSyncRetryBackoffMs) {
+		this.crawlerSyncRetryBackoffMs = crawlerSyncRetryBackoffMs;
 	}
 
 	public int getTtlDays() {

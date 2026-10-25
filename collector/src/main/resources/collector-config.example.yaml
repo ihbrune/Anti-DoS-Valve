@@ -128,6 +128,8 @@ collector:
     # Automated daily sync of verified Search Engine, AI crawler & Tor exit IP ranges:
     crawler-sync-enabled: true
     crawler-sync-cron: "0 0 4 * * *"
+    # Hourly catch-up retry at minute 15 for feeds that previously failed:
+    crawler-retry-cron: "0 15 * * * *"
 
     # Crawler & Anonymizer IP range feeds:
     # Default feeds out-of-the-box (Googlebot, Bingbot, Applebot, OpenAI, ChatGPT, Tor Exit Nodes)

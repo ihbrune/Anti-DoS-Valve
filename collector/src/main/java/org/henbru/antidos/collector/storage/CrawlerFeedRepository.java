@@ -80,6 +80,16 @@ public class CrawlerFeedRepository {
 		jdbcTemplate.update(sql, status, prefixCount, lastError, ts, feedKey);
 	}
 
+	public void recordSyncFailure(String feedKey, String lastError) {
+		String sql = """
+				UPDATE crawler_feeds SET
+				    status = 'FAILED',
+				    last_error = ?
+				WHERE feed_key = ?
+				""";
+		jdbcTemplate.update(sql, lastError, feedKey);
+	}
+
 	public int deleteNotIn(List<String> activeKeys) {
 		if (activeKeys == null || activeKeys.isEmpty()) {
 			return jdbcTemplate.update("DELETE FROM crawler_feeds");

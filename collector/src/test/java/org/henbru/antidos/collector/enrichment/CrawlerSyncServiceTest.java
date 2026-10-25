@@ -191,4 +191,68 @@ class CrawlerSyncServiceTest {
 		assertEquals("https://search.developer.apple.com/applebot.json", appleConfig.getUrl());
 		assertTrue(appleConfig.isEnabled());
 	}
+
+	@Test
+	void testSyncFeedFailureRetainsCachedDataAndCallsRecordSyncFailure() {
+		CrawlerFeedRepository feedRepo = mock(CrawlerFeedRepository.class);
+		BotIpRangeRepository rangeRepo = mock(BotIpRangeRepository.class);
+
+		CrawlerSyncService service = new CrawlerSyncService(
+				new CollectorProperties(),
+				feedRepo,
+				rangeRepo,
+				new ObjectMapper()
+		);
+		// Configure fast retry for unit test
+		service.configureRetry(2, 1L);
+
+		// Use an unreachable local port to trigger connection failure
+		CrawlerFeedConfig failingConfig = new CrawlerFeedConfig(
+				"tor-exit-nodes", "Tor Bulk Exit Nodes", "TOR_EXIT_NODE", "http://127.0.0.1:1/nonexistent");
+
+		boolean result = service.syncFeed(failingConfig);
+
+		assertFalse(result, "Sync must fail when endpoint is unreachable");
+		// Verify recordSyncFailure is called instead of overwriting with prefix_count = 0
+		verify(feedRepo).recordSyncFailure(eq("tor-exit-nodes"), anyString());
+		// Verify existing ranges in DB are NEVER purged/replaced on failure
+		verify(rangeRepo, never()).replaceRangesForFeed(eq("tor-exit-nodes"), anyList());
+	}
+
+	@Test
+	void testSyncFailedFeedsOnlyRetriesFailedFeeds() {
+		CrawlerFeedRepository feedRepo = mock(CrawlerFeedRepository.class);
+		BotIpRangeRepository rangeRepo = mock(BotIpRangeRepository.class);
+
+		CollectorProperties props = new CollectorProperties();
+		props.getEnrichment().setCrawlerFeeds(java.util.Map.of(
+				"feed-ok", new CrawlerFeedConfig("feed-ok", "OK Feed", "SEARCH_ENGINE", "http://127.0.0.1:1/ok"),
+				"feed-failed", new CrawlerFeedConfig("feed-failed", "Failed Feed", "TOR_EXIT_NODE", "http://127.0.0.1:1/failed")
+		));
+
+		when(feedRepo.findAll()).thenReturn(List.of(
+				new org.henbru.antidos.collector.model.CrawlerFeed(
+						"feed-ok", "OK Feed", "SEARCH_ENGINE", "http://127.0.0.1:1/ok",
+						java.time.Instant.now(), "SUCCESS", 100, null),
+				new org.henbru.antidos.collector.model.CrawlerFeed(
+						"feed-failed", "Failed Feed", "TOR_EXIT_NODE", "http://127.0.0.1:1/failed",
+						java.time.Instant.now().minusSeconds(3600), "FAILED", 50, "HTTP 503")
+		));
+
+		CrawlerSyncService service = new CrawlerSyncService(
+				props,
+				feedRepo,
+				rangeRepo,
+				new ObjectMapper()
+		);
+		service.configureRetry(1, 1L);
+
+		int recovered = service.syncFailedFeeds();
+		assertEquals(0, recovered); // Still fails against dummy port, but only attempted for feed-failed!
+
+		// feed-ok was in status SUCCESS and should NOT be re-synced
+		verify(feedRepo, never()).recordSyncFailure(eq("feed-ok"), anyString());
+		// feed-failed was in status FAILED and should be attempted
+		verify(feedRepo).recordSyncFailure(eq("feed-failed"), anyString());
+	}
 }

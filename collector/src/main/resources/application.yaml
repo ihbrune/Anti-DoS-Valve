@@ -55,6 +55,7 @@ collector:
     ttl-days: 30
     crawler-sync-enabled: true
     crawler-sync-cron: "0 0 4 * * *"
+    crawler-retry-cron: "0 15 * * * *"
     crawler-feeds:
       googlebot:
         name: "Googlebot"

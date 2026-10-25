@@ -51,6 +51,9 @@ class DatabaseMigrationAndRepositoryTest {
 	@Autowired
 	private org.henbru.antidos.collector.storage.IntelRangeRepository intelRangeRepository;
 
+	@Autowired
+	private org.henbru.antidos.collector.storage.CrawlerFeedRepository crawlerFeedRepository;
+
 	@Test
 	void testHeartbeatRepositoryUpsertAndFind() {
 		Instant now = Instant.now();
@@ -507,6 +510,30 @@ class DatabaseMigrationAndRepositoryTest {
 		assertEquals(1, count);
 		List<org.henbru.antidos.collector.model.IntelRange> allRanges = intelRangeRepository.findAll();
 		assertTrue(allRanges.stream().anyMatch(r -> "test-intel-src".equals(r.sourceKey())));
+
+		// Test recordSyncFailure preserves existing prefixCount and version
+		intelSourceRepository.recordSyncFailure("test-intel-src", "HTTP 503");
+		Optional<org.henbru.antidos.collector.model.IntelSource> failedSrc = intelSourceRepository.findByKey("test-intel-src");
+		assertTrue(failedSrc.isPresent());
+		assertEquals("FAILED", failedSrc.get().status());
+		assertEquals("HTTP 503", failedSrc.get().lastError());
+		assertEquals(1, failedSrc.get().prefixCount(), "Prefix count must be preserved on sync failure");
+
+		// Test CrawlerFeedRepository recordSyncFailure
+		org.henbru.antidos.collector.model.CrawlerFeed feed = new org.henbru.antidos.collector.model.CrawlerFeed(
+				"test-feed", "Test Feed", "TOR_EXIT_NODE", "https://example.com/tor.txt", now, "SUCCESS", 42, null
+		);
+		crawlerFeedRepository.upsert(feed);
+		crawlerFeedRepository.updateSyncStatus("test-feed", "SUCCESS", 42, null, now);
+		crawlerFeedRepository.recordSyncFailure("test-feed", "ConnectTimeoutException: timed out");
+
+		Optional<org.henbru.antidos.collector.model.CrawlerFeed> failedFeed = crawlerFeedRepository.findByKey("test-feed");
+		assertTrue(failedFeed.isPresent());
+		assertEquals("FAILED", failedFeed.get().status());
+		assertEquals("ConnectTimeoutException: timed out", failedFeed.get().lastError());
+		assertEquals(42, failedFeed.get().prefixCount(), "Prefix count must be preserved on sync failure");
+		assertEquals(now.truncatedTo(ChronoUnit.SECONDS), failedFeed.get().lastSyncedAt().truncatedTo(ChronoUnit.SECONDS),
+				"Last successful sync timestamp must be preserved");
 	}
 
 	@Test
