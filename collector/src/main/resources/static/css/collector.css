@@ -1704,7 +1704,7 @@ html[data-theme="light"] .theme-icon-moon {
 .note-modal-dialog {
     position: relative;
     z-index: 10001;
-    width: 640px;
+    width: 680px;
     max-width: 95vw;
     max-height: 90vh;
     display: flex;
@@ -1833,7 +1833,46 @@ html[data-theme="light"] .theme-icon-moon {
     border-style: solid;
 }
 
-/* Light Theme Overrides for Notes & Modals */
+/* Form Controls & Modal Inputs */
+.form-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 13px;
+    padding: 8px 12px;
+    outline: none;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px var(--color-primary-glow);
+}
+
+.form-textarea {
+    min-height: 190px;
+    resize: vertical;
+    line-height: 1.55;
+}
+
+/* Light Theme Overrides for Notes, Modals & Form Controls */
 [data-theme="light"] .note-card {
     background: #ffffff;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
@@ -1859,6 +1898,25 @@ html[data-theme="light"] .theme-icon-moon {
 
 [data-theme="light"] .note-modal-backdrop {
     background: rgba(15, 23, 42, 0.5);
+}
+
+[data-theme="light"] .form-label {
+    color: var(--text-secondary);
+}
+
+[data-theme="light"] .form-input,
+[data-theme="light"] .form-select,
+[data-theme="light"] .form-textarea {
+    background: #ffffff;
+    border-color: rgba(0, 0, 0, 0.18);
+    color: var(--text-primary);
+}
+
+[data-theme="light"] .form-input:focus,
+[data-theme="light"] .form-select:focus,
+[data-theme="light"] .form-textarea:focus {
+    border-color: #0284c7;
+    box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2);
 }
 
 

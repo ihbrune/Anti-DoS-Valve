@@ -99,7 +99,7 @@
                     <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 14px; margin-bottom: 16px;">
                         <div>
                             <label class="form-label" for="targetTypeSelect">Scope / Target Type</label>
-                            <select id="targetTypeSelect" name="targetType" class="form-select" required
+                            <select id="targetTypeSelect" name="targetType" class="form-select" style="width: 100%; box-sizing: border-box;" required
                                     onchange="updateTargetPlaceholder(this.value)">
                                 <option th:each="t : ${targetTypes}"
                                         th:value="${t.name()}"
@@ -109,7 +109,7 @@
                         </div>
                         <div>
                             <label class="form-label" for="targetKeyInput">Target (ASN or Subnet CIDR)</label>
-                            <input id="targetKeyInput" type="text" name="targetKey" class="form-input ip-mono"
+                            <input id="targetKeyInput" type="text" name="targetKey" class="form-input ip-mono" style="width: 100%; box-sizing: border-box;"
                                    th:value="${targetKey}"
                                    placeholder="e.g. 198.51.100.0/24 or AS24940"
                                    required autocomplete="off">
@@ -131,12 +131,13 @@
                         </div>
                     </div>
 
-                    <div style="margin-bottom: 6px;">
+                    <div style="margin-bottom: 6px; width: 100%;">
                         <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
                             <label class="form-label" for="noteMarkdownTextarea" style="margin-bottom: 0;">Note (Markdown supported)</label>
                             <span style="font-size: 11px; color: var(--text-muted);">Lists, links, code blocks, tables</span>
                         </div>
                         <textarea id="noteMarkdownTextarea" name="noteMarkdown" class="form-textarea" rows="8"
+                                  style="width: 100%; box-sizing: border-box;"
                                   placeholder="e.g.:
 - Investigated on Oct 24 after DoS traffic spike
 - Belongs to partner API cluster (Ticket #SEC-442)
