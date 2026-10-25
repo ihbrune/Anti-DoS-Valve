@@ -13,7 +13,16 @@
         <th:block th:if="${mode == 'VIEW'}">
             <div class="note-modal-header">
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                    <span class="note-target-pill" th:text="${annotation.displayTitle()}">AS24940</span>
+                    <a th:if="${annotation.isAsn()}"
+                       th:href="@{/events(asn=${annotation.asn()})}"
+                       class="note-target-pill"
+                       title="Jump to Incidents for this ASN in Incident Explorer"
+                       th:text="${annotation.displayTitle()}">AS24940</a>
+                    <a th:if="${annotation.isSubnet()}"
+                       th:href="@{/events(clientQuery=${annotation.targetKey()})}"
+                       class="note-target-pill"
+                       title="Jump to Incidents for this subnet in Incident Explorer"
+                       th:text="${annotation.displayTitle()}">198.51.100.0/24</a>
                     <span class="badge" th:classappend="${annotation.verdict().badgeClass()}"
                           th:text="${annotation.verdict().icon() + ' ' + annotation.verdict().displayName()}">🟢 Legitimate</span>
                     <span class="badge badge-secondary" style="font-size: 11px;" th:text="${annotation.targetType().displayName()}">ASN</span>
@@ -59,19 +68,21 @@
                     </div>
                 </div>
             </div>
-
+ 
             <div class="note-modal-footer">
                 <button type="button" class="btn btn-danger"
-                        th:hx-delete="@{'/notes/' + ${annotation.id()}}"
+                        th:hx-delete="@{'/notes/' + ${annotation.id()}(context=${context != null ? context : 'table'})}"
                         hx-confirm="Are you sure you want to permanently delete this note?"
-                        hx-target="#notes-list-container"
-                        onclick="closeNoteModal()"
+                        th:hx-target="${context == 'list' ? '#notes-list-container' : '#note-modal-container'}"
+                        th:hx-swap="${context == 'list' ? 'outerHTML' : 'innerHTML'}"
+                        th:data-context="${context != null ? context : 'table'}"
+                        onclick="if (this.dataset.context === 'list') closeNoteModal()"
                         title="Delete note">
                     <span>&#x1F5D1;</span> Delete
                 </button>
                 <div style="display: flex; gap: 10px;">
                     <button type="button" class="btn"
-                            th:hx-get="@{'/notes/modal/edit/' + ${annotation.id()}}"
+                            th:hx-get="@{'/notes/modal/edit/' + ${annotation.id()}(context=${context != null ? context : 'table'})}"
                             hx-target="#note-modal-container">
                         <span>&#x270F;&#xFE0F;</span> Edit
                     </button>
@@ -91,9 +102,13 @@
                 <button type="button" class="drawer-close-btn" onclick="closeNoteModal()" aria-label="Close" title="Close (Esc)">&times;</button>
             </div>
 
-            <form hx-post="/notes" hx-target="#notes-list-container" hx-swap="outerHTML" onsubmit="setTimeout(closeNoteModal, 150)">
+            <form hx-post="/notes"
+                  th:hx-target="${context == 'list' ? '#notes-list-container' : '#note-modal-container'}"
+                  th:hx-swap="${context == 'list' ? 'outerHTML' : 'innerHTML'}"
+                  th:data-context="${context != null ? context : 'table'}"
+                  onsubmit="if (this.dataset.context === 'list') setTimeout(closeNoteModal, 150)">
                 <input type="hidden" name="id" th:value="${id}">
-                <input type="hidden" name="context" value="list">
+                <input type="hidden" name="context" th:value="${context != null ? context : 'table'}">
 
                 <div class="note-modal-body">
                     <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 14px; margin-bottom: 16px;">
@@ -189,6 +204,9 @@
         </div>
     </div>
 </div>
+
+<!-- Fragment: noteModalSuccess -->
+<div th:fragment="noteModalSuccess"></div>
 
 </body>
 </html>

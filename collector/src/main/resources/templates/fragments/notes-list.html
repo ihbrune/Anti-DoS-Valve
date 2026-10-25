@@ -58,16 +58,6 @@
                         <option value="verdict" th:selected="${sortBy == 'verdict'}">Verdict Category</option>
                     </select>
                 </div>
-
-                <!-- Add Note Button -->
-                <div>
-                    <button type="button" class="btn btn-primary"
-                            hx-get="/notes/modal/new"
-                            hx-target="#note-modal-container"
-                            title="Create new network note">
-                        <span>&#x2795;</span> New Note
-                    </button>
-                </div>
             </div>
         </form>
     </div>
@@ -95,7 +85,16 @@
             <!-- Card Header -->
             <div class="note-card-header">
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                    <span class="note-target-pill" th:text="${a.displayTitle()}">AS24940</span>
+                    <a th:if="${a.isAsn()}"
+                       th:href="@{/events(asn=${a.asn()})}"
+                       class="note-target-pill"
+                       title="Jump to Incidents for this ASN in Incident Explorer"
+                       th:text="${a.displayTitle()}">AS24940</a>
+                    <a th:if="${a.isSubnet()}"
+                       th:href="@{/events(clientQuery=${a.targetKey()})}"
+                       class="note-target-pill"
+                       title="Jump to Incidents for this subnet in Incident Explorer"
+                       th:text="${a.displayTitle()}">198.51.100.0/24</a>
                     <span class="badge" th:classappend="${a.verdict().badgeClass()}"
                           th:text="${a.verdict().icon() + ' ' + a.verdict().displayName()}">🟢 Legitimate</span>
                     <span class="badge badge-secondary" style="font-size: 10px; padding: 2px 6px;" th:text="${a.targetType().displayName()}">ASN</span>

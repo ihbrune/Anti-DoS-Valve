@@ -1651,6 +1651,18 @@ html[data-theme="light"] .theme-icon-moon {
     padding: 2px 8px;
     border-radius: var(--radius-sm);
     letter-spacing: 0.02em;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+a.note-target-pill:hover {
+    background: rgba(56, 189, 248, 0.25);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    text-decoration: underline;
+    cursor: pointer;
 }
 
 .note-card-meta {

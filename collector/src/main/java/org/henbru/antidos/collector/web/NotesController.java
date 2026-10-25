@@ -68,6 +68,7 @@ public class NotesController {
 			@RequestParam(required = false) AnnotationTargetType targetType,
 			@RequestParam(required = false) String targetKey,
 			@RequestParam(required = false) AnnotationVerdict verdict,
+			@RequestParam(required = false, defaultValue = "list") String context,
 			Model model
 	) {
 		model.addAttribute("mode", "CREATE");
@@ -76,13 +77,18 @@ public class NotesController {
 		model.addAttribute("verdict", verdict != null ? verdict : AnnotationVerdict.INFO);
 		model.addAttribute("noteMarkdown", "");
 		model.addAttribute("id", null);
+		model.addAttribute("context", context);
 		model.addAttribute("targetTypes", AnnotationTargetType.values());
 		model.addAttribute("verdicts", AnnotationVerdict.values());
 		return "fragments/note-modal :: noteModal";
 	}
 
 	@GetMapping("/notes/modal/edit/{id}")
-	public String editNoteModal(@PathVariable long id, Model model) {
+	public String editNoteModal(
+			@PathVariable long id,
+			@RequestParam(required = false, defaultValue = "list") String context,
+			Model model
+	) {
 		Optional<NetworkAnnotation> opt = annotationService.getAnnotationById(id);
 		if (opt.isEmpty()) {
 			return "fragments/note-modal :: noteNotFound";
@@ -94,13 +100,18 @@ public class NotesController {
 		model.addAttribute("targetKey", a.targetKey());
 		model.addAttribute("verdict", a.verdict());
 		model.addAttribute("noteMarkdown", a.noteMarkdown());
+		model.addAttribute("context", context);
 		model.addAttribute("targetTypes", AnnotationTargetType.values());
 		model.addAttribute("verdicts", AnnotationVerdict.values());
 		return "fragments/note-modal :: noteModal";
 	}
 
 	@GetMapping("/notes/modal/view/{id}")
-	public String viewNoteModal(@PathVariable long id, Model model) {
+	public String viewNoteModal(
+			@PathVariable long id,
+			@RequestParam(required = false, defaultValue = "list") String context,
+			Model model
+	) {
 		Optional<NetworkAnnotation> opt = annotationService.getAnnotationById(id);
 		if (opt.isEmpty()) {
 			return "fragments/note-modal :: noteNotFound";
@@ -109,6 +120,7 @@ public class NotesController {
 		model.addAttribute("mode", "VIEW");
 		model.addAttribute("annotation", a);
 		model.addAttribute("renderedHtml", annotationService.renderMarkdown(a.noteMarkdown()));
+		model.addAttribute("context", context);
 		return "fragments/note-modal :: noteModal";
 	}
 
@@ -116,6 +128,7 @@ public class NotesController {
 	public String viewTargetNoteModal(
 			@RequestParam AnnotationTargetType targetType,
 			@RequestParam String targetKey,
+			@RequestParam(required = false, defaultValue = "table") String context,
 			Model model
 	) {
 		Optional<NetworkAnnotation> opt = annotationService.getAnnotationByTarget(targetType, targetKey);
@@ -124,6 +137,7 @@ public class NotesController {
 			model.addAttribute("mode", "VIEW");
 			model.addAttribute("annotation", a);
 			model.addAttribute("renderedHtml", annotationService.renderMarkdown(a.noteMarkdown()));
+			model.addAttribute("context", context);
 			return "fragments/note-modal :: noteModal";
 		}
 
@@ -134,6 +148,7 @@ public class NotesController {
 		model.addAttribute("verdict", AnnotationVerdict.INFO);
 		model.addAttribute("noteMarkdown", "");
 		model.addAttribute("id", null);
+		model.addAttribute("context", context);
 		model.addAttribute("targetTypes", AnnotationTargetType.values());
 		model.addAttribute("verdicts", AnnotationVerdict.values());
 		return "fragments/note-modal :: noteModal";
@@ -159,6 +174,7 @@ public class NotesController {
 			model.addAttribute("annotation", saved);
 			model.addAttribute("renderedHtml", annotationService.renderMarkdown(saved.noteMarkdown()));
 			model.addAttribute("actionMessage", "Note saved successfully.");
+			model.addAttribute("context", "table");
 			return "fragments/note-modal :: noteModal";
 		}
 
@@ -170,11 +186,17 @@ public class NotesController {
 	@DeleteMapping("/notes/{id}")
 	public String deleteNote(
 			@PathVariable long id,
+			@RequestParam(required = false, defaultValue = "list") String context,
 			HttpServletResponse response,
 			Model model
 	) {
 		annotationService.deleteAnnotation(id);
 		response.addHeader("HX-Trigger", "annotationChanged");
+
+		if ("table".equalsIgnoreCase(context) || "modal".equalsIgnoreCase(context)) {
+			return "fragments/note-modal :: noteModalSuccess";
+		}
+
 		populateNotesModel(model, null, null, null, "updated_desc");
 		return "fragments/notes-list :: notesList";
 	}

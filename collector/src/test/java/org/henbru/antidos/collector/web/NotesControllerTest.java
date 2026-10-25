@@ -39,12 +39,14 @@ class NotesControllerTest {
 	@Test
 	void testGetNotesPage() throws Exception {
 		annotationService.saveAnnotation(null, AnnotationTargetType.ASN, "AS24940", AnnotationVerdict.SUSPICIOUS, "Test Note");
+		annotationService.saveAnnotation(null, AnnotationTargetType.SUBNET, "198.51.100.0/24", AnnotationVerdict.LEGITIMATE, "Subnet Note");
 
 		mockMvc.perform(get("/notes"))
 				.andExpect(status().isOk())
 				.andExpect(view().name("notes"))
 				.andExpect(model().attributeExists("annotations", "verdictCounts", "totalCount"))
-				.andExpect(content().string(containsString("AS24940")))
+				.andExpect(content().string(containsString("href=\"/events?asn=24940\"")))
+				.andExpect(content().string(containsString("/events?clientQuery=198.51.100.0")))
 				.andExpect(content().string(containsString("Suspicious")));
 	}
 
@@ -111,5 +113,33 @@ class NotesControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(header().string("HX-Trigger", "annotationChanged"))
 				.andExpect(content().string(not(containsString("AS99999"))));
+	}
+
+	@Test
+	void testCreateNoteFromTableContext() throws Exception {
+		// Simulates creating note via +📝 button in Incident Explorer (/events) or Top Offenders (/offenders)
+		mockMvc.perform(post("/notes")
+						.param("targetType", "SUBNET")
+						.param("targetKey", "198.51.100.0/24")
+						.param("verdict", "LEGITIMATE")
+						.param("noteMarkdown", "Known partner gateway")
+						.param("context", "table"))
+				.andExpect(status().isOk())
+				.andExpect(view().name("fragments/note-modal :: noteModal"))
+				.andExpect(model().attribute("mode", "VIEW"))
+				.andExpect(model().attribute("actionMessage", "Note saved successfully."))
+				.andExpect(header().string("HX-Trigger", "annotationChanged"))
+				.andExpect(content().string(containsString("Note saved successfully.")))
+				.andExpect(content().string(containsString("Known partner gateway")));
+
+		// Verify note is saved in memory cache and database
+		NetworkAnnotation saved = annotationService.findForSubnet("198.51.100.0/24").orElseThrow();
+		org.junit.jupiter.api.Assertions.assertEquals("198.51.100.0/24", saved.targetKey());
+
+		// Verify deleting with context=table returns noteModalSuccess fragment
+		mockMvc.perform(delete("/notes/" + saved.id()).param("context", "table"))
+				.andExpect(status().isOk())
+				.andExpect(view().name("fragments/note-modal :: noteModalSuccess"))
+				.andExpect(header().string("HX-Trigger", "annotationChanged"));
 	}
 }
