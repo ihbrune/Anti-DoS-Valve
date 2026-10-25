@@ -117,6 +117,7 @@
                                     <span th:if="${runtimeValvesMap[v.valveName].isBlocking()}" class="badge badge-danger" style="font-size: 9.5px; padding: 1px 5px;" th:text="'BLOCKING (' + ${runtimeValvesMap[v.valveName].httpStatusCode} + ')'">BLOCKING (429)</span>
                                     <span th:unless="${runtimeValvesMap[v.valveName].isBlocking()}" class="badge badge-purple" style="font-size: 9.5px; padding: 1px 5px;">MARKING</span>
                                     <span th:if="${runtimeValvesMap[v.valveName].simulationMode}" class="badge badge-warning" style="font-size: 9.5px; padding: 1px 5px;">SIMULATION</span>
+                                    <span class="badge" th:classappend="${runtimeValvesMap[v.valveName].collectorIntegrationBadgeClass()}" style="font-size: 9.5px; padding: 1px 5px;" th:title="'Collector integration mode: ' + ${runtimeValvesMap[v.valveName].collectorIntegration()}" th:text="'COLLECTOR: ' + ${runtimeValvesMap[v.valveName].collectorIntegrationLabel()}">COLLECTOR: AUTO</span>
                                     <span style="font-size: 11px; color: var(--text-muted);" th:text="${runtimeValvesMap[v.valveName].allowedRequestsPerSlot} + ' req / ' + ${runtimeValvesMap[v.valveName].slotLength} + 's'">50 req / 60s</span>
                                 </div>
                             </td>
@@ -160,7 +161,10 @@
     <!-- Valve Runtime Configurations (Discovered Telemetry) -->
     <section style="margin-bottom: 28px;">
         <div class="section-header">
-            <div class="section-title">&#x2699;&#xFE0F; Discovered Valve Runtime Configurations</div>
+            <div class="section-title">
+                &#x2699;&#xFE0F; Discovered Valve Runtime Configurations
+                <span th:if="${selectedValve != null}" style="font-size: 13px; font-weight: normal; color: var(--text-muted);" th:text="'(Filtered: ' + ${selectedValve} + ')'"></span>
+            </div>
             <div style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 8px;" th:if="${!#lists.isEmpty(runtimeValves)}">
                 <span>Synchronized from Valve JSON API &bull; </span>
                 <a th:href="@{'/api/v1/valves?serverId=' + ${serverId}}" target="_blank" class="btn" style="padding: 2px 8px; font-size: 11px;">{ } JSON</a>
@@ -169,7 +173,8 @@
 
         <div th:if="${#lists.isEmpty(runtimeValves)}" class="table-card">
             <div class="empty-state">
-                <p>No live runtime configuration discovered yet for this node. Valve configurations are automatically synchronized on successful telemetry polls.</p>
+                <p th:if="${selectedValve != null}">No live runtime configuration discovered yet for valve '<span th:text="${selectedValve}"></span>'.</p>
+                <p th:unless="${selectedValve != null}">No live runtime configuration discovered yet for this node. Valve configurations are automatically synchronized on successful telemetry polls.</p>
             </div>
         </div>
 
@@ -183,6 +188,7 @@
                         <span th:unless="${rv.isBlocking()}" class="badge badge-purple">MODE: MARKING</span>
                         <span th:if="${rv.simulationMode}" class="badge badge-warning">SIMULATION MODE</span>
                         <span th:if="${rv.serverWideBlocking}" class="badge badge-warning">SERVER-WIDE BLOCKING</span>
+                        <span class="badge" th:classappend="${rv.collectorIntegrationBadgeClass()}" th:title="'Collector integration mode: ' + ${rv.collectorIntegration()} + ' (Extended metrics &amp; subnet cardinality tracking)'" th:text="'COLLECTOR: ' + ${rv.collectorIntegrationLabel()}">COLLECTOR: AUTO</span>
                     </div>
                     <div style="font-size: 11px; color: var(--text-muted);">
                         Last Synced: <span style="font-weight: 600; color: var(--text-secondary);" th:text="${rv.lastUpdatedAt != null ? #temporals.format(rv.lastUpdatedAt, 'dd.MM.yyyy HH:mm:ss') : 'Unknown'}">24.10 22:30:00</span>
@@ -216,6 +222,14 @@
                             <span th:text="${#numbers.formatInteger(rv.maxBlockedIPCacheSize, 1, 'POINT')}">10.000</span> <span style="font-size: 11px; font-weight: 400; color: var(--text-muted);">blocked</span>
                         </div>
                         <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;">Max concurrent tracked IPs</div>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
+                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Collector Integration</div>
+                        <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);" th:text="${rv.collectorIntegrationLabel()}">AUTO</div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;" th:if="${rv.collectorIntegration().toLowerCase() == 'auto'}">Dynamic lease &bull; Extended metrics</div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;" th:if="${rv.collectorIntegration().toLowerCase() == 'true'}">Permanent &bull; Always active</div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;" th:if="${rv.collectorIntegration().toLowerCase() == 'false'}">Disabled &bull; Zero overhead</div>
                     </div>
 
                     <div th:if="${rv.statusUri != null and !rv.statusUri.isBlank()}"

@@ -87,6 +87,7 @@ class ApiControllerTest {
 				null,
 				"/antidos-status",
 				null,
+				"true",
 				now,
 				22222
 		);
@@ -101,9 +102,11 @@ class ApiControllerTest {
 				.andExpect(jsonPath("$[0].serverId", is("SERVER-ALPHA")))
 				.andExpect(jsonPath("$[0].valveName", is("Edge-Limiter")))
 				.andExpect(jsonPath("$[0].allowedRequestsPerSlot", is(100)))
+				.andExpect(jsonPath("$[0].collectorIntegration", is("auto")))
 				.andExpect(jsonPath("$[1].serverId", is("SERVER-BETA")))
 				.andExpect(jsonPath("$[1].valveName", is("Backend-Limiter")))
-				.andExpect(jsonPath("$[1].monitorMode", is("MARKING")));
+				.andExpect(jsonPath("$[1].monitorMode", is("MARKING")))
+				.andExpect(jsonPath("$[1].collectorIntegration", is("true")));
 
 		// 2. Filter by serverId
 		mockMvc.perform(get("/api/v1/valves?serverId=SERVER-ALPHA"))

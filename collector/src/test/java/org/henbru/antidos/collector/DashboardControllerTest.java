@@ -262,6 +262,8 @@ class DashboardControllerTest {
 				.andExpect(content().string(containsString("View Incidents &rarr;")))
 				.andExpect(content().string(containsString("Discovered Valve Runtime Configurations")))
 				.andExpect(content().string(containsString("Primary edge rate limiter")))
+				.andExpect(content().string(containsString("COLLECTOR: AUTO")))
+				.andExpect(content().string(containsString("Collector Integration")))
 				.andExpect(content().string(containsString("/32 (IPv4) &bull; /64 (IPv6)")))
 				.andExpect(content().string(containsString("100 req / 60s")))
 				.andExpect(content().string(containsString("Window: 300s (5 x 60s)")))
@@ -270,6 +272,49 @@ class DashboardControllerTest {
 				.andExpect(content().string(containsString("/js/htmx-lite.js")))
 				.andExpect(content().string(containsString("id=\"note-modal-container\"")))
 				.andExpect(content().string(containsString("targetType=ASN")));
+	}
+
+	@Test
+	void testServerDetailsPageValveFiltering() throws Exception {
+		java.time.Instant now = java.time.Instant.now();
+		monitoredValveRepository.upsert(new org.henbru.antidos.collector.model.MonitoredValve(
+				"Demo-Server", "FILTERED-VALVE-A", "Valve A description", 1,
+				"BLOCKING", false, false, 429,
+				100, 60, 5, 0.8f,
+				32, 64, 10000, 5000,
+				"/api/*", null, null, null,
+				"/antidos-status", null, "true", now, 111
+		));
+		monitoredValveRepository.upsert(new org.henbru.antidos.collector.model.MonitoredValve(
+				"Demo-Server", "FILTERED-VALVE-B", "Valve B description", 2,
+				"MARKING", true, false, 429,
+				200, 30, 10, 0.5f,
+				24, 48, 10000, 5000,
+				null, null, null, null,
+				"/antidos-status", null, "false", now, 222
+		));
+
+		// 1. Unfiltered request: both valve configurations displayed
+		mockMvc.perform(get("/server/Demo-Server"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Valve A description")))
+				.andExpect(content().string(containsString("Valve B description")))
+				.andExpect(content().string(containsString("COLLECTOR: ALWAYS ON")))
+				.andExpect(content().string(containsString("COLLECTOR: DISABLED")))
+				.andExpect(content().string(not(containsString("(Filtered:"))));
+
+		// 2. Filtered request for VALVE-A: only VALVE-A shown in runtime configuration section
+		mockMvc.perform(get("/server/Demo-Server").param("valve", "FILTERED-VALVE-A"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("(Filtered: FILTERED-VALVE-A)")))
+				.andExpect(content().string(containsString("Valve A description")))
+				.andExpect(content().string(not(containsString("Valve B description"))));
+
+		// 3. Filtered request for non-existing valve: empty state shown
+		mockMvc.perform(get("/server/Demo-Server").param("valve", "NON-EXISTENT"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("(Filtered: NON-EXISTENT)")))
+				.andExpect(content().string(containsString("No live runtime configuration discovered yet for valve '<span>NON-EXISTENT</span>'.")));
 	}
 
 	@Test

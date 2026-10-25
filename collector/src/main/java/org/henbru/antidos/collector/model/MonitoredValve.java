@@ -29,9 +29,46 @@ public record MonitoredValve(
 		String alwaysForbiddenIPs,
 		String statusUri,
 		String statusAllowedIPs,
+		String collectorIntegration,
 		Instant lastUpdatedAt,
 		int configHash
 ) {
+	/**
+	 * Backwards-compatible constructor defaulting collectorIntegration to "auto".
+	 */
+	public MonitoredValve(
+			String serverId,
+			String valveName,
+			String description,
+			int pipelineOrder,
+			String monitorMode,
+			boolean simulationMode,
+			boolean serverWideBlocking,
+			int httpStatusCode,
+			int allowedRequestsPerSlot,
+			int slotLength,
+			int numberOfSlots,
+			float shareOfRetainedFormerRequests,
+			int ipv4SubnetMask,
+			int ipv6SubnetMask,
+			int maxIPCacheSize,
+			int maxBlockedIPCacheSize,
+			String relevantPaths,
+			String nonRelevantPaths,
+			String alwaysAllowedIPs,
+			String alwaysForbiddenIPs,
+			String statusUri,
+			String statusAllowedIPs,
+			Instant lastUpdatedAt,
+			int configHash
+	) {
+		this(serverId, valveName, description, pipelineOrder, monitorMode, simulationMode,
+				serverWideBlocking, httpStatusCode, allowedRequestsPerSlot, slotLength, numberOfSlots,
+				shareOfRetainedFormerRequests, ipv4SubnetMask, ipv6SubnetMask, maxIPCacheSize,
+				maxBlockedIPCacheSize, relevantPaths, nonRelevantPaths, alwaysAllowedIPs,
+				alwaysForbiddenIPs, statusUri, statusAllowedIPs, "auto", lastUpdatedAt, configHash);
+	}
+
 	public boolean isBlocking() {
 		return !"MARKING".equalsIgnoreCase(monitorMode);
 	}
@@ -46,6 +83,28 @@ public record MonitoredValve(
 
 	public String formattedSubnetMasks() {
 		return "/" + ipv4SubnetMask + " (IPv4) &bull; /" + ipv6SubnetMask + " (IPv6)";
+	}
+
+	public String collectorIntegration() {
+		return collectorIntegration != null && !collectorIntegration.isBlank() ? collectorIntegration : "auto";
+	}
+
+	public String collectorIntegrationBadgeClass() {
+		String mode = collectorIntegration().toLowerCase();
+		return switch (mode) {
+			case "true" -> "badge-success";
+			case "false" -> "badge-secondary";
+			default -> "badge-info";
+		};
+	}
+
+	public String collectorIntegrationLabel() {
+		String mode = collectorIntegration().toLowerCase();
+		return switch (mode) {
+			case "true" -> "ALWAYS ON";
+			case "false" -> "DISABLED";
+			default -> "AUTO";
+		};
 	}
 
 	public boolean hasPathFilters() {

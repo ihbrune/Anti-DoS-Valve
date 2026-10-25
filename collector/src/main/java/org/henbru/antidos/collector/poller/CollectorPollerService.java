@@ -499,6 +499,7 @@ public class CollectorPollerService {
 				v.alwaysForbiddenIPs(),
 				v.statusUri(),
 				v.statusAllowedIPs(),
+				v.collectorIntegration() != null && !v.collectorIntegration().isBlank() ? v.collectorIntegration() : "auto",
 				now,
 				configHash
 		);

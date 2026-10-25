@@ -35,6 +35,7 @@ public record ValveOverviewDto(
 			String alwaysForbiddenIPs,
 			String statusUri,
 			String statusAllowedIPs,
+			String collectorIntegration,
 			long alwaysForbiddenBlockedRequests,
 			int currentActiveCounters,
 			int currentBlockedCounters,
@@ -48,6 +49,56 @@ public record ValveOverviewDto(
 			boolean isStatusHost,
 			boolean isCurrentHost
 	) {
+		/**
+		 * Overloaded constructor without collectorIntegration for backwards compatibility.
+		 */
+		public ValveSummaryDto(
+				String monitorName,
+				String description,
+				int pipelineOrder,
+				String monitorMode,
+				boolean simulationMode,
+				boolean serverWideBlocking,
+				int httpStatusCode,
+				int allowedRequestsPerSlot,
+				int slotLength,
+				int numberOfSlots,
+				float shareOfRetainedFormerRequests,
+				int ipv4SubnetMask,
+				int ipv6SubnetMask,
+				int maxIPCacheSize,
+				int maxBlockedIPCacheSize,
+				String relevantPaths,
+				String nonRelevantPaths,
+				String alwaysAllowedIPs,
+				String alwaysForbiddenIPs,
+				String statusUri,
+				String statusAllowedIPs,
+				long alwaysForbiddenBlockedRequests,
+				int currentActiveCounters,
+				int currentBlockedCounters,
+				long currentSlotKey,
+				long lastCompletedSlotKey,
+				long totalRequests,
+				long previousTotalRequests,
+				int previousActiveCounters,
+				int previousBlockedCounters,
+				int activeSlots,
+				boolean isStatusHost,
+				boolean isCurrentHost
+		) {
+			this(
+					monitorName, description, pipelineOrder, monitorMode, simulationMode, serverWideBlocking,
+					httpStatusCode, allowedRequestsPerSlot, slotLength, numberOfSlots,
+					shareOfRetainedFormerRequests, ipv4SubnetMask, ipv6SubnetMask, maxIPCacheSize,
+					maxBlockedIPCacheSize, relevantPaths, nonRelevantPaths, alwaysAllowedIPs,
+					alwaysForbiddenIPs, statusUri, statusAllowedIPs, "auto",
+					alwaysForbiddenBlockedRequests, currentActiveCounters, currentBlockedCounters,
+					currentSlotKey, lastCompletedSlotKey, totalRequests, previousTotalRequests,
+					previousActiveCounters, previousBlockedCounters, activeSlots, isStatusHost, isCurrentHost
+			);
+		}
+
 		/**
 		 * Overloaded constructor for backwards compatibility with tests and concise mock instantiation.
 		 */
@@ -91,6 +142,7 @@ public record ValveOverviewDto(
 					null,
 					null,
 					null,
+					"auto",
 					0L,
 					currentActiveCounters,
 					currentBlockedCounters,
@@ -116,7 +168,7 @@ public record ValveOverviewDto(
 					httpStatusCode, allowedRequestsPerSlot, slotLength, numberOfSlots,
 					Float.floatToIntBits(shareOfRetainedFormerRequests), ipv4SubnetMask, ipv6SubnetMask,
 					maxIPCacheSize, maxBlockedIPCacheSize, relevantPaths, nonRelevantPaths,
-					alwaysAllowedIPs, alwaysForbiddenIPs, statusUri, statusAllowedIPs
+					alwaysAllowedIPs, alwaysForbiddenIPs, statusUri, statusAllowedIPs, collectorIntegration
 			);
 		}
 	}

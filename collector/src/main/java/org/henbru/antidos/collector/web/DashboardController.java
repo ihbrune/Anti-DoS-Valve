@@ -381,11 +381,19 @@ public class DashboardController {
 			configuredValves.add(valveRuleResolver.resolve(endpoint, vName));
 		}
 
+		List<org.henbru.antidos.collector.model.MonitoredValve> displayedRuntimeValves = runtimeValves;
+		if (valve != null && !valve.isBlank()) {
+			String trimmed = valve.trim();
+			displayedRuntimeValves = runtimeValves.stream()
+					.filter(mv -> mv.valveName().equalsIgnoreCase(trimmed))
+					.toList();
+		}
+
 		model.addAttribute("server", hb);
 		model.addAttribute("serverId", serverId);
 		model.addAttribute("endpointConfig", endpoint);
 		model.addAttribute("configuredValves", configuredValves);
-		model.addAttribute("runtimeValves", runtimeValves);
+		model.addAttribute("runtimeValves", displayedRuntimeValves);
 		model.addAttribute("runtimeValvesMap", runtimeValvesMap);
 		model.addAttribute("selectedValve", valve);
 		model.addAttribute("recentSlots", recentSlots);

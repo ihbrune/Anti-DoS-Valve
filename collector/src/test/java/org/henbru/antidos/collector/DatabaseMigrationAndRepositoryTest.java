@@ -707,6 +707,8 @@ class DatabaseMigrationAndRepositoryTest {
 		assertEquals("*.css, *.js", found.nonRelevantPaths());
 		assertEquals("127.0.0.1, 10.0.0.0/8", found.alwaysAllowedIPs());
 		assertEquals("198.51.100.22", found.alwaysForbiddenIPs());
+		assertEquals("auto", found.collectorIntegration());
+		assertEquals("AUTO", found.collectorIntegrationLabel());
 		assertEquals(12345, found.configHash());
 		assertTrue(found.hasPathFilters());
 		assertTrue(found.hasIpLists());
@@ -735,6 +737,7 @@ class DatabaseMigrationAndRepositoryTest {
 				null,
 				"/antidos-status",
 				null,
+				"true",
 				now.plusSeconds(10),
 				99999
 		);
@@ -748,6 +751,8 @@ class DatabaseMigrationAndRepositoryTest {
 		assertFalse(afterUpdate.get().isBlocking());
 		assertTrue(afterUpdate.get().simulationMode());
 		assertEquals(150, afterUpdate.get().allowedRequestsPerSlot());
+		assertEquals("true", afterUpdate.get().collectorIntegration());
+		assertEquals("ALWAYS ON", afterUpdate.get().collectorIntegrationLabel());
 		assertEquals(99999, afterUpdate.get().configHash());
 
 		List<org.henbru.antidos.collector.model.MonitoredValve> serverValves =

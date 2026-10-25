@@ -221,17 +221,18 @@ Summarizes all Valve instances configured on the node and how the Collector inge
   * `BLOCKING (429)` (Red): Actively rejects abusive clients with the configured HTTP status code.
   * `MARKING` (Purple): Audit mode — flags offenders and records metrics without dropping connections.
   * `SIMULATION` (Orange): Simulates threshold evaluations for dry-run testing.
+  * `COLLECTOR: AUTO / ALWAYS ON / DISABLED`: Indicates the Valve's `collectorIntegration` mode for administrative tracking and remote lifecycle control.
   * **Configured Threshold:** Quick summary of allowed request volume (e.g., `50 req / 60s`).
 * **Polling Scope (`INCLUDED` / `EXCLUDED`):** Shows whether the Valve is actively scraped or skipped via endpoint valve regex filters.
 * **Active Tracking (`ENABLED` / `DISABLED`):** Indicates whether non-blocked active client counters are pulled.
 * **Min-Count Threshold & Safety Limits:** Minimum request count required to retain client telemetry (`count >= X`) and maximum client entries ingested per poll (`activeLimit`).
 * **Configuration Source:** Displays where polling rules were resolved (`Endpoint Override`, `Global Valve Rule`, `Global Default`, or `System Default`).
-* **Filter Slots Action:** One-click filtering to isolate the timeline and incident tables to a single Valve in multi-valve pipelines.
+* **Filter Slots Action:** One-click filtering to isolate the timeline, incident tables, and discovered runtime configurations to a single Valve in multi-valve pipelines.
 
 ### 3. Discovered Valve Runtime Configurations
 Automatically discovered and synchronized from the live Valve JSON API (`?format=json`) into the Collector database without requiring manual configuration. An in-memory hash check guarantees zero redundant database writes during steady-state polling.
 
-* **Pipeline Order & Mode Badges:** Displays pipeline placement (`#1 IN PIPELINE`), operational mode (`BLOCKING` or `MARKING`), simulation flags, and server-wide blocking flags.
+* **Pipeline Order & Mode Badges:** Displays pipeline placement (`#1 IN PIPELINE`), operational mode (`BLOCKING` or `MARKING`), simulation flags, server-wide blocking flags, and `COLLECTOR: AUTO / ALWAYS ON / DISABLED` integration mode badge.
 * **Valve Description:** Custom operational description configured directly in Tomcat's `server.xml`.
 * **Rate Limit Threshold Card:**
   * **Allowed Volume:** Requests permitted per time slice (e.g., `100 req / 60s`).
@@ -244,11 +245,14 @@ Automatically discovered and synchronized from the live Valve JSON API (`?format
   * Displays maximum capacity limits for active tracking and blocked IP caches (e.g., `10.000 active • 10.000 blocked`), ensuring Valve memory safety under volumetric SYN/HTTP floods.
 * **Status Dashboard URI Card:**
   * Internal status path (e.g., `/antidos-status`) and allowed client IP ranges configured for administrative access.
+* **Collector Integration Mode Card:**
+  * Displays the configured collector integration mode (`auto`: dynamic 60s active lease upon collector poll, `true`: permanently active independent of pollers, or `false`: disabled, no collector events generated).
 * **Configured Path Filters & IP Lists (Collapsible):**
   * **Relevant Paths:** White-listed path patterns subject to rate limiting (e.g., `/api/*`, `/login`).
   * **Non-Relevant Paths:** Static assets or bypass routes exempt from counter tracking (e.g., `*.css`, `*.js`, `*.png`).
   * **Always Allowed IPs:** Whitelisted IP ranges immune to rate limiting (e.g., corporate proxies, monitoring probes).
   * **Always Forbidden IPs:** Permanently blacklisted IP addresses or malicious subnets dropped immediately.
+* **Synchronized Filtering:** When a specific Valve is selected via the "Filter Slots" option in the Monitored Valves table, the runtime configuration section automatically synchronizes to display only that specific Valve's runtime details (with a clear header indicator like `(Filtered: VALVE-NAME)` and an option to reset back to all valves).
 * **Direct JSON Export:** Click the `{ } JSON` badge in the section title to retrieve discovered runtime configurations directly via the REST API (`/api/v1/valves?serverId={id}`).
 
 ### 4. Slot History & Timeline
