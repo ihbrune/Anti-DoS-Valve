@@ -80,5 +80,62 @@ class AnalyticsServiceTest {
 		assertEquals(1000.0, datacenterCluster.averageRequestsPerClient()); // 2000 / 2 = 1000.0
 		assertFalse(datacenterCluster.isPotentialResidentialProxy());
 		assertEquals("DATACENTER_CLUSTER", datacenterCluster.classification());
+		assertFalse(datacenterCluster.hasNote());
+		assertNull(datacenterCluster.noteVerdict());
+	}
+
+	@Test
+	void testGetDashboardAnalyticsWithAnnotations() {
+		org.henbru.antidos.collector.annotation.NetworkAnnotationService annotationService =
+				Mockito.mock(org.henbru.antidos.collector.annotation.NetworkAnnotationService.class);
+		AnalyticsService service = new AnalyticsService(rollupRepository, rollupAggregationService, annotationService);
+
+		Instant now = Instant.now();
+		when(rollupRepository.findTimeline(any(), any(), any(), any())).thenReturn(List.of());
+		when(rollupRepository.findTrafficComposition(any(), any(), any(), any())).thenReturn(List.of());
+
+		List<SubnetRollupRepository.RawScatterCluster> mockScatter = List.of(
+				new SubnetRollupRepository.RawScatterCluster("185.246.221.0/24", 500, 100, 400, 50, 3320L, "Deutsche Telekom AG", "DE", ClientType.RESIDENTIAL),
+				new SubnetRollupRepository.RawScatterCluster("45.154.255.0/24", 2000, 1500, 500, 2, 45102L, "Alibaba Cloud", "SG", ClientType.DATACENTER)
+		);
+		when(rollupRepository.findScatterClusters(any(), any(), any(), any(), anyInt())).thenReturn(mockScatter);
+
+		org.henbru.antidos.collector.model.NetworkAnnotation subnetAnnotation = new org.henbru.antidos.collector.model.NetworkAnnotation(
+				1L, org.henbru.antidos.collector.model.AnnotationTargetType.SUBNET, "185.246.221.0/24", null, "185.246.221.0/24",
+				4, 24, null, null, null, null, org.henbru.antidos.collector.model.AnnotationVerdict.SUSPICIOUS,
+				"### Residential VPN Proxy\nRotating scrapers", now, now
+		);
+
+		org.henbru.antidos.collector.model.NetworkAnnotation asnAnnotation = new org.henbru.antidos.collector.model.NetworkAnnotation(
+				2L, org.henbru.antidos.collector.model.AnnotationTargetType.ASN, "AS45102", 45102L, null,
+				4, 32, null, null, null, null, org.henbru.antidos.collector.model.AnnotationVerdict.MALICIOUS,
+				"Bulletproof scanner hoster", now, now
+		);
+
+		when(annotationService.getSubnetAnnotationMap()).thenReturn(java.util.Map.of("185.246.221.0/24", subnetAnnotation));
+		when(annotationService.getAsnAnnotationMap()).thenReturn(java.util.Map.of(45102L, asnAnnotation));
+
+		AnalyticsDashboardDto dto = service.getDashboardAnalytics(24, null, null);
+
+		assertNotNull(dto);
+		assertEquals(2, dto.scatterPoints().size());
+
+		SubnetScatterPoint pt1 = dto.scatterPoints().get(0);
+		assertTrue(pt1.hasNote());
+		assertEquals("SUSPICIOUS", pt1.noteVerdict());
+		assertEquals("🟡", pt1.noteVerdictIcon());
+		assertEquals("Suspicious", pt1.noteVerdictDisplayName());
+		assertEquals("#f59e0b", pt1.noteVerdictColor());
+		assertEquals("Suspicious", pt1.subnetNoteVerdict());
+		assertEquals("Residential VPN Proxy", pt1.subnetNoteSnippet());
+
+		SubnetScatterPoint pt2 = dto.scatterPoints().get(1);
+		assertTrue(pt2.hasNote());
+		assertEquals("MALICIOUS", pt2.noteVerdict());
+		assertEquals("🔴", pt2.noteVerdictIcon());
+		assertEquals("Malicious", pt2.noteVerdictDisplayName());
+		assertEquals("#f43f5e", pt2.noteVerdictColor());
+		assertEquals("Malicious", pt2.asnNoteVerdict());
+		assertEquals("Bulletproof scanner hoster", pt2.asnNoteSnippet());
 	}
 }

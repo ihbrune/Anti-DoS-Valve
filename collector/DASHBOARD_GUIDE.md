@@ -158,6 +158,13 @@ The Scatterplot solves this by mapping traffic aggregated across enclosing **Sub
 * 🟢 **Emerald Green (`BENIGN`):** Verified crawler subnets (e.g. Googlebot IP ranges).
 * 🔵 **Sky Blue (`LOW`):** Standard unclassified or mobile CGNAT traffic.
 
+#### Operator Forensic Notes & Verdict Recognition:
+* **Visual Bubble Outlines:** Any cluster bubble whose Subnet or enclosing Autonomous System has an active operator note in the Forensic Memory is styled with a prominent, thickened border colored according to its verdict (e.g., 🔴 Malicious `#f43f5e`, 🟡 Suspicious `#f59e0b`, 🟢 Legitimate `#10b981`, 🔵 Internal `#38bdf8`, ⚪ Info `#94a3b8`).
+* **Enhanced Hover Popup (Tooltips):** Hovering over any cluster circle displays full note forensics directly in the Chart.js popup:
+  * Title indicator displaying the effective verdict badge (e.g. `Subnet: 185.246.221.0/24 🟡 [Suspicious]`).
+  * Subnet note line with verdict icon, categorization name, and excerpt (e.g. `📝 Subnet Note: 🟡 Suspicious - "Known residential proxy egress block"`).
+  * ASN note line with verdict icon, categorization name, and excerpt (e.g. `📝 ASN Note (AS3320): 🟢 Legitimate - "Major German ISP"`).
+
 #### Interactive Click-to-Drilldown:
 Clicking any bubble in the scatterplot instantly captures the clicked subnet prefix (e.g., `198.51.100.0/24`) and navigates directly to:
 ```

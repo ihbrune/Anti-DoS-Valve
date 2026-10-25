@@ -290,12 +290,24 @@
 
         points.forEach(p => {
             const grp = groups[p.classification] || groups['REGULAR_SUBNET'];
-            grp.data.push({
+            const ptItem = {
                 x: p.distinctClients,
                 y: p.averageRequestsPerClient,
                 r: Math.max(5, Math.min(24, Math.log10(p.totalRequests + 1) * 5)),
                 raw: p
-            });
+            };
+            if (p.hasNote) {
+                if (p.noteVerdictColor) {
+                    ptItem.borderColor = p.noteVerdictColor;
+                    ptItem.borderWidth = 3;
+                    ptItem.hoverBorderColor = p.noteVerdictColor;
+                    ptItem.hoverBorderWidth = 4;
+                } else {
+                    ptItem.borderWidth = 3;
+                    ptItem.hoverBorderWidth = 4;
+                }
+            }
+            grp.data.push(ptItem);
         });
 
         const datasets = Object.values(groups)
@@ -304,9 +316,34 @@
                 label: g.label,
                 data: g.data,
                 backgroundColor: g.bg,
-                borderColor: g.border,
-                borderWidth: 1.5,
-                hoverBorderWidth: 2.5
+                borderColor: function(context) {
+                    const raw = context.raw && (context.raw.raw || context.raw);
+                    if (raw && raw.hasNote && raw.noteVerdictColor) {
+                        return raw.noteVerdictColor;
+                    }
+                    return g.border;
+                },
+                borderWidth: function(context) {
+                    const raw = context.raw && (context.raw.raw || context.raw);
+                    if (raw && raw.hasNote) {
+                        return 3;
+                    }
+                    return 1.5;
+                },
+                hoverBorderColor: function(context) {
+                    const raw = context.raw && (context.raw.raw || context.raw);
+                    if (raw && raw.hasNote && raw.noteVerdictColor) {
+                        return raw.noteVerdictColor;
+                    }
+                    return g.border;
+                },
+                hoverBorderWidth: function(context) {
+                    const raw = context.raw && (context.raw.raw || context.raw);
+                    if (raw && raw.hasNote) {
+                        return 4;
+                    }
+                    return 2.5;
+                }
             }));
 
         const chart = new Chart(canvas, {
@@ -346,22 +383,46 @@
                             title: function(items) {
                                 if (items.length > 0) {
                                     const pt = items[0].raw.raw;
-                                    return `Subnet: ${pt.subnetGroup}`;
+                                    let title = `Subnet: ${pt.subnetGroup}`;
+                                    if (pt.hasNote && pt.noteVerdictIcon) {
+                                        title += `  ${pt.noteVerdictIcon} [${pt.noteVerdictDisplayName || 'Note'}]`;
+                                    }
+                                    return title;
                                 }
                                 return '';
                             },
                             label: function(context) {
                                 const pt = context.raw.raw;
                                 const blkPct = pt.totalRequests > 0 ? ((pt.blockedRequests / pt.totalRequests) * 100).toFixed(1) : '0.0';
-                                return [
+                                const lines = [
                                     `ISP: ${pt.asOrg} (${pt.asn ? 'AS' + pt.asn : '--'}) [${pt.countryCode}]`,
-                                    `Classification: ${pt.clientType}`,
+                                    `Classification: ${pt.clientType}`
+                                ];
+
+                                if (pt.hasNote) {
+                                    if (pt.subnetNoteVerdict || pt.subnetNoteSnippet) {
+                                        const icon = pt.subnetNoteIcon || '📝';
+                                        const verdict = pt.subnetNoteVerdict ? `${icon} ${pt.subnetNoteVerdict}` : icon;
+                                        const snip = pt.subnetNoteSnippet ? ` - "${pt.subnetNoteSnippet}"` : '';
+                                        lines.push(`📝 Subnet Note: ${verdict}${snip}`);
+                                    }
+                                    if (pt.asnNoteVerdict || pt.asnNoteSnippet) {
+                                        const icon = pt.asnNoteIcon || '📝';
+                                        const asnLabel = pt.asn ? `AS${pt.asn}` : 'ASN';
+                                        const verdict = pt.asnNoteVerdict ? `${icon} ${pt.asnNoteVerdict}` : icon;
+                                        const snip = pt.asnNoteSnippet ? ` - "${pt.asnNoteSnippet}"` : '';
+                                        lines.push(`📝 ASN Note (${asnLabel}): ${verdict}${snip}`);
+                                    }
+                                }
+
+                                lines.push(
                                     `Distinct IPs in Subnet (X): ${pt.distinctClients}`,
                                     `Ø Requests / IP (Y): ${pt.averageRequestsPerClient}`,
                                     `Total Requests: ${pt.totalRequests.toLocaleString()}`,
                                     `Blocked (429): ${pt.blockedRequests.toLocaleString()} (${blkPct}%)`,
                                     `💡 Click to inspect in Offenders view`
-                                ];
+                                );
+                                return lines;
                             }
                         }
                     }

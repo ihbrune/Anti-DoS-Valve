@@ -14,6 +14,18 @@ package org.henbru.antidos.collector.model;
  * @param countryCode Two-letter country code (ISO 3166-1)
  * @param clientType Classified client type
  * @param classification Risk classification badge (e.g. HIGH_RISK_RESIDENTIAL, DATACENTER_SCRAPER, BENIGN)
+ * @param hasNote Whether this cluster has an associated operator note (Subnet or ASN)
+ * @param noteVerdict Effective categorization verdict name
+ * @param noteVerdictIcon Emoji icon for effective verdict
+ * @param noteVerdictDisplayName Human-readable name for effective verdict
+ * @param noteVerdictColor Hex color for effective verdict
+ * @param noteSnippet Brief excerpt of operator note
+ * @param subnetNoteVerdict Verdict of subnet-specific note (if present)
+ * @param subnetNoteIcon Emoji icon of subnet-specific note
+ * @param subnetNoteSnippet Excerpt of subnet note
+ * @param asnNoteVerdict Verdict of ASN-specific note (if present)
+ * @param asnNoteIcon Emoji icon of ASN note
+ * @param asnNoteSnippet Excerpt of ASN note
  */
 public record SubnetScatterPoint(
 		String subnetGroup,
@@ -26,8 +38,38 @@ public record SubnetScatterPoint(
 		String asOrg,
 		String countryCode,
 		ClientType clientType,
-		String classification
+		String classification,
+		boolean hasNote,
+		String noteVerdict,
+		String noteVerdictIcon,
+		String noteVerdictDisplayName,
+		String noteVerdictColor,
+		String noteSnippet,
+		String subnetNoteVerdict,
+		String subnetNoteIcon,
+		String subnetNoteSnippet,
+		String asnNoteVerdict,
+		String asnNoteIcon,
+		String asnNoteSnippet
 ) {
+	public SubnetScatterPoint(
+			String subnetGroup,
+			int distinctClients,
+			double averageRequestsPerClient,
+			long totalRequests,
+			long blockedRequests,
+			boolean isPotentialResidentialProxy,
+			Long asn,
+			String asOrg,
+			String countryCode,
+			ClientType clientType,
+			String classification
+	) {
+		this(subnetGroup, distinctClients, averageRequestsPerClient, totalRequests, blockedRequests,
+				isPotentialResidentialProxy, asn, asOrg, countryCode, clientType, classification,
+				false, null, null, null, null, null, null, null, null, null, null, null);
+	}
+
 	public double blockedRatioPercent() {
 		if (totalRequests <= 0) {
 			return 0.0;

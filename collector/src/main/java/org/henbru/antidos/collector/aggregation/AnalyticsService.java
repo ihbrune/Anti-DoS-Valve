@@ -4,8 +4,11 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import org.henbru.antidos.collector.annotation.NetworkAnnotationService;
 import org.henbru.antidos.collector.model.AnalyticsDashboardDto;
 import org.henbru.antidos.collector.model.ClientType;
+import org.henbru.antidos.collector.model.NetworkAnnotation;
 import org.henbru.antidos.collector.model.SubnetScatterPoint;
 import org.henbru.antidos.collector.model.TimelinePoint;
 import org.henbru.antidos.collector.model.TrafficCompositionPoint;
@@ -22,14 +25,24 @@ public class AnalyticsService {
 
 	private final SubnetRollupRepository subnetRollupRepository;
 	private final RollupAggregationService rollupAggregationService;
+	private final NetworkAnnotationService networkAnnotationService;
 
 	@Autowired
 	public AnalyticsService(
 			SubnetRollupRepository subnetRollupRepository,
-			RollupAggregationService rollupAggregationService
+			RollupAggregationService rollupAggregationService,
+			@Autowired(required = false) NetworkAnnotationService networkAnnotationService
 	) {
 		this.subnetRollupRepository = subnetRollupRepository;
 		this.rollupAggregationService = rollupAggregationService;
+		this.networkAnnotationService = networkAnnotationService;
+	}
+
+	public AnalyticsService(
+			SubnetRollupRepository subnetRollupRepository,
+			RollupAggregationService rollupAggregationService
+	) {
+		this(subnetRollupRepository, rollupAggregationService, null);
 	}
 
 	public AnalyticsDashboardDto getDashboardAnalytics(
@@ -87,6 +100,13 @@ public class AnalyticsService {
 		List<SubnetRollupRepository.RawScatterCluster> rawClusters =
 				subnetRollupRepository.findScatterClusters(servers, valves, from, to, 150);
 
+		Map<String, NetworkAnnotation> subnetNotes = (networkAnnotationService != null)
+				? networkAnnotationService.getSubnetAnnotationMap()
+				: Map.of();
+		Map<Long, NetworkAnnotation> asnNotes = (networkAnnotationService != null)
+				? networkAnnotationService.getAsnAnnotationMap()
+				: Map.of();
+
 		List<SubnetScatterPoint> scatterPoints = new ArrayList<>();
 		for (SubnetRollupRepository.RawScatterCluster c : rawClusters) {
 			int distinctClients = Math.max(1, c.distinctClients());
@@ -108,6 +128,27 @@ public class AnalyticsService {
 				classification = "REGULAR_SUBNET";
 			}
 
+			// Forensic Notes lookup
+			NetworkAnnotation subNote = (c.subnetGroup() != null) ? subnetNotes.get(c.subnetGroup().trim()) : null;
+			NetworkAnnotation asNote = (c.asn() != null) ? asnNotes.get(c.asn()) : null;
+
+			boolean hasNote = (subNote != null || asNote != null);
+			String subnetNoteVerdict = (subNote != null && subNote.verdict() != null) ? subNote.verdict().displayName() : null;
+			String subnetNoteIcon = (subNote != null && subNote.verdict() != null) ? subNote.verdict().icon() : null;
+			String subnetNoteSnippet = (subNote != null) ? extractSnippet(subNote.noteMarkdown(), 70) : null;
+
+			String asnNoteVerdict = (asNote != null && asNote.verdict() != null) ? asNote.verdict().displayName() : null;
+			String asnNoteIcon = (asNote != null && asNote.verdict() != null) ? asNote.verdict().icon() : null;
+			String asnNoteSnippet = (asNote != null) ? extractSnippet(asNote.noteMarkdown(), 70) : null;
+
+			// Effective verdict (Subnet note takes precedence if present, else ASN note)
+			NetworkAnnotation effectiveNote = (subNote != null) ? subNote : asNote;
+			String noteVerdict = (effectiveNote != null && effectiveNote.verdict() != null) ? effectiveNote.verdict().name() : null;
+			String noteVerdictIcon = (effectiveNote != null && effectiveNote.verdict() != null) ? effectiveNote.verdict().icon() : null;
+			String noteVerdictDisplayName = (effectiveNote != null && effectiveNote.verdict() != null) ? effectiveNote.verdict().displayName() : null;
+			String noteVerdictColor = (effectiveNote != null && effectiveNote.verdict() != null) ? effectiveNote.verdict().colorHex() : null;
+			String noteSnippet = (subNote != null) ? subnetNoteSnippet : asnNoteSnippet;
+
 			scatterPoints.add(new SubnetScatterPoint(
 					c.subnetGroup(),
 					distinctClients,
@@ -119,7 +160,19 @@ public class AnalyticsService {
 					c.asOrg() != null ? c.asOrg() : "Unknown Provider",
 					c.countryCode() != null ? c.countryCode() : "--",
 					c.clientType(),
-					classification
+					classification,
+					hasNote,
+					noteVerdict,
+					noteVerdictIcon,
+					noteVerdictDisplayName,
+					noteVerdictColor,
+					noteSnippet,
+					subnetNoteVerdict,
+					subnetNoteIcon,
+					subnetNoteSnippet,
+					asnNoteVerdict,
+					asnNoteIcon,
+					asnNoteSnippet
 			));
 		}
 
@@ -167,5 +220,21 @@ public class AnalyticsService {
 			case PRIVATE_NETWORK -> "🔒";
 			case UNKNOWN -> "👤";
 		};
+	}
+
+	private String extractSnippet(String markdown, int maxLen) {
+		if (markdown == null || markdown.isBlank()) {
+			return "";
+		}
+		String firstLine = markdown.lines()
+				.map(String::trim)
+				.filter(line -> !line.isEmpty())
+				.findFirst()
+				.orElse("");
+		firstLine = firstLine.replaceAll("^[#\\*\\->\\s]+", "").replaceAll("[\\*`_]", "").trim();
+		if (firstLine.length() > maxLen) {
+			return firstLine.substring(0, maxLen - 1).trim() + "…";
+		}
+		return firstLine;
 	}
 }
