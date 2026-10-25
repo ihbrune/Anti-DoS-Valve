@@ -520,12 +520,19 @@ public class MockValveSimulator {
 				Instant.ofEpochMilli(slotKey * SLOT_LENGTH_MILLIS + 3500)
 		);
 		// Baseline aggregated /24 subnet exceeding threshold
-		blocked.add(new ValveDetailsDto.BlockedClientDto("198.51.100.0/24", 320 + rnd.nextInt(90), 0, true, lastUpdate));
+		blocked.add(new ValveDetailsDto.BlockedClientDto(
+				"198.51.100.0/24", 320 + rnd.nextInt(90), 0, 320 + rnd.nextInt(90), true, lastUpdate, 24 + rnd.nextInt(8)
+		));
 		if (slotKey % 2 == 0) {
-			blocked.add(new ValveDetailsDto.BlockedClientDto("203.0.113.0/24", 260 + rnd.nextInt(70), 0, true, lastUpdate));
+			// Residential proxy swarm cluster: 260 reqs spread across 65-80 distinct client IPs (~3.5 reqs/IP)
+			blocked.add(new ValveDetailsDto.BlockedClientDto(
+					"185.246.221.0/24", 260 + rnd.nextInt(70), 0, 260 + rnd.nextInt(70), true, lastUpdate, 70 + rnd.nextInt(15)
+			));
 		}
 		if (slotKey % 5 == 0) {
-			blocked.add(new ValveDetailsDto.BlockedClientDto("45.154.255.0/24", 290 + rnd.nextInt(80), 0, true, lastUpdate));
+			blocked.add(new ValveDetailsDto.BlockedClientDto(
+					"45.154.255.0/24", 290 + rnd.nextInt(80), 0, 290 + rnd.nextInt(80), true, lastUpdate, 32 + rnd.nextInt(10)
+			));
 		}
 
 		return new SlotMetrics(totalRequests, activeCounters, blocked.size(), blocked);

@@ -145,9 +145,16 @@
                        title="Filter live incidents for this subnet in Incident Explorer">
                         <span>&#x1F50D;</span> <span th:text="${a.targetKey()}"></span> Events
                     </a>
-                    <a th:href="@{/offenders(groupBy=${a.isAsn() ? 'ASN' : 'SUBNET'})}"
+                    <a th:if="${a.isAsn()}"
+                       th:href="@{/offenders(groupBy='ASN', asn=${a.asn() != null ? a.asn() : a.targetKey()})}"
                        class="btn" style="padding: 2px 8px; font-size: 11px;"
-                       title="View aggregated Top Offenders">
+                       title="View aggregated Top Offenders for this ASN">
+                        <span>&#x26A0;</span> Top Offenders
+                    </a>
+                    <a th:if="${a.isSubnet()}"
+                       th:href="@{/offenders(groupBy='SUBNET', clientQuery=${a.targetKey()})}"
+                       class="btn" style="padding: 2px 8px; font-size: 11px;"
+                       title="View aggregated Top Offenders for this subnet">
                         <span>&#x26A0;</span> Top Offenders
                     </a>
                 </div>

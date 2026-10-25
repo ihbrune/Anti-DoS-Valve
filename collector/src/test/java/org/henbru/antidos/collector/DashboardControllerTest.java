@@ -29,6 +29,9 @@ class DashboardControllerTest {
 	@Autowired
 	private org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository;
 
+	@Autowired
+	private org.henbru.antidos.collector.annotation.NetworkAnnotationService annotationService;
+
 	@Test
 	void testIndexPageLoads() throws Exception {
 		mockMvc.perform(get("/"))
@@ -181,6 +184,37 @@ class DashboardControllerTest {
 						.param("limit", "25"))
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("offenders-table-container")));
+	}
+
+	@Test
+	void testOffendersAsnRollupNoteIntegration() throws Exception {
+		annotationService.saveAnnotation(null,
+				org.henbru.antidos.collector.model.AnnotationTargetType.ASN,
+				"AS8075",
+				org.henbru.antidos.collector.model.AnnotationVerdict.SUSPICIOUS,
+				"Hosting Scanners");
+
+		java.time.Instant now = java.time.Instant.now();
+		clientEventRepository.batchUpsert(List.of(
+				new org.henbru.antidos.collector.model.ClientEvent(
+						null, "Demo-Server", "TEST-VALVE", 55555L,
+						now.minusSeconds(30), "198.51.100.99",
+						4, 32, null, null, null, null, "198.51.100.0/24",
+						25, 0, false, org.henbru.antidos.collector.model.ClientEvent.STATUS_BLOCKED, true, now,
+						8075L, "Microsoft Corp", "US",
+						org.henbru.antidos.collector.model.ClientType.DATACENTER, null
+				)
+		));
+
+		mockMvc.perform(get("/fragments/offenders-table")
+						.param("groupBy", "ASN")
+						.param("limit", "25"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("AS8075")))
+				.andExpect(content().string(containsString("targetType=ASN")))
+				.andExpect(content().string(containsString("targetKey=AS8075")))
+				.andExpect(content().string(containsString("ASN Note: Suspicious")))
+				.andExpect(content().string(containsString("href=\"/events?asn=8075\"")));
 	}
 
 	@Test

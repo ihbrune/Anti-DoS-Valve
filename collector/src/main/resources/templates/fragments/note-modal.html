@@ -61,8 +61,16 @@
                            class="btn" style="font-size: 12px; padding: 4px 10px;">
                             <span>&#x1F4DC;</span> Events for <span th:text="${annotation.targetKey()}"></span> &rarr;
                         </a>
-                        <a th:href="@{/offenders(groupBy=${annotation.isAsn() ? 'ASN' : 'SUBNET'})}"
-                           class="btn" style="font-size: 12px; padding: 4px 10px;">
+                        <a th:if="${annotation.isAsn()}"
+                           th:href="@{/offenders(groupBy='ASN', asn=${annotation.asn() != null ? annotation.asn() : annotation.targetKey()})}"
+                           class="btn" style="font-size: 12px; padding: 4px 10px;"
+                           title="View aggregated Top Offenders for this ASN">
+                            <span>&#x26A0;</span> Top Offenders &rarr;
+                        </a>
+                        <a th:if="${annotation.isSubnet()}"
+                           th:href="@{/offenders(groupBy='SUBNET', clientQuery=${annotation.targetKey()})}"
+                           class="btn" style="font-size: 12px; padding: 4px 10px;"
+                           title="View aggregated Top Offenders for this subnet">
                             <span>&#x26A0;</span> Top Offenders &rarr;
                         </a>
                     </div>

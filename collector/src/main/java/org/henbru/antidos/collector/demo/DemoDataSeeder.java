@@ -214,15 +214,16 @@ public class DemoDataSeeder {
 					events.add(createEnrichedEvent(
 							edgeServer, "Subnet-Guard", slotKey, startTime,
 							"45.154.255.0/24", 45102L, "Alibaba Cloud", "SG", org.henbru.antidos.collector.model.ClientType.DATACENTER,
-							290 + sRnd.nextInt(120), 0, true, true, endTime
+							290 + sRnd.nextInt(120), 0, true, true, endTime, 32 + sRnd.nextInt(10)
 					));
 				}
 				if ((slotKey + idx * 13) % 43 == 0) {
 					edgeSubnetBlocked++;
+					// Demonstrates distributed residential proxy swarm: 260 reqs spread across 75-90 distinct residential IPs (~3.5 reqs/IP)
 					events.add(createEnrichedEvent(
 							edgeServer, "Subnet-Guard", slotKey, startTime,
 							"185.246.221.0/24", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
-							260 + sRnd.nextInt(90), 0, true, true, endTime
+							260 + sRnd.nextInt(90), 0, true, true, endTime, 75 + sRnd.nextInt(15)
 					));
 				}
 				if ((slotKey + idx * 17) % 89 == 0) {
@@ -230,7 +231,7 @@ public class DemoDataSeeder {
 					events.add(createEnrichedEvent(
 							edgeServer, "Subnet-Guard", slotKey, startTime,
 							"10.68.42.0/24", null, "Private Network (RFC 1918)", null, org.henbru.antidos.collector.model.ClientType.PRIVATE_NETWORK,
-							310 + sRnd.nextInt(110), 0, true, true, endTime
+							310 + sRnd.nextInt(110), 0, true, true, endTime, 12 + sRnd.nextInt(5)
 					));
 				}
 
@@ -473,6 +474,29 @@ public class DemoDataSeeder {
 			boolean completed,
 			Instant lastUpdatedAt
 	) {
+		return createEnrichedEvent(
+				serverId, valveName, slotKey, slotTime, ip, asn, asOrg, country, type,
+				requestCount, retainedCount, locked, completed, lastUpdatedAt, 1
+		);
+	}
+
+	private ClientEvent createEnrichedEvent(
+			String serverId,
+			String valveName,
+			long slotKey,
+			Instant slotTime,
+			String ip,
+			Long asn,
+			String asOrg,
+			String country,
+			org.henbru.antidos.collector.model.ClientType type,
+			int requestCount,
+			int retainedCount,
+			boolean locked,
+			boolean completed,
+			Instant lastUpdatedAt,
+			int distinctClients
+	) {
 		org.henbru.antidos.collector.model.IpNetworkInfo net = org.henbru.antidos.collector.util.IpNetworkUtil.parse(ip);
 		return new ClientEvent(
 				null, serverId, valveName, slotKey, slotTime,
@@ -482,7 +506,8 @@ public class DemoDataSeeder {
 				locked ? ClientEvent.STATUS_BLOCKED : ClientEvent.STATUS_ACTIVE,
 				completed, lastUpdatedAt,
 				asn, asOrg, country, type, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED,
-				null
+				null,
+				Math.max(1, distinctClients)
 		);
 	}
 

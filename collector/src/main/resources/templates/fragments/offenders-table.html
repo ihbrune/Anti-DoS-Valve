@@ -167,11 +167,18 @@
                         <td>
                             <div style="display: flex; flex-direction: column; gap: 4px;">
                                 <div style="display: flex; align-items: center; gap: 6px;">
-                                    <a th:href="@{/events(clientQuery=${offender.clientKey})}"
+                                    <a th:if="${groupBy == 'ASN' and offender.asn != null}"
+                                       th:href="@{/events(asn=${offender.asn})}"
+                                       class="ip-mono badge badge-info"
+                                       style="text-decoration: underline; color: inherit; font-weight: 600;"
+                                       title="Inspect all individual blocking events for this ASN"
+                                       th:text="${offender.clientKey}">AS24940</a>
+                                    <a th:unless="${groupBy == 'ASN' and offender.asn != null}"
+                                       th:href="@{/events(clientQuery=${offender.clientKey})}"
                                        class="ip-mono"
                                        style="text-decoration: underline; color: inherit; font-weight: 600;"
-                                       th:classappend="${groupBy == 'SUBNET' ? 'badge badge-warning' : (groupBy == 'ASN' ? 'badge badge-info' : '')}"
-                                       title="Inspect all individual blocking events for this client, subnet, or ASN"
+                                       th:classappend="${groupBy == 'SUBNET' ? 'badge badge-warning' : ''}"
+                                       title="Inspect all individual blocking events for this client or subnet"
                                        th:text="${offender.clientKey}">198.51.100.42</a>
                                     <!-- If groupBy is SUBNET: Check subnet note -->
                                     <th:block th:if="${groupBy == 'SUBNET'}">
@@ -189,6 +196,24 @@
                                                   th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${offender.clientKey}, context='table')}"
                                                   hx-target="#note-modal-container"
                                                   title="Add note for this subnet">+📝</span>
+                                        </th:block>
+                                    </th:block>
+                                    <!-- If groupBy is ASN: Check ASN note -->
+                                    <th:block th:if="${groupBy == 'ASN' and offender.asn != null}">
+                                        <th:block th:if="${asnAnnotations != null and asnAnnotations.containsKey(offender.asn)}">
+                                            <span th:with="a=${asnAnnotations.get(offender.asn)}"
+                                                  class="badge-note"
+                                                  th:classappend="${a.verdict().badgeClass()}"
+                                                  th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${offender.asn}, context='table')}"
+                                                  hx-target="#note-modal-container"
+                                                  th:title="'ASN Note: ' + ${a.verdict().displayName()}"
+                                                  th:text="${a.verdict().icon()}">🟢</span>
+                                        </th:block>
+                                        <th:block th:if="${asnAnnotations == null or !asnAnnotations.containsKey(offender.asn)}">
+                                            <span class="btn-add-note"
+                                                  th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${offender.asn}, context='table')}"
+                                                  hx-target="#note-modal-container"
+                                                  title="Add note for this ASN">+📝</span>
                                         </th:block>
                                     </th:block>
                                     <span th:if="${offender.countryCode != null}" class="badge badge-secondary" style="padding: 1px 5px; font-size: 10px;" th:text="${offender.countryCode}">DE</span>
@@ -244,7 +269,15 @@
                         <td th:text="${#temporals.format(offender.firstSeen, 'dd.MM HH:mm')}">11.10 08:30</td>
                         <td th:text="${#temporals.format(offender.lastSeen, 'dd.MM HH:mm')}">11.10 09:45</td>
                         <td style="text-align: right;">
-                            <a th:href="@{/events(clientQuery=${offender.clientKey})}"
+                            <a th:if="${groupBy == 'ASN' and offender.asn != null}"
+                               th:href="@{/events(asn=${offender.asn})}"
+                               class="btn"
+                               style="padding: 2px 8px; font-size: 11px;"
+                               title="Inspect all individual blocking events for this ASN">
+                                View Incidents &rarr;
+                            </a>
+                            <a th:unless="${groupBy == 'ASN' and offender.asn != null}"
+                               th:href="@{/events(clientQuery=${offender.clientKey})}"
                                class="btn"
                                style="padding: 2px 8px; font-size: 11px;"
                                title="Inspect all individual blocking events for this client or subnet">

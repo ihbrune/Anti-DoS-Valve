@@ -48,6 +48,8 @@ class NotesControllerTest {
 				.andExpect(model().attributeExists("annotations", "verdictCounts", "totalCount"))
 				.andExpect(content().string(containsString("href=\"/events?asn=24940\"")))
 				.andExpect(content().string(containsString("/events?clientQuery=198.51.100.0")))
+				.andExpect(content().string(containsString("href=\"/offenders?groupBy=ASN&amp;asn=24940\"")))
+				.andExpect(content().string(containsString("href=\"/offenders?groupBy=SUBNET&amp;clientQuery=198.51.100.0/24\"")))
 				.andExpect(content().string(containsString("Suspicious")));
 	}
 
