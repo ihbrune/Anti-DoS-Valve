@@ -551,6 +551,71 @@ class AntiDoSValveTest {
 	}
 
 	@Test
+	void testCollectorIntegrationConfigurationAndLifecycleValidation() throws LifecycleException {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "COLLECTOR_INTEG_TEST");
+
+		// Default is auto
+		assertEquals("auto", valve.getCollectorIntegration());
+		assertTrue(valve.isCollectorIntegrationValid());
+		assertFalse(valve.isCollectorLeaseActive());
+		assertFalse(valve.isExtendedMetricsActive());
+
+		// Force true
+		valve.setCollectorIntegration("true");
+		assertTrue(valve.isCollectorIntegrationValid());
+		assertTrue(valve.isExtendedMetricsActive());
+
+		// Force false
+		valve.setCollectorIntegration("false");
+		assertTrue(valve.isCollectorIntegrationValid());
+		assertFalse(valve.isExtendedMetricsActive());
+
+		// Touch lease in auto mode
+		valve.setCollectorIntegration("auto");
+		assertFalse(valve.isExtendedMetricsActive());
+		valve.touchCollectorLease();
+		assertTrue(valve.isCollectorLeaseActive());
+		assertTrue(valve.isExtendedMetricsActive());
+
+		// Invalid configuration
+		valve.setCollectorIntegration("invalid");
+		assertFalse(valve.isCollectorIntegrationValid());
+		LifecycleException ex = org.junit.jupiter.api.Assertions.assertThrows(
+				LifecycleException.class, valve::initInternal);
+		assertTrue(ex.getMessage().contains("collectorIntegration is invalid"));
+	}
+
+	@Test
+	void testSubnetCardinalityTrackingWithCollectorIntegration() {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "SUBNET_CARDINALITY_TEST");
+		valve.setAllowedRequestsPerSlot(50);
+		valve.setIpv4SubnetMask(24);
+		valve.setCollectorIntegration("true"); // force extended metrics
+		valve.setRelevantPaths(".*");
+		assertNull(valve.reloadMonitor());
+
+		// 3 requests from 3 distinct IPs in 10.0.1.0/24
+		valve.isIPAddressBlocked("10.0.1.10");
+		valve.isIPAddressBlocked("10.0.1.20");
+		valve.isIPAddressBlocked("10.0.1.30");
+
+		// Check internal counter
+		AntiDoSMonitor monitor = valve.provideMonitor();
+		assertNotNull(monitor);
+		AntiDoSCounter counter = monitor.provideCurrentCounter("10.0.1.0/24");
+		assertNotNull(counter);
+		assertEquals(3, counter.getCount());
+		assertEquals(3, counter.getDistinctClients());
+
+		// Another request from 10.0.1.10 (already seen) -> count 4, distinct remains 3
+		valve.isIPAddressBlocked("10.0.1.10");
+		assertEquals(4, counter.getCount());
+		assertEquals(3, counter.getDistinctClients());
+	}
+
+	@Test
 	void testWhitelistPrecedenceWithSubnetAggregation() {
 		AntiDoSValve valve = new AntiDoSValve();
 		setValidAntiDoSMonitorconfiguration(valve, "WHITELIST_SUBNET_TEST");

@@ -143,6 +143,24 @@ public class AntiDoSMonitor {
 	 *                                  empty
 	 */
 	public boolean registerAndCheckRequest(String counterName) throws IllegalArgumentException {
+		return registerAndCheckRequest(counterName, null, null, false, 32, 128);
+	}
+
+	/**
+	 * Registers an increment to a specific counter and optionally tracks distinct client IPs
+	 * within an aggregated subnet.
+	 * 
+	 * @param counterName      The name of the counter (e.g. IP or subnet)
+	 * @param clientIp         The original client IP address
+	 * @param ipv4Bytes        The parsed 4-byte IPv4 literal array (or null)
+	 * @param trackCardinality true if extended metrics / cardinality tracking is active
+	 * @param v4Mask           IPv4 subnet prefix length
+	 * @param v6Mask           IPv6 subnet prefix length
+	 * @return true if allowed, false if blocked
+	 * @throws IllegalArgumentException If counterName is null or empty
+	 */
+	public boolean registerAndCheckRequest(String counterName, String clientIp, byte[] ipv4Bytes,
+			boolean trackCardinality, int v4Mask, int v6Mask) throws IllegalArgumentException {
 
 		if (counterName == null || counterName.length() == 0)
 			throw new IllegalArgumentException();
@@ -156,6 +174,9 @@ public class AntiDoSMonitor {
 		// Step 2: Get and increment counter
 		AntiDoSCounter counter = slot.getCounter(counterName);
 		counter.incrementCount();
+		if (trackCardinality && clientIp != null) {
+			counter.registerClientIp(ipv4Bytes, clientIp, v4Mask, v6Mask);
+		}
 
 		// Step 3: Do we have to retain counter values from previous slots?
 		if (counter.getRetainedCounts() == -1) {

@@ -48,14 +48,14 @@
                                         <span th:with="a=${subnetAnnotations.get(rollup.subnetGroup())}"
                                               class="badge-note"
                                               th:classappend="${a.verdict().badgeClass()}"
-                                              th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${rollup.subnetGroup()})}"
+                                              th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${rollup.subnetGroup()}, context='table')}"
                                               hx-target="#note-modal-container"
                                               th:title="'Subnet Note: ' + ${a.verdict().displayName()}"
                                               th:text="${a.verdict().icon()}">🟢</span>
                                     </th:block>
                                     <th:block th:if="${rollup.subnetGroup() != null and (subnetAnnotations == null or !subnetAnnotations.containsKey(rollup.subnetGroup()))}">
                                         <span class="btn-add-note"
-                                              th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${rollup.subnetGroup()})}"
+                                              th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${rollup.subnetGroup()}, context='table')}"
                                               hx-target="#note-modal-container"
                                               title="Add note for this subnet">+📝</span>
                                     </th:block>
@@ -66,14 +66,14 @@
                                             <span th:with="a=${asnAnnotations.get(rollup.asn())}"
                                                   class="badge-note"
                                                   th:classappend="${a.verdict().badgeClass()}"
-                                                  th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${rollup.asn()})}"
+                                                  th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${rollup.asn()}, context='table')}"
                                                   hx-target="#note-modal-container"
                                                   th:title="'ASN Note: ' + ${a.verdict().displayName()}"
                                                   th:text="${a.verdict().icon()}">🟢</span>
                                         </th:block>
                                         <th:block th:if="${asnAnnotations == null or !asnAnnotations.containsKey(rollup.asn())}">
                                             <span class="btn-add-note"
-                                                  th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${rollup.asn()})}"
+                                                  th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${rollup.asn()}, context='table')}"
                                                   hx-target="#note-modal-container"
                                                   title="Add note for this ASN">+📝</span>
                                         </th:block>
@@ -179,14 +179,14 @@
                                             <span th:with="a=${subnetAnnotations.get(offender.clientKey)}"
                                                   class="badge-note"
                                                   th:classappend="${a.verdict().badgeClass()}"
-                                                  th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${offender.clientKey})}"
+                                                  th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${offender.clientKey}, context='table')}"
                                                   hx-target="#note-modal-container"
                                                   th:title="'Subnet Note: ' + ${a.verdict().displayName()}"
                                                   th:text="${a.verdict().icon()}">🟢</span>
                                         </th:block>
                                         <th:block th:if="${subnetAnnotations == null or !subnetAnnotations.containsKey(offender.clientKey)}">
                                             <span class="btn-add-note"
-                                                  th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${offender.clientKey})}"
+                                                  th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${offender.clientKey}, context='table')}"
                                                   hx-target="#note-modal-container"
                                                   title="Add note for this subnet">+📝</span>
                                         </th:block>
@@ -198,14 +198,14 @@
                                             <span th:with="a=${asnAnnotations.get(offender.asn)}"
                                                   class="badge-note"
                                                   th:classappend="${a.verdict().badgeClass()}"
-                                                  th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${offender.asn})}"
+                                                  th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${offender.asn}, context='table')}"
                                                   hx-target="#note-modal-container"
                                                   th:title="'ASN Note: ' + ${a.verdict().displayName()}"
                                                   th:text="${a.verdict().icon()}">🟢</span>
                                         </th:block>
                                         <th:block th:if="${asnAnnotations == null or !asnAnnotations.containsKey(offender.asn)}">
                                             <span class="btn-add-note"
-                                                  th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${offender.asn})}"
+                                                  th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${offender.asn}, context='table')}"
                                                   hx-target="#note-modal-container"
                                                   title="Add note for this ASN">+📝</span>
                                         </th:block>

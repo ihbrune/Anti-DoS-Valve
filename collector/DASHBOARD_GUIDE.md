@@ -261,8 +261,12 @@ When analyzing subnets or ASNs, the system automatically runs heuristic cluster 
   * ISO Country Code & Flag.
   * Client Type classification tag (`DATACENTER`, `RESIDENTIAL`, `AI_CRAWLER`, etc.).
 
-### 3. Forensic Drilldown
-Clicking the **`Incident Explorer →`** action button on any offender row automatically transitions to `/events`, pre-populating the search filter with the exact IP or CIDR mask (`/24` or `/64`) for high-resolution event inspection.
+### 3. Forensic Drilldown & Operator Notes
+* **`Incident Explorer →` Drilldown:** Clicking the action button on any offender row automatically transitions to `/events`, pre-populating the search filter with the exact IP or CIDR mask (`/24` or `/64`) for high-resolution event inspection.
+* **Inline Network Notes (`+📝` & Verdict Badges):**
+  * Beside each identified Subnet and ASN, operators can click `+📝` to record investigative notes directly without leaving the table.
+  * When a note already exists, a color-coded verdict badge (🟢 Legitimate, 🔵 Internal, 🟡 Suspicious, 🔴 Malicious, ⚪ Info) is displayed. Clicking it opens the note in a modal with full Markdown rendering, editing capabilities, and forensic quick-links.
+  * All notes are **retention-immune** and permanently saved, even after transient traffic rollups are pruned.
 
 ---
 
@@ -283,9 +287,15 @@ Accessible via `/events`. Provides deep-dive, granular search across every recor
 * **Client Type Filter:**
   Multi-select pills to filter by threat categorization: `Datacenter`, `Residential`, `Search Engine`, `AI Crawler`, `Tor Exit Node`, `Mobile`, `Private Network`, `Unknown`.
 * **ASN Filter:** Filter directly by ASN number or provider name (e.g., `AS13335` or `Cloudflare`).
+* **Interactive Network Notes:** Look for verdict badges (🟢/🔵/🟡/🔴/⚪) or click `+📝` on any ASN or Subnet to inspect previous findings or log new notes directly from the incident log.
 
 ### 2. High-Performance Server-Side Pagination
 Events are streamed with configurable limits (`25`, `50`, `100`, `250`) and offset pagination. The URL dynamically reflects active filters via HTMX `hx-push-url="true"`, allowing links to specific forensic queries to be bookmarked or shared with team members.
+
+### 3. Inline Network Notes & Investigation Intelligence
+* **Instant In-Table Logging:** Responders can click `+📝` next to any Subnet or ASN to record intelligence (ticket IDs, partner agreements, or confirmed DDoS botnet clusters) without navigating away.
+* **Visual Verdict Badges:** Subnets and ASNs with existing notes feature verdict badges (🟢 Legitimate, 🔵 Internal, 🟡 Suspicious, 🔴 Malicious, ⚪ Info). Clicking any badge opens the note in an overlay modal.
+* **Direct Navigation:** From the central Notes repository (`/notes`) or note modals, clicking any ASN or Subnet target pill immediately jumps back into Incident Explorer with that target pre-filtered.
 
 ---
 

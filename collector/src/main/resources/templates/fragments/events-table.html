@@ -43,6 +43,7 @@
                                    title="Filter for this exact client IP"
                                    th:text="${event.clientKey}">198.51.100.42</a>
                                 <span th:if="${event.countryCode != null}" class="badge badge-secondary" style="padding: 1px 5px; font-size: 10px;" th:text="${event.countryCode}">DE</span>
+                                <span th:if="${event.distinctClients > 1}" class="badge badge-info" style="padding: 1px 5px; font-size: 10px;" th:text="${event.distinctClients + ' IPs'}" title="Observed distinct client IP addresses in this aggregated subnet">2 IPs</span>
                             </div>
                             <div style="display: flex; gap: 4px; flex-wrap: wrap;">
                                 <a th:if="${event.clientType != null and event.clientType.name() == 'DATACENTER'}" th:href="@{/events(clientTypes='DATACENTER')}" class="badge badge-warning" style="padding: 1px 6px; font-size: 9px; text-decoration: none;" title="Hosting / Datacenter / Cloud - Click to filter">&#x1F3E2; Datacenter</a>
@@ -59,14 +60,14 @@
                                         <span th:with="a=${asnAnnotations.get(event.asn)}"
                                               class="badge-note"
                                               th:classappend="${a.verdict().badgeClass()}"
-                                              th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${event.asn})}"
+                                              th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${event.asn}, context='table')}"
                                               hx-target="#note-modal-container"
                                               th:title="'ASN Note: ' + ${a.verdict().displayName()}"
                                               th:text="${a.verdict().icon()}">🟢</span>
                                     </th:block>
                                     <th:block th:if="${asnAnnotations == null or !asnAnnotations.containsKey(event.asn)}">
                                         <span class="btn-add-note"
-                                              th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${event.asn})}"
+                                              th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${event.asn}, context='table')}"
                                               hx-target="#note-modal-container"
                                               title="Add note for this ASN">+📝</span>
                                     </th:block>
@@ -82,14 +83,14 @@
                                 <span th:with="a=${subnetAnnotations.get(event.subnetGroup)}"
                                       class="badge-note"
                                       th:classappend="${a.verdict().badgeClass()}"
-                                      th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${event.subnetGroup})}"
+                                      th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${event.subnetGroup}, context='table')}"
                                       hx-target="#note-modal-container"
                                       th:title="'Subnet Note: ' + ${a.verdict().displayName()}"
                                       th:text="${a.verdict().icon()}">🟢</span>
                             </th:block>
                             <th:block th:if="${event.subnetGroup != null and (subnetAnnotations == null or !subnetAnnotations.containsKey(event.subnetGroup))}">
                                 <span class="btn-add-note"
-                                      th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${event.subnetGroup})}"
+                                      th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${event.subnetGroup}, context='table')}"
                                       hx-target="#note-modal-container"
                                       title="Add note for this subnet">+📝</span>
                             </th:block>

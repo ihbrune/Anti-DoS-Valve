@@ -17,6 +17,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.regex.Pattern;
 
@@ -174,10 +175,15 @@ public class AntiDoSValve extends ValveBase {
 		return this.statusRenderer;
 	}
 
+	public static final String DEFAULT_COLLECTOR_INTEGRATION = "auto";
+	public static final long COLLECTOR_LEASE_MILLIS = 120_000L;
+
 	private volatile int maxIPCacheSize = -1;
 	private volatile int maxBlockedIPCacheSize = -1;
 	private volatile int ipv4SubnetMask = 32;
 	private volatile int ipv6SubnetMask = 128;
+	private volatile String collectorIntegration = DEFAULT_COLLECTOR_INTEGRATION;
+	private final AtomicLong lastCollectorScrapeTime = new AtomicLong(0);
 	private volatile int numberOfSlots = -1;
 	private volatile int slotLength = -1;
 	private volatile int allowedRequestsPerSlot = -1;
@@ -695,6 +701,69 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
+	 * @return The collector integration mode ("auto", "true", or "false"). Default is "auto".
+	 */
+	public String getCollectorIntegration() {
+		return collectorIntegration;
+	}
+
+	/**
+	 * Configures collector integration mode.
+	 * <ul>
+	 * <li><code>auto</code>: Automatically enables extended telemetry (distinct client tracking, etc.)
+	 *     for 2 minutes whenever a collector queries the status endpoint. Falls back to minimal zero-overhead
+	 *     mode when no collector is active.</li>
+	 * <li><code>true</code>: Forces extended telemetry on permanently.</li>
+	 * <li><code>false</code>: Explicitly disables extended telemetry (even if polled).</li>
+	 * </ul>
+	 * 
+	 * @param collectorIntegration "auto", "true", or "false"
+	 */
+	public void setCollectorIntegration(String collectorIntegration) {
+		if (collectorIntegration == null || collectorIntegration.trim().isEmpty()) {
+			this.collectorIntegration = DEFAULT_COLLECTOR_INTEGRATION;
+		} else {
+			this.collectorIntegration = collectorIntegration.trim();
+		}
+	}
+
+	public boolean isCollectorIntegrationValid() {
+		if (collectorIntegration == null) {
+			return true;
+		}
+		String trimmed = collectorIntegration.trim().toLowerCase();
+		return "auto".equals(trimmed) || "true".equals(trimmed) || "false".equals(trimmed);
+	}
+
+	/**
+	 * Renews the collector activity lease for {@link #COLLECTOR_LEASE_MILLIS} (2 minutes).
+	 */
+	public void touchCollectorLease() {
+		lastCollectorScrapeTime.set(getTimeInMillis());
+	}
+
+	/**
+	 * @return true if a collector has queried the status endpoint within the last 2 minutes
+	 */
+	public boolean isCollectorLeaseActive() {
+		return (getTimeInMillis() - lastCollectorScrapeTime.get()) < COLLECTOR_LEASE_MILLIS;
+	}
+
+	/**
+	 * @return true if extended metrics collection (distinct client tracking, etc.) is currently active
+	 */
+	public boolean isExtendedMetricsActive() {
+		String mode = this.collectorIntegration;
+		if ("true".equalsIgnoreCase(mode)) {
+			return true;
+		}
+		if ("false".equalsIgnoreCase(mode)) {
+			return false;
+		}
+		return isCollectorLeaseActive();
+	}
+
+	/**
 	 * 
 	 * @param numberOfSlots The number of slots to be held. More slots allow a
 	 *                      further look into the past, but increase the memory
@@ -1080,6 +1149,7 @@ public class AntiDoSValve extends ValveBase {
 		}
 
 		// 3. Authorized (valid token): Render dashboard (NOT blocked, NOT counted in monitor)
+		touchCollectorLease();
 		String token = request.getParameter("token");
 		if (token == null || token.isEmpty()) {
 			String authHeader = request.getHeader("Authorization");
@@ -1394,6 +1464,8 @@ public class AntiDoSValve extends ValveBase {
 			throw new LifecycleException(name4logging + ".ipv4SubnetMask is invalid: " + ipv4SubnetMask);
 		if (!isIpv6SubnetMaskValid())
 			throw new LifecycleException(name4logging + ".ipv6SubnetMask is invalid: " + ipv6SubnetMask);
+		if (!isCollectorIntegrationValid())
+			throw new LifecycleException(name4logging + ".collectorIntegration is invalid: " + collectorIntegration);
 
 		if (provideMonitor() == null) {
 			String monitorMsg = reloadMonitor();
@@ -1630,9 +1702,30 @@ public class AntiDoSValve extends ValveBase {
 		if (ip == null || ip.isEmpty()) {
 			throw new IllegalArgumentException("IP address must not be null or empty");
 		}
-		String counterName = resolveCounterName(ip);
+		int v4Mask = this.ipv4SubnetMask;
+		int v6Mask = this.ipv6SubnetMask;
+		boolean v4Active = v4Mask > 0 && v4Mask < 32;
+		boolean v6Active = v6Mask > 0 && v6Mask < 128;
+
+		String counterName = ip;
+		byte[] rawIpv4Bytes = null;
+		if (v4Active || v6Active) {
+			if (v4Active) {
+				rawIpv4Bytes = parseIPv4Literal(ip);
+				if (rawIpv4Bytes != null) {
+					byte[] maskedBytes = rawIpv4Bytes.clone();
+					maskBytes(maskedBytes, v4Mask);
+					counterName = formatIPv4Subnet(maskedBytes, v4Mask);
+				}
+			}
+			if (counterName.equals(ip) && v6Active && ip.indexOf(':') >= 0) {
+				counterName = aggregateSubnet(ip, false, v4Mask, true, v6Mask);
+			}
+		}
+
+		boolean trackCardinality = isExtendedMetricsActive() && !counterName.equals(ip);
 		AntiDoSMonitor monitor = provideMonitor();
-		if (monitor == null || monitor.registerAndCheckRequest(counterName)) {
+		if (monitor == null || monitor.registerAndCheckRequest(counterName, ip, rawIpv4Bytes, trackCardinality, v4Mask, v6Mask)) {
 			if (log.isDebugEnabled())
 				if (monitor == null)
 					log.debug(name4logging + " not available");

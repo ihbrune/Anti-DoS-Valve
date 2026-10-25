@@ -81,7 +81,7 @@ The valve is now active!
 You can test its functionality using a non-existent URL to avoid impacting real applications. For testing, configure very low thresholds and trigger rapid reloads in your browser until the valve blocks your requests. The following sample configuration can be used for such a test:
 
         <Valve className="org.henbru.antidos.AntiDoSValve"
-                monitorName="TEST VALVE"
+                monitorName="TEST-VALVE"
                 relevantPaths="/valvetest"
                 maxIPCacheSize="50"
                 numberOfSlots="10"
@@ -270,6 +270,8 @@ Accepts:
 * Dotted-decimal netmask string, e.g. `"255.255.255.0"`
 * `32` or `-1`: Disables IPv4 aggregation (default behavior; each IP address is tracked individually).
 
+*Performance & Telemetry note:* When `ipv4SubnetMask` is set to `24` (the recommended setting for bot defense and residential proxy detection), the Valve maintains an exact, lock-free 256-bit bitmask (32 bytes per subnet counter) counting the number of distinct client IP addresses that visited the subnet. This provides the Anti-DoS Collector with exact distinct-IP metrics for its 2D cluster scatterplot without memory explosion.
+
 *Note:* Whitelisted IP addresses configured in *alwaysAllowedIPs* (e.g. `127.0.0.1` or specific internal machines) are evaluated prior to rate limiting and subnet aggregation, so individual whitelisted IPs remain accessible even if their subnet would otherwise be blocked.
 
 ## ipv6SubnetMask (optional)
@@ -282,6 +284,14 @@ Accepts:
 * Prefix length integer (1 to 128), e.g. `64` or `48`
 * CIDR notation string, e.g. `"/64"`
 * `128` or `-1`: Disables IPv6 aggregation (default behavior).
+
+## collectorIntegration (optional)
+
+Controls whether extended telemetry (such as distinct client IP tracking in aggregated subnets) is collected for ingestion by an Anti-DoS Collector instance:
+
+* `auto` (Default): Automatically activates extended telemetry for a rolling 2-minute lease whenever an Anti-DoS Collector queries the Valve's status endpoint (`?format=json`). When no collector is polling, extended telemetry is dormant with zero overhead.
+* `true`: Permanently enables extended telemetry from the moment Tomcat boots.
+* `false`: Permanently disables extended telemetry.
 
 ## slotLength
 
@@ -356,7 +366,7 @@ You can test the effects of configuration values in the 'Traffic & Attack Simula
 Finally, define your *relevantPaths* pattern. Ideally, this should cover only endpoints that are publicly accessible and consume noticeable server resources. Here is a real-world example:
 
         <Valve className="org.henbru.antidos.AntiDoSValve"
-                monitorName="MY VALVE"
+                monitorName="MY-VALVE"
                 alwaysAllowedIPs="10\.68\.\d+\.\d+|10\.77\.\d+\.\d+"
                 relevantPaths=".*(jsp|/download/|/pdf/).*"
                 maxIPCacheSize="250"
@@ -393,7 +403,7 @@ Example configuration:
 
         <Valve className="org.henbru.antidos.AntiDoSValve"
                 monitorMode="marking"
-                monitorName="MARKING VALVE"
+                monitorName="MARKING-VALVE"
                 alwaysAllowedIPs=""
                 alwaysForbiddenIPs=""
                 relevantPaths=".*/swa"
@@ -453,7 +463,7 @@ In some scenarios, it can be useful to apply different rules to different parts 
 The *monitorName* parameter is required to keep the configurations distinct. Blocking and marking valves can also be combined. Here is an example with two valve instances:
 
         <Valve className="org.henbru.antidos.AntiDoSValve"
-                monitorName="TEST VALVE"
+                monitorName="TEST-VALVE"
                 alwaysAllowedIPs=""
                 alwaysForbiddenIPs=""
                 relevantPaths="/valvetest"
@@ -465,7 +475,7 @@ The *monitorName* parameter is required to keep the configurations distinct. Blo
         />
         
         <Valve className="org.henbru.antidos.AntiDoSValve"
-                monitorName="TEST VALVE 2"
+                monitorName="TEST-VALVE-2"
                 alwaysAllowedIPs=""
                 alwaysForbiddenIPs=""
                 relevantPaths="/valvetest2"
@@ -502,7 +512,7 @@ If you plan to use the dashboard feature in a multi-valve setup, it is strongly 
 Here is an example configuration:
 
     <Valve className="org.henbru.antidos.AntiDoSValve"
-        monitorName="STATUS VALVE"
+        monitorName="STATUS-VALVE"
         statusUri="/antidos-status"
         maxIPCacheSize="10"
         numberOfSlots="5"
@@ -512,7 +522,7 @@ Here is an example configuration:
     />
 
     <Valve className="org.henbru.antidos.AntiDoSValve"
-        monitorName="MARKING VALVE"
+        monitorName="MARKING-VALVE"
         monitorMode="marking"
         relevantPaths=".*/swa"
         maxIPCacheSize="50"
@@ -590,7 +600,7 @@ Exposing internal rate-limiting metrics over HTTP presents security risks (such 
 
 ```xml
 <Valve className="org.henbru.antidos.AntiDoSValve"
-       monitorName="STATUS VALVE"
+       monitorName="STATUS-VALVE"
        statusUri="/antidos-status"
        statusAllowedIPs="127\.0\.0\.1|::1|10\..*"
        statusPassword=""

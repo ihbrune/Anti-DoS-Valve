@@ -82,6 +82,7 @@
     <!-- Filter Panel -->
     <form id="offenders-filter-form"
           hx-get="/fragments/offenders-table"
+          hx-trigger="submit, annotationChanged from:body"
           hx-target="#offenders-table-container"
           hx-swap="outerHTML"
           hx-push-url="true"

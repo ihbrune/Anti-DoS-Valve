@@ -1,7 +1,5 @@
 package org.henbru.antidos.collector.storage;
 
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.time.Instant;
@@ -23,6 +21,7 @@ import org.springframework.stereotype.Repository;
  * Note: Data in this repository is independent and never pruned by data retention cleanup.
  */
 @Repository
+@SuppressWarnings("null")
 public class NetworkAnnotationRepository {
 
 	private final JdbcTemplate jdbcTemplate;

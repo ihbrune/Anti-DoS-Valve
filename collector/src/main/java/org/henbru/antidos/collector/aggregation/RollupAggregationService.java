@@ -64,7 +64,7 @@ public class RollupAggregationService {
 				    SUM(request_count) AS total_requests,
 				    SUM(CASE WHEN status = 'ACTIVE' THEN request_count ELSE 0 END) AS active_requests,
 				    SUM(CASE WHEN status = 'BLOCKED' THEN request_count ELSE 0 END) AS blocked_requests,
-				    COUNT(DISTINCT client_key) AS distinct_clients,
+				    CASE WHEN MAX(distinct_clients) > COUNT(DISTINCT client_key) THEN MAX(distinct_clients) ELSE COUNT(DISTINCT client_key) END AS distinct_clients,
 				    MIN(request_count) AS min_requests_per_client,
 				    MAX(request_count) AS max_requests_per_client,
 				    COUNT(DISTINCT slot_key) AS slots_active_count,

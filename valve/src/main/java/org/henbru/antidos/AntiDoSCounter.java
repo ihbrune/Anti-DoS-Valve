@@ -34,6 +34,7 @@ public class AntiDoSCounter {
 	private static final VarHandle COUNT;
 	private static final VarHandle RETAINED_COUNTS;
 	private static final VarHandle ACCESS_ORDER;
+	private static final VarHandle CARDINALITY_TRACKER;
 
 	static {
 		try {
@@ -41,6 +42,7 @@ public class AntiDoSCounter {
 			COUNT = l.findVarHandle(AntiDoSCounter.class, "count", int.class);
 			RETAINED_COUNTS = l.findVarHandle(AntiDoSCounter.class, "retainedCounts", int.class);
 			ACCESS_ORDER = l.findVarHandle(AntiDoSCounter.class, "accessOrder", long.class);
+			CARDINALITY_TRACKER = l.findVarHandle(AntiDoSCounter.class, "cardinalityTracker", AntiDoSCardinalityBitSet.class);
 		} catch (ReflectiveOperationException e) {
 			throw new ExceptionInInitializerError(e);
 		}
@@ -50,6 +52,7 @@ public class AntiDoSCounter {
 	private volatile int retainedCounts = -1;
 	private volatile long accessOrder = 0;
 	private volatile boolean locked = false;
+	private volatile AntiDoSCardinalityBitSet cardinalityTracker = null;
 
 	/**
 	 * Updates the access order timestamp to current System.nanoTime() for LRU recency tracking.
@@ -170,8 +173,37 @@ public class AntiDoSCounter {
 		this.locked = true;
 	}
 
+	/**
+	 * Registers a client IP into the subnet cardinality bitset.
+	 * Instantiates the bitset lazily on first access.
+	 * 
+	 * @param ipv4Bytes Parsed 4-byte array if IPv4 literal, or null otherwise
+	 * @param ip        Raw IP string
+	 * @param v4Mask    IPv4 subnet prefix length
+	 * @param v6Mask    IPv6 subnet prefix length
+	 */
+	public void registerClientIp(byte[] ipv4Bytes, String ip, int v4Mask, int v6Mask) {
+		AntiDoSCardinalityBitSet tracker = this.cardinalityTracker;
+		if (tracker == null) {
+			AntiDoSCardinalityBitSet newTracker = new AntiDoSCardinalityBitSet();
+			CARDINALITY_TRACKER.compareAndSet(this, null, newTracker);
+			tracker = (AntiDoSCardinalityBitSet) CARDINALITY_TRACKER.getVolatile(this);
+		}
+		tracker.register(ipv4Bytes, ip, v4Mask, v6Mask);
+	}
+
+	/**
+	 * @return The number of distinct client IP addresses observed for this counter.
+	 *         Defaults to 1 if not an aggregated subnet or no tracker instantiated.
+	 */
+	public int getDistinctClients() {
+		AntiDoSCardinalityBitSet tracker = this.cardinalityTracker;
+		return tracker != null ? tracker.getDistinctCount() : 1;
+	}
+
 	@Override
 	public String toString() {
-		return "Count:" + getCount() + " Retained:" + getRetainedCounts() + " Locked:" + (locked ? "yes" : "no");
+		return "Count:" + getCount() + " Retained:" + getRetainedCounts() + " Locked:" + (locked ? "yes" : "no")
+				+ (cardinalityTracker != null ? " DistinctClients:" + getDistinctClients() : "");
 	}
 }

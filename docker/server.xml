@@ -63,7 +63,7 @@
 
                     <!-- AntiDoSValve demo configuration for internal status dashboard  -->
                     <Valve className="org.henbru.antidos.AntiDoSValve"
-                         monitorName="STATUS VALVE"
+                         monitorName="STATUS-VALVE"
                          description="Dedicated for status dashboard"
                          statusUri="/antidos-status"
                          statusAllowedIPs="192\.168\.\d+\.\d+"
@@ -75,7 +75,7 @@
 
                     <!-- AntiDoSValve demo configuration for testing  -->
                     <Valve className="org.henbru.antidos.AntiDoSValve"
-                         monitorName="TEST VALVE"
+                         monitorName="TEST-VALVE"
                          description="Functional testing valve with path exclusions"
                          relevantPaths="/valvetest.*"
                          nonRelevantPaths="/valvetest/ex"
@@ -88,7 +88,7 @@
 
                     <Valve className="org.henbru.antidos.AntiDoSValve"
                          monitorMode="marking"
-                         monitorName="MARKING VALVE"
+                         monitorName="MARKING-VALVE"
                          description="Non-blocking marking valve for audit demonstration"
                          relevantPaths="/advdemo.*"
                          maxIPCacheSize="50"
@@ -99,12 +99,13 @@
                     />
 
                     <Valve className="org.henbru.antidos.AntiDoSValve"
-                         monitorName="SUBNET MONITORING VALVE"
+                         monitorName="SUBNET-MONITORING-VALVE"
                          description="Non-blocking subnet-based monitoring, no blocking, just simulation"
                          relevantPaths=".*"
                          maxIPCacheSize="500"
                          ipv4SubnetMask="/24"
                          ipv6SubnetMask="/64"
+                         collectorIntegration="auto"
                          slotLength="900"
                          allowedRequestsPerSlot="30000"
                          numberOfSlots="8"

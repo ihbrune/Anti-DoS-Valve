@@ -467,5 +467,35 @@ class AntiDoSStatusRendererTest {
 		assertTrue(jsonMinCount2.contains("\"10.20.0.2\""));
 		assertFalse(jsonMinCount2.contains("\"10.20.0.1\""));
 	}
+
+	@Test
+	void testCollectorIntegrationAndDistinctClientsRendering() {
+		valve.setIpv4SubnetMask(24);
+		valve.setCollectorIntegration("true");
+		valve.reloadMonitor();
+
+		// Record requests from 2 distinct IPs in same /24
+		valve.isIPAddressBlocked("192.168.1.10");
+		valve.isIPAddressBlocked("192.168.1.20");
+
+		// Check Overview JSON
+		String overviewJson = renderer.buildStatusJson(null);
+		assertTrue(overviewJson.contains("\"collectorIntegration\": \"true\""));
+		assertTrue(overviewJson.contains("\"collectorActive\": true"));
+
+		// Check Details JSON
+		String detailsJson = renderer.buildStatusJsonDetails("RENDERER_TEST", "current", null, null);
+		assertTrue(detailsJson.contains("\"collectorIntegration\": \"true\""));
+		assertTrue(detailsJson.contains("\"collectorActive\": true"));
+		assertTrue(detailsJson.contains("\"distinctClients\": 2"));
+
+		// Check HTML
+		String html = renderer.buildStatusHtml(null, null);
+		assertTrue(html.contains("Collector Integration"));
+		assertTrue(html.contains("Forced On"));
+
+		String detailsHtml = renderer.buildStatusHtmlDetails("RENDERER_TEST");
+		assertTrue(detailsHtml.contains("2 IPs"));
+	}
 }
 

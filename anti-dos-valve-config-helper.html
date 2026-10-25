@@ -1302,7 +1302,7 @@
               </div>
               <div class="field-desc">Subnet prefix length for aggregating IPv4 addresses (1 to 32, e.g.
                 <code>24</code>, <code>/24</code>, or <code>255.255.255.0</code>). <code>32</code> or empty disables
-                aggregation.
+                aggregation. <strong>Recommendation:</strong> Use <code>/24</code> for IPv4 to enable exact 256-bit cardinality tracking for Residential Proxy cluster detection.
               </div>
               <input type="text" id="ipv4SubnetMask" name="ipv4SubnetMask"
                 placeholder="e.g. 24, /24, or 255.255.255.0 (Default: 32)">
@@ -1320,6 +1320,22 @@
               </div>
               <input type="text" id="ipv6SubnetMask" name="ipv6SubnetMask" placeholder="e.g. 64 or /64 (Default: 128)">
               <div id="hintIpv6SubnetMask" class="subnet-mask-hint neutral"></div>
+            </div>
+
+            <!-- 9b. collectorIntegration -->
+            <div class="field-group">
+              <div class="field-header">
+                <label for="collectorIntegration" class="field-label">collectorIntegration</label>
+                <span class="badge badge-optional">Optional</span>
+              </div>
+              <div class="field-desc">Extended telemetry mode for Anti-DoS Collector integration (distinct client IP tracking in subnets).
+                <code>auto</code> (default) automatically activates extended telemetry for 2 minutes when queried by a Collector, and remains zero-overhead otherwise.
+              </div>
+              <select id="collectorIntegration" name="collectorIntegration">
+                <option value="" selected>auto (Default - automatic lease on Collector query)</option>
+                <option value="true">true (Permanently enabled)</option>
+                <option value="false">false (Disabled)</option>
+              </select>
             </div>
 
             <!-- 10. slotLength -->
@@ -2009,6 +2025,7 @@
       { key: 'maxBlockedIPCacheSize', isRequired: false, defaultVal: '' },
       { key: 'ipv4SubnetMask', isRequired: false, defaultVal: '' },
       { key: 'ipv6SubnetMask', isRequired: false, defaultVal: '' },
+      { key: 'collectorIntegration', isRequired: false, defaultVal: 'auto' },
       { key: 'slotLength', isRequired: true, defaultVal: 30 },
       { key: 'allowedRequestsPerSlot', isRequired: true, defaultVal: 5 },
       { key: 'numberOfSlots', isRequired: true, defaultVal: 10 },
@@ -2132,6 +2149,7 @@
             if (param.key === 'httpStatusCode' && (val === '429' || val === 429)) return;
             if (param.key === 'ipv4SubnetMask' && (val === '32' || val === '-1')) return;
             if (param.key === 'ipv6SubnetMask' && (val === '128' || val === '-1')) return;
+            if (param.key === 'collectorIntegration' && (val === 'auto' || val === '')) return;
             if ((param.key === 'statusAllowedIPs' || param.key === 'statusPassword') && !document.getElementById('statusUri').value.trim()) return;
           }
         }

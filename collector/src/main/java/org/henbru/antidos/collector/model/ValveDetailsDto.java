@@ -64,13 +64,21 @@ public record ValveDetailsDto(
 			int retained,
 			int effective,
 			boolean locked,
-			String lastUpdate
+			String lastUpdate,
+			Integer distinctClients
 	) {
+		/**
+		 * Backward-compatible constructor for 6-parameter signature.
+		 */
+		public BlockedClientDto(String key, int count, int retained, int effective, boolean locked, String lastUpdate) {
+			this(key, count, retained, effective, locked, lastUpdate, 1);
+		}
+
 		/**
 		 * Backward-compatible constructor for previous 5-parameter signature.
 		 */
 		public BlockedClientDto(String key, int count, int retained, boolean locked, String lastUpdate) {
-			this(key, count, retained, count + retained, locked, lastUpdate);
+			this(key, count, retained, count + retained, locked, lastUpdate, 1);
 		}
 	}
 
@@ -81,7 +89,14 @@ public record ValveDetailsDto(
 			int retained,
 			int effective,
 			int limit,
-			int quotaPercent
+			int quotaPercent,
+			Integer distinctClients
 	) {
+		/**
+		 * Backward-compatible constructor for previous 6-parameter signature.
+		 */
+		public ActiveClientDto(String key, int count, int retained, int effective, int limit, int quotaPercent) {
+			this(key, count, retained, effective, limit, quotaPercent, 1);
+		}
 	}
 }

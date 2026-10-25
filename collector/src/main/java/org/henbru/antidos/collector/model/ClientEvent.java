@@ -31,11 +31,50 @@ public record ClientEvent(
 		String countryCode,
 		ClientType clientType,
 		EnrichmentStatus enrichmentStatus,
-		Long entityId
+		Long entityId,
+		int distinctClients
 ) {
 
 	public static final String STATUS_BLOCKED = "BLOCKED";
 	public static final String STATUS_ACTIVE = "ACTIVE";
+
+	/**
+	 * Backward-compatible constructor defaulting distinctClients to 1.
+	 */
+	public ClientEvent(
+			Long id,
+			String serverId,
+			String valveName,
+			long slotKey,
+			Instant slotTime,
+			String clientKey,
+			int ipVersion,
+			int cidrPrefix,
+			Long ipV4Start,
+			Long ipV4End,
+			String ipV6Start,
+			String ipV6End,
+			String subnetGroup,
+			int requestCount,
+			int retainedCount,
+			boolean locked,
+			String status,
+			boolean completed,
+			Instant lastUpdatedAt,
+			Long asn,
+			String asOrg,
+			String countryCode,
+			ClientType clientType,
+			EnrichmentStatus enrichmentStatus,
+			Long entityId
+	) {
+		this(
+				id, serverId, valveName, slotKey, slotTime, clientKey, ipVersion, cidrPrefix,
+				ipV4Start, ipV4End, ipV6Start, ipV6End, subnetGroup, requestCount, retainedCount,
+				locked, status, completed, lastUpdatedAt, asn, asOrg, countryCode, clientType,
+				enrichmentStatus, entityId, 1
+		);
+	}
 
 	/**
 	 * Convenience constructor defaulting status to BLOCKED.
@@ -205,6 +244,48 @@ public record ClientEvent(
 	}
 
 	/**
+	 * Convenience constructor with automatic network parsing, explicit status, and distinct client count.
+	 */
+	public ClientEvent(
+			Long id,
+			String serverId,
+			String valveName,
+			long slotKey,
+			Instant slotTime,
+			String clientKey,
+			int requestCount,
+			int retainedCount,
+			boolean locked,
+			String status,
+			boolean completed,
+			Instant lastUpdatedAt,
+			int distinctClients
+	) {
+		this(
+				id,
+				serverId,
+				valveName,
+				slotKey,
+				slotTime,
+				clientKey,
+				IpNetworkUtil.parse(clientKey),
+				requestCount,
+				retainedCount,
+				locked,
+				status != null ? status : (locked ? STATUS_BLOCKED : STATUS_ACTIVE),
+				completed,
+				lastUpdatedAt,
+				null,
+				null,
+				null,
+				ClientType.UNKNOWN,
+				EnrichmentStatus.PENDING,
+				null,
+				Math.max(1, distinctClients)
+		);
+	}
+
+	/**
 	 * Convenience constructor with automatic network parsing and explicit status.
 	 */
 	public ClientEvent(
@@ -228,19 +309,13 @@ public record ClientEvent(
 				slotKey,
 				slotTime,
 				clientKey,
-				IpNetworkUtil.parse(clientKey),
 				requestCount,
 				retainedCount,
 				locked,
-				status != null ? status : (locked ? STATUS_BLOCKED : STATUS_ACTIVE),
+				status,
 				completed,
 				lastUpdatedAt,
-				null,
-				null,
-				null,
-				ClientType.UNKNOWN,
-				EnrichmentStatus.PENDING,
-				null
+				1
 		);
 	}
 
@@ -272,12 +347,68 @@ public record ClientEvent(
 				locked,
 				locked ? STATUS_BLOCKED : STATUS_ACTIVE,
 				completed,
-				lastUpdatedAt
+				lastUpdatedAt,
+				1
 		);
 	}
 
 	/**
-	 * Internal constructor using pre-parsed IpNetworkInfo.
+	 * Internal constructor using pre-parsed IpNetworkInfo with distinct client count.
+	 */
+	public ClientEvent(
+			Long id,
+			String serverId,
+			String valveName,
+			long slotKey,
+			Instant slotTime,
+			String clientKey,
+			IpNetworkInfo net,
+			int requestCount,
+			int retainedCount,
+			boolean locked,
+			String status,
+			boolean completed,
+			Instant lastUpdatedAt,
+			Long asn,
+			String asOrg,
+			String countryCode,
+			ClientType clientType,
+			EnrichmentStatus enrichmentStatus,
+			Long entityId,
+			int distinctClients
+	) {
+		this(
+				id,
+				serverId,
+				valveName,
+				slotKey,
+				slotTime,
+				clientKey,
+				net.version(),
+				net.prefix(),
+				net.v4Start(),
+				net.v4End(),
+				net.v6Start(),
+				net.v6End(),
+				net.subnetGroup(),
+				requestCount,
+				retainedCount,
+				locked,
+				status,
+				completed,
+				lastUpdatedAt,
+				asn,
+				asOrg,
+				countryCode,
+				clientType,
+				enrichmentStatus,
+				entityId,
+				Math.max(1, distinctClients)
+		);
+	}
+
+	/**
+	 * Internal constructor using pre-parsed IpNetworkInfo defaulting distinct clients to 1.
 	 */
 	public ClientEvent(
 			Long id,
@@ -307,13 +438,7 @@ public record ClientEvent(
 				slotKey,
 				slotTime,
 				clientKey,
-				net.version(),
-				net.prefix(),
-				net.v4Start(),
-				net.v4End(),
-				net.v6Start(),
-				net.v6End(),
-				net.subnetGroup(),
+				net,
 				requestCount,
 				retainedCount,
 				locked,
@@ -325,9 +450,11 @@ public record ClientEvent(
 				countryCode,
 				clientType,
 				enrichmentStatus,
-				entityId
+				entityId,
+				1
 		);
 	}
+
 
 	public int totalEffectiveCount() {
 		return requestCount + retainedCount;
@@ -363,7 +490,8 @@ public record ClientEvent(
 				countryCode,
 				clientType,
 				enrichmentStatus,
-				newEntityId
+				newEntityId,
+				distinctClients
 		);
 	}
 
@@ -393,7 +521,8 @@ public record ClientEvent(
 				result.countryCode(),
 				result.clientType(),
 				EnrichmentStatus.ENRICHED,
-				entityId
+				entityId,
+				distinctClients
 		);
 	}
 }

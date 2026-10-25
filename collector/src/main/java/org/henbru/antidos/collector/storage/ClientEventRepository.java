@@ -1,6 +1,7 @@
 package org.henbru.antidos.collector.storage;
 
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.sql.Types;
@@ -105,9 +106,19 @@ public class ClientEventRepository {
 				countryCode,
 				clientType,
 				enrichmentStatus,
-				entityId
+				entityId,
+				getDistinctClientsFromResultSet(rs)
 		);
 	};
+
+	private static int getDistinctClientsFromResultSet(ResultSet rs) {
+		try {
+			int val = rs.getInt("distinct_clients");
+			return val > 0 ? val : 1;
+		} catch (SQLException ignored) {
+			return 1;
+		}
+	}
 
 	@PostConstruct
 	public void repairUnnormalizedEvents() {
@@ -186,9 +197,9 @@ public class ClientEventRepository {
 				    server_id, valve_name, slot_key, slot_time, client_key,
 				    ip_version, cidr_prefix, ip_v4_start, ip_v4_end, ip_v6_start, ip_v6_end, subnet_group,
 				    request_count, retained_count, is_locked, status, is_completed, last_updated_at,
-				    asn, as_org, country_code, client_type, enrichment_status, entity_id
+				    asn, as_org, country_code, client_type, enrichment_status, entity_id, distinct_clients
 				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (server_id, valve_name, slot_key, client_key) DO UPDATE SET
 				    slot_time = EXCLUDED.slot_time,
 				    ip_version = EXCLUDED.ip_version,
@@ -204,6 +215,7 @@ public class ClientEventRepository {
 				    status = EXCLUDED.status,
 				    is_completed = EXCLUDED.is_completed,
 				    last_updated_at = EXCLUDED.last_updated_at,
+				    distinct_clients = EXCLUDED.distinct_clients,
 				    entity_id = COALESCE(EXCLUDED.entity_id, client_events.entity_id)
 				""";
 
@@ -252,6 +264,7 @@ public class ClientEventRepository {
 				} else {
 					ps.setNull(24, Types.BIGINT);
 				}
+				ps.setInt(25, Math.max(1, e.distinctClients()));
 			}
 
 			@Override
@@ -416,7 +429,7 @@ public class ClientEventRepository {
 				.append("MAX(as_org) AS as_org, ")
 				.append("MAX(country_code) AS country_code, ")
 				.append("MAX(client_type) AS client_type, ")
-				.append("COUNT(DISTINCT client_key) AS distinct_clients, ")
+				.append("CASE WHEN MAX(distinct_clients) > COUNT(DISTINCT client_key) THEN MAX(distinct_clients) ELSE COUNT(DISTINCT client_key) END AS distinct_clients, ")
 				.append("COUNT(*) AS total_incidents, ")
 				.append("SUM(request_count + retained_count) AS total_requests, ")
 				.append("COUNT(DISTINCT server_id) AS distinct_servers, ")

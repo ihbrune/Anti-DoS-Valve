@@ -45,8 +45,12 @@ public class AntiDoSStatusRenderer {
 		this.valve = valve;
 	}
 
-	static record CounterEntry(String key, int count, int retained, int effective, boolean locked)
+	static record CounterEntry(String key, int count, int retained, int effective, boolean locked, int distinctClients)
 			implements Comparable<CounterEntry> {
+		public CounterEntry(String key, int count, int retained, int effective, boolean locked) {
+			this(key, count, retained, effective, locked, 1);
+		}
+
 		@Override
 		public int compareTo(CounterEntry other) {
 			int cmp = Integer.compare(other.effective, this.effective);
@@ -194,7 +198,7 @@ public class AntiDoSStatusRenderer {
 				int count = c.getCount();
 				int rawRetained = c.getRetainedCounts();
 				int retained = rawRetained > 0 ? rawRetained : 0;
-				list.add(new CounterEntry(entry.getKey(), count, retained, count + retained, locked));
+				list.add(new CounterEntry(entry.getKey(), count, retained, count + retained, locked, c.getDistinctClients()));
 			}
 			Collections.sort(list);
 			return new FilteredEntries(list, maxOrder);
@@ -218,13 +222,13 @@ public class AntiDoSStatusRenderer {
 				if (effective < worst.effective()) {
 					continue;
 				}
-				CounterEntry candidate = new CounterEntry(entry.getKey(), count, retained, effective, locked);
+				CounterEntry candidate = new CounterEntry(entry.getKey(), count, retained, effective, locked, c.getDistinctClients());
 				if (candidate.compareTo(worst) < 0) {
 					minHeap.poll();
 					minHeap.offer(candidate);
 				}
 			} else {
-				minHeap.offer(new CounterEntry(entry.getKey(), count, retained, effective, locked));
+				minHeap.offer(new CounterEntry(entry.getKey(), count, retained, effective, locked, c.getDistinctClients()));
 			}
 		}
 
@@ -259,7 +263,7 @@ public class AntiDoSStatusRenderer {
 				int retained = rawRetained > 0 ? rawRetained : 0;
 				int effective = count + retained;
 				if (effective >= min) {
-					list.add(new CounterEntry(entry.getKey(), count, retained, effective, locked));
+					list.add(new CounterEntry(entry.getKey(), count, retained, effective, locked, c.getDistinctClients()));
 				}
 			}
 		}
@@ -670,6 +674,14 @@ public class AntiDoSStatusRenderer {
 			sb.append("    <tr><th>Subnet Aggregation</th><td>IPv4: <code>").append(v4Str)
 					.append("</code> &bull; IPv6: <code>").append(v6Str).append("</code></td></tr>\n");
 
+			// Collector Integration
+			String cMode = v.getCollectorIntegration();
+			boolean cActive = v.isExtendedMetricsActive();
+			String cBadge = "auto".equalsIgnoreCase(cMode)
+					? (cActive ? " <span class=\"badge badge-active\">Active (Lease)</span>" : " <span class=\"badge\" style=\"background:var(--accent-subtle);\">Idle</span>")
+					: (cActive ? " <span class=\"badge badge-active\">Forced On</span>" : " <span class=\"badge\" style=\"background:var(--accent-subtle);\">Disabled</span>");
+			sb.append("    <tr><th>Collector Integration</th><td><code>").append(escapeHtml(cMode)).append("</code>").append(cBadge).append("</td></tr>\n");
+
 			// Cache usage & slots
 			sb.append("    <tr><th>Active IP Cache</th><td>").append(activeCounters).append(" / ").append(maxActive)
 					.append(" <div class=\"metric-bar\"><div class=\"metric-fill ").append(activeFillClass)
@@ -903,6 +915,13 @@ public class AntiDoSStatusRenderer {
 		sb.append("    <tr><th>Subnet Aggregation</th><td>IPv4: <code>").append(v4Str)
 				.append("</code> &bull; IPv6: <code>").append(v6Str).append("</code></td></tr>\n");
 
+		String cModeTarget = target.getCollectorIntegration();
+		boolean cActiveTarget = target.isExtendedMetricsActive();
+		String cBadgeTarget = "auto".equalsIgnoreCase(cModeTarget)
+				? (cActiveTarget ? " <span class=\"badge badge-active\">Active (Lease)</span>" : " <span class=\"badge\" style=\"background:var(--accent-subtle);\">Idle</span>")
+				: (cActiveTarget ? " <span class=\"badge badge-active\">Forced On</span>" : " <span class=\"badge\" style=\"background:var(--accent-subtle);\">Disabled</span>");
+		sb.append("    <tr><th>Collector Integration</th><td><code>").append(escapeHtml(cModeTarget)).append("</code>").append(cBadgeTarget).append("</td></tr>\n");
+
 		sb.append("    <tr><th>Active IP Cache</th><td>").append(activeCounters).append(" / ").append(maxActive)
 				.append(" <div class=\"metric-bar\"><div class=\"metric-fill ").append(activeFillClass)
 				.append("\" style=\"width:").append(activePercent).append("%\"></div></div></td></tr>\n");
@@ -1014,7 +1033,12 @@ public class AntiDoSStatusRenderer {
 					.append("    <tbody>\n");
 			for (int i = 0; i < blockedDisplay; i++) {
 				CounterEntry e = blockedList.get(i);
-				sb.append("      <tr><td><code>").append(escapeHtml(e.key())).append("</code></td>")
+				sb.append("      <tr><td><code>").append(escapeHtml(e.key())).append("</code>");
+				if (e.distinctClients() > 1) {
+					sb.append(" <span class=\"badge\" style=\"font-size:0.75rem;padding:2px 6px;border-radius:4px;background:var(--accent-subtle);color:var(--text);margin-left:6px;\" title=\"Distinct client IPs in this subnet\">")
+							.append(e.distinctClients()).append(" IPs</span>");
+				}
+				sb.append("</td>")
 						.append("<td>").append(e.count()).append("</td>")
 						.append("<td>").append(e.retained()).append("</td>")
 						.append("<td><strong>").append(e.effective()).append("</strong></td>")
@@ -1046,7 +1070,12 @@ public class AntiDoSStatusRenderer {
 				CounterEntry e = activeList.get(i);
 				int pct = allowedReqs > 0 ? (int) Math.min(100, Math.round((double) e.effective() / allowedReqs * 100)) : 0;
 				String fillClass = pct > 85 ? "high" : (pct > 50 ? "med" : "");
-				sb.append("      <tr><td><code>").append(escapeHtml(e.key())).append("</code></td>")
+				sb.append("      <tr><td><code>").append(escapeHtml(e.key())).append("</code>");
+				if (e.distinctClients() > 1) {
+					sb.append(" <span class=\"badge\" style=\"font-size:0.75rem;padding:2px 6px;border-radius:4px;background:var(--accent-subtle);color:var(--text);margin-left:6px;\" title=\"Distinct client IPs in this subnet\">")
+							.append(e.distinctClients()).append(" IPs</span>");
+				}
+				sb.append("</td>")
 						.append("<td>").append(e.count()).append("</td>")
 						.append("<td>").append(e.retained()).append("</td>")
 						.append("<td><strong>").append(e.effective()).append("</strong></td>")
@@ -1116,6 +1145,8 @@ public class AntiDoSStatusRenderer {
 					.append("      \"shareOfRetainedFormerRequests\": ").append(v.getShareOfRetainedFormerRequests()).append(",\n")
 					.append("      \"ipv4SubnetMask\": ").append(v.getIpv4SubnetMask()).append(",\n")
 					.append("      \"ipv6SubnetMask\": ").append(v.getIpv6SubnetMask()).append(",\n")
+					.append("      \"collectorIntegration\": \"").append(escapeJson(v.getCollectorIntegration())).append("\",\n")
+					.append("      \"collectorActive\": ").append(v.isExtendedMetricsActive()).append(",\n")
 					.append("      \"maxIPCacheSize\": ").append(maxActive).append(",\n")
 					.append("      \"maxBlockedIPCacheSize\": ").append(maxBlocked).append(",\n")
 					.append("      \"currentActiveCounters\": ").append(activeCounters).append(",\n")
@@ -1211,6 +1242,8 @@ public class AntiDoSStatusRenderer {
 				.append("    \"shareOfRetainedFormerRequests\": ").append(target.getShareOfRetainedFormerRequests()).append(",\n")
 				.append("    \"ipv4SubnetMask\": ").append(target.getIpv4SubnetMask()).append(",\n")
 				.append("    \"ipv6SubnetMask\": ").append(target.getIpv6SubnetMask()).append(",\n")
+				.append("    \"collectorIntegration\": \"").append(escapeJson(target.getCollectorIntegration())).append("\",\n")
+				.append("    \"collectorActive\": ").append(target.isExtendedMetricsActive()).append(",\n")
 				.append("    \"maxIPCacheSize\": ").append(maxActive).append(",\n")
 				.append("    \"maxBlockedIPCacheSize\": ").append(maxBlocked).append(",\n")
 				.append("    \"currentActiveCounters\": ").append(activeCounters).append(",\n")
@@ -1317,6 +1350,7 @@ public class AntiDoSStatusRenderer {
 					.append("      \"retained\": ").append(e.retained()).append(",\n")
 					.append("      \"effective\": ").append(e.effective()).append(",\n")
 					.append("      \"limit\": ").append(target.getAllowedRequestsPerSlot()).append(",\n")
+					.append("      \"distinctClients\": ").append(e.distinctClients()).append(",\n")
 					.append("      \"status\": \"BLOCKED\"\n")
 					.append("    }");
 		}
@@ -1358,7 +1392,8 @@ public class AntiDoSStatusRenderer {
 					.append("      \"retained\": ").append(e.retained()).append(",\n")
 					.append("      \"effective\": ").append(e.effective()).append(",\n")
 					.append("      \"limit\": ").append(target.getAllowedRequestsPerSlot()).append(",\n")
-					.append("      \"quotaPercent\": ").append(pct).append("\n")
+					.append("      \"quotaPercent\": ").append(pct).append(",\n")
+					.append("      \"distinctClients\": ").append(e.distinctClients()).append("\n")
 					.append("    }");
 		}
 		sb.append("\n  ]\n}\n");

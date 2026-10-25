@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import org.henbru.antidos.collector.model.ClientEvent;
 import org.henbru.antidos.collector.model.EndpointHeartbeat;
 import org.henbru.antidos.collector.docs.DocumentationService;
@@ -584,7 +585,7 @@ public class DashboardController {
 		if (obj == null) return "{}";
 		try {
 			return objectMapper.writeValueAsString(obj);
-		} catch (Exception e) {
+		} catch (JsonProcessingException e) {
 			return "{}";
 		}
 	}

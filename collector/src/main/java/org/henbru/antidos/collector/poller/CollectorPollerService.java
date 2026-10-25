@@ -378,6 +378,8 @@ public class CollectorPollerService {
 							}
 						}
 					}
+					Integer dc = c.distinctClients();
+					int distinct = dc != null && dc > 0 ? dc : 1;
 					events.add(new ClientEvent(
 							null,
 							endpoint.getName(),
@@ -390,7 +392,8 @@ public class CollectorPollerService {
 							c.locked(),
 							ClientEvent.STATUS_BLOCKED,
 							completed,
-							pollTime
+							pollTime,
+							distinct
 					).withEntityId(entityId));
 				}
 			}
@@ -406,6 +409,8 @@ public class CollectorPollerService {
 								.map(entity -> entity.id())
 								.orElse(null);
 					}
+					Integer dc = c.distinctClients();
+					int distinct = dc != null && dc > 0 ? dc : 1;
 					events.add(new ClientEvent(
 							null,
 							endpoint.getName(),
@@ -418,7 +423,8 @@ public class CollectorPollerService {
 							false,
 							ClientEvent.STATUS_ACTIVE,
 							completed,
-							pollTime
+							pollTime,
+							distinct
 					).withEntityId(entityId));
 				}
 			}
