@@ -288,12 +288,34 @@
             }
         };
 
+        // Compute min and max total requests across all points for dynamic relative scaling
+        let minReqs = Infinity;
+        let maxReqs = -Infinity;
+        points.forEach(p => {
+            const reqs = p.totalRequests || 0;
+            if (reqs < minReqs) minReqs = reqs;
+            if (reqs > maxReqs) maxReqs = reqs;
+        });
+        if (minReqs === Infinity) minReqs = 0;
+        if (maxReqs === -Infinity) maxReqs = 0;
+
+        const MIN_RADIUS = 6;
+        const MAX_RADIUS = 26;
+
         points.forEach(p => {
             const grp = groups[p.classification] || groups['REGULAR_SUBNET'];
+            let r = 12;
+            if (maxReqs > minReqs) {
+                // Square root scaling relative to dynamic min/max of current cluster dataset
+                const fraction = (p.totalRequests - minReqs) / (maxReqs - minReqs);
+                r = Math.round(MIN_RADIUS + Math.sqrt(Math.max(0, fraction)) * (MAX_RADIUS - MIN_RADIUS));
+            }
+            r = Math.max(MIN_RADIUS, Math.min(MAX_RADIUS, r));
+
             const ptItem = {
                 x: p.distinctClients,
                 y: p.averageRequestsPerClient,
-                r: Math.max(5, Math.min(24, Math.log10(p.totalRequests + 1) * 5)),
+                r: r,
                 raw: p
             };
             if (p.hasNote) {
@@ -346,9 +368,45 @@
                 }
             }));
 
+        // Custom plugin drawing a circular arc around each bubble indicating the block-rate %
+        const blockRateArcPlugin = {
+            id: 'scatterBlockRateArc',
+            afterDatasetDraw: function(chart, args) {
+                const ctx = chart.ctx;
+                const meta = chart.getDatasetMeta(args.index);
+                if (!meta || !meta.data) return;
+
+                meta.data.forEach((element, i) => {
+                    const rawObj = chart.data.datasets[args.index].data[i];
+                    if (!rawObj || !rawObj.raw) return;
+                    const pt = rawObj.raw;
+                    const total = pt.totalRequests || 0;
+                    const blocked = pt.blockedRequests || 0;
+                    if (total <= 0 || blocked <= 0) return;
+
+                    const ratio = Math.min(1.0, blocked / total);
+                    const x = element.x;
+                    const y = element.y;
+                    const radius = (element.options.radius || rawObj.r || 6) + 3.5;
+
+                    ctx.save();
+                    ctx.beginPath();
+                    const startAngle = -Math.PI / 2; // Top center
+                    const endAngle = startAngle + (ratio * 2 * Math.PI);
+                    ctx.arc(x, y, radius, startAngle, endAngle, false);
+                    ctx.strokeStyle = '#f43f5e'; // Danger red
+                    ctx.lineWidth = 2.5;
+                    ctx.lineCap = 'round';
+                    ctx.stroke();
+                    ctx.restore();
+                });
+            }
+        };
+
         const chart = new Chart(canvas, {
             type: 'bubble',
             data: { datasets: datasets },
+            plugins: [blockRateArcPlugin],
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
@@ -358,6 +416,9 @@
                         const el = elements[0];
                         const pt = datasets[el.datasetIndex].data[el.index].raw;
                         if (pt && pt.subnetGroup) {
+                            if (window.highlightScatterTableRow && window.highlightScatterTableRow(pt.subnetGroup)) {
+                                return;
+                            }
                             window.location.href = '/offenders?clientQuery=' + encodeURIComponent(pt.subnetGroup) + '&groupBy=SUBNET';
                         }
                     }
@@ -471,6 +532,36 @@
         });
 
         chartInstances.set(canvasId, chart);
+    };
+
+    /**
+     * Programmatically highlight a scatter point from external UI (e.g., hover over table row)
+     */
+    window.AntiDoSCharts.highlightScatterPoint = function(canvasId, subnetGroup) {
+        const chart = chartInstances.get(canvasId);
+        if (!chart) return;
+        for (let d = 0; d < chart.data.datasets.length; d++) {
+            const ds = chart.data.datasets[d];
+            for (let i = 0; i < ds.data.length; i++) {
+                if (ds.data[i].raw && ds.data[i].raw.subnetGroup === subnetGroup) {
+                    chart.setActiveElements([{ datasetIndex: d, index: i }]);
+                    chart.tooltip.setActiveElements([{ datasetIndex: d, index: i }], { x: 0, y: 0 });
+                    chart.update('none');
+                    return;
+                }
+            }
+        }
+    };
+
+    /**
+     * Clear programmatic scatter point highlight
+     */
+    window.AntiDoSCharts.clearScatterHighlight = function(canvasId) {
+        const chart = chartInstances.get(canvasId);
+        if (!chart) return;
+        chart.setActiveElements([]);
+        chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+        chart.update('none');
     };
 
     // Auto-update charts when theme toggles

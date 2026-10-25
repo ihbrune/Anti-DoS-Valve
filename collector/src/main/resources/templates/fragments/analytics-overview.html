@@ -157,13 +157,183 @@
                 <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #f59e0b; background: rgba(245, 158, 11, 0.25);"></span>
                 <span><strong>Forensic Notes:</strong> Highlighted borders indicate annotated Subnets or ASNs (hover for details)</span>
             </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #f43f5e; box-sizing: border-box;"></span>
+                <span><strong>Block Rate Arc:</strong> Outer red ring shows % blocked (no ring = 0% / bypass)</span>
+            </div>
             <div style="display: flex; align-items: center; gap: 6px; color: var(--text-muted); margin-left: auto;">
-                <span>💡 Click on any bubble to inspect all matching clients in Offenders View</span>
+                <span>💡 Click on any bubble to inspect or jump to table below</span>
             </div>
         </div>
 
         <div class="chart-container-box" style="height: 380px; max-height: 380px; position: relative; overflow: hidden;">
             <canvas id="scatterChart"></canvas>
+        </div>
+
+        <!-- Subnet Cluster Forensics Table & Quick Filters -->
+        <div style="margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 18px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
+                <div>
+                    <div style="font-weight: 600; font-size: 13px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                        <span>&#x1F4CB;</span> Subnet Cluster Forensics Breakdown
+                        <span id="scatter-table-count" class="badge" style="background: rgba(56, 189, 248, 0.12); color: var(--color-primary); font-size: 10px;">
+                            <span th:text="${analytics.scatterPoints.size()}">0</span> Subnets
+                        </span>
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                        Click column headers to sort &bull; Hover over rows to highlight corresponding bubble in scatterplot
+                    </div>
+                </div>
+
+                <!-- Quick Filter Chips -->
+                <div class="filter-btn-group">
+                    <button type="button" class="filter-btn scatter-filter-btn active" data-filter="all" onclick="filterScatterTable('all')">
+                        All (<span th:text="${analytics.scatterPoints.size()}">0</span>)
+                    </button>
+                    <button type="button" class="filter-btn scatter-filter-btn" data-filter="bypass" onclick="filterScatterTable('bypass')"
+                            title="Filter subnets with 0% blocked requests (potential evasion botnets)">
+                        <span>⚠️</span> 0% Blocked (Bypass)
+                    </button>
+                    <button type="button" class="filter-btn scatter-filter-btn" data-filter="annotated" onclick="filterScatterTable('annotated')"
+                            title="Filter subnets with existing operator notes or verdicts">
+                        <span>📝</span> With Notes
+                    </button>
+                </div>
+            </div>
+
+            <!-- Table Container -->
+            <div class="table-responsive" style="max-height: 480px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
+                <table class="data-table" id="scatter-clusters-table" style="margin-bottom: 0;">
+                    <thead>
+                        <tr>
+                            <th onclick="sortScatterTable(0, 'string')" style="cursor: pointer;" title="Sort by Subnet">Subnet &amp; Notes &#x21C5;</th>
+                            <th onclick="sortScatterTable(1, 'string')" style="cursor: pointer;" title="Sort by Autonomous System / ISP">ASN / ISP &#x21C5;</th>
+                            <th onclick="sortScatterTable(2, 'number')" style="cursor: pointer; text-align: right;" title="Sort by Unique Client IPs (X)">Distinct IPs (X) &#x21C5;</th>
+                            <th onclick="sortScatterTable(3, 'number')" style="cursor: pointer; text-align: right;" title="Sort by Average Requests per IP (Y)">Ø Reqs / IP (Y) &#x21C5;</th>
+                            <th onclick="sortScatterTable(4, 'number')" style="cursor: pointer; text-align: right;" title="Sort by Total Request Volume">Total Reqs &#x21C5;</th>
+                            <th onclick="sortScatterTable(5, 'number')" style="cursor: pointer; text-align: right;" title="Sort by Blocked 429 Count">Blocked &#x21C5;</th>
+                            <th onclick="sortScatterTable(6, 'number')" style="cursor: pointer; text-align: right;" title="Sort by Block Rate %">Block Rate &#x21C5;</th>
+                            <th style="text-align: center;">Classification</th>
+                            <th style="text-align: right;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="pt : ${analytics.scatterPoints}"
+                            class="scatter-table-row"
+                            th:attr="data-subnet=${pt.subnetGroup},
+                                     data-blocked=${pt.blockedRequests},
+                                     data-total=${pt.totalRequests},
+                                     data-hasnote=${pt.hasNote},
+                                     onmouseenter=|if(window.AntiDoSCharts) AntiDoSCharts.highlightScatterPoint('scatterChart', '${pt.subnetGroup}')|,
+                                     onmouseleave=|if(window.AntiDoSCharts) AntiDoSCharts.clearScatterHighlight('scatterChart')|">
+                            <!-- Subnet & Notes -->
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <a th:href="@{/offenders(clientQuery=${pt.subnetGroup},groupBy='SUBNET')}"
+                                       class="ip-mono"
+                                       style="font-size: 12px; text-decoration: underline; color: inherit; font-weight: 600;"
+                                       title="Filter offenders view for this subnet"
+                                       th:text="${pt.subnetGroup}">185.246.221.0/24</a>
+
+                                    <!-- Subnet Note Badge or Add Button -->
+                                    <th:block th:if="${pt.subnetNoteVerdict != null}">
+                                        <span class="badge-note"
+                                              th:classappend="${#strings.toLowerCase(pt.subnetNoteVerdict) == 'suspicious' ? 'badge-warning' : (#strings.toLowerCase(pt.subnetNoteVerdict) == 'malicious' ? 'badge-danger' : (#strings.toLowerCase(pt.subnetNoteVerdict) == 'legitimate' ? 'badge-success' : 'badge-info'))}"
+                                              th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${pt.subnetGroup}, context='table')}"
+                                              hx-target="#note-modal-container"
+                                              th:title="'Subnet Note: ' + ${pt.subnetNoteVerdict} + (${pt.subnetNoteSnippet != null} ? ' - &quot;' + ${pt.subnetNoteSnippet} + '&quot;' : '')"
+                                              th:text="${pt.subnetNoteIcon != null ? pt.subnetNoteIcon : '📝'}">🟢</span>
+                                    </th:block>
+                                    <th:block th:if="${pt.subnetNoteVerdict == null and pt.subnetGroup != null}">
+                                        <span class="btn-add-note"
+                                              th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${pt.subnetGroup}, context='table')}"
+                                              hx-target="#note-modal-container"
+                                              title="Add note for this subnet">+📝</span>
+                                    </th:block>
+                                </div>
+                            </td>
+
+                            <!-- ASN & ISP -->
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+                                    <span th:if="${pt.countryCode != null and pt.countryCode != '--'}" class="badge badge-secondary" style="padding: 1px 4px; font-size: 9px;" th:text="${pt.countryCode}">DE</span>
+                                    <span th:if="${pt.asn != null}" style="display: inline-flex; align-items: center; gap: 3px;">
+                                        <a th:href="@{/events(asn=${pt.asn})}" class="badge badge-info" style="padding: 1px 5px; font-size: 9px; text-decoration: none;" th:title="${pt.asOrg + ' - Click to filter incidents'}" th:text="'AS' + ${pt.asn}">AS24940</a>
+                                        <th:block th:if="${pt.asnNoteVerdict != null}">
+                                            <span class="badge-note"
+                                                  th:classappend="${#strings.toLowerCase(pt.asnNoteVerdict) == 'suspicious' ? 'badge-warning' : (#strings.toLowerCase(pt.asnNoteVerdict) == 'malicious' ? 'badge-danger' : (#strings.toLowerCase(pt.asnNoteVerdict) == 'legitimate' ? 'badge-success' : 'badge-info'))}"
+                                                  th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${pt.asn}, context='table')}"
+                                                  hx-target="#note-modal-container"
+                                                  th:title="'ASN Note: ' + ${pt.asnNoteVerdict} + (${pt.asnNoteSnippet != null} ? ' - &quot;' + ${pt.asnNoteSnippet} + '&quot;' : '')"
+                                                  th:text="${pt.asnNoteIcon != null ? pt.asnNoteIcon : '📝'}">🟢</span>
+                                        </th:block>
+                                        <th:block th:if="${pt.asnNoteVerdict == null}">
+                                            <span class="btn-add-note"
+                                                  th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${pt.asn}, context='table')}"
+                                                  hx-target="#note-modal-container"
+                                                  title="Add note for this ASN">+📝</span>
+                                        </th:block>
+                                    </span>
+                                    <span style="font-size: 11px; color: var(--text-secondary);" th:text="${pt.asOrg}">Provider Org</span>
+                                </div>
+                            </td>
+
+                            <!-- Distinct IPs (X) -->
+                            <td style="text-align: right;">
+                                <span class="ip-mono" style="font-weight: 700; color: var(--text-primary);" th:text="${pt.distinctClients}">50</span>
+                            </td>
+
+                            <!-- Ø Reqs / IP (Y) -->
+                            <td style="text-align: right;">
+                                <span class="ip-mono" style="font-weight: 600;" th:text="${pt.averageRequestsPerClient}">10.0</span>
+                            </td>
+
+                            <!-- Total Reqs -->
+                            <td style="text-align: right;">
+                                <span class="ip-mono" th:text="${#numbers.formatInteger(pt.totalRequests, 0, 'COMMA')}">500</span>
+                            </td>
+
+                            <!-- Blocked -->
+                            <td style="text-align: right;">
+                                <span class="ip-mono"
+                                      th:style="${pt.blockedRequests > 0 ? 'color: var(--color-danger); font-weight: 600;' : 'color: var(--text-muted);'}"
+                                      th:text="${#numbers.formatInteger(pt.blockedRequests, 0, 'COMMA')}">0</span>
+                            </td>
+
+                            <!-- Block Rate % -->
+                            <td style="text-align: right;">
+                                <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+                                    <div style="width: 50px; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden;">
+                                        <div th:style="'height: 100%; width: ' + ${pt.blockedRatioPercent} + '%; background: ' + (${pt.blockedRatioPercent == 0} ? 'transparent' : 'var(--color-danger)') + ';'"></div>
+                                    </div>
+                                    <span class="ip-mono" style="font-size: 11px;"
+                                          th:styleappend="${pt.blockedRatioPercent == 0 ? 'color: var(--text-muted);' : 'color: var(--color-danger); font-weight: 600;'}"
+                                          th:text="${pt.blockedRatioPercent} + '%'">0.0%</span>
+                                    <span th:if="${pt.blockedRatioPercent == 0}" class="badge" style="background: rgba(244,63,94,0.15); color: #f43f5e; font-size: 9px; padding: 0 4px;" title="0% blocked - potential evasion">Bypass</span>
+                                </div>
+                            </td>
+
+                            <!-- Classification -->
+                            <td style="text-align: center;">
+                                <span th:if="${pt.classification == 'HIGH_RISK_RESIDENTIAL'}" class="badge" style="background: rgba(244,63,94,0.15); color: #f43f5e; border: 1px solid #f43f5e; font-size: 10px;">🚨 Residential Evasion</span>
+                                <span th:if="${pt.classification == 'DATACENTER_CLUSTER'}" class="badge badge-warning" style="font-size: 10px;">🏢 Datacenter Scraper</span>
+                                <span th:if="${pt.classification == 'TOR_ANONYMIZER'}" class="badge badge-purple" style="font-size: 10px;">🧅 Tor Exit Node</span>
+                                <span th:if="${pt.classification == 'VERIFIED_BOT'}" class="badge badge-success" style="font-size: 10px;">🤖 Verified Crawler</span>
+                                <span th:if="${pt.classification == 'DISTRIBUTED_ACTIVE'}" class="badge badge-info" style="font-size: 10px;">🌐 Distributed Swarm</span>
+                                <span th:if="${pt.classification == 'REGULAR_SUBNET' or pt.classification == null}" class="badge badge-secondary" style="font-size: 10px;">Standard Subnet</span>
+                            </td>
+
+                            <!-- Action -->
+                            <td style="text-align: right;">
+                                <a th:href="@{/offenders(clientQuery=${pt.subnetGroup},groupBy='SUBNET')}"
+                                   class="btn"
+                                   style="padding: 2px 8px; font-size: 11px;"
+                                   title="Inspect in Top Offenders Forensics">Inspect &rarr;</a>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -224,6 +394,93 @@
                 if (initTimer) clearTimeout(initTimer);
                 initTimer = setTimeout(doInitCharts, 25);
             }
+
+            window.highlightScatterTableRow = function(subnetGroup) {
+                const table = document.getElementById('scatter-clusters-table');
+                if (!table) return false;
+                const rows = table.querySelectorAll('tbody tr');
+                let matched = null;
+                rows.forEach(r => {
+                    if (r.getAttribute('data-subnet') === subnetGroup) {
+                        matched = r;
+                        r.style.backgroundColor = 'rgba(56, 189, 248, 0.2)';
+                        r.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    } else {
+                        r.style.backgroundColor = '';
+                    }
+                });
+                if (matched) {
+                    setTimeout(() => {
+                        if (matched) matched.style.backgroundColor = '';
+                    }, 2500);
+                    return true;
+                }
+                return false;
+            };
+
+            window.filterScatterTable = function(filter) {
+                const table = document.getElementById('scatter-clusters-table');
+                if (!table) return;
+                const rows = table.querySelectorAll('tbody tr');
+                const buttons = document.querySelectorAll('.scatter-filter-btn');
+                buttons.forEach(b => {
+                    if (b.getAttribute('data-filter') === filter) {
+                        b.classList.add('active');
+                    } else {
+                        b.classList.remove('active');
+                    }
+                });
+
+                let visible = 0;
+                rows.forEach(r => {
+                    const blocked = parseInt(r.getAttribute('data-blocked') || '0', 10);
+                    const hasNote = r.getAttribute('data-hasnote') === 'true';
+
+                    let show = true;
+                    if (filter === 'bypass') {
+                        show = (blocked === 0);
+                    } else if (filter === 'annotated') {
+                        show = hasNote;
+                    }
+
+                    if (show) {
+                        r.style.display = '';
+                        visible++;
+                    } else {
+                        r.style.display = 'none';
+                    }
+                });
+
+                const countEl = document.getElementById('scatter-table-count');
+                if (countEl) {
+                    countEl.textContent = visible + ' Subnets';
+                }
+            };
+
+            let scatterSortState = {};
+            window.sortScatterTable = function(colIndex, type) {
+                const table = document.getElementById('scatter-clusters-table');
+                if (!table) return;
+                const tbody = table.querySelector('tbody');
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+                const asc = !scatterSortState[colIndex];
+                scatterSortState = {};
+                scatterSortState[colIndex] = asc;
+
+                rows.sort((rowA, rowB) => {
+                    const textA = (rowA.children[colIndex].innerText || '').trim();
+                    const textB = (rowB.children[colIndex].innerText || '').trim();
+                    if (type === 'number') {
+                        const valA = parseFloat(textA.replace(/[^0-9.-]/g, '')) || 0;
+                        const valB = parseFloat(textB.replace(/[^0-9.-]/g, '')) || 0;
+                        return asc ? valA - valB : valB - valA;
+                    } else {
+                        return asc ? textA.localeCompare(textB) : textB.localeCompare(textA);
+                    }
+                });
+
+                rows.forEach(r => tbody.appendChild(r));
+            };
 
             scheduleInit();
 

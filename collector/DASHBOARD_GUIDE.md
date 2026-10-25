@@ -129,8 +129,14 @@ The Scatterplot solves this by mapping traffic aggregated across enclosing **Sub
 #### Coordinate Space & Aesthetics:
 * **X-Axis (Distinct Client IPs - Logarithmic):** Measures the width of the attack footprint within the subnet (from 1 IP up to 256 IPs for a `/24`).
 * **Y-Axis (Average Requests per IP - Logarithmic):** Measures how aggressively each individual IP in that subnet acted.
-* **Bubble Radius ($R$):** Proportional to the total aggregated volume sent by the subnet:
-  $$\text{Radius} = \max\left(4, \, \min\left(28, \, \frac{\sqrt{\text{Total Requests}}}{2}\right)\right)$$
+* **Bubble Radius ($R$):** Dynamically and relatively scaled proportional to total request volume within the current view window:
+  $$R = R_{\min} + (R_{\max} - R_{\min}) \cdot \sqrt{\frac{\text{Requests} - V_{\min}}{V_{\max} - V_{\min}}} \quad (6 \le R \le 26\,\text{px})$$
+  Ensures that low-volume clusters remain clearly clickable ($R \ge 6\,\text{px}$) while high-volume campaign leaders stand out without obscuring neighboring bubbles ($R \le 26\,\text{px}$).
+* **Block-Rate Arc Indicator (Outer Red Ring):**
+  Each bubble features a dynamic circular perimeter arc indicating the percentage of blocked requests ($0\% \dots 100\%$):
+  * **No Arc (0% Blocked):** Signals a successful **Rate-Limiting Bypass / Evasion** where requests slipped past per-IP limits unimpeded.
+  * **Partial Arc ($1\%\dots99\%$):** Shows partial throttling enforcement across the subnet.
+  * **Full Closed Ring (100% Blocked):** Indicates complete mitigation of the subnet's traffic by the Valve.
 * **Logarithmic Scaling:** Employs logarithmic $X$ and $Y$ scales so that single rogue IPs ($X=1, Y=10{,}000$) and massive distributed clusters ($X=200, Y=3$) are visible simultaneously without clustering at the axes.
 
 #### Cluster Quadrant Analysis:
@@ -152,7 +158,7 @@ The Scatterplot solves this by mapping traffic aggregated across enclosing **Sub
 * **Quadrant 4 (Bottom-Right - Distributed Botnets & Rotating Proxies):** High distinct IPs ($X \ge 10$), low requests per IP ($Y < 50$). **This is the smoking gun of residential proxy attacks.** Even though no single IP exceeded rate limits, the subnet as a whole executed a synchronized distributed campaign!
 
 #### Cluster Risk Ratings & Color Legend:
-* 🔴 **Crimson Red (`CRITICAL` / `HIGH`):** Heuristically flagged **Residential Proxy Cluster**. High distinct IP count in consumer ISP subnets with low average requests per IP.
+* 🔴 **Crimson Red (`CRITICAL` / `HIGH`):** Heuristically flagged **Residential Proxy Evasion**. High distinct IP count in consumer ISP subnets with low average requests per IP.
 * 🟠 **Amber Orange (`MEDIUM`):** Datacenter / Cloud scraper cluster. Subnets originating from hosting ASNs.
 * 🟣 **Purple (`ELEVATED`):** Tor exit nodes or commercial VPN gateways.
 * 🟢 **Emerald Green (`BENIGN`):** Verified crawler subnets (e.g. Googlebot IP ranges).
@@ -165,12 +171,18 @@ The Scatterplot solves this by mapping traffic aggregated across enclosing **Sub
   * Subnet note line with verdict icon, categorization name, and excerpt (e.g. `📝 Subnet Note: 🟡 Suspicious - "Known residential proxy egress block"`).
   * ASN note line with verdict icon, categorization name, and excerpt (e.g. `📝 ASN Note (AS3320): 🟢 Legitimate - "Major German ISP"`).
 
-#### Interactive Click-to-Drilldown:
-Clicking any bubble in the scatterplot instantly captures the clicked subnet prefix (e.g., `198.51.100.0/24`) and navigates directly to:
-```
-/offenders?subnet=198.51.100.0/24&groupBy=ROLLUP
-```
-This automatically displays all member IPs, block counts, and Autonomous System details, providing immediate evidence for firewall rules or Valve configuration tuning.
+#### Subnet Cluster Forensics Table & Quick Filters:
+Positioned directly beneath the scatter canvas, this interactive breakdown table transforms visual patterns into actionable operational data:
+* **Quick Filter Chips:**
+  * `All`: Displays all analyzed subnet clusters.
+  * `⚠️ 0% Blocked (Bypass)`: Instantly isolates clusters that completely evaded rate limiting—the prime indicator for distributed residential proxy campaigns.
+  * `📝 With Notes`: Filters for clusters that have existing operator annotations or triage verdicts.
+* **Click-to-Sort Columns:** Sort by Subnet, ASN/ISP, Distinct IPs ($X$), Ø Reqs/IP ($Y$), Total Volume, Blocked Count, or Block Rate %.
+* **Bidirectional Hover & Click Synchronization:**
+  * Hovering over any table row programmatically highlights and opens the tooltip for the corresponding bubble in the scatterplot.
+  * Clicking any bubble in the scatterplot smoothly scrolls to and illuminates the corresponding record in the table.
+* **Inline Note Triage:** Subnet and ASN notes can be viewed or assigned directly from the table using the `+📝` and verdict badges.
+* **Deep-Dive Drilldown:** Each row provides an `Inspect →` link navigating directly to `/offenders?clientQuery=...&groupBy=SUBNET` to audit the underlying individual client IPs.
 
 ---
 

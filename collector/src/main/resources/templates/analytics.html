@@ -94,6 +94,7 @@
           hx-target="#analytics-container"
           hx-swap="outerHTML"
           hx-push-url="true"
+          hx-trigger="submit, annotationChanged from:body"
           class="filter-panel">
 
         <!-- Hidden inputs preserving the active time window & tab mode -->
@@ -167,6 +168,9 @@
 
     <!-- Contextual Help Drawer -->
     <div th:replace="~{fragments/help-drawer :: helpDrawer}"></div>
+
+    <!-- Note Editor & Viewer Modal (loaded dynamically via HTMX) -->
+    <div id="note-modal-container"></div>
 </div>
 
 <script>
