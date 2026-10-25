@@ -302,6 +302,12 @@
       color: #166534;
     }
 
+    .status-field-hint.warning {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      color: #92400e;
+    }
+
     .status-field-hint.invalid {
       background: #fef2f2;
       border: 1px solid #fecaca;
@@ -1178,7 +1184,8 @@
               </div>
               <div class="field-desc">An optional parameter for naming the monitor instance. Separates configurations
                 for multi-instance setups and identifies the valve in log messages. Default: <code>DEFAULT</code></div>
-              <input type="text" id="monitorName" name="monitorName" placeholder="e.g. PROD VALVE">
+              <input type="text" id="monitorName" name="monitorName" placeholder="e.g. PROD-VALVE">
+              <div id="hintMonitorName" class="status-field-hint warning" style="display: none;"></div>
             </div>
 
             <!-- 1b. description -->
@@ -1890,7 +1897,7 @@
         name: 'Test Configuration',
         description: 'From README (/valvetest), 5 requests / 30s',
         values: {
-          monitorName: 'TEST VALVE',
+          monitorName: 'TEST-VALVE',
           description: 'Demo test valve for verifying blocking functionality',
           alwaysForbiddenIPs: '',
           alwaysAllowedIPs: '',
@@ -1915,7 +1922,7 @@
         name: 'Production Standard',
         description: 'Recommended baseline for dynamic web traffic',
         values: {
-          monitorName: 'PROD VALVE',
+          monitorName: 'PROD-VALVE',
           description: 'Baseline rate limiting for dynamic application routes',
           alwaysForbiddenIPs: '',
           alwaysAllowedIPs: '127\\.0\\.0\\.1',
@@ -1940,7 +1947,7 @@
         name: 'Aggressive Bot Defense',
         description: 'With IPv4 (/24) and IPv6 (/64) subnet aggregation',
         values: {
-          monitorName: 'BOT DEFENSE',
+          monitorName: 'BOT-DEFENSE',
           description: 'Subnet-aggregated rate limiter countering distributed scraper bots',
           alwaysForbiddenIPs: '',
           alwaysAllowedIPs: '127\\.0\\.0\\.1',
@@ -1965,7 +1972,7 @@
         name: 'Marking Mode Template',
         description: 'No blocking; sets request attribute for servlets',
         values: {
-          monitorName: 'MARKING VALVE',
+          monitorName: 'MARKING-VALVE',
           description: 'Non-blocking audit valve tagging requests for downstream inspection',
           alwaysForbiddenIPs: '',
           alwaysAllowedIPs: '',
@@ -2088,6 +2095,7 @@
       updateEvictionIndicators();
       updateSubnetMaskIndicators();
       updateStatusDashboardIndicators();
+      updateMonitorNameIndicators();
       runSimulation();
       saveStateToLocalStorage();
     }
@@ -2358,6 +2366,42 @@
       }
       if (v6Input && v6Hint) {
         updateSingleSubnetHint(v6Input.value, 128, v6Hint);
+      }
+    }
+
+    function updateMonitorNameIndicators() {
+      const nameInput = document.getElementById('monitorName');
+      const nameHint = document.getElementById('hintMonitorName');
+      if (!nameInput || !nameHint) return;
+
+      const rawName = nameInput.value;
+      if (/\s/.test(rawName)) {
+        const suggested = rawName.trim().replace(/\s+/g, '-');
+        nameHint.style.display = 'flex';
+        nameHint.className = 'status-field-hint warning';
+
+        let applyHtml = '';
+        if (suggested) {
+          applyHtml = ` (Recommendation: <a href="#" id="btnApplySuggestedName" style="color:var(--primary); font-weight:600; text-decoration:underline;">Use "${escapeHtml(suggested)}"</a>)`;
+        }
+
+        nameHint.innerHTML = `<span>&#9888;</span><div><strong>Spaces detected in valve name:</strong> Consider using hyphens instead of spaces to avoid configuration issues${applyHtml}. In the Collector, Spring Boot's YAML binder ignores spaces in unbracketed map keys (e.g. <code>SUBNET MONITORING</code> becomes <code>SUBNETMONITORING</code>). If you retain spaces, configure the Collector rule with bracket notation: <code>"[${escapeHtml(rawName)}]":</code>.</div>`;
+
+        const applyBtn = document.getElementById('btnApplySuggestedName');
+        if (applyBtn) {
+          applyBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            currentPresetId = null;
+            renderPresets();
+            nameInput.value = suggested;
+            updateMonitorNameIndicators();
+            updateXml();
+            saveStateToLocalStorage();
+          });
+        }
+      } else {
+        nameHint.style.display = 'none';
+        nameHint.innerHTML = '';
       }
     }
 
@@ -3350,6 +3394,7 @@
         updateEvictionIndicators();
         updateSubnetMaskIndicators();
         updateStatusDashboardIndicators();
+        updateMonitorNameIndicators();
         runSimulation();
 
         return true;
@@ -3367,6 +3412,7 @@
       updateEvictionIndicators();
       updateSubnetMaskIndicators();
       updateStatusDashboardIndicators();
+      updateMonitorNameIndicators();
       runSimulation();
       saveStateToLocalStorage();
     });
@@ -3376,6 +3422,7 @@
       updateEvictionIndicators();
       updateSubnetMaskIndicators();
       updateStatusDashboardIndicators();
+      updateMonitorNameIndicators();
       runSimulation();
       saveStateToLocalStorage();
     });
