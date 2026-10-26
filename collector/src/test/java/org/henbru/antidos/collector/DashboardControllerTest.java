@@ -505,5 +505,15 @@ class DashboardControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("id=\"profiles-table-container\"")));
 	}
+
+	@Test
+	void testHelpFragmentWithSubnetProfilesSection() throws Exception {
+		mockMvc.perform(get("/fragments/help")
+						.param("doc", "ui")
+						.param("section", "subnet-profiles"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Subnet Profiles &amp; Baseline Radar")))
+				.andExpect(content().string(containsString("Real-Time KPI Summary Cards")));
+	}
 }
 

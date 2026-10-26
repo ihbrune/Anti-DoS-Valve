@@ -670,14 +670,14 @@ When polling the status endpoint from automated monitoring scripts or collectors
 
 ---
 
-# Anti-DoS Collector & Dashboard
+# Anti-DoS Collector & Fleet Management
 
-For multi-server fleet monitoring and advanced analytics across multiple Tomcat nodes, check out the standalone **[Anti-DoS Collector](collector/README.md)**:
-* Aggregates telemetry across multiple servers and valves.
-* Real-time HTMX fleet dashboard with Incident Explorer, Subnet/ASN Rollup, and Bot categorization.
+For multi-server fleet monitoring, threat intelligence, and advanced analytics across multiple Tomcat nodes, check out the standalone **[Anti-DoS Collector](collector/README.md)**:
+* **[Fleet Architecture & Dual-Plane Guide](collector/README.md)**: Deep dive into the synergy between edge Tomcat Valves and central Collector intelligence.
+* Real-time HTMX fleet dashboard with Incident Explorer, 2D Residential Proxy Scatterplots, Subnet/ASN Rollup, and Bot categorization.
 * Built-in Demo Mode (`java -jar anti-dos-collector-*.jar demo`) for instant exploration.
-* **[Production Setup & Zero-Friction Update Guide](collector/README.md#production-setup--zero-friction-update-guide)** for configuring automated 24/7 systemd operation with conflict-free GitHub updates.
-* **[Relational Database Schema & Data Model](collector/README.md#relational-database-schema--data-model)** describing all tables, attributes, entity relationships, and indexing strategies.
+* **[Production Setup & Operations Guide](collector/SETUP_GUIDE.md)** for configuring automated 24/7 systemd operation with conflict-free GitHub updates.
+* **[Relational Database Schema & Data Model](collector/SETUP_GUIDE.md#relational-database-schema--data-model)** describing all tables, attributes, entity relationships, and indexing strategies.
 
 
 

@@ -54,7 +54,7 @@
                     <span>&#x2699;</span>
                 </a>
                 <button type="button" class="nav-util-btn"
-                        hx-get="/fragments/help?doc=ui&section=top-offender-analytics-subnet-forensics"
+                        hx-get="/fragments/help?doc=ui&section=subnet-profiles"
                         hx-target="#help-drawer-content"
                         onclick="openHelpDrawer()"
                         title="Open Profiles Help Guide"
@@ -290,21 +290,12 @@
     <!-- Profiles Table Container (Loaded via fragment or initial render) -->
     <div th:replace="~{fragments/profiles-table :: profilesTable}"></div>
 
+    <!-- Contextual Help Drawer -->
+    <div th:replace="~{fragments/help-drawer :: helpDrawer}"></div>
 </div>
 
 <!-- Note View/Edit Modal Container -->
 <div id="note-modal-container"></div>
-
-<!-- Help Drawer -->
-<div id="help-drawer" class="help-drawer">
-    <div class="help-drawer-header">
-        <h3>Documentation &amp; User Guide</h3>
-        <button type="button" class="help-drawer-close" onclick="closeHelpDrawer()">&times;</button>
-    </div>
-    <div id="help-drawer-content" class="help-drawer-body">
-        <p>Loading documentation...</p>
-    </div>
-</div>
 
 <script>
     function setPatternFilter(pattern) {
@@ -318,14 +309,6 @@
     function toggleCheckboxes(className, check) {
         document.querySelectorAll('.' + className).forEach(cb => cb.checked = check);
         htmx.trigger('#profiles-filter-form', 'submit');
-    }
-
-    function openHelpDrawer() {
-        document.getElementById('help-drawer').classList.add('open');
-    }
-
-    function closeHelpDrawer() {
-        document.getElementById('help-drawer').classList.remove('open');
     }
 </script>
 

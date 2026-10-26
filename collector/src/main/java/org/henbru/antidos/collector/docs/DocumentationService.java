@@ -254,7 +254,7 @@ public class DocumentationService {
 	private String resolveDocTitle(String key) {
 		return switch (key) {
 			case DOC_SETUP -> "Setup, Deployment & Operations Guide";
-			case DOC_README -> "Anti-DoS Collector Overview";
+			case DOC_README -> "Fleet Architecture & Management Guide";
 			default -> "Dashboard & Forensics User Guide";
 		};
 	}

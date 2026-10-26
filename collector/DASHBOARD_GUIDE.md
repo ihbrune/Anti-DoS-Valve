@@ -1,6 +1,7 @@
 # Anti-DoS Collector: Dashboard & Forensics Guide
 
 This guide is designed for **Security Analysts, Incident Responders, and Web Application Owners** monitoring web traffic and mitigating Denial-of-Service (DoS) and scraping incidents using the Anti-DoS Collector.
+For the high-level system philosophy and fleet interaction, refer to the [🏗️ Fleet Architecture Guide](README.md). For deployment and server configuration, refer to the [⚙️ Setup & Operations Guide](SETUP_GUIDE.md).
 
 ---
 

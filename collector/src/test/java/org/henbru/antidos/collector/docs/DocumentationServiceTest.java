@@ -88,8 +88,13 @@ class DocumentationServiceTest {
 		assertTrue(serverSectionHtml.contains("Server Node Detail View"));
 		assertTrue(serverSectionHtml.contains("Discovered Valve Runtime Configurations"));
 		assertTrue(serverSectionHtml.contains("Monitored Valves &amp; Active Tracking Configuration") || serverSectionHtml.contains("Monitored Valves & Active Tracking Configuration"));
-		assertTrue(serverSectionHtml.contains("Rate Limit Threshold Card"));
+		// Extract section for Subnet Profiles
+		String profileSectionHtml = service.getSectionHtml(DocumentationService.DOC_UI, "subnet-profiles");
+		assertNotNull(profileSectionHtml);
+		assertTrue(profileSectionHtml.contains("Subnet Profiles &amp; Baseline Radar") || profileSectionHtml.contains("Subnet Profiles & Baseline Radar"));
+		assertTrue(profileSectionHtml.contains("Real-Time KPI Summary Cards"));
 	}
+
 
 	@Test
 	void testReadmeLinksAreRewrittenToInAppRoutes() {

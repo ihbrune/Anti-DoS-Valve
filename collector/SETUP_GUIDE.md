@@ -2,6 +2,7 @@
 
 This guide is designed for **DevOps Engineers, Site Reliability Engineers (SRE), and System Administrators** installing, deploying, configuring, and operating the **Anti-DoS Collector** in production environments.
 
+For high-level system philosophy and fleet interaction, refer to the [🏗️ Fleet Architecture Guide](README.md).
 For user interface navigation and incident forensics, refer to the [📖 Dashboard & Forensics User Guide](DASHBOARD_GUIDE.md).
 
 ---
