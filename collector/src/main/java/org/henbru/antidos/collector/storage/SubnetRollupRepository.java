@@ -36,6 +36,30 @@ public class SubnetRollupRepository {
 		String rawClientType = rs.getString("client_type");
 		ClientType clientType = rawClientType != null ? ClientType.valueOf(rawClientType) : ClientType.UNKNOWN;
 
+		long returningRequests = 0L;
+		try {
+			returningRequests = rs.getLong("returning_requests");
+		} catch (SQLException ignored) {
+		}
+
+		long returningTrackedRequests = 0L;
+		try {
+			returningTrackedRequests = rs.getLong("returning_tracked_requests");
+		} catch (SQLException ignored) {
+		}
+
+		long authenticatedRequests = 0L;
+		try {
+			authenticatedRequests = rs.getLong("authenticated_requests");
+		} catch (SQLException ignored) {
+		}
+
+		long authenticatedTrackedRequests = 0L;
+		try {
+			authenticatedTrackedRequests = rs.getLong("authenticated_tracked_requests");
+		} catch (SQLException ignored) {
+		}
+
 		return new ClientSubnetRollup(
 				rs.getLong("id"),
 				rs.getTimestamp("bucket_start").toInstant(),
@@ -55,7 +79,11 @@ public class SubnetRollupRepository {
 				rs.getString("as_org"),
 				rs.getString("country_code"),
 				clientType,
-				rs.getTimestamp("created_at").toInstant()
+				rs.getTimestamp("created_at").toInstant(),
+				returningRequests,
+				returningTrackedRequests,
+				authenticatedRequests,
+				authenticatedTrackedRequests
 		);
 	};
 
@@ -69,8 +97,10 @@ public class SubnetRollupRepository {
 				    bucket_start, bucket_end, bucket_minutes, server_id, valve_name, subnet_group,
 				    total_requests, active_requests, blocked_requests, distinct_clients,
 				    min_requests_per_client, max_requests_per_client, slots_active_count,
-				    asn, as_org, country_code, client_type
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				    asn, as_org, country_code, client_type,
+				    returning_requests, returning_tracked_requests,
+				    authenticated_requests, authenticated_tracked_requests
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (bucket_start, server_id, valve_name, subnet_group) DO UPDATE SET
 				    bucket_end = EXCLUDED.bucket_end,
 				    bucket_minutes = EXCLUDED.bucket_minutes,
@@ -84,7 +114,11 @@ public class SubnetRollupRepository {
 				    asn = COALESCE(EXCLUDED.asn, client_subnet_rollups.asn),
 				    as_org = COALESCE(EXCLUDED.as_org, client_subnet_rollups.as_org),
 				    country_code = COALESCE(EXCLUDED.country_code, client_subnet_rollups.country_code),
-				    client_type = EXCLUDED.client_type
+				    client_type = EXCLUDED.client_type,
+				    returning_requests = EXCLUDED.returning_requests,
+				    returning_tracked_requests = EXCLUDED.returning_tracked_requests,
+				    authenticated_requests = EXCLUDED.authenticated_requests,
+				    authenticated_tracked_requests = EXCLUDED.authenticated_tracked_requests
 				""";
 
 		jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
@@ -113,6 +147,10 @@ public class SubnetRollupRepository {
 				ps.setString(15, r.asOrg());
 				ps.setString(16, r.countryCode());
 				ps.setString(17, r.clientType() != null ? r.clientType().name() : ClientType.UNKNOWN.name());
+				ps.setLong(18, r.returningRequests());
+				ps.setLong(19, r.returningTrackedRequests());
+				ps.setLong(20, r.authenticatedRequests());
+				ps.setLong(21, r.authenticatedTrackedRequests());
 			}
 
 			@Override

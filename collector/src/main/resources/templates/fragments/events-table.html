@@ -20,6 +20,7 @@
                     <th>Requests</th>
                     <th>Retained</th>
                     <th style="min-width: 140px;">Effective Total</th>
+                    <th>Cookies</th>
                     <th style="text-align: right;">Action</th>
                 </tr>
             </thead>
@@ -111,6 +112,14 @@
                             <span th:if="${event.status != 'ACTIVE' and !event.completed}" class="badge badge-warning badge-status" title="Rate-limit exceeded - Currently blocked (429)">
                                 <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" class="status-icon"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 6h2v6h-2V7zm0 8h2v2h-2v-2z"/></svg>Blocked
                             </span>
+                        </div>
+                    </td>
+                    <td>
+                        <div style="display: flex; flex-direction: column; gap: 3px;">
+                            <span th:if="${event.returningCount == null}" class="text-muted" style="font-size: 11px; color: var(--text-muted);" title="Visitor cookie tracking not active on this valve">—</span>
+                            <span th:if="${event.returningCount != null and event.returningCount == 0}" class="badge badge-warning" style="font-size: 10px; padding: 1px 6px;" th:title="'0 of ' + ${event.requestCount} + ' requests carried a valid visitor cookie (first contact / cookies ignored)'">🍪 0% (0/<span th:text="${event.requestCount}"></span>)</span>
+                            <span th:if="${event.returningCount != null and event.returningCount > 0}" class="badge badge-success" style="font-size: 10px; padding: 1px 6px;" th:title="${event.returningCount} + ' of ' + ${event.requestCount} + ' requests carried a valid visitor cookie'">🍪 <span th:text="${#numbers.formatDecimal(event.returningRatio(), 1, 0)} + '%'"></span> (<span th:text="${event.returningCount}"></span>)</span>
+                            <span th:if="${event.authenticatedCount != null and event.authenticatedCount > 0}" class="badge badge-info" style="font-size: 10px; padding: 1px 6px;" th:title="${event.authenticatedCount} + ' of ' + ${event.requestCount} + ' requests were authenticated'">🔐 <span th:text="${#numbers.formatDecimal(event.authenticatedRatio(), 1, 0)} + '%'"></span></span>
                         </div>
                     </td>
                     <td style="text-align: right;">

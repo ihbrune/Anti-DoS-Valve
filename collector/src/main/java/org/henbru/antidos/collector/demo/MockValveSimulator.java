@@ -87,12 +87,14 @@ public class MockValveSimulator {
 		String serverTime = DateTimeFormatter.ISO_INSTANT.format(Instant.ofEpochMilli(now));
 
 		String resolvedValve = resolveValveName(nodeId, valveName);
+		boolean visitorCookieActive = !"api-gateway".equalsIgnoreCase(normalizeNodeId(nodeId));
 		ValveDetailsDto.ValveHeaderDto header = new ValveDetailsDto.ValveHeaderDto(
 				resolvedValve,
 				currentSlotKey,
 				lastCompletedSlotKey,
 				SLOT_LENGTH_MILLIS,
-				NUMBER_OF_SLOTS
+				NUMBER_OF_SLOTS,
+				visitorCookieActive
 		);
 
 		long targetSlotKey = resolveSlotKey(slotParam, currentSlotKey, lastCompletedSlotKey);
@@ -134,9 +136,11 @@ public class MockValveSimulator {
 		List<ValveDetailsDto.ActiveClientDto> activeList = List.of();
 		if (!"0".equals(effectiveActiveLimit) && totalActive > 0) {
 			int min = (activeMinCount != null && activeMinCount > 0) ? activeMinCount : 1;
+			int c1 = Math.max(min, 2);
+			int c2 = Math.max(min, 5);
 			activeList = List.of(
-					new ValveDetailsDto.ActiveClientDto("192.168.1.50", Math.max(min, 2), 0, Math.max(min, 2), 60, 5),
-					new ValveDetailsDto.ActiveClientDto("10.0.0.12", Math.max(min, 5), 1, Math.max(min, 6), 60, 10)
+					new ValveDetailsDto.ActiveClientDto("192.168.1.50", c1, 0, c1, 60, 5, 1, visitorCookieActive ? c1 : null, null),
+					new ValveDetailsDto.ActiveClientDto("10.0.0.12", c2, 1, c2 + 1, 60, 10, 1, visitorCookieActive ? (c2 - 1) : null, null)
 			);
 		}
 
@@ -502,9 +506,9 @@ public class MockValveSimulator {
 			String lastUpdate = DateTimeFormatter.ISO_INSTANT.format(
 					Instant.ofEpochMilli(slotKey * SLOT_LENGTH_MILLIS + 4000)
 			);
-			blocked.add(new ValveDetailsDto.BlockedClientDto("198.51.100.42", 145, 0, false, lastUpdate));
+			blocked.add(new ValveDetailsDto.BlockedClientDto("198.51.100.42", 145, 0, 145, false, lastUpdate, 1, 120, null));
 			if (rnd.nextBoolean()) {
-				blocked.add(new ValveDetailsDto.BlockedClientDto("203.0.113.88", 128, 0, false, lastUpdate));
+				blocked.add(new ValveDetailsDto.BlockedClientDto("203.0.113.88", 128, 0, 128, false, lastUpdate, 1, 0, null));
 			}
 		}
 
@@ -518,20 +522,23 @@ public class MockValveSimulator {
 		List<ValveDetailsDto.BlockedClientDto> blocked = new ArrayList<>();
 		String lastUpdate = DateTimeFormatter.ISO_INSTANT.format(
 				Instant.ofEpochMilli(slotKey * SLOT_LENGTH_MILLIS + 3500)
-		);
-		// Baseline aggregated /24 subnet exceeding threshold
+			);
+		// Baseline aggregated /24 subnet exceeding threshold (legitimate heavy traffic with ~82% cookies)
+		int req1 = 320 + rnd.nextInt(90);
 		blocked.add(new ValveDetailsDto.BlockedClientDto(
-				"198.51.100.0/24", 320 + rnd.nextInt(90), 0, 320 + rnd.nextInt(90), true, lastUpdate, 24 + rnd.nextInt(8)
+				"198.51.100.0/24", req1, 0, req1, true, lastUpdate, 24 + rnd.nextInt(8), (int) (req1 * 0.82), null
 		));
 		if (slotKey % 2 == 0) {
-			// Residential proxy swarm cluster: 260 reqs spread across 65-80 distinct client IPs (~3.5 reqs/IP)
+			// Residential proxy swarm cluster: 260 reqs spread across 65-80 distinct client IPs (~3.5 reqs/IP) - 0% cookies!
+			int req2 = 260 + rnd.nextInt(70);
 			blocked.add(new ValveDetailsDto.BlockedClientDto(
-					"185.246.221.0/24", 260 + rnd.nextInt(70), 0, 260 + rnd.nextInt(70), true, lastUpdate, 70 + rnd.nextInt(15)
+					"185.246.221.0/24", req2, 0, req2, true, lastUpdate, 70 + rnd.nextInt(15), 0, null
 			));
 		}
 		if (slotKey % 5 == 0) {
+			int req3 = 290 + rnd.nextInt(80);
 			blocked.add(new ValveDetailsDto.BlockedClientDto(
-					"45.154.255.0/24", 290 + rnd.nextInt(80), 0, 290 + rnd.nextInt(80), true, lastUpdate, 32 + rnd.nextInt(10)
+					"45.154.255.0/24", req3, 0, req3, true, lastUpdate, 32 + rnd.nextInt(10), 0, null
 			));
 		}
 

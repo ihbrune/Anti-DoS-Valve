@@ -15,6 +15,7 @@ import org.henbru.antidos.collector.config.ValveRuleResolver;
 import org.henbru.antidos.collector.enrichment.EntityResolver;
 import org.henbru.antidos.collector.model.ClientEvent;
 import org.henbru.antidos.collector.model.EndpointHeartbeat;
+import org.henbru.antidos.collector.model.MonitoredValve;
 import org.henbru.antidos.collector.model.NetworkEntity;
 import org.henbru.antidos.collector.model.PollEventLog;
 import org.henbru.antidos.collector.model.SlotSnapshot;
@@ -374,6 +375,11 @@ public class CollectorPollerService {
 			int eventsCount = 0;
 			List<ClientEvent> events = new ArrayList<>();
 
+			boolean isVisitorTrackingActive = (details.valve() != null && Boolean.TRUE.equals(details.valve().visitorCookieEnabled()))
+					|| (monitoredValveRepository != null && monitoredValveRepository.findByServerIdAndValveName(endpoint.getName(), valveName)
+							.map(MonitoredValve::visitorCookieEnabled)
+							.orElse(false));
+
 			// 1. Ingest blocked clients (status = BLOCKED, locked = true)
 			if (details.blockedClients() != null && !details.blockedClients().isEmpty()) {
 				for (ValveDetailsDto.BlockedClientDto c : details.blockedClients()) {
@@ -393,6 +399,8 @@ public class CollectorPollerService {
 					}
 					Integer dc = c.distinctClients();
 					int distinct = dc != null && dc > 0 ? dc : 1;
+					Integer returning = (isVisitorTrackingActive && c.returningCount() != null) ? c.returningCount() : null;
+					Integer authenticated = c.authenticatedCount();
 					events.add(new ClientEvent(
 							null,
 							endpoint.getName(),
@@ -406,7 +414,9 @@ public class CollectorPollerService {
 							ClientEvent.STATUS_BLOCKED,
 							completed,
 							pollTime,
-							distinct
+							distinct,
+							returning,
+							authenticated
 					).withEntityId(entityId));
 				}
 			}
@@ -424,6 +434,8 @@ public class CollectorPollerService {
 					}
 					Integer dc = c.distinctClients();
 					int distinct = dc != null && dc > 0 ? dc : 1;
+					Integer returning = (isVisitorTrackingActive && c.returningCount() != null) ? c.returningCount() : null;
+					Integer authenticated = c.authenticatedCount();
 					events.add(new ClientEvent(
 							null,
 							endpoint.getName(),
@@ -437,7 +449,9 @@ public class CollectorPollerService {
 							ClientEvent.STATUS_ACTIVE,
 							completed,
 							pollTime,
-							distinct
+							distinct,
+							returning,
+							authenticated
 					).withEntityId(entityId));
 				}
 			}

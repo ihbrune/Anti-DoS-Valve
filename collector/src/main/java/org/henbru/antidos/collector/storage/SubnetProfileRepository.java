@@ -41,6 +41,30 @@ public class SubnetProfileRepository {
 		String rawClientType = rs.getString("client_type");
 		ClientType clientType = rawClientType != null ? ClientType.valueOf(rawClientType) : ClientType.UNKNOWN;
 
+		long last24hReturning = 0L;
+		try {
+			last24hReturning = rs.getLong("last_24h_returning_requests");
+		} catch (SQLException ignored) {
+		}
+
+		long last24hReturningTracked = 0L;
+		try {
+			last24hReturningTracked = rs.getLong("last_24h_returning_tracked_requests");
+		} catch (SQLException ignored) {
+		}
+
+		long last24hAuth = 0L;
+		try {
+			last24hAuth = rs.getLong("last_24h_authenticated_requests");
+		} catch (SQLException ignored) {
+		}
+
+		long last24hAuthTracked = 0L;
+		try {
+			last24hAuthTracked = rs.getLong("last_24h_authenticated_tracked_requests");
+		} catch (SQLException ignored) {
+		}
+
 		return new SubnetProfile(
 				rs.getString("subnet_group"),
 				rs.getTimestamp("first_seen_at").toInstant(),
@@ -60,7 +84,11 @@ public class SubnetProfileRepository {
 				rs.getString("as_org"),
 				rs.getString("country_code"),
 				clientType,
-				rs.getTimestamp("updated_at").toInstant()
+				rs.getTimestamp("updated_at").toInstant(),
+				last24hReturning,
+				last24hReturningTracked,
+				last24hAuth,
+				last24hAuthTracked
 		);
 	};
 
@@ -75,8 +103,10 @@ public class SubnetProfileRepository {
 				    total_lifetime_requests, total_active_requests, total_blocked_requests,
 				    baseline_daily_avg, baseline_distinct_clients, peak_daily_requests,
 				    last_24h_requests, last_24h_distinct_clients, last_24h_blocked_requests,
-				    last_24h_surge_factor, asn, as_org, country_code, client_type, updated_at
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				    last_24h_surge_factor, asn, as_org, country_code, client_type, updated_at,
+				    last_24h_returning_requests, last_24h_returning_tracked_requests,
+				    last_24h_authenticated_requests, last_24h_authenticated_tracked_requests
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (subnet_group) DO UPDATE SET
 				    first_seen_at = CASE WHEN subnet_profiles.first_seen_at < EXCLUDED.first_seen_at THEN subnet_profiles.first_seen_at ELSE EXCLUDED.first_seen_at END,
 				    last_seen_at = EXCLUDED.last_seen_at,
@@ -95,7 +125,11 @@ public class SubnetProfileRepository {
 				    as_org = COALESCE(EXCLUDED.as_org, subnet_profiles.as_org),
 				    country_code = COALESCE(EXCLUDED.country_code, subnet_profiles.country_code),
 				    client_type = EXCLUDED.client_type,
-				    updated_at = EXCLUDED.updated_at
+				    updated_at = EXCLUDED.updated_at,
+				    last_24h_returning_requests = EXCLUDED.last_24h_returning_requests,
+				    last_24h_returning_tracked_requests = EXCLUDED.last_24h_returning_tracked_requests,
+				    last_24h_authenticated_requests = EXCLUDED.last_24h_authenticated_requests,
+				    last_24h_authenticated_tracked_requests = EXCLUDED.last_24h_authenticated_tracked_requests
 				""";
 
 		jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
@@ -126,6 +160,10 @@ public class SubnetProfileRepository {
 				ps.setString(17, p.countryCode());
 				ps.setString(18, p.clientType() != null ? p.clientType().name() : ClientType.UNKNOWN.name());
 				ps.setTimestamp(19, Timestamp.from(p.updatedAt() != null ? p.updatedAt() : Instant.now()));
+				ps.setLong(20, p.last24hReturningRequests());
+				ps.setLong(21, p.last24hReturningTrackedRequests());
+				ps.setLong(22, p.last24hAuthenticatedRequests());
+				ps.setLong(23, p.last24hAuthenticatedTrackedRequests());
 			}
 
 			@Override
@@ -250,6 +288,10 @@ public class SubnetProfileRepository {
 				    SUM(CASE WHEN bucket_start >= ? THEN active_requests ELSE 0 END) AS active_24h,
 				    SUM(CASE WHEN bucket_start >= ? THEN blocked_requests ELSE 0 END) AS blocked_24h,
 				    MAX(CASE WHEN bucket_start >= ? THEN distinct_clients ELSE 0 END) AS distinct_24h,
+				    SUM(CASE WHEN bucket_start >= ? THEN returning_requests ELSE 0 END) AS returning_24h,
+				    SUM(CASE WHEN bucket_start >= ? THEN returning_tracked_requests ELSE 0 END) AS returning_tracked_24h,
+				    SUM(CASE WHEN bucket_start >= ? THEN authenticated_requests ELSE 0 END) AS auth_24h,
+				    SUM(CASE WHEN bucket_start >= ? THEN authenticated_tracked_requests ELSE 0 END) AS auth_tracked_24h,
 				    SUM(CASE WHEN bucket_start < ? THEN total_requests ELSE 0 END) AS req_prior,
 				    MAX(CASE WHEN bucket_start < ? THEN bucket_end ELSE NULL END) AS last_seen_prior,
 				    MIN(CASE WHEN bucket_start >= ? THEN bucket_start ELSE NULL END) AS first_seen_current,
@@ -277,6 +319,10 @@ public class SubnetProfileRepository {
 			long req24h = rs.getLong("req_24h");
 			long blocked24h = rs.getLong("blocked_24h");
 			int distinct24h = rs.getInt("distinct_24h");
+			long returning24h = rs.getLong("returning_24h");
+			long returningTracked24h = rs.getLong("returning_tracked_24h");
+			long auth24h = rs.getLong("auth_24h");
+			long authTracked24h = rs.getLong("auth_tracked_24h");
 
 			long reqPrior = rs.getLong("req_prior");
 			Timestamp tsPrior = rs.getTimestamp("last_seen_prior");
@@ -325,9 +371,13 @@ public class SubnetProfileRepository {
 					rs.getString("as_org"),
 					rs.getString("country_code"),
 					clientType,
-					Instant.now()
+					Instant.now(),
+					returning24h,
+					returningTracked24h,
+					auth24h,
+					authTracked24h
 			);
-		}, ts24h, ts24h, ts24h, ts24h, ts24h, ts24h, ts24h, ts30d);
+		}, ts24h, ts24h, ts24h, ts24h, ts24h, ts24h, ts24h, ts24h, ts24h, ts24h, ts24h, ts30d);
 	}
 
 	private void appendFilterConditions(

@@ -426,5 +426,71 @@ class CollectorPollerServiceTest {
 		assertEquals("Updated Description", valveOpt3.get().description());
 		assertNotEquals(firstUpdated, valveOpt3.get().lastUpdatedAt());
 	}
+
+	@Test
+	void testPollEndpointVisitorCookieHandling() throws Exception {
+		EndpointConfig endpoint = new EndpointConfig("COOKIE-TEST-NODE", "http://localhost:8080/antidos-status", "tok", false, true);
+
+		ValveOverviewDto.ValveSummaryDto summary = new ValveOverviewDto.ValveSummaryDto(
+				"COOKIE_VALVE", 1, "BLOCKING", false, false, 50, 60, 5, 5, 1, 500L, 499L, 2000L, 200L, 10, 1
+		);
+		ValveOverviewDto overview = new ValveOverviewDto("2026-10-17T10:00:00Z", List.of(summary), null);
+		when(statusClient.fetchOverview(any())).thenReturn(overview);
+
+		ValveDetailsDto.SelectedSlotDto slotDto = new ValveDetailsDto.SelectedSlotDto(
+				"previous", 4, 499L, false, "2026-10-17T09:59:00Z", "2026-10-17T10:00:00Z", 200L, 10, 1
+		);
+
+		// Case 1: Header has visitorCookieEnabled = true
+		ValveDetailsDto.ValveHeaderDto headerEnabled = new ValveDetailsDto.ValveHeaderDto(
+				"COOKIE_VALVE", 500L, 499L, 60, 5, true
+		);
+		ValveDetailsDto.BlockedClientDto blockedClient = new ValveDetailsDto.BlockedClientDto(
+				"192.0.2.1", 60, 5, 65, true, "2026-10-17T09:59:30Z", 1, 15, 3
+		);
+		ValveDetailsDto.ActiveClientDto activeClient = new ValveDetailsDto.ActiveClientDto(
+				"192.0.2.2", 25, 0, 25, 50, 50, 1, 20, 1
+		);
+		ValveDetailsDto detailsEnabled = new ValveDetailsDto(
+				"2026-10-17T10:00:00Z", headerEnabled, slotDto, 1, "all", null, null, List.of(blockedClient), 1, "all", null, null, null, List.of(activeClient), null
+		);
+		when(statusClient.fetchSlotDetails(any(), eq("COOKIE_VALVE"), eq("previous"), eq("all"), eq("all"), eq("0"))).thenReturn(detailsEnabled);
+
+		pollerService.pollEndpoint(endpoint);
+
+		var blockedEvents = clientEventRepository.findRecentEvents("COOKIE-TEST-NODE", "192.0.2.1", 5);
+		assertFalse(blockedEvents.isEmpty());
+		assertEquals(15, blockedEvents.getFirst().returningCount());
+		assertEquals(3, blockedEvents.getFirst().authenticatedCount());
+
+		var activeEvents = clientEventRepository.findRecentEvents("COOKIE-TEST-NODE", "192.0.2.2", 5);
+		assertFalse(activeEvents.isEmpty());
+		assertEquals(20, activeEvents.getFirst().returningCount());
+		assertEquals(1, activeEvents.getFirst().authenticatedCount());
+
+		// Case 2: Header has visitorCookieEnabled = false -> counts must be stored as null!
+		ValveOverviewDto.ValveSummaryDto summary2 = new ValveOverviewDto.ValveSummaryDto(
+				"COOKIE_VALVE", 1, "BLOCKING", false, false, 50, 60, 5, 5, 1, 501L, 500L, 2000L, 200L, 10, 1
+		);
+		when(statusClient.fetchOverview(any())).thenReturn(new ValveOverviewDto("2026-10-17T10:01:00Z", List.of(summary2), null));
+
+		ValveDetailsDto.ValveHeaderDto headerDisabled = new ValveDetailsDto.ValveHeaderDto(
+				"COOKIE_VALVE", 501L, 500L, 60, 5, false
+		);
+		ValveDetailsDto.SelectedSlotDto slotDto2 = new ValveDetailsDto.SelectedSlotDto(
+				"previous", 4, 500L, false, "2026-10-17T10:00:00Z", "2026-10-17T10:01:00Z", 200L, 10, 1
+		);
+		ValveDetailsDto detailsDisabled = new ValveDetailsDto(
+				"2026-10-17T10:01:00Z", headerDisabled, slotDto2, 1, "all", null, null, List.of(blockedClient), 1, "all", null, null, null, List.of(activeClient), null
+		);
+		when(statusClient.fetchSlotDetails(any(), eq("COOKIE_VALVE"), eq("previous"), eq("all"), eq("all"), eq("0"))).thenReturn(detailsDisabled);
+
+		pollerService.pollEndpoint(endpoint);
+
+		var blockedEventsDisabled = clientEventRepository.findRecentEvents("COOKIE-TEST-NODE", "192.0.2.1", 5)
+				.stream().filter(e -> e.slotKey() == 500L).findFirst();
+		assertTrue(blockedEventsDisabled.isPresent());
+		assertNull(blockedEventsDisabled.get().returningCount(), "Should be null when visitor tracking is disabled");
+	}
 }
 

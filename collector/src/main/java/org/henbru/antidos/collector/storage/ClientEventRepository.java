@@ -81,6 +81,18 @@ public class ClientEventRepository {
 			eventStatus = rs.getBoolean("is_locked") ? ClientEvent.STATUS_BLOCKED : ClientEvent.STATUS_ACTIVE;
 		}
 
+		Integer returningCount = null;
+		try {
+			returningCount = rs.getObject("returning_count") != null ? rs.getInt("returning_count") : null;
+		} catch (SQLException ignored) {
+		}
+
+		Integer authenticatedCount = null;
+		try {
+			authenticatedCount = rs.getObject("authenticated_count") != null ? rs.getInt("authenticated_count") : null;
+		} catch (SQLException ignored) {
+		}
+
 		return new ClientEvent(
 				rs.getLong("id"),
 				rs.getString("server_id"),
@@ -107,7 +119,9 @@ public class ClientEventRepository {
 				clientType,
 				enrichmentStatus,
 				entityId,
-				getDistinctClientsFromResultSet(rs)
+				getDistinctClientsFromResultSet(rs),
+				returningCount,
+				authenticatedCount
 		);
 	};
 
@@ -199,9 +213,10 @@ public class ClientEventRepository {
 				    server_id, valve_name, slot_key, slot_time, client_key,
 				    ip_version, cidr_prefix, ip_v4_start, ip_v4_end, ip_v6_start, ip_v6_end, subnet_group,
 				    request_count, retained_count, is_locked, status, is_completed, last_updated_at,
-				    asn, as_org, country_code, client_type, enrichment_status, entity_id, distinct_clients
+				    asn, as_org, country_code, client_type, enrichment_status, entity_id, distinct_clients,
+				    returning_count, authenticated_count
 				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (server_id, valve_name, slot_key, client_key) DO UPDATE SET
 				    slot_time = EXCLUDED.slot_time,
 				    ip_version = EXCLUDED.ip_version,
@@ -218,6 +233,8 @@ public class ClientEventRepository {
 				    is_completed = EXCLUDED.is_completed,
 				    last_updated_at = EXCLUDED.last_updated_at,
 				    distinct_clients = EXCLUDED.distinct_clients,
+				    returning_count = EXCLUDED.returning_count,
+				    authenticated_count = EXCLUDED.authenticated_count,
 				    entity_id = COALESCE(EXCLUDED.entity_id, client_events.entity_id)
 				""";
 
@@ -271,6 +288,16 @@ public class ClientEventRepository {
 							ps.setNull(24, Types.BIGINT);
 						}
 						ps.setInt(25, Math.max(1, e.distinctClients()));
+						if (e.returningCount() != null) {
+							ps.setInt(26, e.returningCount());
+						} else {
+							ps.setNull(26, Types.INTEGER);
+						}
+						if (e.authenticatedCount() != null) {
+							ps.setInt(27, e.authenticatedCount());
+						} else {
+							ps.setNull(27, Types.INTEGER);
+						}
 					}
 
 					@Override

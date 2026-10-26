@@ -82,7 +82,11 @@ public class RollupAggregationService {
 				    MAX(asn) AS asn,
 				    MAX(as_org) AS as_org,
 				    MAX(country_code) AS country_code,
-				    MAX(client_type) AS client_type
+				    MAX(client_type) AS client_type,
+				    COALESCE(SUM(returning_count), 0) AS returning_requests,
+				    COALESCE(SUM(CASE WHEN returning_count IS NOT NULL THEN request_count ELSE 0 END), 0) AS returning_tracked_requests,
+				    COALESCE(SUM(authenticated_count), 0) AS authenticated_requests,
+				    COALESCE(SUM(CASE WHEN authenticated_count IS NOT NULL THEN request_count ELSE 0 END), 0) AS authenticated_tracked_requests
 				FROM client_events
 				WHERE slot_time >= ? AND slot_time < ? AND subnet_group IS NOT NULL AND subnet_group != ''
 				GROUP BY server_id, valve_name, subnet_group
@@ -95,6 +99,11 @@ public class RollupAggregationService {
 					Long asn = rs.getObject("asn") != null ? rs.getLong("asn") : null;
 					String rawType = rs.getString("client_type");
 					ClientType clientType = rawType != null ? ClientType.valueOf(rawType) : ClientType.UNKNOWN;
+
+					long returningRequests = rs.getLong("returning_requests");
+					long returningTrackedRequests = rs.getLong("returning_tracked_requests");
+					long authenticatedRequests = rs.getLong("authenticated_requests");
+					long authenticatedTrackedRequests = rs.getLong("authenticated_tracked_requests");
 
 					return new ClientSubnetRollup(
 							null,
@@ -114,7 +123,11 @@ public class RollupAggregationService {
 							asn,
 							rs.getString("as_org"),
 							rs.getString("country_code"),
-							clientType
+							clientType,
+							returningRequests,
+							returningTrackedRequests,
+							authenticatedRequests,
+							authenticatedTrackedRequests
 					);
 				},
 				Timestamp.from(bucketStart),

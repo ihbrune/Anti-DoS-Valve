@@ -128,6 +128,10 @@
                             <span th:if="${p.last24hBlockedRequests() > 0}" style="color: var(--color-danger); font-weight: 600;" th:text="${#numbers.formatInteger(p.last24hBlockedRequests(), 1, 'POINT') + ' blocked'}">500 blocked</span>
                             <span th:if="${p.last24hBlockedRequests() == 0}" style="color: var(--text-muted);">0 blocked</span>
                         </div>
+                        <div th:if="${p.isReturningTracked24h()}" style="font-size: 11px; margin-top: 3px;">
+                            <span th:if="${p.last24hReturningRequests() == 0}" class="badge badge-warning" style="font-size: 10px; padding: 1px 5px;" title="0% returning visitor cookies in last 24h (pure first contact)">🍪 0% Cookies</span>
+                            <span th:if="${p.last24hReturningRequests() > 0}" class="badge badge-info" style="font-size: 10px; padding: 1px 5px;" th:title="${p.last24hReturningRequests()} + ' of ' + ${p.last24hReturningTrackedRequests()} + ' requests carried a valid visitor cookie in last 24h'">🍪 <span th:text="${#numbers.formatDecimal(p.returningRatio24h(), 1, 0)} + '% Cookies'"></span></span>
+                        </div>
                     </td>
 
                     <!-- 6. 24h Unique IPs & Spread -->

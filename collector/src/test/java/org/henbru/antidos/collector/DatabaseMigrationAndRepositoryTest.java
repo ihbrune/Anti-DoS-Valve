@@ -54,6 +54,12 @@ class DatabaseMigrationAndRepositoryTest {
 	@Autowired
 	private org.henbru.antidos.collector.storage.CrawlerFeedRepository crawlerFeedRepository;
 
+	@Autowired
+	private org.henbru.antidos.collector.storage.SubnetRollupRepository subnetRollupRepository;
+
+	@Autowired
+	private org.henbru.antidos.collector.storage.SubnetProfileRepository subnetProfileRepository;
+
 	@Test
 	void testHeartbeatRepositoryUpsertAndFind() {
 		Instant now = Instant.now();
@@ -868,6 +874,107 @@ class DatabaseMigrationAndRepositoryTest {
 		boolean deleted = networkAnnotationRepository.deleteById(foundSubnet.get().id());
 		assertTrue(deleted);
 		assertFalse(networkAnnotationRepository.findBySubnet("198.51.100.0/24").isPresent());
+	}
+
+	@Test
+	void testCookieAndAuthMetricsPersistenceAndRollups() {
+		Instant now = Instant.now().truncatedTo(ChronoUnit.MINUTES);
+
+		// 1. ClientEvent with cookie and auth metrics
+		ClientEvent eWithCookies = new ClientEvent(
+				null, "COOKIE-NODE", "VALVE-A", 100L, now, "198.51.100.20",
+				50, 0, false, ClientEvent.STATUS_ACTIVE, true, now,
+				1, 40, 10
+		).withEnrichment(new org.henbru.antidos.collector.model.IpEnrichmentResult(13335L, "Cloudflare", "US", ClientType.RESIDENTIAL));
+		ClientEvent eWithoutCookies = new ClientEvent(
+				null, "COOKIE-NODE", "VALVE-B", 100L, now, "198.51.100.21",
+				30, 0, false, ClientEvent.STATUS_ACTIVE, true, now,
+				1, null, null
+		).withEnrichment(new org.henbru.antidos.collector.model.IpEnrichmentResult(13335L, "Cloudflare", "US", ClientType.RESIDENTIAL));
+		clientEventRepository.batchUpsert(List.of(eWithCookies, eWithoutCookies));
+
+		List<ClientEvent> events = clientEventRepository.findRecentEvents("COOKIE-NODE", "198.51.100.20", 5);
+		assertFalse(events.isEmpty());
+		ClientEvent loadedWith = events.getFirst();
+		assertEquals(40, loadedWith.returningCount());
+		assertEquals(10, loadedWith.authenticatedCount());
+		assertTrue(loadedWith.isReturningTracked());
+		assertTrue(loadedWith.isAuthenticatedTracked());
+		assertEquals(80.0, loadedWith.returningRatio(), 0.01);
+		assertEquals(20.0, loadedWith.authenticatedRatio(), 0.01);
+
+		List<ClientEvent> eventsWithout = clientEventRepository.findRecentEvents("COOKIE-NODE", "198.51.100.21", 5);
+		assertFalse(eventsWithout.isEmpty());
+		ClientEvent loadedWithout = eventsWithout.getFirst();
+		assertNull(loadedWithout.returningCount());
+		assertNull(loadedWithout.authenticatedCount());
+		assertFalse(loadedWithout.isReturningTracked());
+		assertFalse(loadedWithout.isAuthenticatedTracked());
+		assertNull(loadedWithout.returningRatio());
+		assertNull(loadedWithout.authenticatedRatio());
+
+		// 2. SubnetRollup with cookie and auth metrics
+		Instant bStart = now.minus(1, ChronoUnit.HOURS);
+		Instant bEnd = now;
+		org.henbru.antidos.collector.model.ClientSubnetRollup rollup = new org.henbru.antidos.collector.model.ClientSubnetRollup(
+				null, bStart, bEnd, 60, "COOKIE-NODE", "VALVE-A", "198.51.100.0/24",
+				100L, 80L, 20L, 5, 10, 40, 6, 13335L, "Cloudflare", "US", ClientType.RESIDENTIAL,
+				70L, 90L, 18L, 90L
+		);
+		subnetRollupRepository.batchUpsert(List.of(rollup));
+
+		List<org.henbru.antidos.collector.model.ClientSubnetRollup> foundRollups =
+				subnetRollupRepository.findRollupsFiltered(List.of("COOKIE-NODE"), null, null, null, null, null, null, 5, 0);
+		assertFalse(foundRollups.isEmpty());
+		org.henbru.antidos.collector.model.ClientSubnetRollup loadedRollup = foundRollups.getFirst();
+		assertEquals(70L, loadedRollup.returningRequests());
+		assertEquals(90L, loadedRollup.returningTrackedRequests());
+		assertEquals(18L, loadedRollup.authenticatedRequests());
+		assertEquals(90L, loadedRollup.authenticatedTrackedRequests());
+		assertTrue(loadedRollup.isReturningTracked());
+		assertTrue(loadedRollup.isAuthenticatedTracked());
+		assertEquals(77.77, loadedRollup.returningRatio(), 0.1);
+		assertEquals(20.0, loadedRollup.authenticatedRatio(), 0.1);
+
+		// 3. SubnetProfile with cookie and auth metrics
+		org.henbru.antidos.collector.model.SubnetProfile profile = new org.henbru.antidos.collector.model.SubnetProfile(
+				"198.51.100.0/24",
+				now.minus(30, ChronoUnit.DAYS),
+				now,
+				0,
+				1000L,
+				800L,
+				200L,
+				100.0,
+				10,
+				200L,
+				800L,
+				10,
+				200L,
+				1.5,
+				13335L,
+				"Cloudflare",
+				"US",
+				ClientType.RESIDENTIAL,
+				now,
+				600L,
+				800L,
+				160L,
+				800L
+		);
+		subnetProfileRepository.batchUpsert(List.of(profile));
+
+		Optional<org.henbru.antidos.collector.model.SubnetProfile> loadedProfile =
+				subnetProfileRepository.findBySubnetGroup("198.51.100.0/24");
+		assertTrue(loadedProfile.isPresent());
+		assertEquals(600L, loadedProfile.get().last24hReturningRequests());
+		assertEquals(800L, loadedProfile.get().last24hReturningTrackedRequests());
+		assertEquals(160L, loadedProfile.get().last24hAuthenticatedRequests());
+		assertEquals(800L, loadedProfile.get().last24hAuthenticatedTrackedRequests());
+		assertTrue(loadedProfile.get().isReturningTracked24h());
+		assertTrue(loadedProfile.get().isAuthenticatedTracked24h());
+		assertEquals(75.0, loadedProfile.get().returningRatio24h(), 0.01);
+		assertEquals(20.0, loadedProfile.get().authenticatedRatio24h(), 0.01);
 	}
 }
 

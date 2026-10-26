@@ -1049,6 +1049,10 @@ public class AntiDoSStatusRenderer {
 					sb.append(" <span class=\"badge\" style=\"font-size:0.75rem;padding:2px 6px;border-radius:4px;background:var(--accent-subtle);color:var(--text);margin-left:6px;\" title=\"Distinct client IPs in this subnet\">")
 							.append(e.distinctClients()).append(" IPs</span>");
 				}
+				if (target.isVisitorCookieEnabled() && e.returningCount() > 0) {
+					sb.append(" <span class=\"badge\" style=\"font-size:0.75rem;padding:2px 6px;border-radius:4px;background:var(--accent-subtle);color:var(--text);margin-left:6px;\" title=\"Requests carrying valid visitor cookie\">")
+							.append(e.returningCount()).append(" returning</span>");
+				}
 				sb.append("</td>")
 						.append("<td>").append(e.count()).append("</td>")
 						.append("<td>").append(e.retained()).append("</td>")
@@ -1085,6 +1089,10 @@ public class AntiDoSStatusRenderer {
 				if (e.distinctClients() > 1) {
 					sb.append(" <span class=\"badge\" style=\"font-size:0.75rem;padding:2px 6px;border-radius:4px;background:var(--accent-subtle);color:var(--text);margin-left:6px;\" title=\"Distinct client IPs in this subnet\">")
 							.append(e.distinctClients()).append(" IPs</span>");
+				}
+				if (target.isVisitorCookieEnabled() && e.returningCount() > 0) {
+					sb.append(" <span class=\"badge\" style=\"font-size:0.75rem;padding:2px 6px;border-radius:4px;background:var(--accent-subtle);color:var(--text);margin-left:6px;\" title=\"Requests carrying valid visitor cookie\">")
+							.append(e.returningCount()).append(" returning</span>");
 				}
 				sb.append("</td>")
 						.append("<td>").append(e.count()).append("</td>")
@@ -1364,7 +1372,7 @@ public class AntiDoSStatusRenderer {
 					.append("      \"effective\": ").append(e.effective()).append(",\n")
 					.append("      \"limit\": ").append(target.getAllowedRequestsPerSlot()).append(",\n")
 					.append("      \"distinctClients\": ").append(e.distinctClients()).append(",\n")
-					.append("      \"returningCount\": ").append(e.returningCount()).append(",\n")
+					.append("      \"returningCount\": ").append(target.isVisitorCookieEnabled() ? e.returningCount() : "null").append(",\n")
 					.append("      \"status\": \"BLOCKED\"\n")
 					.append("    }");
 		}
@@ -1408,7 +1416,7 @@ public class AntiDoSStatusRenderer {
 					.append("      \"limit\": ").append(target.getAllowedRequestsPerSlot()).append(",\n")
 					.append("      \"quotaPercent\": ").append(pct).append(",\n")
 					.append("      \"distinctClients\": ").append(e.distinctClients()).append(",\n")
-					.append("      \"returningCount\": ").append(e.returningCount()).append("\n")
+					.append("      \"returningCount\": ").append(target.isVisitorCookieEnabled() ? e.returningCount() : "null").append("\n")
 					.append("    }");
 		}
 		sb.append("\n  ]\n}\n");

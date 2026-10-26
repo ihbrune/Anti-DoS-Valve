@@ -343,7 +343,7 @@ Every record in the table presents its metrics with full mathematical transparen
 * **First Seen & Dormancy History:** Exact discovery timestamp, `✨ New` indicator if $<7\text{ days}$, and `💤 Xd Dormancy Break` if the subnet had a silent gap $\ge 14\text{ days}$ prior to its recent activity.
 * **30-Day Daily Baseline:** Moving daily average calculated across the prior 29 days:
   $$\text{Baseline} = \frac{\sum \text{Requests}_{\text{prior 29d}}}{29.0}$$
-* **Last 24h Activity:** Total requests and rate-limiting blocks during the current 24-hour window.
+* **Last 24h Activity:** Total requests and rate-limiting blocks during the current 24-hour window, supplemented by the sample-size-weighted 24h returning visitor cookie badge (`🍪 X%`) and authenticated badge (`🔐 Y%`) when visitor tracking is active.
 * **24h Unique IPs & Spread:** Distinct client IP count and the average requests per IP ($\frac{\text{Requests}_{24\text{h}}}{\text{IPs}_{24\text{h}}}$).
 * **Surge Multiplier & Threat Forensics:**
   * **Surge Badge:** $\text{Surge} = \frac{\text{Requests}_{24\text{h}}}{\text{Baseline}}$. Formatted with clear danger/warning colors (e.g., `⚡ 25.0x Surge`). Tooltips explicitly show the formula calculation: `24h volume (500) is 25.0x above 30-day baseline average (20.0/day)`.
@@ -367,7 +367,7 @@ Accessible via `/events`. Provides deep-dive, granular search across every recor
   * Matches CIDR prefix ranges (e.g., `198.51.100.0/24` or `2001:db8::/32`).
   * Partial substring search for quick lookup.
 * **Client Type Filter:**
-  Multi-select pills to filter by threat categorization: `Datacenter`, `Residential`, `Search Engine`, `AI Crawler`, `Tor Exit Node`, `Mobile`, `Private Network`, `Unknown`.
+  * Multi-select pills to filter by threat categorization: `Datacenter`, `Residential`, `Search Engine`, `AI Crawler`, `Tor Exit Node`, `Mobile`, `Private Network`, `Unknown`.
 * **ASN Filter:** Filter directly by ASN number or provider name (e.g., `AS13335` or `Cloudflare`).
 * **Interactive Network Notes:** Look for verdict badges (🟢/🔵/🟡/🔴/⚪) or click `+📝` on any ASN or Subnet to inspect previous findings or log new notes directly from the incident log.
 
@@ -378,6 +378,12 @@ Events are streamed with configurable limits (`25`, `50`, `100`, `250`) and offs
 * **Instant In-Table Logging:** Responders can click `+📝` next to any Subnet or ASN to record intelligence (ticket IDs, partner agreements, or confirmed DDoS botnet clusters) without navigating away.
 * **Visual Verdict Badges:** Subnets and ASNs with existing notes feature verdict badges (🟢 Legitimate, 🔵 Internal, 🟡 Suspicious, 🔴 Malicious, ⚪ Info). Clicking any badge opens the note in an overlay modal.
 * **Direct Navigation:** From the central Notes repository (`/notes`) or note modals, clicking any ASN or Subnet target pill immediately jumps back into Incident Explorer with that target pre-filtered.
+
+### 4. Visitor Cookie & Authentication Telemetry
+* **Cookies Column (`🍪`):**
+  * **Verified Returning Visitors (`🍪 85% (K)`):** Displays green/neutral ratio badges when requests present valid HMAC-signed visitor cookies.
+  * **Zero Returning / First-Contact (`🍪 0% (0/N)`):** Highlighted with an amber warning badge when a burst of requests arrives with 0 valid visitor cookies (characteristic of rotating proxy farms, headless scrapers, and botnet probes).
+  * **Untracked Valve (`—`):** Explicit dash displayed when the originating Valve has cookie tracking disabled (`visitorCookieEnabled="false"`). Prevents misinterpreting unmonitored endpoints as 0% returning traffic.
 
 ---
 

@@ -163,4 +163,57 @@ class RollupAggregationServiceTest {
 		);
 		assertFalse(datacenterBot.isPotentialResidentialProxy());
 	}
+
+	@Test
+	void testAggregateWindowWithReturningAndAuthenticatedCookies() {
+		Instant now = Instant.now().truncatedTo(ChronoUnit.HOURS);
+		Instant bucketStart = now.minus(2, ChronoUnit.HOURS);
+		Instant bucketEnd = now.minus(1, ChronoUnit.HOURS);
+		Instant slotTime = bucketStart.plus(15, ChronoUnit.MINUTES);
+
+		// Client 1 in Subnet A: 10 requests, 8 returning, 2 auth
+		ClientEvent e1 = new ClientEvent(
+				null, "Node-1", "Limiter", 1001L, slotTime, "198.51.100.10",
+				10, 0, false, ClientEvent.STATUS_ACTIVE, true, slotTime,
+				1, 8, 2
+		).withEnrichment(new org.henbru.antidos.collector.model.IpEnrichmentResult(13335L, "Cloudflare", "US", ClientType.RESIDENTIAL));
+
+		// Client 2 in Subnet A: 20 requests, 15 returning, 6 auth
+		ClientEvent e2 = new ClientEvent(
+				null, "Node-1", "Limiter", 1001L, slotTime, "198.51.100.11",
+				20, 0, false, ClientEvent.STATUS_ACTIVE, true, slotTime,
+				1, 15, 6
+		).withEnrichment(new org.henbru.antidos.collector.model.IpEnrichmentResult(13335L, "Cloudflare", "US", ClientType.RESIDENTIAL));
+
+		// Client 3 in Subnet A: 30 requests, UNTRACKED cookies (null)
+		ClientEvent e3 = new ClientEvent(
+				null, "Node-1", "Limiter", 1001L, slotTime, "198.51.100.12",
+				30, 0, false, ClientEvent.STATUS_ACTIVE, true, slotTime,
+				1, null, null
+		).withEnrichment(new org.henbru.antidos.collector.model.IpEnrichmentResult(13335L, "Cloudflare", "US", ClientType.RESIDENTIAL));
+
+		clientEventRepository.batchUpsert(List.of(e1, e2, e3));
+
+		int rollupsCreated = aggregationService.aggregateWindow(bucketStart, bucketEnd);
+		assertEquals(1, rollupsCreated);
+
+		List<ClientSubnetRollup> rollups = rollupRepository.findRollupsFiltered(
+				List.of("Node-1"), null, null, null, null, null, null, 10, 0
+		);
+		assertEquals(1, rollups.size());
+		ClientSubnetRollup r = rollups.getFirst();
+
+		assertEquals(60L, r.totalRequests(), "10 + 20 + 30 = 60 total requests");
+		// Returning: 8 + 15 = 23 returning out of 10 + 20 = 30 tracked requests
+		assertEquals(23L, r.returningRequests());
+		assertEquals(30L, r.returningTrackedRequests());
+		assertTrue(r.isReturningTracked());
+		assertEquals(76.67, r.returningRatio(), 0.01);
+
+		// Auth: 2 + 6 = 8 auth out of 10 + 20 = 30 tracked requests
+		assertEquals(8L, r.authenticatedRequests());
+		assertEquals(30L, r.authenticatedTrackedRequests());
+		assertTrue(r.isAuthenticatedTracked());
+		assertEquals(26.67, r.authenticatedRatio(), 0.01);
+	}
 }

@@ -26,8 +26,60 @@ public record SubnetProfile(
 		String asOrg,
 		String countryCode,
 		ClientType clientType,
-		Instant updatedAt
+		Instant updatedAt,
+		long last24hReturningRequests,
+		long last24hReturningTrackedRequests,
+		long last24hAuthenticatedRequests,
+		long last24hAuthenticatedTrackedRequests
 ) {
+
+	public SubnetProfile(
+			String subnetGroup,
+			Instant firstSeenAt,
+			Instant lastSeenAt,
+			int daysDormantBeforeLastSeen,
+			long totalLifetimeRequests,
+			long totalActiveRequests,
+			long totalBlockedRequests,
+			double baselineDailyAvg,
+			int baselineDistinctClients,
+			long peakDailyRequests,
+			long last24hRequests,
+			int last24hDistinctClients,
+			long last24hBlockedRequests,
+			double last24hSurgeFactor,
+			Long asn,
+			String asOrg,
+			String countryCode,
+			ClientType clientType,
+			Instant updatedAt
+	) {
+		this(
+				subnetGroup,
+				firstSeenAt,
+				lastSeenAt,
+				daysDormantBeforeLastSeen,
+				totalLifetimeRequests,
+				totalActiveRequests,
+				totalBlockedRequests,
+				baselineDailyAvg,
+				baselineDistinctClients,
+				peakDailyRequests,
+				last24hRequests,
+				last24hDistinctClients,
+				last24hBlockedRequests,
+				last24hSurgeFactor,
+				asn,
+				asOrg,
+				countryCode,
+				clientType != null ? clientType : ClientType.UNKNOWN,
+				updatedAt,
+				0L,
+				0L,
+				0L,
+				0L
+		);
+	}
 
 	public SubnetProfile(
 			String subnetGroup,
@@ -68,7 +120,11 @@ public record SubnetProfile(
 				asOrg,
 				countryCode,
 				clientType != null ? clientType : ClientType.UNKNOWN,
-				Instant.now()
+				Instant.now(),
+				0L,
+				0L,
+				0L,
+				0L
 		);
 	}
 
@@ -120,5 +176,25 @@ public record SubnetProfile(
 		return last24hDistinctClients >= 5
 				&& averageRequestsPerClient24h() <= 20.0
 				&& (ClientType.RESIDENTIAL.equals(clientType) || ClientType.UNKNOWN.equals(clientType));
+	}
+
+	public Double returningRatio24h() {
+		return last24hReturningTrackedRequests > 0
+				? (last24hReturningRequests * 100.0 / last24hReturningTrackedRequests)
+				: null;
+	}
+
+	public Double authenticatedRatio24h() {
+		return last24hAuthenticatedTrackedRequests > 0
+				? (last24hAuthenticatedRequests * 100.0 / last24hAuthenticatedTrackedRequests)
+				: null;
+	}
+
+	public boolean isReturningTracked24h() {
+		return last24hReturningTrackedRequests > 0;
+	}
+
+	public boolean isAuthenticatedTracked24h() {
+		return last24hAuthenticatedTrackedRequests > 0;
 	}
 }

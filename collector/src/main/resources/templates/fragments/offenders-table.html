@@ -260,6 +260,10 @@
                                 <span th:if="${rollup.blockedRequests() > 0 and rollup.activeRequests() > 0}"> &bull; </span>
                                 <span th:if="${rollup.activeRequests() > 0}" style="color: var(--text-muted);" th:text="${#numbers.formatInteger(rollup.activeRequests(), 1, 'POINT') + ' active'}">750 active</span>
                             </div>
+                            <div th:if="${rollup.isReturningTracked()}" style="font-size: 11px; margin-top: 3px;">
+                                <span th:if="${rollup.returningRequests() == 0}" class="badge badge-warning" style="font-size: 10px; padding: 1px 5px;" title="0% returning visitor cookies in this window (pure first contact / cookies ignored)">🍪 0% Cookies</span>
+                                <span th:if="${rollup.returningRequests() > 0}" class="badge badge-info" style="font-size: 10px; padding: 1px 5px;" th:title="${rollup.returningRequests()} + ' of ' + ${rollup.returningTrackedRequests()} + ' requests carried a valid visitor cookie'">🍪 <span th:text="${#numbers.formatDecimal(rollup.returningRatio(), 1, 0)} + '% Cookies'"></span></span>
+                            </div>
                         </td>
                         <td>
                             <div>

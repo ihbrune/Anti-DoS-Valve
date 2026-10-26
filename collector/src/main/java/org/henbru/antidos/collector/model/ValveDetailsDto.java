@@ -39,8 +39,12 @@ public record ValveDetailsDto(
 			long currentSlotKey,
 			long lastCompletedSlotKey,
 			int slotLength,
-			int numberOfSlots
+			int numberOfSlots,
+			Boolean visitorCookieEnabled
 	) {
+		public ValveHeaderDto(String monitorName, long currentSlotKey, long lastCompletedSlotKey, int slotLength, int numberOfSlots) {
+			this(monitorName, currentSlotKey, lastCompletedSlotKey, slotLength, numberOfSlots, null);
+		}
 	}
 
 	@JsonIgnoreProperties(ignoreUnknown = true)
@@ -65,20 +69,20 @@ public record ValveDetailsDto(
 			int effective,
 			boolean locked,
 			String lastUpdate,
-			Integer distinctClients
+			Integer distinctClients,
+			Integer returningCount,
+			Integer authenticatedCount
 	) {
-		/**
-		 * Backward-compatible constructor for 6-parameter signature.
-		 */
-		public BlockedClientDto(String key, int count, int retained, int effective, boolean locked, String lastUpdate) {
-			this(key, count, retained, effective, locked, lastUpdate, 1);
+		public BlockedClientDto(String key, int count, int retained, int effective, boolean locked, String lastUpdate, Integer distinctClients) {
+			this(key, count, retained, effective, locked, lastUpdate, distinctClients, null, null);
 		}
 
-		/**
-		 * Backward-compatible constructor for previous 5-parameter signature.
-		 */
+		public BlockedClientDto(String key, int count, int retained, int effective, boolean locked, String lastUpdate) {
+			this(key, count, retained, effective, locked, lastUpdate, 1, null, null);
+		}
+
 		public BlockedClientDto(String key, int count, int retained, boolean locked, String lastUpdate) {
-			this(key, count, retained, count + retained, locked, lastUpdate, 1);
+			this(key, count, retained, count + retained, locked, lastUpdate, 1, null, null);
 		}
 	}
 
@@ -90,13 +94,16 @@ public record ValveDetailsDto(
 			int effective,
 			int limit,
 			int quotaPercent,
-			Integer distinctClients
+			Integer distinctClients,
+			Integer returningCount,
+			Integer authenticatedCount
 	) {
-		/**
-		 * Backward-compatible constructor for previous 6-parameter signature.
-		 */
+		public ActiveClientDto(String key, int count, int retained, int effective, int limit, int quotaPercent, Integer distinctClients) {
+			this(key, count, retained, effective, limit, quotaPercent, distinctClients, null, null);
+		}
+
 		public ActiveClientDto(String key, int count, int retained, int effective, int limit, int quotaPercent) {
-			this(key, count, retained, effective, limit, quotaPercent, 1);
+			this(key, count, retained, effective, limit, quotaPercent, 1, null, null);
 		}
 	}
 }
