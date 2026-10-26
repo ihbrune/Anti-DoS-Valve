@@ -97,14 +97,24 @@ class AntiDoSStatusRendererTest {
 
 	@Test
 	void testBuildStatusJsonOverviewAndDetails() {
+		valve.setVisitorCookieEnabled(true);
+		valve.setVisitorCookieName("my_custom_cookie");
+		valve.setVisitorCookieDomain("example.com");
+
 		String jsonOverview = renderer.buildStatusJson(null);
 		assertNotNull(jsonOverview);
 		assertTrue(jsonOverview.contains("\"totalActiveValves\": 1"));
 		assertTrue(jsonOverview.contains("\"monitorName\": \"RENDERER_TEST\""));
+		assertTrue(jsonOverview.contains("\"visitorCookieEnabled\": true"));
+		assertTrue(jsonOverview.contains("\"visitorCookieName\": \"my_custom_cookie\""));
+		assertTrue(jsonOverview.contains("\"visitorCookieDomain\": \"example.com\""));
 
 		String jsonDetails = renderer.buildStatusJsonDetails("RENDERER_TEST");
 		assertNotNull(jsonDetails);
 		assertTrue(jsonDetails.contains("\"valve\": {"));
+		assertTrue(jsonDetails.contains("\"visitorCookieEnabled\": true"));
+		assertTrue(jsonDetails.contains("\"visitorCookieName\": \"my_custom_cookie\""));
+		assertTrue(jsonDetails.contains("\"visitorCookieDomain\": \"example.com\""));
 		assertTrue(jsonDetails.contains("\"slots\": ["));
 		assertTrue(jsonDetails.contains("\"totalRequests\":"));
 		assertTrue(jsonDetails.contains("\"blockedClients\": ["));
