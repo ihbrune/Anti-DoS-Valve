@@ -67,4 +67,11 @@ public class AntiDoSMonitorBenchmark {
 		String ip = trafficSimulator.nextIp();
 		return monitor.registerAndCheckRequest(ip);
 	}
+
+	@Benchmark
+	@Threads(Threads.MAX)
+	public boolean registerAndCheckRequestReturningVisitor() {
+		String ip = trafficSimulator.nextIp();
+		return monitor.registerAndCheckRequest(ip, ip, null, false, 0, 0, true);
+	}
 }

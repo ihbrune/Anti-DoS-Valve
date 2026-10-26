@@ -25,9 +25,18 @@ This suite addresses four core testing needs:
 
 3. **Monitor Concurrency Measurement (`AntiDoSMonitorBenchmark`):**
    * Measures `AntiDoSMonitor.registerAndCheckRequest(ip)` under multi-threaded load simulating Tomcat worker threads (`@Threads(MAX)`).
+   * Compares untracked requests vs. requests with returning visitor telemetry (`returningVisitor = true`).
    * Detects regressions in throughput, lock contention, and slot rotation.
 
-4. **Persistent History Tracking (`.benchmarks/`):**
+4. **Cryptographic Visitor Token Engine (`AntiDoSVisitorTokenBenchmark`):**
+   * Isolates the performance of the AES-256-GCM authenticated encryption engine (`AntiDoSVisitorTokenService`).
+   * Evaluates:
+     * `validateToken_Valid`: Returning visitor fast-path (Base64 decode + AES-GCM decrypt + AEAD tag verification).
+     * `createToken_New`: First-contact / refresh path (SecureRandom 12-byte IV + AES-GCM encrypt + Base64URL encode).
+     * `validateToken_Tampered`: Rejection speed on authentication tag failure.
+     * `fullPipeline_ReturningVisitor`: End-to-end composite of token validation followed by monitor counter registration.
+
+5. **Persistent History Tracking (`.benchmarks/`):**
    * Benchmark runs are logged to `.benchmarks/history.jsonl`.
    * The `.benchmarks/` directory is intentionally excluded from Git (`.gitignore`) to avoid polluting the repository with local machine variations, while surviving `mvn clean`.
    * Facilitates local trend analysis across Git branches and commits.
@@ -38,27 +47,33 @@ This suite addresses four core testing needs:
 
 ### Compile & Build Benchmark JAR
 ```bash
-mvn package -pl benchmark -DskipTests
+mvn package -pl valve,benchmark -DskipTests
 ```
 This produces an executable standalone uber-jar at `benchmark/target/benchmarks.jar`.
 
-### Run Automated Runner (Baseline + Monitor + History Recording)
+### Run Automated Runner (Baseline + Monitor + VisitorToken + History Recording)
 ```bash
 java -cp benchmark/target/benchmarks.jar org.henbru.antidos.benchmark.BenchmarkRunner
 ```
 * Sample output:
 ```text
-================================================================================
+====================================================================================================
   BENCHMARK SUMMARY & RELATIVE RATIOS
-================================================================================
-Benchmark / Distribution       | Throughput (ops/s) | Relative Score
--------------------------------+------------------+-------------
-Baseline (ConcurrentMap)       |   28450123.45 op/s | 1.00 (Ref)
-Monitor [ZIPF]                 |   18230456.78 op/s |      0.641
-Monitor [BURST_ATTACK]         |   16102940.12 op/s |      0.566
---------------------------------------------------------------------------------
+====================================================================================================
+Benchmark / Scenario                           | Throughput (ops/s) | Relative Score | Category            
+-----------------------------------------------+------------------+----------------+---------------------
+Baseline (ConcurrentMap)                       |   98796284.62 op/s |  1.000 (Ref) | JDK Baseline        
+Monitor [ZIPF]                                 |   14732289.65 op/s |       0.1491 | Monitor Concurrency 
+Monitor [BURST_ATTACK]                         |    7024601.81 op/s |       0.0711 | Monitor Concurrency 
+Monitor [ZIPF (Returning Visitor)]             |   14644394.33 op/s |       0.1482 | Monitor Concurrency 
+Monitor [BURST_ATTACK (Returning Visitor)]     |    7011494.59 op/s |       0.0710 | Monitor Concurrency 
+VisitorToken [Create New Token (IV+AES)]       |    2067986.43 op/s |       0.0209 | Crypto AES-256-GCM  
+VisitorToken [Full Pipeline (Token + Monitor)] |    7585767.11 op/s |       0.0768 | Crypto AES-256-GCM  
+VisitorToken [Reject Tampered Token]           |    6622263.43 op/s |       0.0670 | Crypto AES-256-GCM  
+VisitorToken [Validate Valid Token]            |    9927570.27 op/s |       0.1005 | Crypto AES-256-GCM  
+----------------------------------------------------------------------------------------------------
 Result appended to: .benchmarks/history.jsonl
-================================================================================
+====================================================================================================
 ```
 
 ### Run Direct JMH Command-Line
