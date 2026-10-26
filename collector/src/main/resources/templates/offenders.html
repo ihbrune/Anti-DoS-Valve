@@ -32,6 +32,9 @@
                 <a href="/offenders" class="btn active" title="Detailed Top Offender &amp; Subnet Rollup Tables">
                     <span>&#x26A0;</span> Top Offenders
                 </a>
+                <a href="/profiles" class="btn" title="Subnet Traffic Profiles, 30-Day Baselines &amp; Surge Radar">
+                    <span>&#x26A1;</span> Profiles
+                </a>
                 <a href="/events" class="btn" title="Multi-Server Incident Explorer with advanced filtering">
                     <span>&#x1F4CB;</span> Incidents
                 </a>
@@ -70,13 +73,24 @@
     </header>
 
     <!-- Header & Title -->
-    <div class="section-header" style="margin-bottom: 20px;">
+    <div class="section-header" style="margin-bottom: 16px;">
         <div class="section-title">
             <span>&#x26A0;</span> Top Offender Analytics &amp; Subnet Rollup
         </div>
         <div style="font-size: 13px; color: var(--text-muted);">
             Analyze high-volume attackers, distributed botnets, and residential proxy clusters
         </div>
+    </div>
+
+    <!-- Dedicated Profiles Explorer Banner -->
+    <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: var(--radius-md); padding: 12px 18px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+        <div>
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);">&#x26A1; Looking for Subnet Traffic Baselines &amp; Anomaly Radars?</div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                Inspect 30-day baseline averages, surge multipliers, dormancy breakouts, and rotating residential proxy pools in the dedicated Profiles explorer.
+            </div>
+        </div>
+        <a href="/profiles" class="btn btn-primary" style="font-size: 11px; padding: 4px 14px; white-space: nowrap;">Open Profiles Radar &rarr;</a>
     </div>
 
     <!-- Filter Panel -->

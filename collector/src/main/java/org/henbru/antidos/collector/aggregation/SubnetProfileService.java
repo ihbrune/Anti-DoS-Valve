@@ -98,4 +98,9 @@ public class SubnetProfileService {
 	public Map<String, SubnetProfile> findSubnetProfilesMap(List<String> subnetGroups) {
 		return profileRepository.findSubnetProfilesMap(subnetGroups);
 	}
+
+	public org.henbru.antidos.collector.model.SubnetProfileStats getProfileStats() {
+		return profileRepository.getProfileStats();
+	}
 }
+

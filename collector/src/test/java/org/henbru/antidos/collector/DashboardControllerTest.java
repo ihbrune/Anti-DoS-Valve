@@ -476,5 +476,34 @@ class DashboardControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("id=\"offenders-table-container\"")));
 	}
+
+	@Test
+	void testProfilesPageLoads() throws Exception {
+		mockMvc.perform(get("/profiles"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Subnet Profiles &amp; Baseline Radar")))
+				.andExpect(content().string(containsString("Total Subnets Tracked")))
+				.andExpect(content().string(containsString("id=\"profiles-table-container\"")))
+				.andExpect(content().string(containsString("id=\"profiles-filter-form\"")));
+	}
+
+	@Test
+	void testProfilesTableFragmentLoads() throws Exception {
+		mockMvc.perform(get("/fragments/profiles-table")
+						.param("activityPattern", "ALL")
+						.param("sortBy", "SURGE"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("id=\"profiles-table-container\"")));
+	}
+
+	@Test
+	void testProfilesTableFragmentWithPatternAndSearch() throws Exception {
+		mockMvc.perform(get("/fragments/profiles-table")
+						.param("activityPattern", "SURGE")
+						.param("clientQuery", "195.181.168.")
+						.param("sortBy", "REQUESTS"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("id=\"profiles-table-container\"")));
+	}
 }
 

@@ -206,6 +206,32 @@ public class SubnetProfileRepository {
 		return count != null ? count : 0L;
 	}
 
+	public org.henbru.antidos.collector.model.SubnetProfileStats getProfileStats() {
+		Instant sevenDaysAgo = Instant.now().minus(7, ChronoUnit.DAYS);
+		String sql = """
+				SELECT
+				    COUNT(*) AS total_count,
+				    COUNT(CASE WHEN last_24h_requests > 0 THEN 1 END) AS active_24h,
+				    COUNT(CASE WHEN last_24h_requests > 0 AND last_24h_surge_factor >= 5.0 THEN 1 END) AS high_surge,
+				    COUNT(CASE WHEN last_24h_requests > 0 AND (days_dormant_before_last_seen >= 900 OR first_seen_at >= ?) THEN 1 END) AS new_subnets,
+				    COUNT(CASE WHEN last_24h_requests > 0 AND days_dormant_before_last_seen >= 14 AND days_dormant_before_last_seen < 900 THEN 1 END) AS dormant_breaks,
+				    COUNT(CASE WHEN last_24h_requests > 0 AND last_24h_distinct_clients >= 5 AND (last_24h_requests * 1.0 / CASE WHEN last_24h_distinct_clients = 0 THEN 1 ELSE last_24h_distinct_clients END) <= 20.0 THEN 1 END) AS proxy_pools
+				FROM subnet_profiles
+				""";
+		try {
+			return jdbcTemplate.queryForObject(sql, (rs, rowNum) -> new org.henbru.antidos.collector.model.SubnetProfileStats(
+					rs.getLong("total_count"),
+					rs.getLong("active_24h"),
+					rs.getLong("high_surge"),
+					rs.getLong("new_subnets"),
+					rs.getLong("dormant_breaks"),
+					rs.getLong("proxy_pools")
+			), Timestamp.from(sevenDaysAgo));
+		} catch (Exception e) {
+			return org.henbru.antidos.collector.model.SubnetProfileStats.empty();
+		}
+	}
+
 	/**
 	 * Computes and returns updated subnet profiles from historical rollups looking back up to 30 days.
 	 */

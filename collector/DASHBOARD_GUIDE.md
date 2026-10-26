@@ -14,8 +14,9 @@ The Collector interface is built around high-throughput, real-time observability
 * **Contextual Help Drawers (`[?] Guide`):** Every screen features an in-page slide-over drawer that explains the active view's filters, data models, and forensic interpretations without losing current search queries.
 * **Top Navigation Bar:**
   * **Dashboard (`/`):** Real-time fleet overview, health cards, and top offenders.
-  * **Top Offenders (`/offenders`):** Multi-server aggregation ranking, Subnet Rollup (`/24` & `/64`), and ASN cluster detection.
   * **Analytics (`/analytics`):** Dedicated visual telemetry cockpit, attack timelines, bot-mix composition, and 2D residential proxy cluster scatterplots.
+  * **Top Offenders (`/offenders`):** Multi-server aggregation ranking, Subnet Rollup (`/24` & `/64`), and ASN cluster detection.
+  * **Profiles (`/profiles`):** Dedicated baseline inventory, 30-day moving daily frequencies, 24h surge multipliers, dormancy breakouts, and residential proxy cluster triage.
   * **Incident Explorer (`/events`):** High-resolution log search with CIDR subnets, exact time horizons, and classification tags.
   * **Network Notes (`/notes`):** Persistent operator knowledge archive and forensic memory for ASNs and Subnets, completely immune to data retention cleanups.
   * **Event Log (`/poll-log`):** Background collection audit trail, latency tracking, and automatic recovery events.
@@ -303,6 +304,50 @@ When analyzing subnets or ASNs, the system automatically runs heuristic cluster 
   * Beside each identified Subnet and ASN, operators can click `+📝` to record investigative notes directly without leaving the table.
   * When a note already exists, a color-coded verdict badge (🟢 Legitimate, 🔵 Internal, 🟡 Suspicious, 🔴 Malicious, ⚪ Info) is displayed. Clicking it opens the note in a modal with full Markdown rendering, editing capabilities, and forensic quick-links.
   * All notes are **retention-immune** and permanently saved, even after transient traffic rollups are pruned.
+
+---
+
+## Subnet Profiles & Baseline Radar (/profiles)
+
+Accessible via `/profiles`. While `/offenders` focuses on acute rate-limiting blocks and high-volume attacker IPs, **Profiles** serves as the persistent **behavioral census and traffic baseline inventory** for all observed subnets across the entire fleet.
+
+It continuously evaluates 30-day moving daily frequencies against real-time 24-hour activity to unmask stealth attack patterns: sudden traffic surges, newly registered or previously silent subnets waking up, and distributed residential proxy swarms.
+
+### 1. Real-Time KPI Summary Cards
+At the top of the screen, six real-time metric cards provide an immediate high-level overview of network anomalies:
+* **Total Subnets Tracked:** Aggregate inventory of all distinct `/24` and `/64` subnets recorded in the 30-day profile window.
+* **Active in Last 24h:** Subnets that transmitted at least one request during the past 24 hours. Click to isolate active subnets.
+* **⚡ High Surge (≥5×):** Subnets whose 24-hour volume is at least 5 times higher than their 30-day moving daily baseline.
+* **✨ New Subnets (<7d):** Subnets observed for the very first time within the last 7 days. Critical for catching fresh VPS/hosting pools spun up specifically for scraping or DDoS.
+* **💤 Dormancy Breaks (≥14d):** Subnets that were completely inactive or silent for at least 14 days and abruptly resumed traffic today.
+* **🔄 Proxy Pools:** Subnets exhibiting distributed client IP rotations (≥5 distinct IPs with $\le 20.0$ requests per IP).
+
+*Clicking any metric card instantly filters the table below to the corresponding anomaly pattern.*
+
+### 2. Anomaly Pattern Presets & Live Filter Controls
+* **One-Click Pattern Presets:** Instantly toggle between `All Subnets`, `⚡ High Surge (≥5x)`, `✨ New Subnets (<7d)`, `💤 Dormancy Break (≥14d)`, and `🔄 Residential IP Rotation`.
+* **Live Subnet / Provider Search:** Real-time search field matching CIDR masks (e.g. `198.51.100.`), ASN numbers (e.g. `AS3320`), or organization names (e.g. `Telekom`, `Cloudflare`, `LeaseWeb`).
+* **Sort Dimensions:**
+  * **24h Surge Multiplier (Highest First):** Ranks most abnormal volume spikes at the top.
+  * **24h Request Volume (Most Active First):** Ranks by raw traffic volume.
+  * **Unique IPs in 24h (Most Distributed First):** Surfaces large distributed botnets and proxy farms.
+  * **Inactivity Days before Return (Longest Dormancy):** Surfaces sleeper subnets.
+  * **First Seen Date:** Surfaces the freshest subnets.
+* **Classification Filtering:** Multi-select pills to restrict analysis by network category (`Datacenter`, `Residential`, `Search Engine`, `AI Bot`, `Mobile`, `Tor Exit Node`, `Unclassified`).
+
+### 3. Transparent Metric Columns & Calculations
+Every record in the table presents its metrics with full mathematical transparency:
+* **Subnet & Provider:** Displays the CIDR group, country code, ASN badge, and interactive `+📝` / verdict badge to access or record operator notes.
+* **Classification:** Color-coded client type tag.
+* **First Seen & Dormancy History:** Exact discovery timestamp, `✨ New` indicator if $<7\text{ days}$, and `💤 Xd Dormancy Break` if the subnet had a silent gap $\ge 14\text{ days}$ prior to its recent activity.
+* **30-Day Daily Baseline:** Moving daily average calculated across the prior 29 days:
+  $$\text{Baseline} = \frac{\sum \text{Requests}_{\text{prior 29d}}}{29.0}$$
+* **Last 24h Activity:** Total requests and rate-limiting blocks during the current 24-hour window.
+* **24h Unique IPs & Spread:** Distinct client IP count and the average requests per IP ($\frac{\text{Requests}_{24\text{h}}}{\text{IPs}_{24\text{h}}}$).
+* **Surge Multiplier & Threat Forensics:**
+  * **Surge Badge:** $\text{Surge} = \frac{\text{Requests}_{24\text{h}}}{\text{Baseline}}$. Formatted with clear danger/warning colors (e.g., `⚡ 25.0x Surge`). Tooltips explicitly show the formula calculation: `24h volume (500) is 25.0x above 30-day baseline average (20.0/day)`.
+  * **Residential IP Pool Rotation Badge:** Displayed when distributed multi-IP evasion heuristics trigger.
+* **Forensics Action:** Direct `Events →` link opening `/events?clientQuery=...` pre-filtered for the subnet.
 
 ---
 

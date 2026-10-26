@@ -322,6 +322,36 @@ public class DashboardController {
 		return "fragments/offenders-table :: offenderTable";
 	}
 
+	@GetMapping("/profiles")
+	public String profilesPage(
+			@RequestParam(name = "activityPattern", required = false, defaultValue = "ALL") String activityPattern,
+			@RequestParam(name = "minRequests", required = false) Long minRequests,
+			@RequestParam(name = "clientQuery", required = false) String clientQuery,
+			@RequestParam(name = "asn", required = false) String asn,
+			@RequestParam(name = "clientTypes", required = false) List<String> clientTypes,
+			@RequestParam(name = "sortBy", required = false, defaultValue = "SURGE") String sortBy,
+			@RequestParam(name = "limit", defaultValue = "50") int limit,
+			@RequestParam(name = "offset", defaultValue = "0") int offset,
+			Model model) {
+		populateProfilesModel(activityPattern, minRequests, clientQuery, asn, clientTypes, sortBy, limit, offset, model);
+		return "profiles";
+	}
+
+	@GetMapping("/fragments/profiles-table")
+	public String profilesTableFragment(
+			@RequestParam(name = "activityPattern", required = false, defaultValue = "ALL") String activityPattern,
+			@RequestParam(name = "minRequests", required = false) Long minRequests,
+			@RequestParam(name = "clientQuery", required = false) String clientQuery,
+			@RequestParam(name = "asn", required = false) String asn,
+			@RequestParam(name = "clientTypes", required = false) List<String> clientTypes,
+			@RequestParam(name = "sortBy", required = false, defaultValue = "SURGE") String sortBy,
+			@RequestParam(name = "limit", defaultValue = "50") int limit,
+			@RequestParam(name = "offset", defaultValue = "0") int offset,
+			Model model) {
+		populateProfilesModel(activityPattern, minRequests, clientQuery, asn, clientTypes, sortBy, limit, offset, model);
+		return "fragments/profiles-table :: profilesTable";
+	}
+
 	@GetMapping("/server/{serverId}")
 	public String serverDetails(
 			@PathVariable(name = "serverId") String serverId,
@@ -673,6 +703,56 @@ public class DashboardController {
 		model.addAttribute("selectedTypes", clientTypes != null ? clientTypes : List.of());
 		model.addAttribute("selectedAsn", asnStr != null ? asnStr : "");
 		model.addAttribute("selectedStatus", status != null ? status : "ALL");
+	}
+
+	private void populateProfilesModel(
+			String activityPattern,
+			Long minRequests,
+			String clientQuery,
+			String asnStr,
+			List<String> clientTypes,
+			String sortBy,
+			int limit,
+			int offset,
+			Model model) {
+
+		if (subnetProfileService != null && subnetProfileService.countProfilesFiltered("ALL", null, null, null, null, null) == 0) {
+			try {
+				subnetProfileService.refreshProfiles();
+			} catch (Exception ignored) {
+			}
+		}
+
+		Long parsedAsn = parseAsn(asnStr);
+		String asOrgQuery = (parsedAsn == null && asnStr != null && !asnStr.isBlank()) ? asnStr.trim() : null;
+
+		List<org.henbru.antidos.collector.model.SubnetProfile> profiles = (subnetProfileService != null)
+				? subnetProfileService.findProfilesFiltered(activityPattern, minRequests, clientQuery, parsedAsn, asOrgQuery, clientTypes, sortBy, limit, offset)
+				: List.of();
+		long totalProfiles = (subnetProfileService != null)
+				? subnetProfileService.countProfilesFiltered(activityPattern, minRequests, clientQuery, parsedAsn, asOrgQuery, clientTypes)
+				: 0L;
+
+		org.henbru.antidos.collector.model.SubnetProfileStats stats = (subnetProfileService != null)
+				? subnetProfileService.getProfileStats()
+				: org.henbru.antidos.collector.model.SubnetProfileStats.empty();
+
+		boolean hasMore = (offset + profiles.size()) < totalProfiles;
+		int nextOffset = offset + limit;
+
+		model.addAttribute("subnetProfiles", profiles);
+		model.addAttribute("totalProfiles", totalProfiles);
+		model.addAttribute("profileStats", stats);
+		model.addAttribute("activityPattern", activityPattern != null ? activityPattern : "ALL");
+		model.addAttribute("minRequests", minRequests != null ? minRequests : 0L);
+		model.addAttribute("clientQuery", clientQuery != null ? clientQuery : "");
+		model.addAttribute("selectedAsn", asnStr != null ? asnStr : "");
+		model.addAttribute("selectedTypes", clientTypes != null ? clientTypes : List.of());
+		model.addAttribute("sortBy", sortBy != null ? sortBy : "SURGE");
+		model.addAttribute("limit", limit);
+		model.addAttribute("offset", offset);
+		model.addAttribute("hasMore", hasMore);
+		model.addAttribute("nextOffset", nextOffset);
 	}
 
 	private String toJson(Object obj) {

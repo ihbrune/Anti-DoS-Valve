@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- Fragment: profilesTable -->
+<div th:fragment="profilesTable" id="profiles-table-container">
+
+    <div th:if="${#lists.isEmpty(subnetProfiles)}" class="empty-state" style="padding: 40px; text-align: center; background: var(--bg-card); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+        <div style="font-size: 32px; margin-bottom: 12px;">&#x1F50D;</div>
+        <div style="font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;">No Subnet Profiles Match Your Filters</div>
+        <p style="color: var(--text-muted); font-size: 13px; max-width: 480px; margin: 0 auto;">
+            Try broadening your search term, clearing classification checkboxes, or selecting "All Subnets" in the pattern presets.
+        </p>
+    </div>
+
+    <div th:unless="${#lists.isEmpty(subnetProfiles)}" class="table-responsive" style="background: var(--bg-card); border-radius: var(--radius-md); border: 1px solid var(--border-color); overflow: hidden;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Subnet &amp; Provider</th>
+                    <th>Classification</th>
+                    <th>First Seen &amp; Dormancy</th>
+                    <th>30-Day Daily Baseline</th>
+                    <th>Last 24h Activity</th>
+                    <th>24h Unique IPs &amp; Spread</th>
+                    <th>Surge Multiplier &amp; Threat Forensics</th>
+                    <th style="text-align: right;">Forensics</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr th:each="p : ${subnetProfiles}">
+                    <!-- 1. Subnet & Provider -->
+                    <td>
+                        <div style="display: flex; flex-direction: column; gap: 3px;">
+                            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                <a th:href="@{/events(clientQuery=${p.subnetGroup()})}"
+                                   class="ip-mono badge badge-warning"
+                                   style="text-decoration: underline; font-weight: 600; font-size: 12px;"
+                                   th:text="${p.subnetGroup()}">198.51.100.0/24</a>
+                                <th:block th:if="${p.subnetGroup() != null and subnetAnnotations != null and subnetAnnotations.containsKey(p.subnetGroup())}">
+                                    <span th:with="a=${subnetAnnotations.get(p.subnetGroup())}"
+                                          class="badge-note"
+                                          th:classappend="${a.verdict().badgeClass()}"
+                                          th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${p.subnetGroup()}, context='table')}"
+                                          hx-target="#note-modal-container"
+                                          th:title="'Subnet Note: ' + ${a.verdict().displayName()}"
+                                          th:text="${a.verdict().icon()}">&#x1F7E2;</span>
+                                </th:block>
+                                <th:block th:if="${p.subnetGroup() != null and (subnetAnnotations == null or !subnetAnnotations.containsKey(p.subnetGroup()))}">
+                                    <span class="btn-add-note"
+                                          th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${p.subnetGroup()}, context='table')}"
+                                          hx-target="#note-modal-container"
+                                          title="Add note for this subnet">+&#x1F4DD;</span>
+                                </th:block>
+                                <span th:if="${p.countryCode() != null}" class="badge badge-secondary" style="padding: 1px 5px; font-size: 10px;" th:text="${p.countryCode()}">DE</span>
+                                <span th:if="${p.asn() != null}" style="display: inline-flex; align-items: center; gap: 3px;">
+                                    <a th:href="@{/events(asn=${p.asn()})}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px; text-decoration: none;" th:title="${p.asOrg()}" th:text="'AS' + ${p.asn()}">AS3320</a>
+                                    <th:block th:if="${asnAnnotations != null and asnAnnotations.containsKey(p.asn())}">
+                                        <span th:with="a=${asnAnnotations.get(p.asn())}"
+                                              class="badge-note"
+                                              th:classappend="${a.verdict().badgeClass()}"
+                                              th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${p.asn()}, context='table')}"
+                                              hx-target="#note-modal-container"
+                                              th:title="'ASN Note: ' + ${a.verdict().displayName()}"
+                                              th:text="${a.verdict().icon()}">&#x1F7E2;</span>
+                                    </th:block>
+                                    <th:block th:if="${asnAnnotations == null or !asnAnnotations.containsKey(p.asn())}">
+                                        <span class="btn-add-note"
+                                              th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${p.asn()}, context='table')}"
+                                              hx-target="#note-modal-container"
+                                              title="Add note for this ASN">+&#x1F4DD;</span>
+                                    </th:block>
+                                </span>
+                            </div>
+                            <span th:if="${p.asOrg() != null}" style="font-size: 11px; color: var(--text-muted);" th:text="${p.asOrg()}">Deutsche Telekom AG</span>
+                        </div>
+                    </td>
+
+                    <!-- 2. Classification -->
+                    <td>
+                        <span th:if="${p.clientType() != null and p.clientType().name() == 'RESIDENTIAL'}" class="badge badge-secondary">&#x1F3E0; Residential</span>
+                        <span th:if="${p.clientType() != null and p.clientType().name() == 'DATACENTER'}" class="badge badge-warning">&#x1F3E2; Datacenter</span>
+                        <span th:if="${p.clientType() != null and p.clientType().name() == 'SEARCH_ENGINE'}" class="badge badge-success">&#x1F50D; Search Engine</span>
+                        <span th:if="${p.clientType() != null and p.clientType().name() == 'AI_CRAWLER'}" class="badge badge-purple">&#x1F916; AI Bot</span>
+                        <span th:if="${p.clientType() != null and p.clientType().name() == 'MOBILE'}" class="badge badge-info">&#x1F4F1; Mobile</span>
+                        <span th:if="${p.clientType() != null and p.clientType().name() == 'PRIVATE_NETWORK'}" class="badge badge-info">&#x1F512; Private Net</span>
+                        <span th:if="${p.clientType() != null and p.clientType().name() == 'TOR_EXIT_NODE'}" class="badge badge-purple">&#x1F9C5; Tor Exit Node</span>
+                        <span th:if="${p.clientType() == null or p.clientType().name() == 'UNKNOWN'}" class="badge badge-secondary" style="padding: 1px 6px; font-size: 9px; opacity: 0.75;">Unclassified</span>
+                    </td>
+
+                    <!-- 3. First Seen & Dormancy -->
+                    <td>
+                        <div>
+                            <span th:text="${#temporals.format(p.firstSeenAt(), 'dd.MM.yyyy HH:mm')}">01.10.2026 12:00</span>
+                            <span th:if="${p.isNewSubnet(7)}" class="badge badge-success" style="font-size: 9px; padding: 1px 4px; margin-left: 4px;">&#x2728; New</span>
+                        </div>
+                        <div style="font-size: 11px; margin-top: 2px;">
+                            <span th:if="${p.isDormantBreakout(14)}" class="badge badge-purple" style="font-size: 10px;"
+                                  th:title="'Inactive for ' + ${p.daysDormantBeforeLastSeen()} + ' days before recent surge'">
+                                &#x1F4A4; <span th:text="${p.daysDormantBeforeLastSeen()} + 'd Dormancy Break'"></span>
+                            </span>
+                            <span th:if="${p.daysDormantBeforeLastSeen() > 0 and p.daysDormantBeforeLastSeen() < 14}" style="color: var(--text-muted);"
+                                  th:text="'Last active ' + ${#temporals.format(p.lastSeenAt(), 'dd.MM HH:mm')}"></span>
+                            <span th:if="${p.daysDormantBeforeLastSeen() == 0}" style="color: var(--text-muted);">
+                                Steady traffic
+                            </span>
+                        </div>
+                    </td>
+
+                    <!-- 4. 30-Day Daily Baseline -->
+                    <td>
+                        <div>
+                            <strong th:text="${#numbers.formatDecimal(p.baselineDailyAvg(), 1, 1)}">1.5</strong>
+                            <span style="font-size: 11px; color: var(--text-muted);">req/day</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted);">
+                            Lifetime: <span th:text="${#numbers.formatInteger(p.totalLifetimeRequests(), 1, 'POINT')}">15,000</span>
+                        </div>
+                    </td>
+
+                    <!-- 5. Last 24h Activity -->
+                    <td>
+                        <div>
+                            <strong th:text="${#numbers.formatInteger(p.last24hRequests(), 1, 'POINT')}">1,250</strong>
+                            <span style="font-size: 11px; color: var(--text-muted);">reqs</span>
+                        </div>
+                        <div style="font-size: 11px;">
+                            <span th:if="${p.last24hBlockedRequests() > 0}" style="color: var(--color-danger); font-weight: 600;" th:text="${#numbers.formatInteger(p.last24hBlockedRequests(), 1, 'POINT') + ' blocked'}">500 blocked</span>
+                            <span th:if="${p.last24hBlockedRequests() == 0}" style="color: var(--text-muted);">0 blocked</span>
+                        </div>
+                    </td>
+
+                    <!-- 6. 24h Unique IPs & Spread -->
+                    <td>
+                        <div>
+                            <strong th:text="${p.last24hDistinctClients()}">45</strong>
+                            <span style="font-size: 11px; color: var(--text-muted);">distinct IPs</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted);">
+                            Avg <strong th:text="${#numbers.formatDecimal(p.averageRequestsPerClient24h(), 1, 1)}">1.8</strong> req/IP
+                        </div>
+                    </td>
+
+                    <!-- 7. Surge Multiplier & Threat Forensics -->
+                    <td>
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <div>
+                                <span th:if="${p.last24hSurgeFactor() >= 10.0}" class="badge badge-danger" style="font-weight: 700; font-size: 11px;"
+                                      th:title="'24h volume (' + ${p.last24hRequests()} + ') is ' + ${p.last24hSurgeFactor()} + 'x above 30-day baseline average (' + ${p.baselineDailyAvg()} + '/day)'">
+                                    &#x26A1; <span th:text="${#numbers.formatDecimal(p.last24hSurgeFactor(), 1, 1)} + 'x Surge'"></span>
+                                </span>
+                                <span th:if="${p.last24hSurgeFactor() >= 3.0 and p.last24hSurgeFactor() < 10.0}" class="badge badge-warning" style="font-weight: 600; font-size: 11px;"
+                                      th:title="'24h volume (' + ${p.last24hRequests()} + ') is ' + ${p.last24hSurgeFactor()} + 'x above 30-day baseline average (' + ${p.baselineDailyAvg()} + '/day)'">
+                                    &#x26A1; <span th:text="${#numbers.formatDecimal(p.last24hSurgeFactor(), 1, 1)} + 'x Surge'"></span>
+                                </span>
+                                <span th:if="${p.last24hSurgeFactor() < 3.0}" class="badge badge-secondary" style="font-size: 10px;">
+                                    Normal (<span th:text="${#numbers.formatDecimal(p.last24hSurgeFactor(), 1, 1)} + 'x'"></span>)
+                                </span>
+                            </div>
+                            <span th:if="${p.isPotentialResidentialProxyPool()}" class="badge badge-danger" style="font-size: 10px;"
+                                  title="High distinct IP count with low requests per IP - classic rotating residential proxy pattern!">
+                                &#x26A0;&#xFE0F; Residential IP Pool Rotation
+                            </span>
+                        </div>
+                    </td>
+
+                    <!-- 8. Forensics Actions -->
+                    <td style="text-align: right;">
+                        <a th:href="@{/events(clientQuery=${p.subnetGroup()})}"
+                           class="btn"
+                           style="padding: 3px 10px; font-size: 11px;"
+                           title="Inspect raw incident events for this subnet">
+                            Events &rarr;
+                        </a>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Table Footer & Status -->
+        <div style="padding: 12px 18px; font-size: 12px; color: var(--text-muted); background: rgba(15, 23, 42, 0.5); border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div>
+                Showing <strong th:text="${#lists.size(subnetProfiles)}">50</strong> of <strong th:text="${totalProfiles}">120</strong> persistent subnet profiles.
+            </div>
+            <div th:if="${hasMore}">
+                <button type="button"
+                        class="btn btn-primary"
+                        style="font-size: 11px; padding: 4px 12px;"
+                        th:hx-get="@{/fragments/profiles-table(activityPattern=${activityPattern}, minRequests=${minRequests}, clientQuery=${clientQuery}, asn=${selectedAsn}, sortBy=${sortBy}, limit=${limit}, offset=${nextOffset})}"
+                        hx-target="#profiles-table-container"
+                        hx-swap="outerHTML">
+                    Load Next <span th:text="${limit}">50</span> Profiles &rarr;
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>
