@@ -108,4 +108,29 @@ public record NetworkEntity(
 				lastSeen
 		);
 	}
+
+	public NetworkEntity withTags(String newTags) {
+		return new NetworkEntity(
+				id,
+				clientKey,
+				ipVersion,
+				cidrPrefix,
+				ipV4Start,
+				ipV4End,
+				ipV6Start,
+				ipV6End,
+				subnetGroup,
+				mmdbNetwork,
+				asn,
+				asOrg,
+				countryCode,
+				clientType,
+				newTags,
+				enrichmentStatus,
+				resolvedAt,
+				resolvedVersions,
+				firstSeen,
+				lastSeen
+		);
+	}
 }

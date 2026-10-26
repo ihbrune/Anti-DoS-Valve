@@ -114,12 +114,13 @@
                             <td>
                                 <strong style="font-size: 13px;" th:text="${v.valveName}">Primary-Rate-Limiter</strong>
                                 <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px;" th:if="${runtimeValvesMap != null and runtimeValvesMap[v.valveName] != null}">
+                                    <span th:if="${runtimeValvesMap[v.valveName].isHoneypot()}" class="badge badge-warning" style="font-size: 9.5px; padding: 1px 5px; background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);" title="Zero-Tolerance Honeypot Valve">&#x1F36F; HONEYPOT</span>
                                     <span th:if="${runtimeValvesMap[v.valveName].isBlocking()}" class="badge badge-danger" style="font-size: 9.5px; padding: 1px 5px;" th:text="'BLOCKING (' + ${runtimeValvesMap[v.valveName].httpStatusCode} + ')'">BLOCKING (429)</span>
                                     <span th:unless="${runtimeValvesMap[v.valveName].isBlocking()}" class="badge badge-purple" style="font-size: 9.5px; padding: 1px 5px;">MARKING</span>
                                     <span th:if="${runtimeValvesMap[v.valveName].simulationMode}" class="badge badge-warning" style="font-size: 9.5px; padding: 1px 5px;">SIMULATION</span>
                                     <span class="badge" th:classappend="${runtimeValvesMap[v.valveName].collectorIntegrationBadgeClass()}" style="font-size: 9.5px; padding: 1px 5px;" th:title="'Collector integration mode: ' + ${runtimeValvesMap[v.valveName].collectorIntegration()}" th:text="'COLLECTOR: ' + ${runtimeValvesMap[v.valveName].collectorIntegrationLabel()}">COLLECTOR: AUTO</span>
                                     <span class="badge" th:classappend="${runtimeValvesMap[v.valveName].visitorCookieBadgeClass()}" style="font-size: 9.5px; padding: 1px 5px;" th:title="'Visitor cookie tracking: ' + ${runtimeValvesMap[v.valveName].visitorCookieLabel()}" th:text="'COOKIE: ' + ${runtimeValvesMap[v.valveName].visitorCookieLabel()}">COOKIE: OFF</span>
-                                    <span style="font-size: 11px; color: var(--text-muted);" th:text="${runtimeValvesMap[v.valveName].allowedRequestsPerSlot} + ' req / ' + ${runtimeValvesMap[v.valveName].slotLength} + 's'">50 req / 60s</span>
+                                    <span style="font-size: 11px; color: var(--text-muted);" th:text="${runtimeValvesMap[v.valveName].allowedRequestsPerSlot == 0 ? '0 req (Zero Tolerance) / ' + runtimeValvesMap[v.valveName].slotLength + 's' : runtimeValvesMap[v.valveName].allowedRequestsPerSlot + ' req / ' + runtimeValvesMap[v.valveName].slotLength + 's'}">50 req / 60s</span>
                                 </div>
                             </td>
                             <td>
@@ -184,6 +185,7 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 14px;">
                     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                         <span style="font-size: 16px; font-weight: 700; color: var(--text-primary);" th:text="${rv.valveName}">Primary-Rate-Limiter</span>
+                        <span th:if="${rv.isHoneypot()}" class="badge badge-warning" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);" title="Zero-Tolerance Honeypot Valve">&#x1F36F; HONEYPOT</span>
                         <span class="badge badge-info" th:text="'#' + ${rv.pipelineOrder} + ' IN PIPELINE'">#1 IN PIPELINE</span>
                         <span th:if="${rv.isBlocking()}" class="badge badge-danger" th:text="'MODE: BLOCKING (' + ${rv.httpStatusCode} + ')'">MODE: BLOCKING (429)</span>
                         <span th:unless="${rv.isBlocking()}" class="badge badge-purple">MODE: MARKING</span>
@@ -207,7 +209,7 @@
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 14px;">
                     <div style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
                         <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Rate Limit Threshold</div>
-                        <div style="font-size: 14px; font-weight: 700; color: var(--color-primary);" th:text="${rv.allowedRequestsPerSlot} + ' req / ' + ${rv.slotLength} + 's'">50 req / 60s</div>
+                        <div style="font-size: 14px; font-weight: 700; color: var(--color-primary);" th:text="${rv.allowedRequestsPerSlot == 0 ? '0 req (Zero Tolerance / Honeypot) / ' + rv.slotLength + 's' : rv.allowedRequestsPerSlot + ' req / ' + rv.slotLength + 's'}">50 req / 60s</div>
                         <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;" th:text="'Window: ' + ${rv.formattedWindow()} + ' &bull; Decay: ' + ${rv.formattedDecay()}">Window: 300s &bull; Decay: 80%</div>
                     </div>
 
@@ -307,7 +309,7 @@
                     <tbody>
                         <tr th:each="slot : ${recentSlots}">
                             <td><strong th:text="${slot.slotKey}">174620</strong></td>
-                            <td><span class="badge badge-info" th:text="${slot.valveName}">STATUS VALVE</span></td>
+                            <td><span class="badge" th:classappend="${slot.valveName != null and slot.valveName.toUpperCase().contains('HONEYPOT') ? 'badge-warning' : 'badge-info'}" th:text="${(slot.valveName != null and slot.valveName.toUpperCase().contains('HONEYPOT') ? '&#x1F36F; ' : '') + slot.valveName}">STATUS VALVE</span></td>
                             <td th:text="${#temporals.format(slot.startTime, 'HH:mm:ss')} + ' - ' + ${#temporals.format(slot.endTime, 'HH:mm:ss')}">10:00:00 - 10:01:00</td>
                             <td th:text="${#numbers.formatInteger(slot.totalRequests, 1, 'POINT')}">1,250</td>
                             <td th:text="${slot.activeCounters}">45</td>
@@ -344,6 +346,7 @@
                                                           title="Add note for this subnet">+📝</span>
                                                 </th:block>
                                             </th:block>
+                                            <span th:if="${ev.isHoneypot()}" class="badge badge-warning" style="padding: 1px 5px; font-size: 9px; background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);" title="Client accessed a Honeypot trap URL">&#x1F36F; Honeypot Triggered</span>
                                             <span th:if="${ev.countryCode != null}" class="badge badge-secondary" style="padding: 1px 4px; font-size: 9px;" th:text="${ev.countryCode}">DE</span>
                                             <span th:if="${ev.clientType != null and ev.clientType.name() == 'DATACENTER'}" class="badge badge-warning" style="padding: 1px 5px; font-size: 9px;" title="Hosting / Datacenter / Cloud">&#x1F3E2; Datacenter</span>
                                             <span th:if="${ev.clientType != null and ev.clientType.name() == 'SEARCH_ENGINE'}" class="badge badge-success" style="padding: 1px 5px; font-size: 9px;" title="Verified Search Engine Crawler">&#x1F50D; Search Engine</span>
@@ -458,7 +461,7 @@
                     <tbody>
                         <tr th:each="event : ${recentEvents}">
                             <td th:text="${#temporals.format(event.slotTime, 'HH:mm:ss')}">10:45:00</td>
-                            <td><span class="badge badge-info" th:text="${event.valveName}">API LIMITER</span></td>
+                            <td><span class="badge" th:classappend="${event.isHoneypot() ? 'badge-warning' : 'badge-info'}" th:text="${(event.isHoneypot() ? '&#x1F36F; ' : '') + event.valveName}">API LIMITER</span></td>
                             <td>
                                 <div style="display: flex; flex-direction: column; gap: 4px;">
                                     <div style="display: flex; align-items: center; gap: 6px;">
@@ -488,6 +491,7 @@
                                         <span th:if="${event.countryCode != null}" class="badge badge-secondary" style="padding: 1px 5px; font-size: 10px;" th:text="${event.countryCode}">DE</span>
                                     </div>
                                     <div style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center;">
+                                        <span th:if="${event.isHoneypot()}" class="badge badge-warning" style="padding: 1px 6px; font-size: 9px; background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);" title="Client accessed a Honeypot trap URL">&#x1F36F; Honeypot Triggered</span>
                                         <span th:if="${event.clientType != null and event.clientType.name() == 'DATACENTER'}" class="badge badge-warning" style="padding: 1px 6px; font-size: 9px;" title="Hosting / Datacenter / Cloud">&#x1F3E2; Datacenter</span>
                                         <span th:if="${event.clientType != null and event.clientType.name() == 'SEARCH_ENGINE'}" class="badge badge-success" style="padding: 1px 6px; font-size: 9px;" title="Verified Search Engine Crawler">&#x1F50D; Search Engine</span>
                                         <span th:if="${event.clientType != null and event.clientType.name() == 'AI_CRAWLER'}" class="badge badge-purple" style="padding: 1px 6px; font-size: 9px;" title="Verified AI Bot / LLM Crawler">&#x1F916; AI Bot</span>

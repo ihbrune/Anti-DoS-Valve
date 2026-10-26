@@ -169,4 +169,11 @@ public record MonitoredValve(
 		return (alwaysAllowedIPs != null && !alwaysAllowedIPs.isBlank())
 				|| (alwaysForbiddenIPs != null && !alwaysForbiddenIPs.isBlank());
 	}
+
+	/**
+	 * @return true if this valve is designated as a Honeypot trap (name contains "HONEYPOT")
+	 */
+	public boolean isHoneypot() {
+		return valveName != null && valveName.toUpperCase().contains("HONEYPOT");
+	}
 }

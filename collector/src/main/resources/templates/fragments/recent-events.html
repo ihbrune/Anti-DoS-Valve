@@ -34,7 +34,7 @@
                         <strong th:text="${event.serverId}">Web-Node-1</strong>
                     </a>
                 </td>
-                <td><span class="badge badge-info" th:text="${event.valveName}">API LIMITER</span></td>
+                <td><span class="badge" th:classappend="${event.isHoneypot() ? 'badge-warning' : 'badge-info'}" th:text="${(event.isHoneypot() ? '&#x1F36F; ' : '') + event.valveName}">API LIMITER</span></td>
                 <td>
                     <div style="display: flex; flex-direction: column; gap: 4px;">
                         <div style="display: flex; align-items: center; gap: 6px;">
@@ -64,6 +64,7 @@
                             <span th:if="${event.countryCode != null}" class="badge badge-secondary" style="padding: 1px 5px; font-size: 10px;" th:text="${event.countryCode}">DE</span>
                         </div>
                         <div style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center;">
+                            <span th:if="${event.isHoneypot()}" class="badge badge-warning" style="padding: 1px 6px; font-size: 9px; background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);" title="Client accessed a Honeypot trap URL">&#x1F36F; Honeypot Triggered</span>
                             <span th:if="${event.clientType != null and event.clientType.name() == 'DATACENTER'}" class="badge badge-warning" style="padding: 1px 6px; font-size: 9px;" title="Hosting / Datacenter / Cloud">&#x1F3E2; Datacenter</span>
                             <span th:if="${event.clientType != null and event.clientType.name() == 'SEARCH_ENGINE'}" class="badge badge-success" style="padding: 1px 6px; font-size: 9px;" title="Verified Search Engine Crawler">&#x1F50D; Search Engine</span>
                             <span th:if="${event.clientType != null and event.clientType.name() == 'AI_CRAWLER'}" class="badge badge-purple" style="padding: 1px 6px; font-size: 9px;" title="Verified AI Bot / LLM Crawler">&#x1F916; AI Bot</span>

@@ -133,4 +133,25 @@ class EntityResolverTest {
 		);
 		assertFalse(entityResolver.isExpired(priv));
 	}
+
+	@Test
+	void testRecordHoneypotTriggerAndTagPreservation() {
+		String testIp = "198.51.100.99";
+		entityResolver.recordHoneypotTrigger(testIp);
+
+		NetworkEntity entity = entityResolver.getOrCreate(testIp, Instant.now());
+		assertNotNull(entity.tags());
+		assertTrue(entity.tags().contains("HONEYPOT_TRIGGERED"));
+
+		// Calling recordHoneypotTrigger again must not duplicate the tag
+		entityResolver.recordHoneypotTrigger(testIp);
+		NetworkEntity reloaded = entityResolver.getOrCreate(testIp, Instant.now());
+		assertEquals("HONEYPOT_TRIGGERED", reloaded.tags());
+
+		// Resolving entity must preserve existing HONEYPOT_TRIGGERED tag
+		NetworkEntity resolved = entityResolver.resolve(reloaded);
+		assertNotNull(resolved.tags());
+		assertTrue(resolved.tags().contains("HONEYPOT_TRIGGERED"));
+	}
 }
+

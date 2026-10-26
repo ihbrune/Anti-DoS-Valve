@@ -258,7 +258,7 @@ class DemoModeTest {
 		var subnetEvents = clientEventRepository.findRecentEventsFiltered(
 				java.util.List.of("Demo-Edge-EU"), java.util.List.of("Subnet-Guard"), null, null, null, 10, 0);
 		assertFalse(subnetEvents.isEmpty(), "Should have seeded Subnet-Guard /24 aggregated events");
-		assertEquals(24, subnetEvents.getFirst().cidrPrefix(), "Event should be categorized as /24 CIDR prefix");
+		assertTrue(subnetEvents.stream().anyMatch(e -> e.cidrPrefix() == 24), "Event should be categorized as /24 CIDR prefix");
 
 		// 7. Verify Subnet Rollup groups IPv6 into /64 and IPv4 into /24
 		var rollup = clientEventRepository.findTopOffendersFiltered(

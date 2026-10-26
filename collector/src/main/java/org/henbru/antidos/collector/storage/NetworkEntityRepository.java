@@ -204,6 +204,13 @@ public class NetworkEntityRepository {
 		});
 	}
 
+	public void updateTags(long entityId, String tags) {
+		String sql = "UPDATE network_entity SET tags = ? WHERE id = ?";
+		StorageRetryUtil.executeWithRetry("NetworkEntityRepository.updateTags", () -> {
+			jdbcTemplate.update(sql, tags, entityId);
+		});
+	}
+
 	public long count() {
 		Long count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM network_entity", Long.class);
 		return count != null ? count : 0L;

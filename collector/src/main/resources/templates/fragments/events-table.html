@@ -34,7 +34,7 @@
                             <strong th:text="${event.serverId}">Web-01</strong>
                         </a>
                     </td>
-                    <td><span class="badge badge-info" th:text="${event.valveName}">API-LIMITER</span></td>
+                    <td><span class="badge" th:classappend="${event.isHoneypot() ? 'badge-warning' : 'badge-info'}" th:text="${(event.isHoneypot() ? '&#x1F36F; ' : '') + event.valveName}">API-LIMITER</span></td>
                     <td>
                         <div style="display: flex; flex-direction: column; gap: 4px;">
                             <div style="display: flex; align-items: center; gap: 6px;">
@@ -47,6 +47,7 @@
                                 <span th:if="${event.distinctClients > 1}" class="badge badge-info" style="padding: 1px 5px; font-size: 10px;" th:text="${event.distinctClients + ' IPs'}" title="Observed distinct client IP addresses in this aggregated subnet">2 IPs</span>
                             </div>
                             <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                                <span th:if="${event.isHoneypot()}" class="badge badge-warning" style="padding: 1px 6px; font-size: 9px; background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);" title="Client accessed a Honeypot trap URL">&#x1F36F; Honeypot Triggered</span>
                                 <a th:if="${event.clientType != null and event.clientType.name() == 'DATACENTER'}" th:href="@{/events(clientTypes='DATACENTER')}" class="badge badge-warning" style="padding: 1px 6px; font-size: 9px; text-decoration: none;" title="Hosting / Datacenter / Cloud - Click to filter">&#x1F3E2; Datacenter</a>
                                 <a th:if="${event.clientType != null and event.clientType.name() == 'SEARCH_ENGINE'}" th:href="@{/events(clientTypes='SEARCH_ENGINE')}" class="badge badge-success" style="padding: 1px 6px; font-size: 9px; text-decoration: none;" title="Verified Search Engine Crawler - Click to filter">&#x1F50D; Search Engine</a>
                                 <a th:if="${event.clientType != null and event.clientType.name() == 'AI_CRAWLER'}" th:href="@{/events(clientTypes='AI_CRAWLER')}" class="badge badge-purple" style="padding: 1px 6px; font-size: 9px; text-decoration: none;" title="Verified AI Bot / LLM Crawler - Click to filter">&#x1F916; AI Bot</a>

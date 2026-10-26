@@ -394,6 +394,8 @@ public class CollectorPollerService {
 							.map(v -> v.visitorCookieEnabled())
 							.orElse(false));
 
+			boolean isHoneypot = isHoneypotValve(valveName);
+
 			// 1. Ingest blocked clients (status = BLOCKED, locked = true)
 			if (details.blockedClients() != null && !details.blockedClients().isEmpty()) {
 				blockedCount = details.blockedClients().size();
@@ -410,6 +412,9 @@ public class CollectorPollerService {
 							} catch (Exception e) {
 								log.debug("Could not resolve entity for key {}: {}", c.key(), e.getMessage());
 							}
+						}
+						if (isHoneypot) {
+							entityResolver.recordHoneypotTrigger(c.key());
 						}
 					}
 					Integer dc = c.distinctClients();
@@ -446,6 +451,9 @@ public class CollectorPollerService {
 						entityId = entityResolver.getCached(c.key())
 								.map(entity -> entity.id())
 								.orElse(null);
+						if (isHoneypot) {
+							entityResolver.recordHoneypotTrigger(c.key());
+						}
 					}
 					Integer dc = c.distinctClients();
 					int distinct = dc != null && dc > 0 ? dc : 1;
@@ -566,5 +574,9 @@ public class CollectorPollerService {
 		} catch (DateTimeParseException e) {
 			return fallback;
 		}
+	}
+
+	public static boolean isHoneypotValve(String valveName) {
+		return valveName != null && valveName.toUpperCase().contains("HONEYPOT");
 	}
 }

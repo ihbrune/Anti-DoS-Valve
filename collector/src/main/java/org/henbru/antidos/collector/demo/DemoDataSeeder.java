@@ -353,7 +353,7 @@ public class DemoDataSeeder {
 				if ((slotKey + idx * 47) % 53 == 0) {
 					events.add(createEnrichedEvent(
 							edgeServer, "Subnet-Guard", slotKey, startTime,
-							"185.246.222.84", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
+							"185.246.222.0/24", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
 							95 + sRnd.nextInt(25), 0, false, true, endTime, 7 + sRnd.nextInt(2)
 					));
 				}

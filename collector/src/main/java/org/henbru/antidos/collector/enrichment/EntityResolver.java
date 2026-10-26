@@ -193,6 +193,15 @@ public class EntityResolver {
 			clientType = asnClassifierService.classify(asn, asOrg);
 		}
 
+		if (entity.tags() != null && !entity.tags().isBlank()) {
+			for (String t : entity.tags().split(",")) {
+				String trimmed = t.trim();
+				if (!trimmed.isEmpty() && !tags.contains(trimmed)) {
+					tags.add(trimmed);
+				}
+			}
+		}
+
 		if (intelResult.tags() != null && !intelResult.tags().isBlank()) {
 			tags.add(intelResult.tags());
 		}
@@ -302,5 +311,26 @@ public class EntityResolver {
 
 	public int getMaxCacheEntries() {
 		return MAX_CACHE_ENTRIES;
+	}
+
+	/**
+	 * Records that a client IP address triggered a Honeypot trap, adding the
+	 * HONEYPOT_TRIGGERED tag to its network entity and updating cache and database.
+	 */
+	public void recordHoneypotTrigger(String clientKey) {
+		if (clientKey == null || clientKey.isBlank()) {
+			return;
+		}
+		String cleanKey = clientKey.trim();
+		NetworkEntity entity = getOrCreate(cleanKey, Instant.now());
+		String currentTags = entity.tags();
+		if (currentTags == null || !currentTags.contains("HONEYPOT_TRIGGERED")) {
+			String newTags = (currentTags == null || currentTags.isBlank()) ? "HONEYPOT_TRIGGERED" : currentTags + ",HONEYPOT_TRIGGERED";
+			NetworkEntity updated = entity.withTags(newTags);
+			entityCache.put(cleanKey, updated);
+			if (updated.id() != null) {
+				entityRepository.updateTags(updated.id(), newTags);
+			}
+		}
 	}
 }

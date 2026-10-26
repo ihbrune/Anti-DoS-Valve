@@ -49,6 +49,9 @@ class CollectorPollerServiceTest {
 	private org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository;
 
 	@Autowired
+	private org.henbru.antidos.collector.enrichment.EntityResolver entityResolver;
+
+	@Autowired
 	private JdbcTemplate jdbcTemplate;
 
 	@BeforeEach
@@ -548,5 +551,42 @@ class CollectorPollerServiceTest {
 		assertTrue(blockedEventsDisabled.isPresent());
 		assertNull(blockedEventsDisabled.get().returningCount(), "Should be null when visitor tracking is disabled");
 	}
+
+	@Test
+	void testPollHoneypotValveTagsClientEntity() throws Exception {
+		EndpointConfig endpoint = new EndpointConfig(
+				"HONEYPOT-NODE", "http://localhost:8080/antidos-status", null, false, true
+		);
+
+		ValveOverviewDto.ValveSummaryDto honeypotSummary = new ValveOverviewDto.ValveSummaryDto(
+				"HONEYPOT-PROBE-VALVE", 1, "BLOCKING", false, true, 0, 60, 5, 5, 1, 600L, 599L, 100L, 1L, 1, 1
+		);
+		when(statusClient.fetchOverview(any())).thenReturn(new ValveOverviewDto("2026-10-17T10:00:00Z", List.of(honeypotSummary), null));
+
+		ValveDetailsDto.ValveHeaderDto header = new ValveDetailsDto.ValveHeaderDto(
+				"HONEYPOT-PROBE-VALVE", 600L, 599L, 60, 5, false
+		);
+		ValveDetailsDto.SelectedSlotDto slotDto = new ValveDetailsDto.SelectedSlotDto(
+				"previous", 4, 599L, false, "2026-10-17T09:59:00Z", "2026-10-17T10:00:00Z", 1L, 1, 1
+		);
+		ValveDetailsDto.BlockedClientDto blockedClient = new ValveDetailsDto.BlockedClientDto(
+				"198.51.100.222", 1, 0, 1, true, "2026-10-17T09:59:10Z", 1, null, null
+		);
+		ValveDetailsDto details = new ValveDetailsDto(
+				"2026-10-17T10:00:00Z", header, slotDto, 1, "all", null, null, List.of(blockedClient), 0, "all", null, null, null, List.of(), null
+		);
+		when(statusClient.fetchSlotDetails(any(), eq("HONEYPOT-PROBE-VALVE"), eq("previous"), eq("all"), eq("all"), eq("0"))).thenReturn(details);
+
+		pollerService.pollEndpoint(endpoint);
+
+		var events = clientEventRepository.findRecentEvents("HONEYPOT-NODE", "198.51.100.222", 5);
+		assertFalse(events.isEmpty());
+		assertTrue(events.getFirst().isHoneypot());
+
+		var entity = entityResolver.getOrCreate("198.51.100.222", Instant.now());
+		assertNotNull(entity.tags());
+		assertTrue(entity.tags().contains("HONEYPOT_TRIGGERED"));
+	}
 }
+
 

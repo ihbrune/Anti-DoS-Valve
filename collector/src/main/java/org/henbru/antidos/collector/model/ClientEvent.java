@@ -747,4 +747,11 @@ public record ClientEvent(
 	public boolean isAuthenticatedTracked() {
 		return authenticatedCount != null;
 	}
+
+	/**
+	 * @return true if this event originated from a Honeypot trap valve
+	 */
+	public boolean isHoneypot() {
+		return valveName != null && valveName.toUpperCase().contains("HONEYPOT");
+	}
 }
