@@ -274,7 +274,6 @@ public class SubnetProfileRepository {
 			int maxClients = rs.getInt("max_distinct_clients");
 
 			long req24h = rs.getLong("req_24h");
-			long active24h = rs.getLong("active_24h");
 			long blocked24h = rs.getLong("blocked_24h");
 			int distinct24h = rs.getInt("distinct_24h");
 

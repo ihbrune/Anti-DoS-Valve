@@ -227,7 +227,7 @@ public class AnalyticsService {
 			return "";
 		}
 		String firstLine = markdown.lines()
-				.map(String::trim)
+				.map(line -> line != null ? line.trim() : "")
 				.filter(line -> !line.isEmpty())
 				.findFirst()
 				.orElse("");

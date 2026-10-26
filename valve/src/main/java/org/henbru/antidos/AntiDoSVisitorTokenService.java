@@ -5,7 +5,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.util.Arrays;
 import java.util.Base64;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
