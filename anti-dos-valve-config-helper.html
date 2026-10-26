@@ -1622,8 +1622,19 @@
                   <label for="statusPassword" class="field-label">statusPassword</label>
                   <span class="badge badge-optional">Optional</span>
                 </div>
-                <div class="field-desc">Access password for the dashboard. Passed via <code>?token=...</code> or <code>Authorization: Bearer &lt;token&gt;</code> header. <strong>If left empty, a secure random HEX token is automatically generated on server startup and printed to the logs.</strong> If entered, must be at least 10 characters long.</div>
-                <input type="text" id="statusPassword" name="statusPassword" minlength="10" placeholder="Leave empty for auto-generated HEX token (min. 10 chars)">
+                <div class="secret-input-wrapper">
+                  <input type="text" id="statusPassword" name="statusPassword" minlength="10" placeholder="Leave empty for auto-generated HEX token (min. 10 chars)" autocomplete="off" spellcheck="false">
+                  <button type="button" id="btnGenStatusPassword" class="btn-secret-gen" title="Generate cryptographically secure 128-bit HEX token (32 hex characters)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                    <span>Generate Token</span>
+                  </button>
+                  <button type="button" id="btnClearStatusPassword" class="btn-secret-clear" title="Clear password (reverts to auto-generated token on startup)" style="display: none;">
+                    &times;
+                  </button>
+                </div>
                 <div id="hintStatusPassword" class="status-field-hint neutral"></div>
               </div>
             </div>
@@ -2792,10 +2803,15 @@
       // 3. statusPassword validation
       if (pwdInput && pwdHint) {
         const rawPwd = pwdInput.value.trim();
+        const clearBtn = document.getElementById('btnClearStatusPassword');
+        if (clearBtn) {
+          clearBtn.style.display = rawPwd ? 'inline-flex' : 'none';
+        }
+
         if (!rawPwd) {
           pwdInput.classList.remove('input-invalid');
           pwdHint.className = 'status-field-hint neutral';
-          pwdHint.innerHTML = '<span>&#9432;</span><div><strong>Auto-generated token (recommended):</strong> A secure random 15–20 char HEX token will be generated on startup and logged to catalina.out.</div>';
+          pwdHint.innerHTML = '<span>&#9432;</span><div><strong>Auto-generated token (recommended for single node):</strong> A secure random 15–20 char HEX token will be generated on startup and logged to catalina.out.</div>';
         } else if (rawPwd.length < 10) {
           pwdInput.classList.add('input-invalid');
           pwdHint.className = 'status-field-hint invalid';
@@ -2803,7 +2819,7 @@
         } else {
           pwdInput.classList.remove('input-invalid');
           pwdHint.className = 'status-field-hint valid';
-          pwdHint.innerHTML = `<span>&#10003;</span><div><strong>Custom password configured:</strong> ${rawPwd.length} characters. Authenticate via <code>?token=...</code> or <code>Authorization: Bearer &lt;token&gt;</code>.</div>`;
+          pwdHint.innerHTML = `<span>&#10003;</span><div><strong>Custom password configured:</strong> ${rawPwd.length} characters. Configure the same token across multi-node clusters and Collector endpoints. Authenticate via <code>?token=...</code> or <code>Authorization: Bearer &lt;token&gt;</code>.</div>`;
         }
       }
     }
@@ -4008,6 +4024,43 @@
         if (!secretInput) return;
         secretInput.value = '';
         updateVisitorCookieIndicators();
+        updateXml();
+        saveStateToLocalStorage();
+      });
+    }
+
+    const btnGenStatusPassword = document.getElementById('btnGenStatusPassword');
+    if (btnGenStatusPassword) {
+      btnGenStatusPassword.addEventListener('click', () => {
+        const pwdInput = document.getElementById('statusPassword');
+        if (!pwdInput) return;
+        pwdInput.value = generateSecureHexSecret(16); // 16 bytes = 32 hex characters
+        updateStatusDashboardIndicators();
+        updateXml();
+        saveStateToLocalStorage();
+
+        const origHtml = btnGenStatusPassword.innerHTML;
+        btnGenStatusPassword.classList.add('generated');
+        btnGenStatusPassword.innerHTML = `
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span>Token Generated!</span>
+        `;
+        setTimeout(() => {
+          btnGenStatusPassword.classList.remove('generated');
+          btnGenStatusPassword.innerHTML = origHtml;
+        }, 1500);
+      });
+    }
+
+    const btnClearStatusPassword = document.getElementById('btnClearStatusPassword');
+    if (btnClearStatusPassword) {
+      btnClearStatusPassword.addEventListener('click', () => {
+        const pwdInput = document.getElementById('statusPassword');
+        if (!pwdInput) return;
+        pwdInput.value = '';
+        updateStatusDashboardIndicators();
         updateXml();
         saveStateToLocalStorage();
       });

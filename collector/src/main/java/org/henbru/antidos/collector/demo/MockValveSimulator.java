@@ -490,10 +490,28 @@ public class MockValveSimulator {
 			int reqCount = 120 + rnd.nextInt(850);
 			int retained = 5 + rnd.nextInt(25);
 			boolean locked = rnd.nextBoolean();
-			blocked.add(new ValveDetailsDto.BlockedClientDto(ip, reqCount, retained, locked, lastUpdate));
+			int dc = getDistinctClientsForAttacker(ip);
+			blocked.add(new ValveDetailsDto.BlockedClientDto(ip, reqCount, retained, reqCount + retained, locked, lastUpdate, dc));
 		}
 
 		return new SlotMetrics(totalRequests, activeCounters, blocked.size(), blocked);
+	}
+
+	private int getDistinctClientsForAttacker(String ip) {
+		return switch (ip) {
+			case "185.246.221.84" -> 82;
+			case "103.149.28.19" -> 64;
+			case "91.240.118.77" -> 44;
+			case "45.154.255.12" -> 34;
+			case "195.123.245.9" -> 12;
+			case "194.26.29.110" -> 8;
+			case "178.62.204.14" -> 6;
+			case "185.220.101.5" -> 3;
+			case "167.99.165.88", "159.65.130.22" -> 4;
+			case "146.190.112.51", "45.148.10.66" -> 3;
+			case "193.32.162.201", "2a01:4f8:c010:d56::1" -> 5;
+			default -> 1;
+		};
 	}
 
 	private SlotMetrics calculateEdgePrimaryMetrics(long slotKey, Random rnd) {
@@ -506,9 +524,9 @@ public class MockValveSimulator {
 			String lastUpdate = DateTimeFormatter.ISO_INSTANT.format(
 					Instant.ofEpochMilli(slotKey * SLOT_LENGTH_MILLIS + 4000)
 			);
-			blocked.add(new ValveDetailsDto.BlockedClientDto("198.51.100.42", 145, 0, 145, false, lastUpdate, 1, 120, null));
+			blocked.add(new ValveDetailsDto.BlockedClientDto("198.51.100.42", 145, 0, 145, false, lastUpdate, 24, 120, null));
 			if (rnd.nextBoolean()) {
-				blocked.add(new ValveDetailsDto.BlockedClientDto("203.0.113.88", 128, 0, 128, false, lastUpdate, 1, 0, null));
+				blocked.add(new ValveDetailsDto.BlockedClientDto("203.0.113.88", 128, 0, 128, false, lastUpdate, 28, 0, null));
 			}
 		}
 
@@ -529,16 +547,23 @@ public class MockValveSimulator {
 				"198.51.100.0/24", req1, 0, req1, true, lastUpdate, 24 + rnd.nextInt(8), (int) (req1 * 0.82), null
 		));
 		if (slotKey % 2 == 0) {
-			// Residential proxy swarm cluster: 260 reqs spread across 65-80 distinct client IPs (~3.5 reqs/IP) - 0% cookies!
+			// Residential proxy swarm cluster: 260 reqs spread across 75-90 distinct client IPs (~3.2 reqs/IP) - 0% cookies!
 			int req2 = 260 + rnd.nextInt(70);
 			blocked.add(new ValveDetailsDto.BlockedClientDto(
-					"185.246.221.0/24", req2, 0, req2, true, lastUpdate, 70 + rnd.nextInt(15), 0, null
+					"185.246.221.0/24", req2, 0, req2, false, lastUpdate, 82 + rnd.nextInt(8), 0, null
+			));
+		}
+		if (slotKey % 3 == 0) {
+			// Comcast residential proxy swarm: 180 reqs spread across 90-100 distinct client IPs (~1.9 reqs/IP)
+			int reqComcast = 180 + rnd.nextInt(40);
+			blocked.add(new ValveDetailsDto.BlockedClientDto(
+					"73.15.20.0/24", reqComcast, 0, reqComcast, false, lastUpdate, 96 + rnd.nextInt(6), 0, null
 			));
 		}
 		if (slotKey % 5 == 0) {
 			int req3 = 290 + rnd.nextInt(80);
 			blocked.add(new ValveDetailsDto.BlockedClientDto(
-					"45.154.255.0/24", req3, 0, req3, true, lastUpdate, 32 + rnd.nextInt(10), 0, null
+					"45.154.255.0/24", req3, 0, req3, true, lastUpdate, 34 + rnd.nextInt(8), 0, null
 			));
 		}
 

@@ -41,26 +41,23 @@ public class DemoDataSeeder {
 			Long asn,
 			String asOrg,
 			String country,
-			org.henbru.antidos.collector.model.ClientType type
+			org.henbru.antidos.collector.model.ClientType type,
+			int distinctClients
 	) {}
 
 	private static final DemoIpProfile[] DEMO_PROFILES = {
-			new DemoIpProfile("2a01:4f8:c010:d56::1", 24940L, "Hetzner Online GmbH", "DE", org.henbru.antidos.collector.model.ClientType.DATACENTER),
-			new DemoIpProfile("178.62.204.14", 14061L, "DigitalOcean, LLC", "NL", org.henbru.antidos.collector.model.ClientType.DATACENTER),
-			new DemoIpProfile("167.99.165.88", 14061L, "DigitalOcean, LLC", "DE", org.henbru.antidos.collector.model.ClientType.DATACENTER),
-			new DemoIpProfile("194.26.29.110", 16276L, "OVH SAS", "FR", org.henbru.antidos.collector.model.ClientType.DATACENTER),
-			new DemoIpProfile("45.154.255.12", 45102L, "Alibaba Cloud", "SG", org.henbru.antidos.collector.model.ClientType.DATACENTER),
-			new DemoIpProfile("185.220.101.5", 208294L, "Zwiebelfreunde (Tor Exit)", "DE", org.henbru.antidos.collector.model.ClientType.DATACENTER),
-			new DemoIpProfile("185.246.222.84", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL),
-			new DemoIpProfile("185.246.222.85", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL),
-			new DemoIpProfile("185.246.222.86", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL),
-			new DemoIpProfile("91.240.118.77", 3209L, "Vodafone Deutschland GmbH", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL),
-			new DemoIpProfile("103.149.28.19", 133480L, "VNPT Residential Fiber", "VN", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL),
-			new DemoIpProfile("66.249.66.1", 15169L, "Google LLC", "US", org.henbru.antidos.collector.model.ClientType.SEARCH_ENGINE),
-			new DemoIpProfile("20.15.240.65", 8075L, "OpenAI / Microsoft", "US", org.henbru.antidos.collector.model.ClientType.AI_CRAWLER),
-			new DemoIpProfile("157.55.39.12", 8075L, "Microsoft Corporation", "US", org.henbru.antidos.collector.model.ClientType.SEARCH_ENGINE),
-			new DemoIpProfile("10.68.42.15", null, "Private Network (RFC 1918)", null, org.henbru.antidos.collector.model.ClientType.PRIVATE_NETWORK),
-			new DemoIpProfile("fd00:10:68::42", null, "Unique Local Address (RFC 4193)", null, org.henbru.antidos.collector.model.ClientType.PRIVATE_NETWORK)
+			new DemoIpProfile("178.62.204.14", 14061L, "DigitalOcean, LLC", "NL", org.henbru.antidos.collector.model.ClientType.DATACENTER, 6),
+			new DemoIpProfile("167.99.165.88", 14061L, "DigitalOcean, LLC", "DE", org.henbru.antidos.collector.model.ClientType.DATACENTER, 4),
+			new DemoIpProfile("194.26.29.110", 16276L, "OVH SAS", "FR", org.henbru.antidos.collector.model.ClientType.DATACENTER, 8),
+			new DemoIpProfile("195.181.168.42", 60781L, "LeaseWeb Netherlands B.V.", "NL", org.henbru.antidos.collector.model.ClientType.DATACENTER, 12),
+			new DemoIpProfile("185.220.102.5", 208294L, "Tor Project Exit Routers", "DE", org.henbru.antidos.collector.model.ClientType.TOR_EXIT_NODE, 5),
+			new DemoIpProfile("146.190.112.51", 14061L, "DigitalOcean, LLC", "US", org.henbru.antidos.collector.model.ClientType.DATACENTER, 3),
+			new DemoIpProfile("159.65.130.22", 14061L, "DigitalOcean, LLC", "GB", org.henbru.antidos.collector.model.ClientType.DATACENTER, 4),
+			new DemoIpProfile("193.32.162.201", 58224L, "Scalaxy B.V.", "NL", org.henbru.antidos.collector.model.ClientType.DATACENTER, 2),
+			new DemoIpProfile("45.148.10.66", 20773L, "Host Europe GmbH", "DE", org.henbru.antidos.collector.model.ClientType.DATACENTER, 3),
+			new DemoIpProfile("89.248.163.74", 49981L, "Recubed B.V. (Port Scanner)", "NL", org.henbru.antidos.collector.model.ClientType.DATACENTER, 1),
+			new DemoIpProfile("45.154.255.12", 45102L, "Alibaba Cloud", "SG", org.henbru.antidos.collector.model.ClientType.DATACENTER, 34),
+			new DemoIpProfile("185.220.101.5", 208294L, "Zwiebelfreunde (Tor Exit)", "DE", org.henbru.antidos.collector.model.ClientType.TOR_EXIT_NODE, 3)
 	};
 
 	private final SlotSnapshotRepository slotSnapshotRepository;
@@ -214,13 +211,13 @@ public class DemoDataSeeder {
 				int edgePrimaryActive = (int) (180 + 200 * diurnal + sRnd.nextInt(50));
 				int edgePrimaryBlocked = 0;
 
-				// Occasional crawlers exceeding rate limit
+				// Occasional crawlers and single-IP scanners
 				if ((slotKey + idx * 7) % 67 == 0) {
 					edgePrimaryBlocked = 1;
 					events.add(createEnrichedEvent(
 							edgeServer, "Primary-Rate-Limiter", slotKey, startTime,
 							"20.15.240.65", 8075L, "OpenAI / Microsoft", "US", org.henbru.antidos.collector.model.ClientType.AI_CRAWLER,
-							142 + sRnd.nextInt(30), 0, false, true, endTime
+							142 + sRnd.nextInt(30), 0, false, true, endTime, 10
 					));
 				}
 				if ((slotKey + idx * 11) % 131 == 0) {
@@ -228,7 +225,31 @@ public class DemoDataSeeder {
 					events.add(createEnrichedEvent(
 							edgeServer, "Primary-Rate-Limiter", slotKey, startTime,
 							"66.249.66.1", 15169L, "Google LLC", "US", org.henbru.antidos.collector.model.ClientType.SEARCH_ENGINE,
-							129 + sRnd.nextInt(25), 0, false, true, endTime
+							129 + sRnd.nextInt(25), 0, false, true, endTime, 28
+					));
+				}
+				if ((slotKey + idx * 17) % 173 == 0) {
+					edgePrimaryBlocked++;
+					events.add(createEnrichedEvent(
+							edgeServer, "Primary-Rate-Limiter", slotKey, startTime,
+							"157.55.39.12", 8075L, "Microsoft Corporation", "US", org.henbru.antidos.collector.model.ClientType.SEARCH_ENGINE,
+							110 + sRnd.nextInt(20), 0, false, true, endTime, 16
+					));
+				}
+				if ((slotKey + idx * 13) % 83 == 0) {
+					edgePrimaryBlocked++;
+					events.add(createEnrichedEvent(
+							edgeServer, "Primary-Rate-Limiter", slotKey, startTime,
+							"185.220.101.5", 208294L, "Zwiebelfreunde (Tor Exit)", "DE", org.henbru.antidos.collector.model.ClientType.TOR_EXIT_NODE,
+							180 + sRnd.nextInt(60), 0, true, true, endTime, 3
+					));
+				}
+				if ((slotKey + idx * 19) % 101 == 0) {
+					edgePrimaryBlocked++;
+					events.add(createEnrichedEvent(
+							edgeServer, "Primary-Rate-Limiter", slotKey, startTime,
+							"89.248.163.74", 49981L, "Recubed B.V. (Port Scanner)", "NL", org.henbru.antidos.collector.model.ClientType.DATACENTER,
+							420 + sRnd.nextInt(150), 0, true, true, endTime, 1
 					));
 				}
 
@@ -237,35 +258,103 @@ public class DemoDataSeeder {
 						startTime, endTime, edgePrimaryReqs, edgePrimaryActive, edgePrimaryBlocked, true, endTime
 				));
 
-				// Server 1 - Valve 2: Subnet-Guard (aggregates IPv4 into /24 subnets)
+				// Server 1 - Valve 2: Subnet-Guard (aggregates traffic across /24 and /64 subnet partitions)
 				long edgeSubnetReqs = (long) (900 + 1100 * diurnal + sRnd.nextInt(350));
 				int edgeSubnetActive = (int) (120 + 80 * diurnal + sRnd.nextInt(30));
 				int edgeSubnetBlocked = 0;
 
+				// 1. Datacenter Scraper Farm (Alibaba Cloud)
 				if ((slotKey + idx * 5) % 19 == 0) {
 					edgeSubnetBlocked++;
 					events.add(createEnrichedEvent(
 							edgeServer, "Subnet-Guard", slotKey, startTime,
 							"45.154.255.0/24", 45102L, "Alibaba Cloud", "SG", org.henbru.antidos.collector.model.ClientType.DATACENTER,
-							290 + sRnd.nextInt(120), 0, true, true, endTime, 32 + sRnd.nextInt(10)
+							290 + sRnd.nextInt(120), 0, true, true, endTime, 34 + sRnd.nextInt(6)
 					));
 				}
-				boolean isProxySwarm = (hoursAgo <= 2) && ((slotKey + idx * 13) % 29 == 0);
-				if (isProxySwarm) {
-					edgeSubnetBlocked++;
-					// Demonstrates distributed residential proxy swarm: 180 reqs spread across 75-90 distinct residential IPs (~2.2 reqs/IP)
+
+				// Residential Proxy Evasion Swarms (bypassing per-IP limits: high distinct clients, low requests/IP, locked = false)
+				// 2. Deutsche Telekom Residential Proxy Swarm (82 IPs) - active in recent 24h
+				if ((slotKey + idx * 13) % 23 == 0) {
 					events.add(createEnrichedEvent(
 							edgeServer, "Subnet-Guard", slotKey, startTime,
 							"185.246.221.0/24", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
-							180 + sRnd.nextInt(50), 0, true, true, endTime, 75 + sRnd.nextInt(15)
+							180 + sRnd.nextInt(50), 0, false, true, endTime, 82 + sRnd.nextInt(8)
 					));
 				}
-				if ((slotKey + idx * 17) % 89 == 0) {
-					edgeSubnetBlocked++;
+
+				// 3. Comcast Cable Residential Proxy Swarm (96 IPs) - pure evasion botnet
+				if ((slotKey + idx * 23) % 31 == 0) {
+					events.add(createEnrichedEvent(
+							edgeServer, "Subnet-Guard", slotKey, startTime,
+							"73.15.20.0/24", 7922L, "Comcast Cable Communications", "US", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
+							170 + sRnd.nextInt(40), 0, false, true, endTime, 96 + sRnd.nextInt(6)
+					));
+				}
+
+				// 4. VNPT Vietnam Residential Fiber Swarm (64 IPs) - low rate distributed scraping
+				if ((slotKey + idx * 29) % 37 == 0) {
+					boolean blockedPart = sRnd.nextInt(5) == 0;
+					if (blockedPart) edgeSubnetBlocked++;
+					events.add(createEnrichedEvent(
+							edgeServer, "Subnet-Guard", slotKey, startTime,
+							"103.149.28.0/24", 133480L, "VNPT Residential Fiber", "VN", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
+							210 + sRnd.nextInt(45), 0, blockedPart, true, endTime, 64 + sRnd.nextInt(8)
+					));
+				}
+
+				// 5. Vodafone Deutschland Dormant Breakout (44 IPs) - active in recent 6 hours
+				if (hoursAgo <= 6 && ((slotKey + idx * 31) % 17 == 0)) {
+					events.add(createEnrichedEvent(
+							edgeServer, "Subnet-Guard", slotKey, startTime,
+							"91.240.118.0/24", 3209L, "Vodafone Deutschland GmbH", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
+							190 + sRnd.nextInt(35), 0, false, true, endTime, 44 + sRnd.nextInt(6)
+					));
+				}
+
+				// 6. 1&1 Versatel Low-and-Slow Scanner (26 IPs)
+				if ((slotKey + idx * 37) % 43 == 0) {
+					events.add(createEnrichedEvent(
+							edgeServer, "Subnet-Guard", slotKey, startTime,
+							"82.165.197.0/24", 8560L, "1&1 Versatel", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
+							115 + sRnd.nextInt(30), 0, false, true, endTime, 26 + sRnd.nextInt(4)
+					));
+				}
+
+				// Benign Multi-Client Networks (locked = false, distinct clients 7..24)
+				// 7. Management & Monitoring Gateway (24 IPs)
+				if ((slotKey + idx * 41) % 29 == 0) {
+					events.add(createEnrichedEvent(
+							edgeServer, "Subnet-Guard", slotKey, startTime,
+							"198.51.100.0/24", null, "Management & Health Gateway", null, org.henbru.antidos.collector.model.ClientType.PRIVATE_NETWORK,
+							240 + sRnd.nextInt(60), 0, false, true, endTime, 24 + sRnd.nextInt(4)
+					));
+				}
+
+				// 8. Corporate Office LAN (18 IPs)
+				if ((slotKey + idx * 17) % 37 == 0) {
 					events.add(createEnrichedEvent(
 							edgeServer, "Subnet-Guard", slotKey, startTime,
 							"10.68.42.0/24", null, "Private Network (RFC 1918)", null, org.henbru.antidos.collector.model.ClientType.PRIVATE_NETWORK,
-							310 + sRnd.nextInt(110), 0, true, true, endTime, 12 + sRnd.nextInt(5)
+							210 + sRnd.nextInt(50), 0, false, true, endTime, 18 + sRnd.nextInt(4)
+					));
+				}
+
+				// 9. RWTH Aachen University Campus Gateway (22 IPs)
+				if ((slotKey + idx * 43) % 47 == 0) {
+					events.add(createEnrichedEvent(
+							edgeServer, "Subnet-Guard", slotKey, startTime,
+							"134.130.4.0/24", 134130L, "RWTH Aachen University", "DE", org.henbru.antidos.collector.model.ClientType.UNKNOWN,
+							150 + sRnd.nextInt(40), 0, false, true, endTime, 22 + sRnd.nextInt(4)
+					));
+				}
+
+				// 10. Deutsche Telekom Consumer DSL (7 IPs)
+				if ((slotKey + idx * 47) % 53 == 0) {
+					events.add(createEnrichedEvent(
+							edgeServer, "Subnet-Guard", slotKey, startTime,
+							"185.246.222.84", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
+							95 + sRnd.nextInt(25), 0, false, true, endTime, 7 + sRnd.nextInt(2)
 					));
 				}
 
@@ -283,25 +372,23 @@ public class DemoDataSeeder {
 					edgeIpv6Blocked++;
 					events.add(createEnrichedEvent(
 							edgeServer, "IPv6-Rate-Limiter", slotKey, startTime,
-							"2a02:1205:502c:3b00:1c44:98ff:fe22:1011", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
-							165 + sRnd.nextInt(40), 0, true, true, endTime
+							"2a01:4f8:c010:d56::1", 24940L, "Hetzner Online GmbH", "DE", org.henbru.antidos.collector.model.ClientType.DATACENTER,
+							190 + sRnd.nextInt(50), 0, true, true, endTime, 5
 					));
 				}
-				if ((slotKey + idx * 9) % 47 == 0) {
-					// Second rotating client from the exact same residential /64 prefix
+				if ((slotKey + idx * 9) % 37 == 0) {
 					edgeIpv6Blocked++;
 					events.add(createEnrichedEvent(
 							edgeServer, "IPv6-Rate-Limiter", slotKey, startTime,
-							"2a02:1205:502c:3b00:2d55:77aa:1122:3344", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
-							152 + sRnd.nextInt(35), 0, true, true, endTime
+							"2a02:1205:502c:3b00:1c44:98ff:fe22:1011", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
+							165 + sRnd.nextInt(40), 0, true, true, endTime, 2
 					));
 				}
 				if ((slotKey + idx * 19) % 79 == 0) {
-					edgeIpv6Blocked++;
 					events.add(createEnrichedEvent(
 							edgeServer, "IPv6-Rate-Limiter", slotKey, startTime,
 							"fd00:10:68::42", null, "Unique Local Address (RFC 4193)", null, org.henbru.antidos.collector.model.ClientType.PRIVATE_NETWORK,
-							140 + sRnd.nextInt(30), 0, true, true, endTime
+							70 + sRnd.nextInt(20), 0, false, true, endTime, 2
 					));
 				}
 
@@ -332,13 +419,11 @@ public class DemoDataSeeder {
 					apiBlocked = 12 + aRnd.nextInt(4);
 					for (int i = 0; i < apiBlocked && i < DEMO_PROFILES.length; i++) {
 						DemoIpProfile p = DEMO_PROFILES[(i + idx) % DEMO_PROFILES.length];
-						if ("91.240.118.77".equals(p.ip())) {
-							continue; // Keep dormant until recent attack
-						}
 						events.add(createEnrichedEvent(
 								apiServer, "API-DoS-Shield", slotKey, startTime,
 								p.ip(), p.asn(), p.asOrg(), p.country(), p.type(),
-								180 + aRnd.nextInt(750), 10 + aRnd.nextInt(25), true, true, endTime
+								180 + aRnd.nextInt(750), 10 + aRnd.nextInt(25), true, true, endTime,
+								p.distinctClients()
 						));
 					}
 				} else if (isAttackWave2) {
@@ -347,13 +432,11 @@ public class DemoDataSeeder {
 					apiBlocked = 8 + aRnd.nextInt(4);
 					for (int i = 0; i < apiBlocked && i < DEMO_PROFILES.length; i++) {
 						DemoIpProfile p = DEMO_PROFILES[(i + 4 + idx) % DEMO_PROFILES.length];
-						if ("91.240.118.77".equals(p.ip())) {
-							continue; // Keep dormant until recent attack
-						}
 						events.add(createEnrichedEvent(
 								apiServer, "API-DoS-Shield", slotKey, startTime,
 								p.ip(), p.asn(), p.asOrg(), p.country(), p.type(),
-								140 + aRnd.nextInt(500), 5 + aRnd.nextInt(15), true, true, endTime
+								140 + aRnd.nextInt(500), 5 + aRnd.nextInt(15), true, true, endTime,
+								p.distinctClients()
 						));
 					}
 				} else if (isRecentAttack) {
@@ -365,14 +448,16 @@ public class DemoDataSeeder {
 						events.add(createEnrichedEvent(
 								apiServer, "API-DoS-Shield", slotKey, startTime,
 								p.ip(), p.asn(), p.asOrg(), p.country(), p.type(),
-								150 + aRnd.nextInt(600), 8 + aRnd.nextInt(20), aRnd.nextBoolean(), true, endTime
+								150 + aRnd.nextInt(600), 8 + aRnd.nextInt(20), aRnd.nextBoolean(), true, endTime,
+								p.distinctClients()
 						));
 					}
 					// Brand new subnet appearing for the first time in recent attack
 					events.add(createEnrichedEvent(
 							apiServer, "API-DoS-Shield", slotKey, startTime,
 							"195.181.168.42", 60781L, "LeaseWeb Netherlands B.V.", "NL", org.henbru.antidos.collector.model.ClientType.DATACENTER,
-							220 + aRnd.nextInt(300), 12 + aRnd.nextInt(10), true, true, endTime
+							220 + aRnd.nextInt(300), 12 + aRnd.nextInt(10), true, true, endTime,
+							12
 					));
 				} else {
 					// Normal baseline traffic
@@ -572,7 +657,7 @@ public class DemoDataSeeder {
 			jdbcTemplate.update("""
 					UPDATE client_events
 					SET asn = 8075, as_org = 'OpenAI / Microsoft', country_code = 'US', client_type = 'AI_CRAWLER', enrichment_status = 'ENRICHED'
-					WHERE client_key = '198.51.100.42' OR client_key = '20.15.240.65'
+					WHERE client_key = '20.15.240.65'
 					""");
 			jdbcTemplate.update("""
 					UPDATE client_events
@@ -582,14 +667,55 @@ public class DemoDataSeeder {
 			jdbcTemplate.update("""
 					UPDATE client_events
 					SET asn = 45102, as_org = 'Alibaba Cloud', country_code = 'SG', client_type = 'DATACENTER', enrichment_status = 'ENRICHED'
-					WHERE client_key = '198.51.100.0/24' OR client_key = '45.154.255.0/24'
+					WHERE client_key = '45.154.255.0/24' OR client_key = '45.154.255.12'
 					""");
 			jdbcTemplate.update("""
 					UPDATE client_events
 					SET asn = 3320, as_org = 'Deutsche Telekom AG', country_code = 'DE', client_type = 'RESIDENTIAL', enrichment_status = 'ENRICHED'
-					WHERE client_key = '203.0.113.0/24' OR client_key = '185.246.221.0/24'
+					WHERE client_key = '203.0.113.0/24' OR client_key = '185.246.221.0/24' OR client_key = '185.246.221.84'
+					   OR client_key = '185.246.222.84' OR client_key = '185.246.222.85' OR client_key = '185.246.222.86'
 					   OR client_key = '2a02:1205:502c:3b00:1c44:98ff:fe22:1011'
 					   OR client_key = '2a02:1205:502c:3b00:2d55:77aa:1122:3344'
+					""");
+			jdbcTemplate.update("""
+					UPDATE client_events
+					SET asn = 7922, as_org = 'Comcast Cable Communications', country_code = 'US', client_type = 'RESIDENTIAL', enrichment_status = 'ENRICHED'
+					WHERE client_key = '73.15.20.0/24' OR client_key = '73.15.20.45'
+					""");
+			jdbcTemplate.update("""
+					UPDATE client_events
+					SET asn = 133480, as_org = 'VNPT Residential Fiber', country_code = 'VN', client_type = 'RESIDENTIAL', enrichment_status = 'ENRICHED'
+					WHERE client_key = '103.149.28.0/24' OR client_key = '103.149.28.19'
+					""");
+			jdbcTemplate.update("""
+					UPDATE client_events
+					SET asn = 8560, as_org = '1&1 Versatel', country_code = 'DE', client_type = 'RESIDENTIAL', enrichment_status = 'ENRICHED'
+					WHERE client_key = '82.165.197.0/24'
+					""");
+			jdbcTemplate.update("""
+					UPDATE client_events
+					SET asn = 134130, as_org = 'RWTH Aachen University', country_code = 'DE', client_type = 'UNKNOWN', enrichment_status = 'ENRICHED'
+					WHERE client_key = '134.130.4.0/24'
+					""");
+			jdbcTemplate.update("""
+					UPDATE client_events
+					SET asn = 208294, as_org = 'Tor Project Exit Routers', country_code = 'DE', client_type = 'TOR_EXIT_NODE', enrichment_status = 'ENRICHED'
+					WHERE client_key = '185.220.102.5' OR client_key = '185.220.102.0/24'
+					""");
+			jdbcTemplate.update("""
+					UPDATE client_events
+					SET asn = 208294, as_org = 'Zwiebelfreunde (Tor Exit)', country_code = 'DE', client_type = 'TOR_EXIT_NODE', enrichment_status = 'ENRICHED'
+					WHERE client_key = '185.220.101.5' OR client_key = '185.220.101.0/24'
+					""");
+			jdbcTemplate.update("""
+					UPDATE client_events
+					SET asn = 49981, as_org = 'Recubed B.V. (Port Scanner)', country_code = 'NL', client_type = 'DATACENTER', enrichment_status = 'ENRICHED'
+					WHERE client_key = '89.248.163.74' OR client_key = '89.248.163.0/24'
+					""");
+			jdbcTemplate.update("""
+					UPDATE client_events
+					SET as_org = 'Management & Health Gateway', client_type = 'PRIVATE_NETWORK', enrichment_status = 'ENRICHED'
+					WHERE client_key = '198.51.100.0/24' OR client_key = '198.51.100.42'
 					""");
 			jdbcTemplate.update("""
 					UPDATE client_events
@@ -672,8 +798,8 @@ public class DemoDataSeeder {
 					org.henbru.antidos.collector.model.AnnotationVerdict.SUSPICIOUS,
 					"""
 					### Suspicious Residential Proxy Cluster
-					- Conspicuous cluster of end-user IPs (`.84`, `.85`, `.86`), each issuing only 2–3 requests.
-					- Typical signature of distributed web scraping via residential proxy networks.
+					- Conspicuous cluster of rotating consumer IPs, each issuing only 2–3 requests.
+					- Typical signature of distributed web scraping via commercial residential proxy networks.
 					- Investigated in ticket **#SEC-512**.
 					"""
 			);
@@ -703,7 +829,32 @@ public class DemoDataSeeder {
 					"""
 			);
 
-			log.info("Demo network annotations seeded: 4 investigative notes created (ASNs & Subnets).");
+			annotationService.saveAnnotation(
+					null,
+					org.henbru.antidos.collector.model.AnnotationTargetType.SUBNET,
+					"45.154.255.0/24",
+					org.henbru.antidos.collector.model.AnnotationVerdict.MALICIOUS,
+					"""
+					### Malicious Cloud Scraper Fleet
+					- Distributed commercial scraping farm operating across 34 distinct VPS instances.
+					- Aggressive request burst rates targeting checkout flows and pricing catalog.
+					- **Recommendation:** Maintain aggressive blocking thresholds in Subnet-Guard.
+					"""
+			);
+
+			annotationService.saveAnnotation(
+					null,
+					org.henbru.antidos.collector.model.AnnotationTargetType.SUBNET,
+					"134.130.4.0/24",
+					org.henbru.antidos.collector.model.AnnotationVerdict.LEGITIMATE,
+					"""
+					### RWTH Aachen University Research Gateway
+					- Legitimate academic network and multi-user campus egress.
+					- Natural multi-user traffic aggregation with zero malicious activity.
+					"""
+			);
+
+			log.info("Demo network annotations seeded: 6 investigative notes created (ASNs & Subnets).");
 		} catch (Exception e) {
 			log.warn("Could not seed demo annotations: {}", e.getMessage());
 		}

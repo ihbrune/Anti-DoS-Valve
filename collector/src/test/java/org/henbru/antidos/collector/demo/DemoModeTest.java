@@ -65,6 +65,9 @@ class DemoModeTest {
 	@Autowired
 	private org.henbru.antidos.collector.aggregation.SubnetProfileService subnetProfileService;
 
+	@Autowired
+	private org.henbru.antidos.collector.aggregation.AnalyticsService analyticsService;
+
 	@Test
 	void testDemoEndpointsAutoConfigured() {
 		assertTrue(properties.isDemoMode(), "Demo mode should be enabled via properties");
@@ -338,5 +341,46 @@ class DemoModeTest {
 		// Verify NEW pattern matches (195.181.168.0/24)
 		long newCount = subnetProfileService.countProfilesFiltered("NEW", null, null, null, null, null);
 		assertTrue(newCount > 0, "Demo mode should include new subnet profile");
+	}
+
+	@Test
+	void testDemoSubnetScatterplotPointsSpread() {
+		assertNotNull(analyticsService, "AnalyticsService should be available");
+		var dto = analyticsService.getDashboardAnalytics(24, null, null);
+		assertNotNull(dto);
+		assertFalse(dto.scatterPoints().isEmpty(), "Scatter points should be populated in demo mode");
+
+		long countDistinctClientsGt1 = dto.scatterPoints().stream()
+				.filter(p -> p.distinctClients() > 1)
+				.count();
+		assertTrue(countDistinctClientsGt1 >= 10,
+				"At least 10 subnet clusters should have distinct client IPs > 1 to avoid stacking on the X=1 axis, found: " + countDistinctClientsGt1);
+
+		long countXAtLeast10 = dto.scatterPoints().stream()
+				.filter(p -> p.distinctClients() >= 10)
+				.count();
+		assertTrue(countXAtLeast10 >= 5,
+				"Should have multiple large/residential clusters with distinct IPs >= 10, found: " + countXAtLeast10);
+
+		// Verify residential proxy evasion swarms are identified (high X, low Y, residential/heuristic)
+		long residentialEvasions = dto.scatterPoints().stream()
+				.filter(p -> "HIGH_RISK_RESIDENTIAL".equals(p.classification()))
+				.count();
+		assertTrue(residentialEvasions >= 3,
+				"Should have multiple residential proxy evasion swarms, found: " + residentialEvasions);
+
+		// Verify diverse classifications appear in scatter points
+		java.util.Set<String> classifications = dto.scatterPoints().stream()
+				.map(org.henbru.antidos.collector.model.SubnetScatterPoint::classification)
+				.collect(java.util.stream.Collectors.toSet());
+		assertTrue(classifications.contains("HIGH_RISK_RESIDENTIAL"), "Should include residential proxy evasion");
+		assertTrue(classifications.contains("DATACENTER_CLUSTER"), "Should include datacenter scrapers");
+		assertTrue(classifications.contains("VERIFIED_BOT"), "Should include verified search/AI crawlers");
+
+		// Verify forensic notes appear on scatter points with verdicts
+		long withNotes = dto.scatterPoints().stream()
+				.filter(org.henbru.antidos.collector.model.SubnetScatterPoint::hasNote)
+				.count();
+		assertTrue(withNotes >= 3, "Should have multiple annotated subnets with forensic notes");
 	}
 }

@@ -114,14 +114,16 @@ public class AnalyticsService {
 			boolean isResidential = (c.clientType() == ClientType.RESIDENTIAL || distinctClients >= 5) && avgReqs < 50.0;
 
 			String classification;
-			if (isResidential && (distinctClients >= 5 || c.blockedRequests() > 0)) {
-				classification = "HIGH_RISK_RESIDENTIAL";
-			} else if (c.clientType() == ClientType.DATACENTER) {
-				classification = "DATACENTER_CLUSTER";
+			if (c.clientType() == ClientType.AI_CRAWLER || c.clientType() == ClientType.SEARCH_ENGINE) {
+				classification = "VERIFIED_BOT";
 			} else if (c.clientType() == ClientType.TOR_EXIT_NODE) {
 				classification = "TOR_ANONYMIZER";
-			} else if (c.clientType() == ClientType.AI_CRAWLER || c.clientType() == ClientType.SEARCH_ENGINE) {
-				classification = "VERIFIED_BOT";
+			} else if (c.clientType() == ClientType.DATACENTER) {
+				classification = "DATACENTER_CLUSTER";
+			} else if (c.clientType() == ClientType.PRIVATE_NETWORK) {
+				classification = "REGULAR_SUBNET";
+			} else if (isResidential && (distinctClients >= 5 || c.blockedRequests() > 0)) {
+				classification = "HIGH_RISK_RESIDENTIAL";
 			} else if (distinctClients >= 10) {
 				classification = "DISTRIBUTED_ACTIVE";
 			} else {
