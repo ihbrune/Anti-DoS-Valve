@@ -309,6 +309,7 @@ When enabled, the Valve automatically issues an unforgeable, compact (~58 charac
 * `visitorCookieSubnetMaskV4`: IPv4 subnet mask prefix bound to the cookie token (default: `24` for `/24`). Prevents botnet operators from sharing cookies across different networks.
 * `visitorCookieSubnetMaskV6`: IPv6 subnet mask prefix bound to the cookie token (default: `64` for `/64`).
 * `visitorCookiePath`: Cookie `Path` attribute (default: `"/"`).
+* `visitorCookieDomain`: Cookie `Domain` attribute (e.g. `"example.com"`). Allows sharing reputation and returning visitor status across multiple subdomains (e.g. `auth.example.com` and `app.example.com`). Defaults to `null` (host-only cookie per RFC 6265).
 * `visitorCookieSameSite`: Cookie `SameSite` attribute (`"Lax"`, `"Strict"`, or `"None"`, default: `"Lax"`).
 * `visitorCookieSecure`: `"auto"` (sets `Secure` if request is HTTPS or `X-Forwarded-Proto: https`), `"true"`, or `"false"` (default: `"auto"`).
 

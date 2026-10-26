@@ -114,6 +114,7 @@
                          simulationMode="true"
                          visitorCookieEnabled="true"
                          visitorCookieName="_adv"
+                         <!-- visitorCookieDomain="example.com" -->
                     />
 
                </Host>

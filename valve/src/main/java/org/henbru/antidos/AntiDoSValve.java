@@ -222,6 +222,7 @@ public class AntiDoSValve extends ValveBase {
 	private volatile String visitorCookiePath = "/";
 	private volatile String visitorCookieSameSite = "Lax";
 	private volatile String visitorCookieSecure = "auto";
+	private volatile String visitorCookieDomain = null;
 	private volatile AntiDoSVisitorTokenService visitorTokenService = null;
 
 	/**
@@ -908,6 +909,18 @@ public class AntiDoSValve extends ValveBase {
 				? visitorCookieSecure.trim() : "auto";
 	}
 
+	public String getVisitorCookieDomain() {
+		return visitorCookieDomain;
+	}
+
+	public void setVisitorCookieDomain(String visitorCookieDomain) {
+		if (visitorCookieDomain == null || visitorCookieDomain.trim().isEmpty()) {
+			this.visitorCookieDomain = null;
+		} else {
+			this.visitorCookieDomain = visitorCookieDomain.trim();
+		}
+	}
+
 	public AntiDoSVisitorTokenService getVisitorTokenService() {
 		return visitorTokenService;
 	}
@@ -1349,6 +1362,9 @@ public class AntiDoSValve extends ValveBase {
 	String buildSetCookieHeader(Request request, String cookieValue, int ttlSeconds) {
 		StringBuilder sb = new StringBuilder(128);
 		sb.append(visitorCookieName).append('=').append(cookieValue);
+		if (visitorCookieDomain != null && !visitorCookieDomain.isEmpty()) {
+			sb.append("; Domain=").append(visitorCookieDomain);
+		}
 		sb.append("; Path=").append(visitorCookiePath != null ? visitorCookiePath : "/");
 		sb.append("; Max-Age=").append(ttlSeconds);
 		sb.append("; SameSite=").append(visitorCookieSameSite != null ? visitorCookieSameSite : "Lax");
@@ -1734,6 +1750,9 @@ public class AntiDoSValve extends ValveBase {
 			}
 			if (visitorCookieRefreshRatio <= 0.0f || visitorCookieRefreshRatio >= 1.0f) {
 				throw new LifecycleException(name4logging + ".visitorCookieRefreshRatio must be between 0.0 and 1.0: " + visitorCookieRefreshRatio);
+			}
+			if (visitorCookieDomain != null && (visitorCookieDomain.contains("/") || visitorCookieDomain.contains(";") || visitorCookieDomain.contains(" "))) {
+				throw new LifecycleException(name4logging + ".visitorCookieDomain contains invalid characters: " + visitorCookieDomain);
 			}
 			if (visitorTokenService == null) {
 				initVisitorTokenService();

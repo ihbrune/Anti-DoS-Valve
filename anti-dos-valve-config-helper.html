@@ -1746,7 +1746,18 @@
                   <input type="text" id="visitorCookiePath" name="visitorCookiePath" placeholder="/ (Default: /)">
                 </div>
 
-                <!-- 28. visitorCookieSameSite -->
+                <!-- 28. visitorCookieDomain -->
+                <div class="field-group visitor-cookie-field-group">
+                  <div class="field-header">
+                    <label for="visitorCookieDomain" class="field-label">visitorCookieDomain</label>
+                    <span class="badge badge-optional">Optional</span>
+                  </div>
+                  <div class="field-desc">Cookie Domain attribute for sharing reputation across subdomains (e.g. <code>example.com</code> allows sharing between <code>auth.example.com</code> and <code>app.example.com</code>). <strong>Leave empty for host-only cookies</strong> (recommended for single-domain sites).</div>
+                  <input type="text" id="visitorCookieDomain" name="visitorCookieDomain" placeholder="e.g. example.com (Default: host-only)">
+                  <div id="hintVisitorCookieDomain" class="status-field-hint neutral"></div>
+                </div>
+
+                <!-- 29. visitorCookieSameSite -->
                 <div class="field-group visitor-cookie-field-group">
                   <div class="field-header">
                     <label for="visitorCookieSameSite" class="field-label">visitorCookieSameSite</label>
@@ -1760,7 +1771,7 @@
                   </select>
                 </div>
 
-                <!-- 29. visitorCookieSecure -->
+                <!-- 30. visitorCookieSecure -->
                 <div class="field-group checkbox-group visitor-cookie-field-group" style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
                   <label class="checkbox-label">
                     <input type="checkbox" id="visitorCookieSecure" name="visitorCookieSecure" checked>
@@ -2343,6 +2354,7 @@
       { key: 'visitorCookieSubnetMaskV4', isRequired: false, defaultVal: 24 },
       { key: 'visitorCookieSubnetMaskV6', isRequired: false, defaultVal: 64 },
       { key: 'visitorCookiePath', isRequired: false, defaultVal: '/' },
+      { key: 'visitorCookieDomain', isRequired: false, defaultVal: '' },
       { key: 'visitorCookieSameSite', isRequired: false, defaultVal: 'Lax' },
       { key: 'visitorCookieSecure', isRequired: false, defaultVal: true, isBoolean: true }
     ];
@@ -2481,6 +2493,7 @@
             if (param.key === 'visitorCookieSubnetMaskV4' && (val === '24' || val === 24)) return;
             if (param.key === 'visitorCookieSubnetMaskV6' && (val === '64' || val === 64)) return;
             if (param.key === 'visitorCookiePath' && val === '/') return;
+            if (param.key === 'visitorCookieDomain' && val === '') return;
             if (param.key === 'visitorCookieSameSite' && (val === 'Lax' || val === '')) return;
             if (param.key.startsWith('visitorCookie') && param.key !== 'visitorCookieEnabled' && !document.getElementById('visitorCookieEnabled').checked) return;
           }
@@ -2944,6 +2957,27 @@
             </div>
             ${hasExcessDecimals ? `<div style="font-size:0.72rem; color:#92400e; margin-top:2px;">&#9888; More than 2 decimal places entered. Configuration and calculations are rounded to <strong>${effRatio.toFixed(2)}</strong>.</div>` : ''}
           </div>`;
+        }
+      }
+
+      // Domain validation
+      const domainInput = document.getElementById('visitorCookieDomain');
+      const domainHint = document.getElementById('hintVisitorCookieDomain');
+      if (domainInput && domainHint) {
+        const rawDomain = domainInput.value.trim();
+        if (!rawDomain) {
+          domainInput.classList.remove('input-invalid');
+          domainHint.className = 'status-field-hint neutral';
+          domainHint.innerHTML = '<span>&#9432;</span><div><strong>Host-only cookie:</strong> Cookie is restricted exclusively to the issuing host (default, RFC 6265).</div>';
+        } else if (rawDomain.includes('/') || rawDomain.includes(';') || /\s/.test(rawDomain) || rawDomain.startsWith('http://') || rawDomain.startsWith('https://')) {
+          domainInput.classList.add('input-invalid');
+          domainHint.className = 'status-field-hint invalid';
+          domainHint.innerHTML = '<span>&#9888;</span><div><strong>Invalid domain:</strong> Must be a domain name without protocol (e.g. <code>example.com</code>), without slashes or spaces.</div>';
+        } else {
+          domainInput.classList.remove('input-invalid');
+          domainHint.className = 'status-field-hint valid';
+          const cleanDomain = rawDomain.startsWith('.') ? rawDomain.substring(1) : rawDomain;
+          domainHint.innerHTML = `<span>&#10003;</span><div><strong>Shared subdomain scope:</strong> Cookie valid for <code>*.${escapeHtml(cleanDomain)}</code> and apex domain. Ensure identical <code>visitorCookieSecret</code> on all participating nodes.</div>`;
         }
       }
     }

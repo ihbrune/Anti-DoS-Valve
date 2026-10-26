@@ -1,5 +1,6 @@
 package org.henbru.antidos;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -1542,9 +1543,13 @@ class AntiDoSValveTest {
 		assertEquals(0.4f, valve.getVisitorCookieRefreshRatio());
 		assertEquals(16, valve.getVisitorCookieSubnetMaskV4());
 		assertEquals(48, valve.getVisitorCookieSubnetMaskV6());
+		assertNull(valve.getVisitorCookieDomain());
 		assertEquals("/app", valve.getVisitorCookiePath());
 		assertEquals("Strict", valve.getVisitorCookieSameSite());
 		assertEquals("true", valve.getVisitorCookieSecure());
+
+		valve.setVisitorCookieDomain("example.com");
+		assertEquals("example.com", valve.getVisitorCookieDomain());
 
 		// Test lifecycle exceptions
 		valve.setVisitorCookieTtlSeconds(-1);
@@ -1553,6 +1558,39 @@ class AntiDoSValveTest {
 		valve.setVisitorCookieTtlSeconds(600);
 		valve.setVisitorCookieRefreshRatio(1.5f);
 		assertThrows(LifecycleException.class, valve::initInternal);
+
+		valve.setVisitorCookieRefreshRatio(0.5f);
+		valve.setVisitorCookieDomain("example domain.com");
+		assertThrows(LifecycleException.class, valve::initInternal);
+		valve.setVisitorCookieDomain("example/domain.com");
+		assertThrows(LifecycleException.class, valve::initInternal);
+		valve.setVisitorCookieDomain("example.com; evil");
+		assertThrows(LifecycleException.class, valve::initInternal);
+		valve.setVisitorCookieDomain("example.com");
+		assertDoesNotThrow(valve::initInternal);
+	}
+
+	@Test
+	void testVisitorCookieDomainAttribute() {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "COOKIE_DOMAIN_TEST");
+		valve.setVisitorCookieEnabled(true);
+		valve.initVisitorTokenService();
+
+		// Case 1: No domain configured -> Host-only cookie (no Domain attribute)
+		String header1 = valve.buildSetCookieHeader(null, "sample_token", 900);
+		assertFalse(header1.contains("Domain="), "Host-only cookie must omit Domain attribute: " + header1);
+
+		// Case 2: Domain configured -> Domain attribute included
+		valve.setVisitorCookieDomain("example.com");
+		String header2 = valve.buildSetCookieHeader(null, "sample_token", 900);
+		assertTrue(header2.contains("; Domain=example.com"), "Set-Cookie must include Domain attribute: " + header2);
+
+		// Case 3: Empty string resets to null / host-only
+		valve.setVisitorCookieDomain("   ");
+		assertNull(valve.getVisitorCookieDomain());
+		String header3 = valve.buildSetCookieHeader(null, "sample_token", 900);
+		assertFalse(header3.contains("Domain="), "Reset domain must omit Domain attribute: " + header3);
 	}
 
 	@Test

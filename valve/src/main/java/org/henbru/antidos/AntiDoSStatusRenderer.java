@@ -948,7 +948,8 @@ public class AntiDoSStatusRenderer {
 		String visitorCookieStatus = target.isVisitorCookieEnabled()
 				? "Enabled (name: <code>" + escapeHtml(target.getVisitorCookieName()) + "</code>, TTL: <strong>"
 						+ target.getVisitorCookieTtlSeconds() + "s</strong>, masks: /" + target.getVisitorCookieSubnetMaskV4()
-						+ " v4, /" + target.getVisitorCookieSubnetMaskV6() + " v6)"
+						+ " v4, /" + target.getVisitorCookieSubnetMaskV6() + " v6"
+						+ (target.getVisitorCookieDomain() != null ? ", domain: <code>" + escapeHtml(target.getVisitorCookieDomain()) + "</code>" : "") + ")"
 				: "Disabled";
 		sb.append("    <tr><th>Visitor Cookie</th><td>").append(visitorCookieStatus).append("</td></tr>\n");
 
@@ -1265,6 +1266,7 @@ public class AntiDoSStatusRenderer {
 				.append("    \"collectorActive\": ").append(target.isExtendedMetricsActive()).append(",\n")
 				.append("    \"visitorCookieEnabled\": ").append(target.isVisitorCookieEnabled()).append(",\n")
 				.append("    \"visitorCookieName\": \"").append(escapeJson(target.getVisitorCookieName())).append("\",\n")
+				.append("    \"visitorCookieDomain\": ").append(target.getVisitorCookieDomain() != null ? "\"" + escapeJson(target.getVisitorCookieDomain()) + "\"" : "null").append(",\n")
 				.append("    \"maxIPCacheSize\": ").append(maxActive).append(",\n")
 				.append("    \"maxBlockedIPCacheSize\": ").append(maxBlocked).append(",\n")
 				.append("    \"currentActiveCounters\": ").append(activeCounters).append(",\n")
