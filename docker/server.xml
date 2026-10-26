@@ -114,7 +114,23 @@
                          simulationMode="true"
                          visitorCookieEnabled="true"
                          visitorCookieName="_adv"
-                         <!-- visitorCookieDomain="example.com" -->
+                    />
+
+                    <!-- AntiDoSValve Honeypot demo configuration:
+                         Blocks scanning bots on the very first access to non-existent technologies (*.php, *.cgi, *.aspx)
+                         and enforces the block server-wide across all application paths. -->
+                    <Valve className="org.henbru.antidos.AntiDoSValve"
+                         monitorName="HONEYPOT-PROBE-VALVE"
+                         description="Zero-tolerance honeypot trap blocking probers across the entire server"
+                         relevantPaths=".*\\.(php|cgi|aspx)$|.*/wp-.*|.*/\\.env.*"
+                         allowedRequestsPerSlot="0"
+                         serverWideBlocking="true"
+                         maxIPCacheSize="500"
+                         maxBlockedIPCacheSize="1000"
+                         numberOfSlots="6"
+                         slotLength="300"
+                         shareOfRetainedFormerRequests="0"
+                         httpStatusCode="429"
                     />
 
                </Host>

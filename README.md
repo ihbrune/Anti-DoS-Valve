@@ -326,7 +326,9 @@ The duration of a slot in seconds (must be an integer greater than 0). The slot 
 
 ## allowedRequestsPerSlot
 
-The maximum number of requests permitted within a slot before an IP address or subnet is blocked (must be an integer greater than 0). As described above, the check evaluates the sum of requests in the current slot plus requests carried over from previous slots.
+The maximum number of requests permitted within a slot before an IP address or subnet is blocked (must be an integer greater than or equal to 0). As described above, the check evaluates the sum of requests in the current slot plus requests carried over from previous slots.
+
+* **Zero-Tolerance / Honeypot Traps (`allowedRequestsPerSlot="0"`):** Setting this parameter to `0` causes the monitor to block any accessing client immediately on its very first request. When combined with `serverWideBlocking="true"` and `relevantPaths=".*\\.(php|cgi|aspx)$|.*/wp-.*"` (probing paths that never exist on your Tomcat server), probing bots and vulnerability scanners are banned across the entire server upon their first probe attempt.
 
 Increasing *slotLength* should typically be paired with an increase in *allowedRequestsPerSlot* to avoid blocking legitimate users. However, higher limits also give attackers more leeway before a block triggers.
 
@@ -556,6 +558,24 @@ Here is an example configuration:
         numberOfSlots="10"
         slotLength="30"
         allowedRequestsPerSlot="5"
+    />
+
+## Honeypot Probing Trap with Server-Wide Blocking
+
+You can configure a dedicated Honeypot valve in `server.xml` positioned before your application valve. By combining `allowedRequestsPerSlot="0"` with `serverWideBlocking="true"` and path regexes matching non-existent technologies (`*.php`, `*.cgi`, `*.aspx`, `/wp-admin`, `/.env`), vulnerability scanners and hostile bots are blocked across the entire server upon their very first probing request:
+
+    <Valve className="org.henbru.antidos.AntiDoSValve"
+        monitorName="HONEYPOT-PROBE-VALVE"
+        description="Zero-tolerance honeypot trap blocking probers across the entire server"
+        relevantPaths=".*\.(php|cgi|aspx)$|.*/wp-.*|.*/\.env.*"
+        allowedRequestsPerSlot="0"
+        serverWideBlocking="true"
+        maxIPCacheSize="500"
+        maxBlockedIPCacheSize="1000"
+        numberOfSlots="6"
+        slotLength="300"
+        shareOfRetainedFormerRequests="0"
+        httpStatusCode="429"
     />
 
 

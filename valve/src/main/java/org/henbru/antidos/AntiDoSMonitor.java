@@ -65,7 +65,7 @@ public class AntiDoSMonitor {
 	 *                                      monitored within a time slot
 	 * @param numberOfSlots                 The number of slots to be held
 	 * @param slotLength                    The length of the individual slots in seconds
-	 * @param allowedRequestsPerSlot        The number of requests allowed within a slot
+	 * @param allowedRequestsPerSlot        The number of requests allowed within a slot (>= 0; 0 blocks on first request)
 	 * @param shareOfRetainedFormerRequests Proportion of requests retained from previous slots
 	 */
 	public AntiDoSMonitor(String monitorName, int maxCountersPerSlot, int maxBlockedCountersPerSlot,
@@ -85,7 +85,7 @@ public class AntiDoSMonitor {
 		if (slotLength < 1)
 			throw new IllegalArgumentException("Parameter slotLength is invalid: " + slotLength);
 
-		if (allowedRequestsPerSlot < 1)
+		if (allowedRequestsPerSlot < 0)
 			throw new IllegalArgumentException(
 					"Parameter allowedRequestsPerSlot is invalid: " + allowedRequestsPerSlot);
 

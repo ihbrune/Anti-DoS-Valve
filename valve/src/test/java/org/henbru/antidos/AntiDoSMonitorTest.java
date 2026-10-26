@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
@@ -334,6 +335,34 @@ class AntiDoSMonitorTest {
 		AntiDoSSlot fallbackPrev = mon.getPreviousSlotIfExists();
 		assertNotNull(fallbackPrev);
 		assertEquals(2, fallbackPrev.getSlotKey());
+	}
+
+	@Test
+	void testAllowedRequestsPerSlotZeroBlocksImmediately() {
+		// allowedRequestsPerSlot = 0 (zero tolerance / honeypot mode)
+		AntiDoSMonitor mon = new AntiDoSMonitor("HONEYPOT_TEST", 10, 5, 30, 0, 0f);
+		assertEquals(0, mon.getAllowedRequestsPerSlot());
+
+		// 1st request is immediately blocked!
+		assertFalse(mon.registerAndCheckRequest("198.51.100.1"));
+		assertTrue(mon.isCounterBlocked("198.51.100.1"));
+
+		// 2nd request is also blocked
+		assertFalse(mon.registerAndCheckRequest("198.51.100.1"));
+		assertTrue(mon.isCounterBlocked("198.51.100.1"));
+
+		// Another IP not registered yet is unblocked
+		assertFalse(mon.isCounterBlocked("198.51.100.2"));
+
+		// But when it touches the honeypot, it is blocked on its very first request too
+		assertFalse(mon.registerAndCheckRequest("198.51.100.2"));
+		assertTrue(mon.isCounterBlocked("198.51.100.2"));
+	}
+
+	@Test
+	void testNegativeAllowedRequestsPerSlotThrows() {
+		assertThrows(IllegalArgumentException.class, () ->
+				new AntiDoSMonitor("FAIL_TEST", 10, 5, 30, -1, 0f));
 	}
 }
 

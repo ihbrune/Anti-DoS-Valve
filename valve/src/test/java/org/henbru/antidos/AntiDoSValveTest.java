@@ -757,6 +757,45 @@ class AntiDoSValveTest {
 	}
 
 	@Test
+	void testHoneypotZeroToleranceConfigurationBlocksOnFirstRequest() {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "HONEYPOT-PROBE-VALVE");
+		valve.setAllowedRequestsPerSlot(0);
+		valve.setRelevantPaths(".*\\.php$|.*\\.cgi$|.*\\.aspx$");
+		valve.setServerWideBlocking(true);
+		assertNull(valve.reloadMonitor());
+		assertEquals(0, valve.getAllowedRequestsPerSlot());
+		assertTrue(valve.isServerWideBlocking());
+
+		// 1st request to honeypot path is blocked IMMEDIATELY (zero tolerance)
+		assertFalse(valve.isRequestAllowed("192.168.1.50", "/wp-login.php"));
+		assertTrue(valve.isIPAddressCurrentlyBlocked("192.168.1.50"));
+
+		// Server-wide blocking is active: legitimate application URLs are now blocked for this IP too!
+		assertFalse(valve.isRequestAllowed("192.168.1.50", "/public/index.html"));
+		assertFalse(valve.isRequestAllowed("192.168.1.50", "/api/v1/resource"));
+
+		// Other clean IP visiting /public/index.html is allowed
+		assertTrue(valve.isRequestAllowed("192.168.1.99", "/public/index.html"));
+	}
+
+	@Test
+	void testSetAllowedRequestsPerSlotString() {
+		AntiDoSValve valve = new AntiDoSValve();
+		valve.setAllowedRequestsPerSlot("0");
+		assertEquals(0, valve.getAllowedRequestsPerSlot());
+
+		valve.setAllowedRequestsPerSlot(" 42 ");
+		assertEquals(42, valve.getAllowedRequestsPerSlot());
+
+		valve.setAllowedRequestsPerSlot("");
+		assertEquals(-1, valve.getAllowedRequestsPerSlot());
+
+		valve.setAllowedRequestsPerSlot((String) null);
+		assertEquals(-1, valve.getAllowedRequestsPerSlot());
+	}
+
+	@Test
 	void testIsIPAddressCurrentlyBlockedValidation() {
 		AntiDoSValve valve = new AntiDoSValve();
 		IllegalArgumentException exNull = assertThrows(IllegalArgumentException.class,

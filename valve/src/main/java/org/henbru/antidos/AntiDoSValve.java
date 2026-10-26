@@ -964,10 +964,24 @@ public class AntiDoSValve extends ValveBase {
 	/**
 	 * 
 	 * @param allowedRequestsPerSlot The number of requests from one IP address
-	 *                               allowed within a slot until it is blocked
+	 *                               allowed within a slot until it is blocked (>= 0;
+	 *                               set to 0 for zero-tolerance honeypot traps)
 	 */
 	public void setAllowedRequestsPerSlot(int allowedRequestsPerSlot) {
 		this.allowedRequestsPerSlot = allowedRequestsPerSlot;
+	}
+
+	/**
+	 * Sets the number of allowed requests per slot from a string.
+	 * 
+	 * @param allowedRequestsPerSlot The number of requests as string (>= 0)
+	 */
+	public void setAllowedRequestsPerSlot(String allowedRequestsPerSlot) {
+		if (allowedRequestsPerSlot == null || allowedRequestsPerSlot.trim().isEmpty()) {
+			this.allowedRequestsPerSlot = -1;
+		} else {
+			this.allowedRequestsPerSlot = Integer.parseInt(allowedRequestsPerSlot.trim());
+		}
 	}
 
 	public int getAllowedRequestsPerSlot() {

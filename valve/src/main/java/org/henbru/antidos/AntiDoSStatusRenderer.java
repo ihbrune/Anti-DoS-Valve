@@ -668,7 +668,8 @@ public class AntiDoSStatusRenderer {
 
 			// Rate limit parameters
 			int retentionPct = Math.round(v.getShareOfRetainedFormerRequests() * 100);
-			sb.append("    <tr><th>Rate Limit</th><td><strong>").append(v.getAllowedRequestsPerSlot())
+			String limitLabel = v.getAllowedRequestsPerSlot() == 0 ? "0 (Zero Tolerance / Honeypot)" : String.valueOf(v.getAllowedRequestsPerSlot());
+			sb.append("    <tr><th>Rate Limit</th><td><strong>").append(limitLabel)
 					.append("</strong> req / <strong>").append(v.getSlotLength()).append("s</strong> slot (Slots: ")
 					.append(v.getNumberOfSlots()).append(", Retention: ").append(retentionPct).append("%)</td></tr>\n");
 
@@ -910,7 +911,8 @@ public class AntiDoSStatusRenderer {
 		}
 
 		int retentionPct = Math.round(target.getShareOfRetainedFormerRequests() * 100);
-		sb.append("    <tr><th>Rate Limit</th><td><strong>").append(target.getAllowedRequestsPerSlot())
+		String targetLimitLabel = target.getAllowedRequestsPerSlot() == 0 ? "0 (Zero Tolerance / Honeypot)" : String.valueOf(target.getAllowedRequestsPerSlot());
+		sb.append("    <tr><th>Rate Limit</th><td><strong>").append(targetLimitLabel)
 				.append("</strong> req / <strong>").append(target.getSlotLength()).append("s</strong> slot (Slots: ")
 				.append(target.getNumberOfSlots()).append(", Retention: ").append(retentionPct).append("%)</td></tr>\n");
 
