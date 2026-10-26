@@ -108,6 +108,62 @@ class CollectorPollerServiceTest {
 		assertEquals(200, pollLogs.getFirst().httpStatusCode());
 		assertEquals(1, pollLogs.getFirst().valvesPolled());
 		assertEquals(1, pollLogs.getFirst().slotsIngested());
+		assertEquals(1, pollLogs.getFirst().eventsIngested());
+		assertEquals(1, pollLogs.getFirst().blockedEventsIngested());
+		assertEquals(0, pollLogs.getFirst().activeEventsIngested());
+	}
+
+	@Test
+	void testPollEndpointWithActiveAndBlockedClients() throws Exception {
+		EndpointConfig endpoint = new EndpointConfig("SUBNET-TEST-NODE", "http://localhost:8080/antidos-status", "tok", false, true);
+		endpoint.setValves(List.of(new org.henbru.antidos.collector.config.EndpointValveConfig("SUBNET_VALVE", true, 10, "1000")));
+
+		ValveOverviewDto.ValveSummaryDto summary = new ValveOverviewDto.ValveSummaryDto(
+				"SUBNET_VALVE", 1, "BLOCKING", false, false, 50, 60, 5, 5, 1, 500L, 499L, 2000L, 200L, 10, 1
+		);
+		ValveOverviewDto overview = new ValveOverviewDto("2026-10-17T10:00:00Z", List.of(summary), null);
+		when(statusClient.fetchOverview(any())).thenReturn(overview);
+
+		ValveDetailsDto.SelectedSlotDto slotDto = new ValveDetailsDto.SelectedSlotDto(
+				"previous", 4, 499L, false, "2026-10-17T09:59:00Z", "2026-10-17T10:00:00Z", 200L, 10, 1
+		);
+		ValveDetailsDto.BlockedClientDto blockedClient = new ValveDetailsDto.BlockedClientDto(
+				"198.51.100.1", 70, 5, true, "2026-10-17T09:59:30Z"
+		);
+		ValveDetailsDto.ActiveClientDto activeClient1 = new ValveDetailsDto.ActiveClientDto(
+				"203.0.113.0/24", 25, 0, 25, 100, 25
+		);
+		ValveDetailsDto.ActiveClientDto activeClient2 = new ValveDetailsDto.ActiveClientDto(
+				"192.0.2.0/24", 15, 0, 15, 100, 15
+		);
+		ValveDetailsDto details = new ValveDetailsDto(
+				"2026-10-17T10:00:00Z",
+				null,
+				slotDto,
+				1,
+				"all",
+				null,
+				null,
+				List.of(blockedClient),
+				2,
+				"1000",
+				null,
+				null,
+				10,
+				List.of(activeClient1, activeClient2),
+				null
+		);
+		when(statusClient.fetchSlotDetails(any(), eq("SUBNET_VALVE"), eq("previous"), eq("all"), eq("all"), eq("1000"), isNull(), isNull(), eq(10))).thenReturn(details);
+
+		pollerService.pollEndpoint(endpoint);
+
+		var pollLogs = pollEventLogRepository.findRecent(null, "ALL", "SUBNET-TEST-NODE", 10);
+		assertFalse(pollLogs.isEmpty());
+		var log = pollLogs.getFirst();
+		assertEquals(3, log.eventsIngested());
+		assertEquals(1, log.blockedEventsIngested());
+		assertEquals(2, log.activeEventsIngested());
+		assertTrue(log.details().contains("3 event(s) (1 blocked, 2 active)"));
 	}
 
 	@Test

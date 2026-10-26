@@ -34,6 +34,7 @@ public class PollEventLogRepository {
 			rs.getInt("valves_polled"),
 			rs.getInt("slots_ingested"),
 			rs.getInt("events_ingested"),
+			rs.getInt("blocked_events_ingested"),
 			rs.getString("details"),
 			rs.getString("error_message")
 	);
@@ -43,8 +44,8 @@ public class PollEventLogRepository {
 				INSERT INTO poll_event_log (
 				    server_id, url, poll_time, status, http_status_code,
 				    response_time_ms, valves_polled, slots_ingested, events_ingested,
-				    details, error_message
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				    blocked_events_ingested, details, error_message
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				""";
 
 		StorageRetryUtil.executeWithRetry("PollEventLogRepository.insert", () -> {
@@ -59,6 +60,7 @@ public class PollEventLogRepository {
 					log.valvesPolled(),
 					log.slotsIngested(),
 					log.eventsIngested(),
+					log.blockedEventsIngested(),
 					log.details(),
 					log.errorMessage()
 			);
@@ -74,8 +76,8 @@ public class PollEventLogRepository {
 				INSERT INTO poll_event_log (
 				    server_id, url, poll_time, status, http_status_code,
 				    response_time_ms, valves_polled, slots_ingested, events_ingested,
-				    details, error_message
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				    blocked_events_ingested, details, error_message
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				""";
 
 		StorageRetryUtil.executeWithRetry("PollEventLogRepository.batchInsert", () -> {
@@ -92,8 +94,9 @@ public class PollEventLogRepository {
 					ps.setInt(7, log.valvesPolled());
 					ps.setInt(8, log.slotsIngested());
 					ps.setInt(9, log.eventsIngested());
-					ps.setString(10, log.details());
-					ps.setString(11, log.errorMessage());
+					ps.setInt(10, log.blockedEventsIngested());
+					ps.setString(11, log.details());
+					ps.setString(12, log.errorMessage());
 				}
 
 				@Override

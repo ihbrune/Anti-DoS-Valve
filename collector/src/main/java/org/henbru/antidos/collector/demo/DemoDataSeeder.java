@@ -426,18 +426,24 @@ public class DemoDataSeeder {
 				String name = ep.getName();
 				String url = ep.getUrl();
 				if (name.contains("Edge")) {
+					int activeEvs = 40 + rnd.nextInt(30);
 					logs.add(new PollEventLog(
 							null, name, url,
-							pollTime, "SUCCESS", 200, 12L + rnd.nextInt(15), 3, 3, 0,
-							"Polled 3 valve(s), 3 slot(s), 0 event(s)", null
+							pollTime, "SUCCESS", 200, 12L + rnd.nextInt(15), 3, 3, activeEvs, 0,
+							"Polled 3 valve(s), 3 slot(s), " + activeEvs + " event(s)", null
 					));
 				} else if (name.contains("API")) {
 					boolean underAttack = (h >= 12 && h <= 15) || (h <= 1);
-					int evs = underAttack ? (8 + rnd.nextInt(6)) : 0;
+					int blockedEvs = underAttack ? (8 + rnd.nextInt(6)) : 0;
+					int activeEvs = 85 + rnd.nextInt(40);
+					int totalEvs = blockedEvs + activeEvs;
+					String breakdown = blockedEvs > 0
+							? totalEvs + " event(s) (" + blockedEvs + " blocked, " + activeEvs + " active)"
+							: totalEvs + " event(s)";
 					logs.add(new PollEventLog(
 							null, name, url,
-							pollTime.plusSeconds(3), "SUCCESS", 200, 18L + rnd.nextInt(20), 1, 1, evs,
-							"Polled 1 valve(s), 1 slot(s), " + evs + " event(s)", null
+							pollTime.plusSeconds(3), "SUCCESS", 200, 18L + rnd.nextInt(20), 1, 1, totalEvs, blockedEvs,
+							"Polled 1 valve(s), 1 slot(s), " + breakdown, null
 					));
 				} else {
 					switch (h) {

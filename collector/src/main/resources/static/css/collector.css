@@ -413,9 +413,16 @@ body {
 }
 
 .badge-info {
-    background: rgba(56, 189, 248, 0.15);
-    color: #38bdf8;
-    border: 1px solid rgba(56, 189, 248, 0.3);
+    background: rgba(56, 189, 248, 0.08);
+    color: #78bfe8;
+    border: 1px solid rgba(56, 189, 248, 0.20);
+}
+
+.badge-active-metric {
+    background: rgba(56, 189, 248, 0.07);
+    color: #78bfe8;
+    border: 1px solid rgba(56, 189, 248, 0.18);
+    font-weight: 600;
 }
 
 .badge-warning {
@@ -451,7 +458,8 @@ body {
 }
 
 .event-total-count.count-active {
-    color: var(--color-primary);
+    color: #70b4dc;
+    font-weight: 600;
 }
 
 .event-total-count.count-blocked {
@@ -477,8 +485,7 @@ body {
 
 .status-dot-active {
     background-color: currentColor;
-    box-shadow: 0 0 5px currentColor;
-    animation: status-pulse 2s infinite ease-in-out;
+    opacity: 0.85;
 }
 
 @keyframes status-pulse {
@@ -927,9 +934,21 @@ tr:hover td {
 }
 
 [data-theme="light"] .badge-info {
+    color: #0284c7;
+    background: rgba(56, 189, 248, 0.09);
+    border-color: rgba(56, 189, 248, 0.22);
+}
+
+[data-theme="light"] .badge-active-metric {
+    color: #0284c7;
+    background: rgba(56, 189, 248, 0.08);
+    border-color: rgba(56, 189, 248, 0.20);
+    font-weight: 600;
+}
+
+[data-theme="light"] .event-total-count.count-active {
     color: #0369a1;
-    background: rgba(56, 189, 248, 0.18);
-    border-color: rgba(56, 189, 248, 0.35);
+    font-weight: 600;
 }
 
 [data-theme="light"] .badge-warning {

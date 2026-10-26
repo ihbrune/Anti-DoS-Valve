@@ -180,6 +180,7 @@ public class CollectorPollerService {
 		int valvesPolled = 0;
 		int slotsIngested = 0;
 		int eventsIngested = 0;
+		int blockedEventsIngested = 0;
 		long totalNetworkMs = 0;
 		List<String> warnings = new ArrayList<>();
 
@@ -214,6 +215,7 @@ public class CollectorPollerService {
 					IngestResult result = ingestValve(endpoint, v, now);
 					slotsIngested += result.slotsIngested();
 					eventsIngested += result.eventsIngested();
+					blockedEventsIngested += result.blockedEventsIngested();
 					warnings.addAll(result.warnings());
 					totalNetworkMs += result.networkDurationMs();
 				}
@@ -222,8 +224,12 @@ public class CollectorPollerService {
 			long totalDuration = System.currentTimeMillis() - start;
 			long dbDuration = Math.max(0, totalDuration - totalNetworkMs);
 			String status = "SUCCESS";
-			String details = "Polled " + valvesPolled + " valve(s), " + slotsIngested + " slot(s), " + eventsIngested
-					+ " event(s) in " + totalDuration + " ms (network: " + totalNetworkMs + " ms, db: " + dbDuration + " ms)";
+			int activeEventsIngested = Math.max(0, eventsIngested - blockedEventsIngested);
+			String eventsBreakdown = blockedEventsIngested > 0
+					? eventsIngested + " event(s) (" + blockedEventsIngested + " blocked, " + activeEventsIngested + " active)"
+					: eventsIngested + " event(s)";
+			String details = "Polled " + valvesPolled + " valve(s), " + slotsIngested + " slot(s), " + eventsBreakdown
+					+ " in " + totalDuration + " ms (network: " + totalNetworkMs + " ms, db: " + dbDuration + " ms)";
 			String errorMsg = null;
 
 			if (!warnings.isEmpty()) {
@@ -247,6 +253,7 @@ public class CollectorPollerService {
 					valvesPolled,
 					slotsIngested,
 					eventsIngested,
+					blockedEventsIngested,
 					details,
 					errorMsg
 			));
@@ -278,6 +285,7 @@ public class CollectorPollerService {
 					0,
 					0,
 					0,
+					0,
 					"Connection failed: " + errorMsg,
 					errorMsg
 			));
@@ -289,6 +297,7 @@ public class CollectorPollerService {
 		long lastCompletedKey = summary.lastCompletedSlotKey();
 		int slots = 0;
 		int events = 0;
+		int blockedEvents = 0;
 		long networkMs = 0;
 		List<String> warnings = new ArrayList<>();
 
@@ -304,6 +313,7 @@ public class CollectorPollerService {
 				SlotIngestResult r = fetchAndStoreSlot(endpoint, valveName, String.valueOf(k), true, pollTime);
 				slots += r.slotsCount();
 				events += r.eventsCount();
+				blockedEvents += r.blockedEventsCount();
 				networkMs += r.networkDurationMs();
 				if (r.warning() != null) {
 					warnings.add(r.warning());
@@ -317,6 +327,7 @@ public class CollectorPollerService {
 			SlotIngestResult r = fetchAndStoreSlot(endpoint, valveName, "previous", true, pollTime);
 			slots += r.slotsCount();
 			events += r.eventsCount();
+			blockedEvents += r.blockedEventsCount();
 			networkMs += r.networkDurationMs();
 			if (r.warning() != null) {
 				warnings.add(r.warning());
@@ -328,13 +339,14 @@ public class CollectorPollerService {
 			SlotIngestResult r = fetchAndStoreSlot(endpoint, valveName, "current", false, pollTime);
 			slots += r.slotsCount();
 			events += r.eventsCount();
+			blockedEvents += r.blockedEventsCount();
 			networkMs += r.networkDurationMs();
 			if (r.warning() != null) {
 				warnings.add(r.warning());
 			}
 		}
 
-		return new IngestResult(slots, events, warnings, networkMs);
+		return new IngestResult(slots, events, blockedEvents, warnings, networkMs);
 	}
 
 	private SlotIngestResult fetchAndStoreSlot(EndpointConfig endpoint, String valveName, String slotParam, boolean completed, Instant pollTime) {
@@ -350,7 +362,7 @@ public class CollectorPollerService {
 					: statusClient.fetchSlotDetails(endpoint, valveName, slotParam, "all", "all", activeLimitParam);
 			long netDuration = System.currentTimeMillis() - netStart;
 			if (details.selectedSlot() == null) {
-				return new SlotIngestResult(0, 0, null, netDuration);
+				return new SlotIngestResult(0, 0, 0, null, netDuration);
 			}
 
 			ValveDetailsDto.SelectedSlotDto slot = details.selectedSlot();
@@ -373,6 +385,7 @@ public class CollectorPollerService {
 			slotSnapshotRepository.upsert(snapshot);
 
 			int eventsCount = 0;
+			int blockedCount = 0;
 			List<ClientEvent> events = new ArrayList<>();
 
 			boolean isVisitorTrackingActive = (details.valve() != null && Boolean.TRUE.equals(details.valve().visitorCookieEnabled()))
@@ -382,6 +395,7 @@ public class CollectorPollerService {
 
 			// 1. Ingest blocked clients (status = BLOCKED, locked = true)
 			if (details.blockedClients() != null && !details.blockedClients().isEmpty()) {
+				blockedCount = details.blockedClients().size();
 				for (ValveDetailsDto.BlockedClientDto c : details.blockedClients()) {
 					Long entityId = null;
 					if (entityResolver != null) {
@@ -461,14 +475,14 @@ public class CollectorPollerService {
 				eventsCount = events.size();
 			}
 
-			return new SlotIngestResult(1, eventsCount, null, netDuration);
+			return new SlotIngestResult(1, eventsCount, blockedCount, null, netDuration);
 
 		} catch (IOException | InterruptedException | RuntimeException e) {
 			long netDuration = System.currentTimeMillis() - netStart;
 			String err = "Valve '" + valveName + "' slot '" + slotParam + "' failed: " + ValveStatusClient.formatErrorMessage(e);
 			log.warn("Could not fetch slot '{}' for valve '{}' on '{}': {}",
 					slotParam, valveName, endpoint.getName(), ValveStatusClient.formatErrorMessage(e));
-			return new SlotIngestResult(0, 0, err, netDuration);
+			return new SlotIngestResult(0, 0, 0, err, netDuration);
 		}
 	}
 
@@ -539,8 +553,12 @@ public class CollectorPollerService {
 		this.knownConfigHashes.clear();
 	}
 
-	private record SlotIngestResult(int slotsCount, int eventsCount, String warning, long networkDurationMs) {}
-	private record IngestResult(int slotsIngested, int eventsIngested, List<String> warnings, long networkDurationMs) {}
+	private record SlotIngestResult(int slotsCount, int eventsCount, int blockedEventsCount, String warning, long networkDurationMs) {
+		public SlotIngestResult(int slotsCount, int eventsCount, String warning, long networkDurationMs) {
+			this(slotsCount, eventsCount, 0, warning, networkDurationMs);
+		}
+	}
+	private record IngestResult(int slotsIngested, int eventsIngested, int blockedEventsIngested, List<String> warnings, long networkDurationMs) {}
 
 	private static Instant parseInstantOrFallback(String str, Instant fallback) {
 		if (str == null || str.trim().isEmpty()) {

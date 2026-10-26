@@ -1,5 +1,6 @@
 package org.henbru.antidos.collector;
 
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +32,9 @@ class DashboardControllerTest {
 
 	@Autowired
 	private org.henbru.antidos.collector.annotation.NetworkAnnotationService annotationService;
+
+	@Autowired
+	private org.henbru.antidos.collector.storage.PollEventLogRepository pollEventLogRepository;
 
 	@Test
 	void testIndexPageLoads() throws Exception {
@@ -113,8 +117,18 @@ class DashboardControllerTest {
 
 	@Test
 	void testPollLogFragmentLoads() throws Exception {
+		pollEventLogRepository.insert(new org.henbru.antidos.collector.model.PollEventLog(
+				null, "TEST-LOG-NODE", "http://test:8080/antidos-status",
+				Instant.now(), "SUCCESS", 200, 45L, 2, 2, 105, 5,
+				"Polled 2 valve(s), 2 slot(s), 105 event(s) (5 blocked, 100 active)", null
+		));
+
 		mockMvc.perform(get("/fragments/poll-log").param("status", "ALL"))
-				.andExpect(status().isOk());
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("TEST-LOG-NODE")))
+				.andExpect(content().string(containsString("5 blocked")))
+				.andExpect(content().string(containsString("100 active")))
+				.andExpect(content().string(not(containsString("105 blocked"))));
 	}
 
 	@Test
