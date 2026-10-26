@@ -15,6 +15,7 @@ import java.util.Objects;
 import java.util.Optional;
 import org.henbru.antidos.collector.model.ClientType;
 import org.henbru.antidos.collector.model.SubnetProfile;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -227,7 +228,7 @@ public class SubnetProfileRepository {
 					rs.getLong("dormant_breaks"),
 					rs.getLong("proxy_pools")
 			), Timestamp.from(sevenDaysAgo));
-		} catch (Exception e) {
+		} catch (DataAccessException e) {
 			return org.henbru.antidos.collector.model.SubnetProfileStats.empty();
 		}
 	}

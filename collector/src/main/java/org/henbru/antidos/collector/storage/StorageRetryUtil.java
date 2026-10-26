@@ -66,7 +66,7 @@ public final class StorageRetryUtil {
 					log.warn("Database busy/locked during '{}' (attempt {}/{}); retrying in {}ms: {}",
 							operationName, attempt, DEFAULT_MAX_RETRIES, backoff, e.getMessage());
 					try {
-						Thread.sleep(backoff);
+						sleepBackoff(backoff);
 					} catch (InterruptedException ie) {
 						Thread.currentThread().interrupt();
 						throw e;
@@ -76,5 +76,9 @@ public final class StorageRetryUtil {
 				}
 			}
 		}
+	}
+
+	private static void sleepBackoff(long backoffMs) throws InterruptedException {
+		Thread.sleep(backoffMs);
 	}
 }

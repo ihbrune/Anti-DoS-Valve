@@ -610,7 +610,8 @@ public class DashboardController {
 			effectiveGroupBy = "PROFILES";
 		}
 
-		if ("PROFILES".equals(effectiveGroupBy)) {
+		switch (effectiveGroupBy) {
+		case "PROFILES" -> {
 			if (subnetProfileService != null && subnetProfileService.countProfilesFiltered("ALL", null, null, null, null, null) == 0) {
 				try {
 					subnetProfileService.refreshProfiles();
@@ -630,7 +631,8 @@ public class DashboardController {
 			model.addAttribute("totalRollups", 0L);
 			model.addAttribute("topOffenders", List.of());
 			model.addAttribute("subnetProfilesMap", Map.of());
-		} else if ("ROLLUP".equals(effectiveGroupBy)) {
+		}
+		case "ROLLUP" -> {
 			List<org.henbru.antidos.collector.model.ClientSubnetRollup> subnetRollups = subnetRollupRepository.findRollupsFiltered(
 					servers, valves, fromTime, toTime, clientQuery, parsedAsn, asOrgQuery, clientTypes, limit, 0);
 			long totalRollups = subnetRollupRepository.countRollupsFiltered(
@@ -659,7 +661,8 @@ public class DashboardController {
 			model.addAttribute("topOffenders", List.of());
 			model.addAttribute("subnetProfiles", List.of());
 			model.addAttribute("totalProfiles", 0L);
-		} else {
+		}
+		default -> {
 			List<TopOffenderSummary> topOffenders = clientEventRepository.findTopOffendersFiltered(
 					servers, valves, fromTime, toTime, clientQuery, clientTypes, parsedAsn, asOrgQuery, normalizedStatus, effectiveGroupBy, limit);
 
@@ -685,6 +688,7 @@ public class DashboardController {
 			model.addAttribute("totalRollups", 0L);
 			model.addAttribute("subnetProfiles", List.of());
 			model.addAttribute("totalProfiles", 0L);
+		}
 		}
 
 		model.addAttribute("groupBy", effectiveGroupBy);

@@ -2,6 +2,7 @@ package org.henbru.antidos.collector.storage;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -39,12 +40,13 @@ class StorageRetryUtilTest {
 	@Test
 	void testExecuteWithRetryDoesNotRetryNonBusyErrors() {
 		AtomicInteger attempts = new AtomicInteger(0);
-		assertThrows(DataAccessException.class, () -> {
+		DataAccessException ex = assertThrows(DataAccessException.class, () -> {
 			StorageRetryUtil.executeWithRetry("test-fatal", () -> {
 				attempts.incrementAndGet();
 				throw new org.springframework.dao.DataIntegrityViolationException("unique constraint violated");
 			});
 		});
+		assertNotNull(ex);
 
 		assertEquals(1, attempts.get());
 	}

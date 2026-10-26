@@ -34,7 +34,7 @@ class SubnetProfileServiceTest {
 	private SubnetProfileService profileService;
 
 	@BeforeEach
-	void setUp() {
+	public void setUp() {
 		jdbcTemplate.update("DELETE FROM subnet_profiles");
 		jdbcTemplate.update("DELETE FROM client_subnet_rollups");
 	}

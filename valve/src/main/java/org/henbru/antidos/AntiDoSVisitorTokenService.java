@@ -1,7 +1,9 @@
 package org.henbru.antidos;
 
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -126,7 +128,7 @@ public final class AntiDoSVisitorTokenService {
 			out.put(cipherTextWithTag);
 
 			return Base64.getUrlEncoder().withoutPadding().encodeToString(out.array());
-		} catch (Exception e) {
+		} catch (GeneralSecurityException e) {
 			throw new IllegalStateException("Failed to encrypt visitor token", e);
 		}
 	}
@@ -188,7 +190,7 @@ public final class AntiDoSVisitorTokenService {
 			}
 
 			return TokenData.valid(counter, expiresAt);
-		} catch (Exception e) {
+		} catch (GeneralSecurityException | IllegalArgumentException | BufferUnderflowException e) {
 			return TokenData.INVALID;
 		}
 	}
