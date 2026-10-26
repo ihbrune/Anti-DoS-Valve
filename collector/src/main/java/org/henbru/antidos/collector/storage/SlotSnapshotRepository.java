@@ -52,18 +52,20 @@ public class SlotSnapshotRepository {
 				    last_polled_at = EXCLUDED.last_polled_at
 				""";
 
-		jdbcTemplate.update(sql,
-				s.serverId(),
-				s.valveName(),
-				s.slotKey(),
-				Timestamp.from(s.startTime()),
-				Timestamp.from(s.endTime()),
-				s.totalRequests(),
-				s.activeCounters(),
-				s.blockedCounters(),
-				s.completed(),
-				Timestamp.from(s.lastPolledAt())
-		);
+		StorageRetryUtil.executeWithRetry("SlotSnapshotRepository.upsert", () -> {
+			jdbcTemplate.update(sql,
+					s.serverId(),
+					s.valveName(),
+					s.slotKey(),
+					Timestamp.from(s.startTime()),
+					Timestamp.from(s.endTime()),
+					s.totalRequests(),
+					s.activeCounters(),
+					s.blockedCounters(),
+					s.completed(),
+					Timestamp.from(s.lastPolledAt())
+			);
+		});
 	}
 
 	public void batchUpsert(List<SlotSnapshot> snapshots) {
@@ -84,26 +86,28 @@ public class SlotSnapshotRepository {
 				    last_polled_at = EXCLUDED.last_polled_at
 				""";
 
-		jdbcTemplate.batchUpdate(sql, new org.springframework.jdbc.core.BatchPreparedStatementSetter() {
-			@Override
-			public void setValues(@NonNull java.sql.PreparedStatement ps, int i) throws java.sql.SQLException {
-				SlotSnapshot s = snapshots.get(i);
-				ps.setString(1, s.serverId());
-				ps.setString(2, s.valveName());
-				ps.setLong(3, s.slotKey());
-				ps.setTimestamp(4, Timestamp.from(s.startTime()));
-				ps.setTimestamp(5, Timestamp.from(s.endTime()));
-				ps.setLong(6, s.totalRequests());
-				ps.setInt(7, s.activeCounters());
-				ps.setInt(8, s.blockedCounters());
-				ps.setBoolean(9, s.completed());
-				ps.setTimestamp(10, Timestamp.from(s.lastPolledAt()));
-			}
+		StorageRetryUtil.executeWithRetry("SlotSnapshotRepository.batchUpsert", () -> {
+			jdbcTemplate.batchUpdate(sql, new org.springframework.jdbc.core.BatchPreparedStatementSetter() {
+				@Override
+				public void setValues(@NonNull java.sql.PreparedStatement ps, int i) throws java.sql.SQLException {
+					SlotSnapshot s = snapshots.get(i);
+					ps.setString(1, s.serverId());
+					ps.setString(2, s.valveName());
+					ps.setLong(3, s.slotKey());
+					ps.setTimestamp(4, Timestamp.from(s.startTime()));
+					ps.setTimestamp(5, Timestamp.from(s.endTime()));
+					ps.setLong(6, s.totalRequests());
+					ps.setInt(7, s.activeCounters());
+					ps.setInt(8, s.blockedCounters());
+					ps.setBoolean(9, s.completed());
+					ps.setTimestamp(10, Timestamp.from(s.lastPolledAt()));
+				}
 
-			@Override
-			public int getBatchSize() {
-				return snapshots.size();
-			}
+				@Override
+				public int getBatchSize() {
+					return snapshots.size();
+				}
+			});
 		});
 	}
 

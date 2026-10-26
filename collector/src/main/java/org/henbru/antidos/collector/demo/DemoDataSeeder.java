@@ -51,9 +51,9 @@ public class DemoDataSeeder {
 			new DemoIpProfile("194.26.29.110", 16276L, "OVH SAS", "FR", org.henbru.antidos.collector.model.ClientType.DATACENTER),
 			new DemoIpProfile("45.154.255.12", 45102L, "Alibaba Cloud", "SG", org.henbru.antidos.collector.model.ClientType.DATACENTER),
 			new DemoIpProfile("185.220.101.5", 208294L, "Zwiebelfreunde (Tor Exit)", "DE", org.henbru.antidos.collector.model.ClientType.DATACENTER),
-			new DemoIpProfile("185.246.221.84", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL),
-			new DemoIpProfile("185.246.221.85", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL),
-			new DemoIpProfile("185.246.221.86", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL),
+			new DemoIpProfile("185.246.222.84", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL),
+			new DemoIpProfile("185.246.222.85", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL),
+			new DemoIpProfile("185.246.222.86", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL),
 			new DemoIpProfile("91.240.118.77", 3209L, "Vodafone Deutschland GmbH", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL),
 			new DemoIpProfile("103.149.28.19", 133480L, "VNPT Residential Fiber", "VN", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL),
 			new DemoIpProfile("66.249.66.1", 15169L, "Google LLC", "US", org.henbru.antidos.collector.model.ClientType.SEARCH_ENGINE),
@@ -111,6 +111,20 @@ public class DemoDataSeeder {
 			log.info("Demo database already contains historical telemetry. Updating any legacy un-enriched demo events...");
 			enrichLegacyDemoEventsIfAny();
 			seedDemoAnnotationsIfEmpty();
+			if (subnetProfileService != null && subnetProfileService.countProfilesFiltered("ALL", null, null, null, null, null) == 0) {
+				if (rollupAggregationService != null) {
+					try {
+						rollupAggregationService.aggregateCatchUp(720);
+					} catch (Exception ignored) {
+					}
+				}
+				try {
+					int cnt = subnetProfileService.refreshProfiles();
+					log.info("Populated {} missing subnet profiles in existing demo database.", cnt);
+				} catch (Exception e) {
+					log.warn("Failed to populate subnet profiles in existing demo database: {}", e.getMessage());
+				}
+			}
 			return;
 		}
 
@@ -163,6 +177,21 @@ public class DemoDataSeeder {
 		while (cursor.isBefore(endThreshold)) {
 			timepoints.add(cursor);
 			cursor = cursor.plus(1, ChronoUnit.MINUTES);
+		}
+
+		// Seed historical baseline 22 days ago for dormant breakout demonstration (91.240.118.0/24 Vodafone)
+		Instant dormantTime = now.minus(22, ChronoUnit.DAYS);
+		long dormantSlotKey = dormantTime.toEpochMilli() / SLOT_LENGTH_MILLIS;
+		for (String edgeServer : edgeServers) {
+			snapshots.add(new SlotSnapshot(
+					null, edgeServer, "Subnet-Guard", dormantSlotKey,
+					dormantTime, dormantTime.plusMillis(SLOT_LENGTH_MILLIS), 400L, 40, 1, true, dormantTime.plusMillis(SLOT_LENGTH_MILLIS)
+			));
+			events.add(createEnrichedEvent(
+					edgeServer, "Subnet-Guard", dormantSlotKey, dormantTime,
+					"91.240.118.77", 3209L, "Vodafone Deutschland GmbH", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
+					310, 0, true, true, dormantTime.plusMillis(SLOT_LENGTH_MILLIS), 12
+			));
 		}
 
 		for (Instant t : timepoints) {
@@ -221,13 +250,14 @@ public class DemoDataSeeder {
 							290 + sRnd.nextInt(120), 0, true, true, endTime, 32 + sRnd.nextInt(10)
 					));
 				}
-				if ((slotKey + idx * 13) % 43 == 0) {
+				boolean isProxySwarm = (hoursAgo <= 2) && ((slotKey + idx * 13) % 29 == 0);
+				if (isProxySwarm) {
 					edgeSubnetBlocked++;
-					// Demonstrates distributed residential proxy swarm: 260 reqs spread across 75-90 distinct residential IPs (~3.5 reqs/IP)
+					// Demonstrates distributed residential proxy swarm: 180 reqs spread across 75-90 distinct residential IPs (~2.2 reqs/IP)
 					events.add(createEnrichedEvent(
 							edgeServer, "Subnet-Guard", slotKey, startTime,
 							"185.246.221.0/24", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
-							260 + sRnd.nextInt(90), 0, true, true, endTime, 75 + sRnd.nextInt(15)
+							180 + sRnd.nextInt(50), 0, true, true, endTime, 75 + sRnd.nextInt(15)
 					));
 				}
 				if ((slotKey + idx * 17) % 89 == 0) {
@@ -302,6 +332,9 @@ public class DemoDataSeeder {
 					apiBlocked = 12 + aRnd.nextInt(4);
 					for (int i = 0; i < apiBlocked && i < DEMO_PROFILES.length; i++) {
 						DemoIpProfile p = DEMO_PROFILES[(i + idx) % DEMO_PROFILES.length];
+						if ("91.240.118.77".equals(p.ip())) {
+							continue; // Keep dormant until recent attack
+						}
 						events.add(createEnrichedEvent(
 								apiServer, "API-DoS-Shield", slotKey, startTime,
 								p.ip(), p.asn(), p.asOrg(), p.country(), p.type(),
@@ -314,6 +347,9 @@ public class DemoDataSeeder {
 					apiBlocked = 8 + aRnd.nextInt(4);
 					for (int i = 0; i < apiBlocked && i < DEMO_PROFILES.length; i++) {
 						DemoIpProfile p = DEMO_PROFILES[(i + 4 + idx) % DEMO_PROFILES.length];
+						if ("91.240.118.77".equals(p.ip())) {
+							continue; // Keep dormant until recent attack
+						}
 						events.add(createEnrichedEvent(
 								apiServer, "API-DoS-Shield", slotKey, startTime,
 								p.ip(), p.asn(), p.asOrg(), p.country(), p.type(),
@@ -332,6 +368,12 @@ public class DemoDataSeeder {
 								150 + aRnd.nextInt(600), 8 + aRnd.nextInt(20), aRnd.nextBoolean(), true, endTime
 						));
 					}
+					// Brand new subnet appearing for the first time in recent attack
+					events.add(createEnrichedEvent(
+							apiServer, "API-DoS-Shield", slotKey, startTime,
+							"195.181.168.42", 60781L, "LeaseWeb Netherlands B.V.", "NL", org.henbru.antidos.collector.model.ClientType.DATACENTER,
+							220 + aRnd.nextInt(300), 12 + aRnd.nextInt(10), true, true, endTime
+					));
 				} else {
 					// Normal baseline traffic
 					apiReqs = (long) (1500 + 1200 * diurnal + aRnd.nextInt(400));
@@ -452,7 +494,7 @@ public class DemoDataSeeder {
 
 		if (rollupAggregationService != null) {
 			try {
-				int rolledUp = rollupAggregationService.aggregateCatchUp(168);
+				int rolledUp = rollupAggregationService.aggregateCatchUp(720);
 				log.info("Historical demo rollups generated: {} subnet time-buckets for 7-day lookback.", rolledUp);
 				if (subnetProfileService != null) {
 					int profCount = subnetProfileService.refreshProfiles();

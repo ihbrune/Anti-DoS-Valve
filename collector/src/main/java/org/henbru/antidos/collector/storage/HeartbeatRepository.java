@@ -53,16 +53,18 @@ public class HeartbeatRepository {
 				    valves_count = EXCLUDED.valves_count
 				""";
 
-		jdbcTemplate.update(sql,
-				hb.serverId(),
-				hb.url(),
-				hb.online(),
-				hb.lastPollAt() != null ? Timestamp.from(hb.lastPollAt()) : null,
-				hb.lastSuccessAt() != null ? Timestamp.from(hb.lastSuccessAt()) : null,
-				hb.lastError(),
-				hb.responseTimeMs(),
-				hb.valvesCount()
-		);
+		StorageRetryUtil.executeWithRetry("HeartbeatRepository.upsert", () -> {
+			jdbcTemplate.update(sql,
+					hb.serverId(),
+					hb.url(),
+					hb.online(),
+					hb.lastPollAt() != null ? Timestamp.from(hb.lastPollAt()) : null,
+					hb.lastSuccessAt() != null ? Timestamp.from(hb.lastSuccessAt()) : null,
+					hb.lastError(),
+					hb.responseTimeMs(),
+					hb.valvesCount()
+			);
+		});
 	}
 
 	public List<EndpointHeartbeat> findAll() {

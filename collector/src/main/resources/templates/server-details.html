@@ -118,6 +118,7 @@
                                     <span th:unless="${runtimeValvesMap[v.valveName].isBlocking()}" class="badge badge-purple" style="font-size: 9.5px; padding: 1px 5px;">MARKING</span>
                                     <span th:if="${runtimeValvesMap[v.valveName].simulationMode}" class="badge badge-warning" style="font-size: 9.5px; padding: 1px 5px;">SIMULATION</span>
                                     <span class="badge" th:classappend="${runtimeValvesMap[v.valveName].collectorIntegrationBadgeClass()}" style="font-size: 9.5px; padding: 1px 5px;" th:title="'Collector integration mode: ' + ${runtimeValvesMap[v.valveName].collectorIntegration()}" th:text="'COLLECTOR: ' + ${runtimeValvesMap[v.valveName].collectorIntegrationLabel()}">COLLECTOR: AUTO</span>
+                                    <span class="badge" th:classappend="${runtimeValvesMap[v.valveName].visitorCookieBadgeClass()}" style="font-size: 9.5px; padding: 1px 5px;" th:title="'Visitor cookie tracking: ' + ${runtimeValvesMap[v.valveName].visitorCookieLabel()}" th:text="'COOKIE: ' + ${runtimeValvesMap[v.valveName].visitorCookieLabel()}">COOKIE: OFF</span>
                                     <span style="font-size: 11px; color: var(--text-muted);" th:text="${runtimeValvesMap[v.valveName].allowedRequestsPerSlot} + ' req / ' + ${runtimeValvesMap[v.valveName].slotLength} + 's'">50 req / 60s</span>
                                 </div>
                             </td>
@@ -189,6 +190,7 @@
                         <span th:if="${rv.simulationMode}" class="badge badge-warning">SIMULATION MODE</span>
                         <span th:if="${rv.serverWideBlocking}" class="badge badge-warning">SERVER-WIDE BLOCKING</span>
                         <span class="badge" th:classappend="${rv.collectorIntegrationBadgeClass()}" th:title="'Collector integration mode: ' + ${rv.collectorIntegration()} + ' (Extended metrics &amp; subnet cardinality tracking)'" th:text="'COLLECTOR: ' + ${rv.collectorIntegrationLabel()}">COLLECTOR: AUTO</span>
+                        <span class="badge" th:classappend="${rv.visitorCookieBadgeClass()}" th:title="'Visitor cookie tracking: ' + ${rv.visitorCookieLabel()} + ' (Reputation &amp; first-contact detection)'" th:text="'COOKIE: ' + ${rv.visitorCookieLabel()}">COOKIE: OFF</span>
                     </div>
                     <div style="font-size: 11px; color: var(--text-muted);">
                         Last Synced: <span style="font-weight: 600; color: var(--text-secondary);" th:text="${rv.lastUpdatedAt != null ? #temporals.format(rv.lastUpdatedAt, 'dd.MM.yyyy HH:mm:ss') : 'Unknown'}">24.10 22:30:00</span>
@@ -230,6 +232,17 @@
                         <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;" th:if="${rv.collectorIntegration().toLowerCase() == 'auto'}">Dynamic lease &bull; Extended metrics</div>
                         <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;" th:if="${rv.collectorIntegration().toLowerCase() == 'true'}">Permanent &bull; Always active</div>
                         <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;" th:if="${rv.collectorIntegration().toLowerCase() == 'false'}">Disabled &bull; Zero overhead</div>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
+                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Visitor Tracking &amp; Cookies</div>
+                        <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);" th:text="${rv.visitorCookieEnabled ? 'ACTIVE' : 'DISABLED'}">DISABLED</div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;" th:if="${rv.visitorCookieEnabled}">
+                            Cookie: <code style="font-weight: 600; color: var(--color-primary);" th:text="${rv.visitorCookieName()}">_adv</code> &bull; First-contact detection
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 3px;" th:unless="${rv.visitorCookieEnabled}">
+                            Disabled &bull; No visitor cookies issued
+                        </div>
                     </div>
 
                     <div th:if="${rv.statusUri != null and !rv.statusUri.isBlank()}"

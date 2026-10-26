@@ -263,6 +263,8 @@ class DashboardControllerTest {
 				.andExpect(content().string(containsString("Discovered Valve Runtime Configurations")))
 				.andExpect(content().string(containsString("Primary edge rate limiter")))
 				.andExpect(content().string(containsString("COLLECTOR: AUTO")))
+				.andExpect(content().string(containsString("COOKIE: OFF")))
+				.andExpect(content().string(containsString("Visitor Tracking &amp; Cookies")))
 				.andExpect(content().string(containsString("Collector Integration")))
 				.andExpect(content().string(containsString("/32 (IPv4) &bull; /64 (IPv6)")))
 				.andExpect(content().string(containsString("100 req / 60s")))
@@ -445,6 +447,34 @@ class DashboardControllerTest {
 		mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/rollups/subnets/profiles/refresh"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.status").value("SUCCESS"));
+	}
+
+	@Test
+	void testOffendersAutoPivotToProfilesWhenPatternProvided() throws Exception {
+		mockMvc.perform(get("/fragments/offenders-table")
+						.param("groupBy", "CLIENT")
+						.param("activityPattern", "SURGE"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("id=\"offenders-table-container\"")))
+				.andExpect(content().string(containsString("Subnet &amp; Provider")));
+	}
+
+	@Test
+	void testOffendersFragmentWithSubnetModeAndPattern() throws Exception {
+		mockMvc.perform(get("/fragments/offenders-table")
+						.param("groupBy", "SUBNET")
+						.param("activityPattern", "DORMANT"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("id=\"offenders-table-container\"")));
+	}
+
+	@Test
+	void testOffendersFragmentWithRollupModeAndPattern() throws Exception {
+		mockMvc.perform(get("/fragments/offenders-table")
+						.param("groupBy", "ROLLUP")
+						.param("activityPattern", "PROXY_POOL"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("id=\"offenders-table-container\"")));
 	}
 }
 

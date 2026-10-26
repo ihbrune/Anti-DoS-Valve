@@ -270,31 +270,31 @@
                     <label class="pill-label">
                         <input type="radio" name="activityPattern" value="ALL"
                                th:checked="${activityPattern == null or activityPattern == 'ALL'}"
-                               onchange="htmx.trigger('#offenders-filter-form', 'submit');">
+                               onchange="onActivityPatternChange(this);">
                         <span>All Patterns</span>
                     </label>
                     <label class="pill-label">
                         <input type="radio" name="activityPattern" value="SURGE"
                                th:checked="${activityPattern == 'SURGE'}"
-                               onchange="htmx.trigger('#offenders-filter-form', 'submit');">
+                               onchange="onActivityPatternChange(this);">
                         <span>&#x26A1; High Surge (&ge;5x)</span>
                     </label>
                     <label class="pill-label">
                         <input type="radio" name="activityPattern" value="NEW"
                                th:checked="${activityPattern == 'NEW'}"
-                               onchange="htmx.trigger('#offenders-filter-form', 'submit');">
+                               onchange="onActivityPatternChange(this);">
                         <span>&#x2728; New Subnets (&lt;7d)</span>
                     </label>
                     <label class="pill-label">
                         <input type="radio" name="activityPattern" value="DORMANT"
                                th:checked="${activityPattern == 'DORMANT'}"
-                               onchange="htmx.trigger('#offenders-filter-form', 'submit');">
+                               onchange="onActivityPatternChange(this);">
                         <span>&#x1F4A4; Dormancy Break (&ge;14d)</span>
                     </label>
                     <label class="pill-label">
                         <input type="radio" name="activityPattern" value="PROXY_POOL"
                                th:checked="${activityPattern == 'PROXY_POOL'}"
-                               onchange="htmx.trigger('#offenders-filter-form', 'submit');">
+                               onchange="onActivityPatternChange(this);">
                         <span>&#x1F504; Residential IP Rotation</span>
                     </label>
                 </div>
@@ -379,6 +379,19 @@
         document.getElementById('toInput').value = formatLocal(now);
         document.getElementById('fromInput').value = formatLocal(past);
 
+        htmx.trigger('#offenders-filter-form', 'submit');
+    }
+
+    function onActivityPatternChange(input) {
+        if (input && input.value && input.value !== 'ALL') {
+            const clientRadio = document.querySelector('input[name="groupBy"][value="CLIENT"]');
+            if (clientRadio && clientRadio.checked) {
+                const profilesRadio = document.querySelector('input[name="groupBy"][value="PROFILES"]');
+                if (profilesRadio) {
+                    profilesRadio.checked = true;
+                }
+            }
+        }
         htmx.trigger('#offenders-filter-form', 'submit');
     }
 </script>

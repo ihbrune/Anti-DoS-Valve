@@ -179,11 +179,14 @@ public class CollectorPollerService {
 		int valvesPolled = 0;
 		int slotsIngested = 0;
 		int eventsIngested = 0;
+		long totalNetworkMs = 0;
 		List<String> warnings = new ArrayList<>();
 
 		try {
+			long overviewStart = System.currentTimeMillis();
 			ValveOverviewDto overview = statusClient.fetchOverview(endpoint);
-			long duration = System.currentTimeMillis() - start;
+			long overviewDuration = System.currentTimeMillis() - overviewStart;
+			totalNetworkMs += overviewDuration;
 
 			int valveCount = overview.valves() != null
 					? (int) overview.valves().stream().filter(v -> endpoint.isValveIncluded(v.monitorName())).count()
@@ -195,7 +198,7 @@ public class CollectorPollerService {
 					now,
 					now,
 					null,
-					duration,
+					overviewDuration,
 					valveCount
 			));
 
@@ -211,21 +214,25 @@ public class CollectorPollerService {
 					slotsIngested += result.slotsIngested();
 					eventsIngested += result.eventsIngested();
 					warnings.addAll(result.warnings());
+					totalNetworkMs += result.networkDurationMs();
 				}
 			}
 
 			long totalDuration = System.currentTimeMillis() - start;
+			long dbDuration = Math.max(0, totalDuration - totalNetworkMs);
 			String status = "SUCCESS";
-			String details = "Polled " + valvesPolled + " valve(s), " + slotsIngested + " slot(s), " + eventsIngested + " event(s)";
+			String details = "Polled " + valvesPolled + " valve(s), " + slotsIngested + " slot(s), " + eventsIngested
+					+ " event(s) in " + totalDuration + " ms (network: " + totalNetworkMs + " ms, db: " + dbDuration + " ms)";
 			String errorMsg = null;
 
 			if (!warnings.isEmpty()) {
 				status = "WARNING";
-				details = "Partial success (" + warnings.size() + " issue(s)): " + String.join("; ", warnings);
+				details = "Partial success (" + warnings.size() + " issue(s)): " + String.join("; ", warnings)
+						+ " (network: " + totalNetworkMs + " ms, db: " + dbDuration + " ms)";
 				errorMsg = String.join("; ", warnings);
-			} else if (totalDuration > properties.getSlowPollThresholdMs()) {
+			} else if (totalNetworkMs > properties.getSlowPollThresholdMs()) {
 				status = "WARNING";
-				details = "Slow response: " + totalDuration + " ms (threshold: " + properties.getSlowPollThresholdMs() + " ms)";
+				details = "Slow endpoint response: " + totalNetworkMs + " ms (threshold: " + properties.getSlowPollThresholdMs() + " ms)";
 			}
 
 			pollEventLogRepository.insert(new PollEventLog(
@@ -235,7 +242,7 @@ public class CollectorPollerService {
 					now,
 					status,
 					200,
-					totalDuration,
+					totalNetworkMs,
 					valvesPolled,
 					slotsIngested,
 					eventsIngested,
@@ -281,6 +288,7 @@ public class CollectorPollerService {
 		long lastCompletedKey = summary.lastCompletedSlotKey();
 		int slots = 0;
 		int events = 0;
+		long networkMs = 0;
 		List<String> warnings = new ArrayList<>();
 
 		// 1. Check for missed slots (catch-up recovery)
@@ -295,6 +303,7 @@ public class CollectorPollerService {
 				SlotIngestResult r = fetchAndStoreSlot(endpoint, valveName, String.valueOf(k), true, pollTime);
 				slots += r.slotsCount();
 				events += r.eventsCount();
+				networkMs += r.networkDurationMs();
 				if (r.warning() != null) {
 					warnings.add(r.warning());
 				}
@@ -307,6 +316,7 @@ public class CollectorPollerService {
 			SlotIngestResult r = fetchAndStoreSlot(endpoint, valveName, "previous", true, pollTime);
 			slots += r.slotsCount();
 			events += r.eventsCount();
+			networkMs += r.networkDurationMs();
 			if (r.warning() != null) {
 				warnings.add(r.warning());
 			}
@@ -317,15 +327,17 @@ public class CollectorPollerService {
 			SlotIngestResult r = fetchAndStoreSlot(endpoint, valveName, "current", false, pollTime);
 			slots += r.slotsCount();
 			events += r.eventsCount();
+			networkMs += r.networkDurationMs();
 			if (r.warning() != null) {
 				warnings.add(r.warning());
 			}
 		}
 
-		return new IngestResult(slots, events, warnings);
+		return new IngestResult(slots, events, warnings, networkMs);
 	}
 
 	private SlotIngestResult fetchAndStoreSlot(EndpointConfig endpoint, String valveName, String slotParam, boolean completed, Instant pollTime) {
+		long netStart = System.currentTimeMillis();
 		try {
 			// Apply effective telemetry rules (activeLimit=0 if disabled, or activeLimit + activeMinCount)
 			org.henbru.antidos.collector.config.EffectiveValveRule rule = valveRuleResolver.resolve(endpoint, valveName);
@@ -335,8 +347,9 @@ public class CollectorPollerService {
 			ValveDetailsDto details = (activeMinCountParam != null)
 					? statusClient.fetchSlotDetails(endpoint, valveName, slotParam, "all", "all", activeLimitParam, null, null, activeMinCountParam)
 					: statusClient.fetchSlotDetails(endpoint, valveName, slotParam, "all", "all", activeLimitParam);
+			long netDuration = System.currentTimeMillis() - netStart;
 			if (details.selectedSlot() == null) {
-				return new SlotIngestResult(0, 0, null);
+				return new SlotIngestResult(0, 0, null, netDuration);
 			}
 
 			ValveDetailsDto.SelectedSlotDto slot = details.selectedSlot();
@@ -434,13 +447,14 @@ public class CollectorPollerService {
 				eventsCount = events.size();
 			}
 
-			return new SlotIngestResult(1, eventsCount, null);
+			return new SlotIngestResult(1, eventsCount, null, netDuration);
 
 		} catch (IOException | InterruptedException | RuntimeException e) {
+			long netDuration = System.currentTimeMillis() - netStart;
 			String err = "Valve '" + valveName + "' slot '" + slotParam + "' failed: " + ValveStatusClient.formatErrorMessage(e);
 			log.warn("Could not fetch slot '{}' for valve '{}' on '{}': {}",
 					slotParam, valveName, endpoint.getName(), ValveStatusClient.formatErrorMessage(e));
-			return new SlotIngestResult(0, 0, err);
+			return new SlotIngestResult(0, 0, err, netDuration);
 		}
 	}
 
@@ -500,6 +514,8 @@ public class CollectorPollerService {
 				v.statusUri(),
 				v.statusAllowedIPs(),
 				v.collectorIntegration() != null && !v.collectorIntegration().isBlank() ? v.collectorIntegration() : "auto",
+				v.visitorCookieEnabled(),
+				v.visitorCookieName() != null && !v.visitorCookieName().isBlank() ? v.visitorCookieName() : "_adv",
 				now,
 				configHash
 		);
@@ -509,8 +525,8 @@ public class CollectorPollerService {
 		this.knownConfigHashes.clear();
 	}
 
-	private record SlotIngestResult(int slotsCount, int eventsCount, String warning) {}
-	private record IngestResult(int slotsIngested, int eventsIngested, List<String> warnings) {}
+	private record SlotIngestResult(int slotsCount, int eventsCount, String warning, long networkDurationMs) {}
+	private record IngestResult(int slotsIngested, int eventsIngested, List<String> warnings, long networkDurationMs) {}
 
 	private static Instant parseInstantOrFallback(String str, Instant fallback) {
 		if (str == null || str.trim().isEmpty()) {

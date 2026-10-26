@@ -30,11 +30,51 @@ public record MonitoredValve(
 		String statusUri,
 		String statusAllowedIPs,
 		String collectorIntegration,
+		boolean visitorCookieEnabled,
+		String visitorCookieName,
 		Instant lastUpdatedAt,
 		int configHash
 ) {
 	/**
-	 * Backwards-compatible constructor defaulting collectorIntegration to "auto".
+	 * Backwards-compatible constructor defaulting visitorCookieEnabled to false and visitorCookieName to "_adv".
+	 */
+	public MonitoredValve(
+			String serverId,
+			String valveName,
+			String description,
+			int pipelineOrder,
+			String monitorMode,
+			boolean simulationMode,
+			boolean serverWideBlocking,
+			int httpStatusCode,
+			int allowedRequestsPerSlot,
+			int slotLength,
+			int numberOfSlots,
+			float shareOfRetainedFormerRequests,
+			int ipv4SubnetMask,
+			int ipv6SubnetMask,
+			int maxIPCacheSize,
+			int maxBlockedIPCacheSize,
+			String relevantPaths,
+			String nonRelevantPaths,
+			String alwaysAllowedIPs,
+			String alwaysForbiddenIPs,
+			String statusUri,
+			String statusAllowedIPs,
+			String collectorIntegration,
+			Instant lastUpdatedAt,
+			int configHash
+	) {
+		this(serverId, valveName, description, pipelineOrder, monitorMode, simulationMode,
+				serverWideBlocking, httpStatusCode, allowedRequestsPerSlot, slotLength, numberOfSlots,
+				shareOfRetainedFormerRequests, ipv4SubnetMask, ipv6SubnetMask, maxIPCacheSize,
+				maxBlockedIPCacheSize, relevantPaths, nonRelevantPaths, alwaysAllowedIPs,
+				alwaysForbiddenIPs, statusUri, statusAllowedIPs, collectorIntegration,
+				false, "_adv", lastUpdatedAt, configHash);
+	}
+
+	/**
+	 * Backwards-compatible constructor defaulting collectorIntegration to "auto" and visitor cookie tracking to false.
 	 */
 	public MonitoredValve(
 			String serverId,
@@ -66,7 +106,8 @@ public record MonitoredValve(
 				serverWideBlocking, httpStatusCode, allowedRequestsPerSlot, slotLength, numberOfSlots,
 				shareOfRetainedFormerRequests, ipv4SubnetMask, ipv6SubnetMask, maxIPCacheSize,
 				maxBlockedIPCacheSize, relevantPaths, nonRelevantPaths, alwaysAllowedIPs,
-				alwaysForbiddenIPs, statusUri, statusAllowedIPs, "auto", lastUpdatedAt, configHash);
+				alwaysForbiddenIPs, statusUri, statusAllowedIPs, "auto",
+				false, "_adv", lastUpdatedAt, configHash);
 	}
 
 	public boolean isBlocking() {
@@ -105,6 +146,18 @@ public record MonitoredValve(
 			case "false" -> "DISABLED";
 			default -> "AUTO";
 		};
+	}
+
+	public String visitorCookieName() {
+		return visitorCookieName != null && !visitorCookieName.isBlank() ? visitorCookieName : "_adv";
+	}
+
+	public String visitorCookieBadgeClass() {
+		return visitorCookieEnabled ? "badge-success" : "badge-secondary";
+	}
+
+	public String visitorCookieLabel() {
+		return visitorCookieEnabled ? "ACTIVE (" + visitorCookieName() + ")" : "OFF";
 	}
 
 	public boolean hasPathFilters() {

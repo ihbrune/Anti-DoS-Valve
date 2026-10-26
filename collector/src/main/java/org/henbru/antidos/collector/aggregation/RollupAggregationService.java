@@ -170,7 +170,7 @@ public class RollupAggregationService {
 	public RollupExecutionResult executeManualCatchUp(int lookbackHours) {
 		long start = System.currentTimeMillis();
 		int persisted = aggregateCatchUp(lookbackHours);
-		if (subnetProfileService != null && persisted > 0) {
+		if (subnetProfileService != null) {
 			try {
 				subnetProfileService.refreshProfiles();
 			} catch (Exception e) {

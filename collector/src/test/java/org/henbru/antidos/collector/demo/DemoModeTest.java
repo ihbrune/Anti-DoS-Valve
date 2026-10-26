@@ -24,7 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {
 		"collector.demo-mode=true",
-		"spring.datasource.url=jdbc:sqlite:target/demo-test.db?busy_timeout=10000"
+		"spring.datasource.url=jdbc:sqlite:target/demo-test.db?busy_timeout=60000"
 })
 @SuppressWarnings("null")
 class DemoModeTest {
@@ -61,6 +61,9 @@ class DemoModeTest {
 
 	@Autowired
 	private org.henbru.antidos.collector.storage.HeartbeatRepository heartbeatRepository;
+
+	@Autowired
+	private org.henbru.antidos.collector.aggregation.SubnetProfileService subnetProfileService;
 
 	@Test
 	void testDemoEndpointsAutoConfigured() {
@@ -312,5 +315,28 @@ class DemoModeTest {
 						.header("Authorization", "Bearer demo-token"))
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("API-DoS-Shield")));
+	}
+
+	@Test
+	void testDemoSubnetProfilesAndAnomalyPatterns() {
+		assertNotNull(subnetProfileService, "SubnetProfileService should be available");
+		long count = subnetProfileService.countProfilesFiltered("ALL", null, null, null, null, null);
+		assertTrue(count > 0, "Demo database should have generated subnet profiles");
+
+		// Verify SURGE pattern matches
+		long surgeCount = subnetProfileService.countProfilesFiltered("SURGE", null, null, null, null, null);
+		assertTrue(surgeCount > 0, "Demo mode should include high surge profiles");
+
+		// Verify PROXY_POOL pattern matches (185.246.221.0/24)
+		long proxyPoolCount = subnetProfileService.countProfilesFiltered("PROXY_POOL", null, null, null, null, null);
+		assertTrue(proxyPoolCount > 0, "Demo mode should include residential proxy pool rotation profile");
+
+		// Verify DORMANT pattern matches (91.240.118.0/24)
+		long dormantCount = subnetProfileService.countProfilesFiltered("DORMANT", null, null, null, null, null);
+		assertTrue(dormantCount > 0, "Demo mode should include dormancy breakout profile");
+
+		// Verify NEW pattern matches (195.181.168.0/24)
+		long newCount = subnetProfileService.countProfilesFiltered("NEW", null, null, null, null, null);
+		assertTrue(newCount > 0, "Demo mode should include new subnet profile");
 	}
 }

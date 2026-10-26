@@ -4,7 +4,7 @@
 
 spring:
   datasource:
-    url: ${DEMO_DATASOURCE_URL:jdbc:sqlite:antidos-collector-demo.db?busy_timeout=10000}
+    url: ${DEMO_DATASOURCE_URL:jdbc:sqlite:antidos-collector-demo.db?busy_timeout=60000}
     driver-class-name: org.sqlite.JDBC
     username: ""
     password: ""

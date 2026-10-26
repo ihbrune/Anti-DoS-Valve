@@ -112,6 +112,8 @@
                          shareOfRetainedFormerRequests="0"
                          monitorMode="MARKING"
                          simulationMode="true"
+                         visitorCookieEnabled="true"
+                         visitorCookieName="_adv"
                     />
 
                </Host>

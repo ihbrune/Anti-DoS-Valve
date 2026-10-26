@@ -47,20 +47,22 @@ public class PollEventLogRepository {
 				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				""";
 
-		jdbcTemplate.update(
-				sql,
-				log.serverId(),
-				log.url(),
-				Timestamp.from(log.pollTime()),
-				log.status(),
-				log.httpStatusCode(),
-				log.responseTimeMs(),
-				log.valvesPolled(),
-				log.slotsIngested(),
-				log.eventsIngested(),
-				log.details(),
-				log.errorMessage()
-		);
+		StorageRetryUtil.executeWithRetry("PollEventLogRepository.insert", () -> {
+			jdbcTemplate.update(
+					sql,
+					log.serverId(),
+					log.url(),
+					Timestamp.from(log.pollTime()),
+					log.status(),
+					log.httpStatusCode(),
+					log.responseTimeMs(),
+					log.valvesPolled(),
+					log.slotsIngested(),
+					log.eventsIngested(),
+					log.details(),
+					log.errorMessage()
+			);
+		});
 	}
 
 	public void batchInsert(List<PollEventLog> logs) {
@@ -76,27 +78,29 @@ public class PollEventLogRepository {
 				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				""";
 
-		jdbcTemplate.batchUpdate(sql, new org.springframework.jdbc.core.BatchPreparedStatementSetter() {
-			@Override
-			public void setValues(@NonNull java.sql.PreparedStatement ps, int i) throws java.sql.SQLException {
-				PollEventLog log = logs.get(i);
-				ps.setString(1, log.serverId());
-				ps.setString(2, log.url());
-				ps.setTimestamp(3, Timestamp.from(log.pollTime()));
-				ps.setString(4, log.status());
-				ps.setInt(5, log.httpStatusCode());
-				ps.setLong(6, log.responseTimeMs());
-				ps.setInt(7, log.valvesPolled());
-				ps.setInt(8, log.slotsIngested());
-				ps.setInt(9, log.eventsIngested());
-				ps.setString(10, log.details());
-				ps.setString(11, log.errorMessage());
-			}
+		StorageRetryUtil.executeWithRetry("PollEventLogRepository.batchInsert", () -> {
+			jdbcTemplate.batchUpdate(sql, new org.springframework.jdbc.core.BatchPreparedStatementSetter() {
+				@Override
+				public void setValues(@NonNull java.sql.PreparedStatement ps, int i) throws java.sql.SQLException {
+					PollEventLog log = logs.get(i);
+					ps.setString(1, log.serverId());
+					ps.setString(2, log.url());
+					ps.setTimestamp(3, Timestamp.from(log.pollTime()));
+					ps.setString(4, log.status());
+					ps.setInt(5, log.httpStatusCode());
+					ps.setLong(6, log.responseTimeMs());
+					ps.setInt(7, log.valvesPolled());
+					ps.setInt(8, log.slotsIngested());
+					ps.setInt(9, log.eventsIngested());
+					ps.setString(10, log.details());
+					ps.setString(11, log.errorMessage());
+				}
 
-			@Override
-			public int getBatchSize() {
-				return logs.size();
-			}
+				@Override
+				public int getBatchSize() {
+					return logs.size();
+				}
+			});
 		});
 	}
 

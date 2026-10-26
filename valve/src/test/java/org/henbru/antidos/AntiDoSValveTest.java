@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +21,7 @@ import org.apache.catalina.connector.Connector;
 import org.apache.catalina.connector.Request;
 import org.apache.catalina.connector.Response;
 import org.apache.catalina.core.StandardEngine;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -1506,11 +1508,154 @@ class AntiDoSValveTest {
 		assertNull(valve.getDescription());
 	}
 
+	@Test
+	void testVisitorCookieConfigurationAndValidation() {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "COOKIE_CONFIG_TEST");
+
+		assertFalse(valve.isVisitorCookieEnabled());
+		assertEquals("_adv", valve.getVisitorCookieName());
+		assertNull(valve.getVisitorCookieSecret());
+		assertEquals(900, valve.getVisitorCookieTtlSeconds());
+		assertEquals(0.5f, valve.getVisitorCookieRefreshRatio());
+		assertEquals(24, valve.getVisitorCookieSubnetMaskV4());
+		assertEquals(64, valve.getVisitorCookieSubnetMaskV6());
+		assertEquals("/", valve.getVisitorCookiePath());
+		assertEquals("Lax", valve.getVisitorCookieSameSite());
+		assertEquals("auto", valve.getVisitorCookieSecure());
+
+		valve.setVisitorCookieEnabled(true);
+		valve.setVisitorCookieName("my_cookie");
+		valve.setVisitorCookieSecret("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+		valve.setVisitorCookieTtlSeconds(600);
+		valve.setVisitorCookieRefreshRatio(0.4f);
+		valve.setVisitorCookieSubnetMaskV4(16);
+		valve.setVisitorCookieSubnetMaskV6(48);
+		valve.setVisitorCookiePath("/app");
+		valve.setVisitorCookieSameSite("Strict");
+		valve.setVisitorCookieSecure("true");
+
+		assertTrue(valve.isVisitorCookieEnabled());
+		assertEquals("my_cookie", valve.getVisitorCookieName());
+		assertEquals("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", valve.getVisitorCookieSecret());
+		assertEquals(600, valve.getVisitorCookieTtlSeconds());
+		assertEquals(0.4f, valve.getVisitorCookieRefreshRatio());
+		assertEquals(16, valve.getVisitorCookieSubnetMaskV4());
+		assertEquals(48, valve.getVisitorCookieSubnetMaskV6());
+		assertEquals("/app", valve.getVisitorCookiePath());
+		assertEquals("Strict", valve.getVisitorCookieSameSite());
+		assertEquals("true", valve.getVisitorCookieSecure());
+
+		// Test lifecycle exceptions
+		valve.setVisitorCookieTtlSeconds(-1);
+		assertThrows(LifecycleException.class, valve::initInternal);
+
+		valve.setVisitorCookieTtlSeconds(600);
+		valve.setVisitorCookieRefreshRatio(1.5f);
+		assertThrows(LifecycleException.class, valve::initInternal);
+	}
+
+	@Test
+	void testVisitorCookieFirstContactAndReturningVisit() throws Exception {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "COOKIE_VISIT_TEST");
+		valve.setVisitorCookieEnabled(true);
+		valve.setVisitorCookieSecret("test-secret-shared-between-nodes-12345");
+		valve.setVisitorCookieTtlSeconds(900);
+		valve.setRelevantPaths("/.*");
+		valve.start();
+
+		String clientIp = "192.168.1.100";
+
+		// 1. First contact without cookie
+		TestRequest req1 = new TestRequest("/index.html", clientIp);
+		TestResponse resp1 = new TestResponse();
+		valve.invoke(req1, resp1);
+
+		assertEquals(Boolean.FALSE, req1.getAttribute(AntiDoSValve.RETURNING_VISITOR_ATTRIBUTE_NAME));
+		assertEquals(Boolean.TRUE, req1.getAttribute(AntiDoSValve.FIRST_CONTACT_ATTRIBUTE_NAME));
+		assertEquals(0, req1.getAttribute(AntiDoSValve.VISITOR_COUNTER_ATTRIBUTE_NAME));
+
+		// Cookie must be issued in response
+		assertFalse(resp1.getSetCookies().isEmpty(), "Set-Cookie must be issued on first contact");
+		String setCookieHeader = resp1.getSetCookies().get(0);
+		assertTrue(setCookieHeader.startsWith("_adv="));
+		assertTrue(setCookieHeader.contains("HttpOnly"));
+		assertTrue(setCookieHeader.contains("SameSite=Lax"));
+
+		// Extract cookie value
+		String cookieVal = setCookieHeader.substring(5, setCookieHeader.indexOf(';'));
+
+		// 2. Returning request with the cookie
+		TestRequest req2 = new TestRequest("/api/data", clientIp);
+		req2.setCookies(new Cookie[]{new Cookie("_adv", cookieVal)});
+		TestResponse resp2 = new TestResponse();
+		valve.invoke(req2, resp2);
+
+		assertEquals(Boolean.TRUE, req2.getAttribute(AntiDoSValve.RETURNING_VISITOR_ATTRIBUTE_NAME));
+		assertEquals(Boolean.FALSE, req2.getAttribute(AntiDoSValve.FIRST_CONTACT_ATTRIBUTE_NAME));
+		assertEquals(1, req2.getAttribute(AntiDoSValve.VISITOR_COUNTER_ATTRIBUTE_NAME));
+
+		// Since token is fresh (< 50% TTL elapsed), no new Set-Cookie should be sent (prevents HTTP/2 race condition)
+		assertTrue(resp2.getSetCookies().isEmpty(), "Fresh cookie should not re-issue Set-Cookie");
+
+		// Verify counter recorded the returning visit
+		AntiDoSMonitor monitor = valve.provideMonitor();
+		AntiDoSSlot slot = monitor.getSlotByKey(monitor.getCurrentSlotKey());
+		AntiDoSCounter counter = slot.getCounter(clientIp);
+		assertNotNull(counter);
+		assertEquals(2, counter.getCount());
+		assertEquals(1, counter.getReturningCount());
+
+		valve.stop();
+	}
+
+	@Test
+	void testVisitorCookieIPMismatchAndTamperedRejection() throws Exception {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "COOKIE_SECURITY_TEST");
+		valve.setVisitorCookieEnabled(true);
+		valve.setVisitorCookieSecret("test-secret-security-12345");
+		valve.setVisitorCookieSubnetMaskV4(24);
+		valve.setRelevantPaths("/.*");
+		valve.start();
+
+		// Issue cookie to IP 192.168.1.50 (/24 -> 192.168.1.0)
+		TestRequest req1 = new TestRequest("/home", "192.168.1.50");
+		TestResponse resp1 = new TestResponse();
+		valve.invoke(req1, resp1);
+		String setCookie = resp1.getSetCookies().get(0);
+		String cookieVal = setCookie.substring(5, setCookie.indexOf(';'));
+
+		// 1. Present from different subnet 10.0.0.1 -> must be rejected as returning
+		TestRequest reqDifferentSubnet = new TestRequest("/home", "10.0.0.1");
+		reqDifferentSubnet.setCookies(new Cookie[]{new Cookie("_adv", cookieVal)});
+		TestResponse respDiff = new TestResponse();
+		valve.invoke(reqDifferentSubnet, respDiff);
+
+		assertEquals(Boolean.FALSE, reqDifferentSubnet.getAttribute(AntiDoSValve.RETURNING_VISITOR_ATTRIBUTE_NAME));
+		assertEquals(Boolean.TRUE, reqDifferentSubnet.getAttribute(AntiDoSValve.FIRST_CONTACT_ATTRIBUTE_NAME));
+
+		// 2. Tampered cookie -> must be rejected
+		String tamperedVal = cookieVal.substring(0, cookieVal.length() - 2) + "==";
+		TestRequest reqTampered = new TestRequest("/home", "192.168.1.50");
+		reqTampered.setCookies(new Cookie[]{new Cookie("_adv", tamperedVal)});
+		TestResponse respTampered = new TestResponse();
+		valve.invoke(reqTampered, respTampered);
+
+		assertEquals(Boolean.FALSE, reqTampered.getAttribute(AntiDoSValve.RETURNING_VISITOR_ATTRIBUTE_NAME));
+		assertEquals(Boolean.TRUE, reqTampered.getAttribute(AntiDoSValve.FIRST_CONTACT_ATTRIBUTE_NAME));
+
+		valve.stop();
+	}
+
 	private static class TestRequest extends Request {
 		private final String testUri;
 		private final String testRemoteAddr;
 		private final Map<String, String> params = new HashMap<>();
 		private final Map<String, String> headers = new HashMap<>();
+		private final Map<String, Object> attributes = new HashMap<>();
+		private Cookie[] cookies = null;
 
 		TestRequest(String uri, String remoteAddr) {
 			super(new Connector());
@@ -1545,6 +1690,25 @@ class AntiDoSValveTest {
 		void setHeader(String name, String value) {
 			headers.put(name, value);
 		}
+
+		@Override
+		public void setAttribute(String name, Object value) {
+			attributes.put(name, value);
+		}
+
+		@Override
+		public Object getAttribute(String name) {
+			return attributes.get(name);
+		}
+
+		@Override
+		public Cookie[] getCookies() {
+			return cookies;
+		}
+
+		void setCookies(Cookie[] cookies) {
+			this.cookies = cookies;
+		}
 	}
 
 	private static class TestResponse extends Response {
@@ -1552,6 +1716,7 @@ class AntiDoSValveTest {
 		private final StringWriter sw = new StringWriter();
 		private final PrintWriter pw = new PrintWriter(sw);
 		private final Map<String, String> headers = new HashMap<>();
+		private final List<String> setCookies = new ArrayList<>();
 
 		TestResponse() {
 			super();
@@ -1573,6 +1738,18 @@ class AntiDoSValveTest {
 		@Override
 		public void setHeader(String name, String value) {
 			headers.put(name, value);
+		}
+
+		@Override
+		public void addHeader(String name, String value) {
+			if ("Set-Cookie".equalsIgnoreCase(name)) {
+				setCookies.add(value);
+			}
+			headers.put(name, value);
+		}
+
+		List<String> getSetCookies() {
+			return setCookies;
 		}
 
 		@Override

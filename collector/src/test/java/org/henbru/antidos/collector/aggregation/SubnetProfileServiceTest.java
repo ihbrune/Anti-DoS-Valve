@@ -227,4 +227,37 @@ class SubnetProfileServiceTest {
 		assertTrue(persistedA.isPresent());
 		assertEquals(10.0, persistedA.get().last24hSurgeFactor(), 0.5);
 	}
+
+	@Test
+	void testBrandNewSubnetDoesNotMatchDormant() {
+		Instant now = Instant.now();
+		SubnetProfile brandNew = new SubnetProfile(
+				"198.51.200.0/24",
+				now.minus(1, ChronoUnit.HOURS),
+				now,
+				999, // Brand new sentinel
+				50,
+				50,
+				0,
+				0.0,
+				2,
+				50,
+				50,
+				2,
+				0,
+				50.0,
+				null,
+				null,
+				null,
+				ClientType.UNKNOWN
+		);
+		profileRepository.batchUpsert(List.of(brandNew));
+
+		List<SubnetProfile> dormant = profileRepository.findProfilesFiltered("DORMANT", null, null, null, null, null, "DORMANT", 10, 0);
+		assertTrue(dormant.isEmpty(), "Brand-new subnet with sentinel 999 must NOT match DORMANT filter");
+
+		List<SubnetProfile> newSubnets = profileRepository.findProfilesFiltered("NEW", null, null, null, null, null, "FIRST_SEEN", 10, 0);
+		assertEquals(1, newSubnets.size());
+		assertEquals("198.51.200.0/24", newSubnets.getFirst().subnetGroup());
+	}
 }

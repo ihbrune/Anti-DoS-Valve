@@ -222,6 +222,7 @@ Summarizes all Valve instances configured on the node and how the Collector inge
   * `MARKING` (Purple): Audit mode — flags offenders and records metrics without dropping connections.
   * `SIMULATION` (Orange): Simulates threshold evaluations for dry-run testing.
   * `COLLECTOR: AUTO / ALWAYS ON / DISABLED`: Indicates the Valve's `collectorIntegration` mode for administrative tracking and remote lifecycle control.
+  * `COOKIE: ACTIVE (_adv) / OFF`: Indicates whether tamper-proof visitor cookie tracking is enabled on the Valve to distinguish returning visitors from first-contact requests.
   * **Configured Threshold:** Quick summary of allowed request volume (e.g., `50 req / 60s`).
 * **Polling Scope (`INCLUDED` / `EXCLUDED`):** Shows whether the Valve is actively scraped or skipped via endpoint valve regex filters.
 * **Active Tracking (`ENABLED` / `DISABLED`):** Indicates whether non-blocked active client counters are pulled.
@@ -232,7 +233,7 @@ Summarizes all Valve instances configured on the node and how the Collector inge
 ### 3. Discovered Valve Runtime Configurations
 Automatically discovered and synchronized from the live Valve JSON API (`?format=json`) into the Collector database without requiring manual configuration. An in-memory hash check guarantees zero redundant database writes during steady-state polling.
 
-* **Pipeline Order & Mode Badges:** Displays pipeline placement (`#1 IN PIPELINE`), operational mode (`BLOCKING` or `MARKING`), simulation flags, server-wide blocking flags, and `COLLECTOR: AUTO / ALWAYS ON / DISABLED` integration mode badge.
+* **Pipeline Order & Mode Badges:** Displays pipeline placement (`#1 IN PIPELINE`), operational mode (`BLOCKING` or `MARKING`), simulation flags, server-wide blocking flags, `COLLECTOR: AUTO / ALWAYS ON / DISABLED` mode badge, and `COOKIE: ACTIVE / OFF` reputation tracking badge.
 * **Valve Description:** Custom operational description configured directly in Tomcat's `server.xml`.
 * **Rate Limit Threshold Card:**
   * **Allowed Volume:** Requests permitted per time slice (e.g., `100 req / 60s`).
@@ -243,10 +244,12 @@ Automatically discovered and synchronized from the live Valve JSON API (`?format
   * Informs security teams whether rate limits protect individual hosts or aggregate abusive `/24` or `/64` network blocks.
 * **Cache Bounds (LRU Capacity) Card:**
   * Displays maximum capacity limits for active tracking and blocked IP caches (e.g., `10.000 active • 10.000 blocked`), ensuring Valve memory safety under volumetric SYN/HTTP floods.
-* **Status Dashboard URI Card:**
-  * Internal status path (e.g., `/antidos-status`) and allowed client IP ranges configured for administrative access.
 * **Collector Integration Mode Card:**
   * Displays the configured collector integration mode (`auto`: dynamic 60s active lease upon collector poll, `true`: permanently active independent of pollers, or `false`: disabled, no collector events generated).
+* **Visitor Tracking & Cookies Card:**
+  * Displays whether encrypted visitor tracking is active (`ACTIVE` or `DISABLED`) and the configured cookie name (e.g., `_adv`), confirming that request streams carry returning visitor telemetry.
+* **Status Dashboard URI Card:**
+  * Internal status path (e.g., `/antidos-status`) and allowed client IP ranges configured for administrative access.
 * **Configured Path Filters & IP Lists (Collapsible):**
   * **Relevant Paths:** White-listed path patterns subject to rate limiting (e.g., `/api/*`, `/login`).
   * **Non-Relevant Paths:** Static assets or bypass routes exempt from counter tracking (e.g., `*.css`, `*.js`, `*.png`).
@@ -405,10 +408,13 @@ Accessible via `/system`. The administrative and telemetry health center of the 
   * `slot_snapshots`: Historical telemetry slot summaries per valve.
   * `client_events`: Recorded client incidents (both blocked rate-limit events and high-volume active clients).
   * `client_subnet_rollups`: Aggregated subnet-level time-bucket records (/24 for IPv4, /64 for IPv6). Generated periodically for completed time windows (default: 60 minutes).
+  * `subnet_profiles`: Persistent rolling frequency baselines, dormancy indicators, and 24h surge multipliers per subnet partition.
   * `network_entity`: Normalized directory of enriched client IPs and subnets with ASN, geolocation, and threat classifications.
+  * `network_annotations`: Persistent analyst notes and verdict badges on subnets, ASNs, and IPs.
   * `poll_event_log`: Background ingestion audit diagnostics.
   * `intel_range`: Verified CIDR intelligence ranges for legitimate crawlers, commercial AI scrapers, and Tor exit relays.
   * `crawler_feeds`: Registered crawler intelligence feeds and sync states.
+  * `monitored_valves`: Active and historically discovered valve monitors across all nodes.
 
 ### 2. Polling Rules & Concurrency
 * **Polling Interval:** Global frequency of status polling (default: 15s).

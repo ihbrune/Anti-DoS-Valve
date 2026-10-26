@@ -317,12 +317,12 @@ public class SubnetProfileRepository {
 		if (activityPattern != null && !activityPattern.isBlank() && !"ALL".equalsIgnoreCase(activityPattern.trim())) {
 			switch (activityPattern.trim().toUpperCase()) {
 				case "NEW" -> {
-					sql.append(" AND (days_dormant_before_last_seen >= 900 OR first_seen_at >= ?)");
+					sql.append(" AND last_24h_requests > 0 AND (days_dormant_before_last_seen >= 900 OR first_seen_at >= ?)");
 					params.add(Timestamp.from(Instant.now().minus(7, ChronoUnit.DAYS)));
 				}
-				case "DORMANT" -> sql.append(" AND days_dormant_before_last_seen >= 14");
-				case "SURGE" -> sql.append(" AND last_24h_surge_factor >= 5.0");
-				case "PROXY_POOL" -> sql.append(" AND last_24h_distinct_clients >= 5 AND (last_24h_requests * 1.0 / CASE WHEN last_24h_distinct_clients = 0 THEN 1 ELSE last_24h_distinct_clients END) <= 5.0");
+				case "DORMANT" -> sql.append(" AND last_24h_requests > 0 AND days_dormant_before_last_seen >= 14 AND days_dormant_before_last_seen < 900");
+				case "SURGE" -> sql.append(" AND last_24h_requests > 0 AND last_24h_surge_factor >= 5.0");
+				case "PROXY_POOL" -> sql.append(" AND last_24h_requests > 0 AND last_24h_distinct_clients >= 5 AND (last_24h_requests * 1.0 / CASE WHEN last_24h_distinct_clients = 0 THEN 1 ELSE last_24h_distinct_clients END) <= 20.0");
 				default -> {}
 			}
 		}

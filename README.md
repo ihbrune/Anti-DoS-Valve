@@ -293,6 +293,32 @@ Controls whether extended telemetry (such as distinct client IP tracking in aggr
 * `true`: Permanently enables extended telemetry from the moment Tomcat boots.
 * `false`: Permanently disables extended telemetry.
 
+## visitorCookieEnabled (optional)
+
+Available since version 1.7.5, enables cryptographic first-party visitor tracking (*Proof-of-Prior-Visit*) using standard **AES-256-GCM (AEAD)** with zero runtime dependencies. Default: `false`.
+
+When enabled, the Valve automatically issues an unforgeable, compact (~58 characters Base64URL) HTTP cookie to clients. The token contains the client's masked network subnet, an expiration timestamp, and a saturating visit counter. Any bit manipulation or forged cookie causes an immediate AEAD tag mismatch and is rejected before parsing.
+
+### Visitor Cookie Parameters
+
+* `visitorCookieEnabled`: `true` or `false` (default: `false`).
+* `visitorCookieName`: Name of the HTTP cookie (default: `"_adv"`).
+* `visitorCookieSecret`: 256-bit or 128-bit secret key (64 or 32 hex characters, or Base64 string). If omitted, an ephemeral 256-bit AES key is automatically generated on startup (for single-server deployments). In multi-server clusters, configure the same secret key across all nodes to allow instant stateless cross-server validation without database or session replication.
+* `visitorCookieTtlSeconds`: Token lifetime in seconds (default: `900` = 15 minutes).
+* `visitorCookieRefreshRatio`: Fraction of TTL that must elapse before a refreshed cookie with incremented visit counter is emitted (default: `0.5` = 50% elapsed). This throttling mechanism completely prevents HTTP/2 parallel asset request race conditions and header bloat.
+* `visitorCookieSubnetMaskV4`: IPv4 subnet mask prefix bound to the cookie token (default: `24` for `/24`). Prevents botnet operators from sharing cookies across different networks.
+* `visitorCookieSubnetMaskV6`: IPv6 subnet mask prefix bound to the cookie token (default: `64` for `/64`).
+* `visitorCookiePath`: Cookie `Path` attribute (default: `"/"`).
+* `visitorCookieSameSite`: Cookie `SameSite` attribute (`"Lax"`, `"Strict"`, or `"None"`, default: `"Lax"`).
+* `visitorCookieSecure`: `"auto"` (sets `Secure` if request is HTTPS or `X-Forwarded-Proto: https`), `"true"`, or `"false"` (default: `"auto"`).
+
+### Inter-Valve Request Attributes
+
+The Valve automatically populates request attributes for all downstream Valves, filters, and servlets:
+* `org.henbru.antidos.RETURNING_VISITOR`: `Boolean.TRUE` if the request carried a valid, unexpired cookie matching the client subnet, `Boolean.FALSE` otherwise.
+* `org.henbru.antidos.FIRST_CONTACT`: `Boolean.TRUE` if the client was unseen or lacked a valid cookie, `Boolean.FALSE` otherwise.
+* `org.henbru.antidos.VISITOR_COUNTER`: `Integer` visit sequence counter extracted from the token (starts at `1`, increments on refreshes up to `65535`).
+
 ## slotLength
 
 The duration of a slot in seconds (must be an integer greater than 0). The slot length and *allowedRequestsPerSlot* are closely related:

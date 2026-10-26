@@ -47,6 +47,8 @@ public class MonitoredValveRepository {
 			rs.getString("status_uri"),
 			rs.getString("status_allowed_ips"),
 			rs.getString("collector_integration"),
+			rs.getBoolean("visitor_cookie_enabled"),
+			rs.getString("visitor_cookie_name"),
 			toInstant(rs.getTimestamp("last_updated_at")),
 			rs.getInt("config_hash")
 	);
@@ -63,9 +65,11 @@ public class MonitoredValveRepository {
 				    slot_length, number_of_slots, share_of_retained_former_requests,
 				    ipv4_subnet_mask, ipv6_subnet_mask, max_ip_cache_size, max_blocked_ip_cache_size,
 				    relevant_paths, non_relevant_paths, always_allowed_ips, always_forbidden_ips,
-				    status_uri, status_allowed_ips, collector_integration, last_updated_at, config_hash
+				    status_uri, status_allowed_ips, collector_integration,
+				    visitor_cookie_enabled, visitor_cookie_name,
+				    last_updated_at, config_hash
 				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (server_id, valve_name) DO UPDATE SET
 				    description = EXCLUDED.description,
 				    pipeline_order = EXCLUDED.pipeline_order,
@@ -88,6 +92,8 @@ public class MonitoredValveRepository {
 				    status_uri = EXCLUDED.status_uri,
 				    status_allowed_ips = EXCLUDED.status_allowed_ips,
 				    collector_integration = EXCLUDED.collector_integration,
+				    visitor_cookie_enabled = EXCLUDED.visitor_cookie_enabled,
+				    visitor_cookie_name = EXCLUDED.visitor_cookie_name,
 				    last_updated_at = EXCLUDED.last_updated_at,
 				    config_hash = EXCLUDED.config_hash
 				""";
@@ -116,6 +122,8 @@ public class MonitoredValveRepository {
 				v.statusUri(),
 				v.statusAllowedIPs(),
 				v.collectorIntegration(),
+				v.visitorCookieEnabled(),
+				v.visitorCookieName(),
 				v.lastUpdatedAt() != null ? Timestamp.from(v.lastUpdatedAt()) : Timestamp.from(Instant.now()),
 				v.configHash()
 		);

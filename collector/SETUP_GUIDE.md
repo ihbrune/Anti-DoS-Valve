@@ -121,7 +121,7 @@ server:
 
 spring:
   datasource:
-    url: "jdbc:sqlite:/var/lib/antidos/antidos-collector.db?busy_timeout=10000"
+    url: "jdbc:sqlite:/var/lib/antidos/antidos-collector.db?busy_timeout=60000"
 
 collector:
   poll-interval-seconds: 15
@@ -226,7 +226,7 @@ Configured with Write-Ahead Logging (WAL) and busy timeout to ensure non-blockin
 ```yaml
 spring:
   datasource:
-    url: "jdbc:sqlite:/var/lib/antidos/antidos-collector.db?busy_timeout=10000"
+    url: "jdbc:sqlite:/var/lib/antidos/antidos-collector.db?busy_timeout=60000"
 ```
 
 ### PostgreSQL (Production Fleet)
@@ -328,14 +328,22 @@ The database separates real-time transient telemetry, persistent subnet aggregat
  +-----------+-----------------------+     +----------+----------+
              | 1                                      | 1
              |                                        |
-             | N                                      | N
- +-----------v------------+                +----------v----------+
- |   rollup_signatures    |                | network_entity_match|
- +------------------------+                +---------------------+
- | PK id                  |                | PK id               |
- | FK rollup_id           |                | FK entity_id        |
- |    ua_id, req_count    |                | FK range_id         |
- +------------------------+                +----------+----------+
+             +-----------------------+                |
+             |                       |                |
+             | computed into (30d)   | N              | N
+             v                       v                v
+ +-----------------------+  +----------------+  +---------------------+
+ |    subnet_profiles    |  |rollup_signat...|  | network_entity_match|
+ +-----------------------+  +----------------+  +---------------------+
+ | PK subnet_group       |  | PK id          |  | PK id               |
+ |    first/last_seen_at |  | FK rollup_id   |  | FK entity_id        |
+ |    days_dormant       |  |    ua_id       |  | FK range_id         |
+ |    baseline_daily_avg |  |    req_count   |  +----------+----------+
+ |    peak_daily_reqs    |  +----------------+
+ |    last_24h_requests  |
+ |    last_24h_surge     |
+ |    asn, client_type   |
+ +-----------------------+
                                                       | N
                                                       |
                                                       | 1
@@ -373,13 +381,15 @@ The database separates real-time transient telemetry, persistent subnet aggregat
 2. **`slot_snapshots`:** Completed and active 1-minute time slots per server and valve instance with total request and client counts.
 3. **`client_events`:** Granular rate-limit events (both blocked attacks and tracked active clients) with numeric IPv4/IPv6 boundaries (`ip_v4_start`, `ip_v4_end`) for sub-millisecond range lookups.
 4. **`client_subnet_rollups`:** Persistent 1-hour time-bucket aggregations per `/24` (IPv4) or `/64` (IPv6) subnet partition with distinct client tracking, request percentiles, and botnet heuristic metrics.
-5. **`rollup_signatures`:** Optional User-Agent and client signature dimensions linked to subnet rollups for distributed fingerprinting.
-6. **`network_entity`:** Normalized directory of enriched client IPs and subnets with ASN, geolocation, threat classification, and first/last seen timestamps.
-7. **`network_entity_match`:** Cross-reference junction table linking detected network entities to specific matched threat intelligence ranges.
-8. **`intel_source` & `intel_range`:** Threat intelligence directory containing verified CIDR blocks from search engine bots, commercial AI scrapers, and Tor exit relays.
-9. **`asn_info`:** Autonomous System catalog caching organization names and datacenter / hosting provider classifications.
-10. **`crawler_feeds` & `bot_ip_ranges`:** Automatic synchronization catalog for official bot feeds (Googlebot, Bingbot, OpenAI, Anthropic) with versioning and orphan pruning.
-11. **`poll_event_log`:** Diagnostic audit trail tracking background ingestion cycles, communication latency, warnings, and recovery gap-fills.
+5. **`subnet_profiles`:** Long-term frequency baselines (30-day lookback), dormancy periods (inactivity before reappearance), and 24-hour surge multipliers per subnet partition for rapid detection of dormant breakouts and residential proxy sweeps.
+6. **`network_annotations`:** Persistent operator knowledge, threat notes, and verdict badges (Legitimate, Suspicious, Malicious, etc.) assigned to specific IPs, subnets, or ASNs.
+7. **`rollup_signatures`:** Optional User-Agent and client signature dimensions linked to subnet rollups for distributed fingerprinting.
+8. **`network_entity`:** Normalized directory of enriched client IPs and subnets with ASN, geolocation, threat classification, and first/last seen timestamps.
+9. **`network_entity_match`:** Cross-reference junction table linking detected network entities to specific matched threat intelligence ranges.
+10. **`intel_source` & `intel_range`:** Threat intelligence directory containing verified CIDR blocks from search engine bots, commercial AI scrapers, and Tor exit relays.
+11. **`asn_info`:** Autonomous System catalog caching organization names and datacenter / hosting provider classifications.
+12. **`crawler_feeds` & `bot_ip_ranges`:** Automatic synchronization catalog for official bot feeds (Googlebot, Bingbot, OpenAI, Anthropic) with versioning and orphan pruning.
+13. **`poll_event_log`:** Diagnostic audit trail tracking background ingestion cycles, communication latency, warnings, and recovery gap-fills.
 
 ---
 

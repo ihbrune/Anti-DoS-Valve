@@ -88,7 +88,7 @@
                                 <span th:if="${p.isNewSubnet(7)}" class="badge badge-success" style="font-size: 9px; padding: 1px 4px;">&#x2728; New</span>
                             </div>
                             <div style="font-size: 11px; margin-top: 2px;">
-                                <span th:if="${p.daysDormantBeforeLastSeen() >= 14}" class="badge badge-purple" style="font-size: 10px;"
+                                <span th:if="${p.isDormantBreakout(14)}" class="badge badge-purple" style="font-size: 10px;"
                                       th:title="'Inactive for ' + ${p.daysDormantBeforeLastSeen()} + ' days before recent surge'">
                                     &#x1F4A4; <span th:text="${p.daysDormantBeforeLastSeen()} + 'd Dormancy Break'"></span>
                                 </span>

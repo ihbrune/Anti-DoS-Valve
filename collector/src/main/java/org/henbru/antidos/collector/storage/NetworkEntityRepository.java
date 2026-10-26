@@ -105,47 +105,49 @@ public class NetworkEntityRepository {
 				    last_seen = EXCLUDED.last_seen
 				""";
 
-		jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
-			@Override
-			public void setValues(@NonNull PreparedStatement ps, int i) throws SQLException {
-				NetworkEntity e = entities.get(i);
-				ps.setString(1, e.clientKey());
-				ps.setInt(2, e.ipVersion());
-				ps.setInt(3, e.cidrPrefix());
-				if (e.ipV4Start() != null) {
-					ps.setLong(4, e.ipV4Start());
-				} else {
-					ps.setNull(4, Types.BIGINT);
+		StorageRetryUtil.executeWithRetry("NetworkEntityRepository.batchUpsert", () -> {
+			jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
+				@Override
+				public void setValues(@NonNull PreparedStatement ps, int i) throws SQLException {
+					NetworkEntity e = entities.get(i);
+					ps.setString(1, e.clientKey());
+					ps.setInt(2, e.ipVersion());
+					ps.setInt(3, e.cidrPrefix());
+					if (e.ipV4Start() != null) {
+						ps.setLong(4, e.ipV4Start());
+					} else {
+						ps.setNull(4, Types.BIGINT);
+					}
+					if (e.ipV4End() != null) {
+						ps.setLong(5, e.ipV4End());
+					} else {
+						ps.setNull(5, Types.BIGINT);
+					}
+					ps.setString(6, e.ipV6Start());
+					ps.setString(7, e.ipV6End());
+					ps.setString(8, e.subnetGroup());
+					ps.setString(9, e.mmdbNetwork());
+					if (e.asn() != null) {
+						ps.setLong(10, e.asn());
+					} else {
+						ps.setNull(10, Types.BIGINT);
+					}
+					ps.setString(11, e.asOrg());
+					ps.setString(12, e.countryCode());
+					ps.setString(13, e.clientType() != null ? e.clientType().name() : ClientType.UNKNOWN.name());
+					ps.setString(14, e.tags());
+					ps.setString(15, e.enrichmentStatus() != null ? e.enrichmentStatus().name() : EnrichmentStatus.PENDING.name());
+					ps.setTimestamp(16, e.resolvedAt() != null ? Timestamp.from(e.resolvedAt()) : null);
+					ps.setString(17, e.resolvedVersions());
+					ps.setTimestamp(18, e.firstSeen() != null ? Timestamp.from(e.firstSeen()) : new Timestamp(System.currentTimeMillis()));
+					ps.setTimestamp(19, e.lastSeen() != null ? Timestamp.from(e.lastSeen()) : new Timestamp(System.currentTimeMillis()));
 				}
-				if (e.ipV4End() != null) {
-					ps.setLong(5, e.ipV4End());
-				} else {
-					ps.setNull(5, Types.BIGINT);
-				}
-				ps.setString(6, e.ipV6Start());
-				ps.setString(7, e.ipV6End());
-				ps.setString(8, e.subnetGroup());
-				ps.setString(9, e.mmdbNetwork());
-				if (e.asn() != null) {
-					ps.setLong(10, e.asn());
-				} else {
-					ps.setNull(10, Types.BIGINT);
-				}
-				ps.setString(11, e.asOrg());
-				ps.setString(12, e.countryCode());
-				ps.setString(13, e.clientType() != null ? e.clientType().name() : ClientType.UNKNOWN.name());
-				ps.setString(14, e.tags());
-				ps.setString(15, e.enrichmentStatus() != null ? e.enrichmentStatus().name() : EnrichmentStatus.PENDING.name());
-				ps.setTimestamp(16, e.resolvedAt() != null ? Timestamp.from(e.resolvedAt()) : null);
-				ps.setString(17, e.resolvedVersions());
-				ps.setTimestamp(18, e.firstSeen() != null ? Timestamp.from(e.firstSeen()) : new Timestamp(System.currentTimeMillis()));
-				ps.setTimestamp(19, e.lastSeen() != null ? Timestamp.from(e.lastSeen()) : new Timestamp(System.currentTimeMillis()));
-			}
 
-			@Override
-			public int getBatchSize() {
-				return entities.size();
-			}
+				@Override
+				public int getBatchSize() {
+					return entities.size();
+				}
+			});
 		});
 	}
 
@@ -173,30 +175,32 @@ public class NetworkEntityRepository {
 				WHERE id = ?
 				""";
 
-		jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
-			@Override
-			public void setValues(@NonNull PreparedStatement ps, int i) throws SQLException {
-				NetworkEntity e = entities.get(i);
-				ps.setString(1, e.mmdbNetwork());
-				if (e.asn() != null) {
-					ps.setLong(2, e.asn());
-				} else {
-					ps.setNull(2, Types.BIGINT);
+		StorageRetryUtil.executeWithRetry("NetworkEntityRepository.batchUpdateEnrichment", () -> {
+			jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
+				@Override
+				public void setValues(@NonNull PreparedStatement ps, int i) throws SQLException {
+					NetworkEntity e = entities.get(i);
+					ps.setString(1, e.mmdbNetwork());
+					if (e.asn() != null) {
+						ps.setLong(2, e.asn());
+					} else {
+						ps.setNull(2, Types.BIGINT);
+					}
+					ps.setString(3, e.asOrg());
+					ps.setString(4, e.countryCode());
+					ps.setString(5, e.clientType() != null ? e.clientType().name() : ClientType.UNKNOWN.name());
+					ps.setString(6, e.tags());
+					ps.setString(7, e.enrichmentStatus() != null ? e.enrichmentStatus().name() : EnrichmentStatus.ENRICHED.name());
+					ps.setTimestamp(8, e.resolvedAt() != null ? Timestamp.from(e.resolvedAt()) : new Timestamp(System.currentTimeMillis()));
+					ps.setString(9, e.resolvedVersions());
+					ps.setLong(10, e.id());
 				}
-				ps.setString(3, e.asOrg());
-				ps.setString(4, e.countryCode());
-				ps.setString(5, e.clientType() != null ? e.clientType().name() : ClientType.UNKNOWN.name());
-				ps.setString(6, e.tags());
-				ps.setString(7, e.enrichmentStatus() != null ? e.enrichmentStatus().name() : EnrichmentStatus.ENRICHED.name());
-				ps.setTimestamp(8, e.resolvedAt() != null ? Timestamp.from(e.resolvedAt()) : new Timestamp(System.currentTimeMillis()));
-				ps.setString(9, e.resolvedVersions());
-				ps.setLong(10, e.id());
-			}
 
-			@Override
-			public int getBatchSize() {
-				return entities.size();
-			}
+				@Override
+				public int getBatchSize() {
+					return entities.size();
+				}
+			});
 		});
 	}
 

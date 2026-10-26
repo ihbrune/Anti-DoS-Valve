@@ -35,6 +35,7 @@ public class AntiDoSCounter {
 	private static final VarHandle RETAINED_COUNTS;
 	private static final VarHandle ACCESS_ORDER;
 	private static final VarHandle CARDINALITY_TRACKER;
+	private static final VarHandle RETURNING_COUNT;
 
 	static {
 		try {
@@ -43,6 +44,7 @@ public class AntiDoSCounter {
 			RETAINED_COUNTS = l.findVarHandle(AntiDoSCounter.class, "retainedCounts", int.class);
 			ACCESS_ORDER = l.findVarHandle(AntiDoSCounter.class, "accessOrder", long.class);
 			CARDINALITY_TRACKER = l.findVarHandle(AntiDoSCounter.class, "cardinalityTracker", AntiDoSCardinalityBitSet.class);
+			RETURNING_COUNT = l.findVarHandle(AntiDoSCounter.class, "returningCount", int.class);
 		} catch (ReflectiveOperationException e) {
 			throw new ExceptionInInitializerError(e);
 		}
@@ -53,6 +55,7 @@ public class AntiDoSCounter {
 	private volatile long accessOrder = 0;
 	private volatile boolean locked = false;
 	private volatile AntiDoSCardinalityBitSet cardinalityTracker = null;
+	private volatile int returningCount = 0;
 
 	/**
 	 * Updates the access order timestamp to current System.nanoTime() for LRU recency tracking.
@@ -110,6 +113,41 @@ public class AntiDoSCounter {
 	 */
 	public void setCount(int value) {
 		COUNT.setVolatile(this, value);
+	}
+
+	/**
+	 * Atomically increments the returning visitor count by 1.
+	 * 
+	 * @return The updated returning visitor count
+	 */
+	public int incrementReturningCount() {
+		return (int) RETURNING_COUNT.getAndAdd(this, 1) + 1;
+	}
+
+	/**
+	 * Atomically adds the given delta to the returning visitor count.
+	 * 
+	 * @param delta The value to add
+	 * @return The updated returning visitor count
+	 */
+	public int addAndGetReturningCount(int delta) {
+		return (int) RETURNING_COUNT.getAndAdd(this, delta) + delta;
+	}
+
+	/**
+	 * @return The current returning visitor count
+	 */
+	public int getReturningCount() {
+		return returningCount;
+	}
+
+	/**
+	 * Sets the returning visitor count directly to the specified value.
+	 * 
+	 * @param value The new returning visitor count
+	 */
+	public void setReturningCount(int value) {
+		RETURNING_COUNT.setVolatile(this, value);
 	}
 
 	/**
@@ -204,6 +242,7 @@ public class AntiDoSCounter {
 	@Override
 	public String toString() {
 		return "Count:" + getCount() + " Retained:" + getRetainedCounts() + " Locked:" + (locked ? "yes" : "no")
-				+ (cardinalityTracker != null ? " DistinctClients:" + getDistinctClients() : "");
+				+ (cardinalityTracker != null ? " DistinctClients:" + getDistinctClients() : "")
+				+ (returningCount > 0 ? " Returning:" + returningCount : "");
 	}
 }

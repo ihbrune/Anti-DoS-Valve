@@ -10,6 +10,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import org.henbru.antidos.collector.model.ClientEvent;
@@ -569,11 +571,23 @@ public class DashboardController {
 				? status.trim().toUpperCase()
 				: null;
 
+		boolean hasPatternFilter = activityPattern != null && !activityPattern.isBlank() && !"ALL".equalsIgnoreCase(activityPattern.trim());
 		String effectiveGroupBy = "PROFILES".equalsIgnoreCase(groupBy) || "PROFILE".equalsIgnoreCase(groupBy) ? "PROFILES"
 				: ("ROLLUP".equalsIgnoreCase(groupBy) ? "ROLLUP"
 				: ("ASN".equalsIgnoreCase(groupBy) ? "ASN" : ("SUBNET".equalsIgnoreCase(groupBy) ? "SUBNET" : "CLIENT")));
 
+		if (hasPatternFilter && "CLIENT".equals(effectiveGroupBy)) {
+			effectiveGroupBy = "PROFILES";
+		}
+
 		if ("PROFILES".equals(effectiveGroupBy)) {
+			if (subnetProfileService != null && subnetProfileService.countProfilesFiltered("ALL", null, null, null, null, null) == 0) {
+				try {
+					subnetProfileService.refreshProfiles();
+				} catch (Exception ignored) {
+				}
+			}
+
 			List<org.henbru.antidos.collector.model.SubnetProfile> profiles = (subnetProfileService != null)
 					? subnetProfileService.findProfilesFiltered(activityPattern, minRequests, clientQuery, parsedAsn, asOrgQuery, clientTypes, sortBy, limit, 0)
 					: List.of();
@@ -591,6 +605,14 @@ public class DashboardController {
 					servers, valves, fromTime, toTime, clientQuery, parsedAsn, asOrgQuery, clientTypes, limit, 0);
 			long totalRollups = subnetRollupRepository.countRollupsFiltered(
 					servers, valves, fromTime, toTime, clientQuery, parsedAsn, asOrgQuery, clientTypes);
+
+			if (hasPatternFilter && subnetProfileService != null) {
+				List<org.henbru.antidos.collector.model.SubnetProfile> matched = subnetProfileService.findProfilesFiltered(
+						activityPattern, null, null, parsedAsn, asOrgQuery, clientTypes, "SURGE", 1000, 0);
+				Set<String> matchedSubnets = matched.stream().map(org.henbru.antidos.collector.model.SubnetProfile::subnetGroup).collect(Collectors.toSet());
+				subnetRollups = subnetRollups.stream().filter(r -> matchedSubnets.contains(r.subnetGroup())).toList();
+				totalRollups = subnetRollups.size();
+			}
 
 			List<String> subnets = subnetRollups.stream()
 					.map(org.henbru.antidos.collector.model.ClientSubnetRollup::subnetGroup)
@@ -610,6 +632,13 @@ public class DashboardController {
 		} else {
 			List<TopOffenderSummary> topOffenders = clientEventRepository.findTopOffendersFiltered(
 					servers, valves, fromTime, toTime, clientQuery, clientTypes, parsedAsn, asOrgQuery, normalizedStatus, effectiveGroupBy, limit);
+
+			if (hasPatternFilter && "SUBNET".equals(effectiveGroupBy) && subnetProfileService != null) {
+				List<org.henbru.antidos.collector.model.SubnetProfile> matched = subnetProfileService.findProfilesFiltered(
+						activityPattern, null, null, parsedAsn, asOrgQuery, clientTypes, "SURGE", 1000, 0);
+				Set<String> matchedSubnets = matched.stream().map(org.henbru.antidos.collector.model.SubnetProfile::subnetGroup).collect(Collectors.toSet());
+				topOffenders = topOffenders.stream().filter(o -> matchedSubnets.contains(o.clientKey())).toList();
+			}
 
 			List<String> subnets = topOffenders.stream()
 					.map(TopOffenderSummary::clientKey)

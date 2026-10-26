@@ -32,7 +32,7 @@ class DatabaseDirectoryInitializerTest {
 	void testSqliteHikariCustomizerConfiguresPragmas(@TempDir Path tempDir) throws Exception {
 		Path dbPath = tempDir.resolve("pragma-test.db");
 		com.zaxxer.hikari.HikariDataSource ds = new com.zaxxer.hikari.HikariDataSource();
-		// URL without busy_timeout - customizer should automatically append busy_timeout=10000
+		// URL without busy_timeout - customizer should automatically append busy_timeout=60000 and synchronous=NORMAL
 		ds.setJdbcUrl("jdbc:sqlite:" + dbPath.toString());
 
 		org.springframework.beans.factory.config.BeanPostProcessor bpp = DatabaseDirectoryInitializer.sqliteHikariCustomizer();
@@ -46,7 +46,11 @@ class DatabaseDirectoryInitializerTest {
 
 			java.sql.ResultSet rs2 = stmt.executeQuery("PRAGMA busy_timeout;");
 			assertTrue(rs2.next());
-			org.junit.jupiter.api.Assertions.assertEquals(10000, rs2.getInt(1));
+			org.junit.jupiter.api.Assertions.assertEquals(60000, rs2.getInt(1));
+
+			java.sql.ResultSet rs3 = stmt.executeQuery("PRAGMA synchronous;");
+			assertTrue(rs3.next());
+			org.junit.jupiter.api.Assertions.assertEquals(1, rs3.getInt(1)); // 1 = NORMAL
 		} finally {
 			ds.close();
 		}

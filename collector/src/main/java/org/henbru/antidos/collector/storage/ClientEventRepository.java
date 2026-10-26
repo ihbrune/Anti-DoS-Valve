@@ -187,6 +187,8 @@ public class ClientEventRepository {
 		}
 	}
 
+	private static final int BATCH_CHUNK_SIZE = 500;
+
 	public void batchUpsert(List<ClientEvent> events) {
 		if (events == null || events.isEmpty()) {
 			return;
@@ -219,59 +221,65 @@ public class ClientEventRepository {
 				    entity_id = COALESCE(EXCLUDED.entity_id, client_events.entity_id)
 				""";
 
-		jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
-			@Override
-			public void setValues(@NonNull PreparedStatement ps, int i) throws SQLException {
-				ClientEvent e = events.get(i);
-				ps.setString(1, e.serverId());
-				ps.setString(2, e.valveName());
-				ps.setLong(3, e.slotKey());
-				ps.setTimestamp(4, Timestamp.from(e.slotTime()));
-				ps.setString(5, e.clientKey());
-				ps.setInt(6, e.ipVersion());
-				ps.setInt(7, e.cidrPrefix());
-				if (e.ipV4Start() != null) {
-					ps.setLong(8, e.ipV4Start());
-				} else {
-					ps.setNull(8, Types.BIGINT);
-				}
-				if (e.ipV4End() != null) {
-					ps.setLong(9, e.ipV4End());
-				} else {
-					ps.setNull(9, Types.BIGINT);
-				}
-				ps.setString(10, e.ipV6Start());
-				ps.setString(11, e.ipV6End());
-				ps.setString(12, e.subnetGroup());
-				ps.setInt(13, e.requestCount());
-				ps.setInt(14, e.retainedCount());
-				ps.setBoolean(15, e.locked());
-				ps.setString(16, e.status() != null ? e.status() : (e.locked() ? ClientEvent.STATUS_BLOCKED : ClientEvent.STATUS_ACTIVE));
-				ps.setBoolean(17, e.completed());
-				ps.setTimestamp(18, Timestamp.from(e.lastUpdatedAt()));
+		for (int from = 0; from < events.size(); from += BATCH_CHUNK_SIZE) {
+			int to = Math.min(from + BATCH_CHUNK_SIZE, events.size());
+			List<ClientEvent> chunk = events.subList(from, to);
+			StorageRetryUtil.executeWithRetry("ClientEventRepository.batchUpsert", () -> {
+				jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
+					@Override
+					public void setValues(@NonNull PreparedStatement ps, int i) throws SQLException {
+						ClientEvent e = chunk.get(i);
+						ps.setString(1, e.serverId());
+						ps.setString(2, e.valveName());
+						ps.setLong(3, e.slotKey());
+						ps.setTimestamp(4, Timestamp.from(e.slotTime()));
+						ps.setString(5, e.clientKey());
+						ps.setInt(6, e.ipVersion());
+						ps.setInt(7, e.cidrPrefix());
+						if (e.ipV4Start() != null) {
+							ps.setLong(8, e.ipV4Start());
+						} else {
+							ps.setNull(8, Types.BIGINT);
+						}
+						if (e.ipV4End() != null) {
+							ps.setLong(9, e.ipV4End());
+						} else {
+							ps.setNull(9, Types.BIGINT);
+						}
+						ps.setString(10, e.ipV6Start());
+						ps.setString(11, e.ipV6End());
+						ps.setString(12, e.subnetGroup());
+						ps.setInt(13, e.requestCount());
+						ps.setInt(14, e.retainedCount());
+						ps.setBoolean(15, e.locked());
+						ps.setString(16, e.status() != null ? e.status() : (e.locked() ? ClientEvent.STATUS_BLOCKED : ClientEvent.STATUS_ACTIVE));
+						ps.setBoolean(17, e.completed());
+						ps.setTimestamp(18, Timestamp.from(e.lastUpdatedAt()));
 
-				if (e.asn() != null) {
-					ps.setLong(19, e.asn());
-				} else {
-					ps.setNull(19, Types.BIGINT);
-				}
-				ps.setString(20, e.asOrg());
-				ps.setString(21, e.countryCode());
-				ps.setString(22, e.clientType() != null ? e.clientType().name() : ClientType.UNKNOWN.name());
-				ps.setString(23, e.enrichmentStatus() != null ? e.enrichmentStatus().name() : EnrichmentStatus.PENDING.name());
-				if (e.entityId() != null) {
-					ps.setLong(24, e.entityId());
-				} else {
-					ps.setNull(24, Types.BIGINT);
-				}
-				ps.setInt(25, Math.max(1, e.distinctClients()));
-			}
+						if (e.asn() != null) {
+							ps.setLong(19, e.asn());
+						} else {
+							ps.setNull(19, Types.BIGINT);
+						}
+						ps.setString(20, e.asOrg());
+						ps.setString(21, e.countryCode());
+						ps.setString(22, e.clientType() != null ? e.clientType().name() : ClientType.UNKNOWN.name());
+						ps.setString(23, e.enrichmentStatus() != null ? e.enrichmentStatus().name() : EnrichmentStatus.PENDING.name());
+						if (e.entityId() != null) {
+							ps.setLong(24, e.entityId());
+						} else {
+							ps.setNull(24, Types.BIGINT);
+						}
+						ps.setInt(25, Math.max(1, e.distinctClients()));
+					}
 
-			@Override
-			public int getBatchSize() {
-				return events.size();
-			}
-		});
+					@Override
+					public int getBatchSize() {
+						return chunk.size();
+					}
+				});
+			});
+		}
 	}
 
 	public List<TopOffenderSummary> findTopOffenders(Instant since, int limit) {
@@ -695,26 +703,32 @@ public class ClientEventRepository {
 				WHERE id = ?
 				""";
 
-		jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
-			@Override
-			public void setValues(@NonNull PreparedStatement ps, int i) throws SQLException {
-				ClientEvent e = events.get(i);
-				if (e.asn() != null) {
-					ps.setLong(1, e.asn());
-				} else {
-					ps.setNull(1, Types.BIGINT);
-				}
-				ps.setString(2, e.asOrg());
-				ps.setString(3, e.countryCode());
-				ps.setString(4, e.clientType() != null ? e.clientType().name() : ClientType.UNKNOWN.name());
-				ps.setString(5, e.enrichmentStatus() != null ? e.enrichmentStatus().name() : EnrichmentStatus.ENRICHED.name());
-				ps.setLong(6, e.id());
-			}
+		for (int from = 0; from < events.size(); from += BATCH_CHUNK_SIZE) {
+			int to = Math.min(from + BATCH_CHUNK_SIZE, events.size());
+			List<ClientEvent> chunk = events.subList(from, to);
+			StorageRetryUtil.executeWithRetry("ClientEventRepository.batchUpdateEnrichment", () -> {
+				jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
+					@Override
+					public void setValues(@NonNull PreparedStatement ps, int i) throws SQLException {
+						ClientEvent e = chunk.get(i);
+						if (e.asn() != null) {
+							ps.setLong(1, e.asn());
+						} else {
+							ps.setNull(1, Types.BIGINT);
+						}
+						ps.setString(2, e.asOrg());
+						ps.setString(3, e.countryCode());
+						ps.setString(4, e.clientType() != null ? e.clientType().name() : ClientType.UNKNOWN.name());
+						ps.setString(5, e.enrichmentStatus() != null ? e.enrichmentStatus().name() : EnrichmentStatus.ENRICHED.name());
+						ps.setLong(6, e.id());
+					}
 
-			@Override
-			public int getBatchSize() {
-				return events.size();
-			}
-		});
+					@Override
+					public int getBatchSize() {
+						return chunk.size();
+					}
+				});
+			});
+		}
 	}
 }

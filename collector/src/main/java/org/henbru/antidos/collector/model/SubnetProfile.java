@@ -76,6 +76,9 @@ public record SubnetProfile(
 	 * Checks if the subnet was first observed recently within the given maximum days.
 	 */
 	public boolean isNewSubnet(int maxDaysOld) {
+		if (daysDormantBeforeLastSeen >= 900) {
+			return true;
+		}
 		if (firstSeenAt == null) {
 			return false;
 		}
@@ -86,7 +89,7 @@ public record SubnetProfile(
 	 * Checks if this subnet broke out of an extended dormancy period.
 	 */
 	public boolean isDormantBreakout(int thresholdDays) {
-		return daysDormantBeforeLastSeen >= thresholdDays;
+		return daysDormantBeforeLastSeen >= thresholdDays && daysDormantBeforeLastSeen < 900;
 	}
 
 	/**
@@ -115,7 +118,7 @@ public record SubnetProfile(
 	 */
 	public boolean isPotentialResidentialProxyPool() {
 		return last24hDistinctClients >= 5
-				&& averageRequestsPerClient24h() <= 5.0
+				&& averageRequestsPerClient24h() <= 20.0
 				&& (ClientType.RESIDENTIAL.equals(clientType) || ClientType.UNKNOWN.equals(clientType));
 	}
 }

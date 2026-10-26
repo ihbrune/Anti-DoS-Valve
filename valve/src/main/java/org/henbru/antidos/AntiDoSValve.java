@@ -32,8 +32,11 @@ import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
 
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import javax.crypto.SecretKey;
+import org.henbru.antidos.AntiDoSVisitorTokenService.TokenData;
 
 /**
  * Copyright 2026 Henning Brune
@@ -115,6 +118,21 @@ public class AntiDoSValve extends ValveBase {
 	 */
 	public static final String MARKING_ATTRIBUTE_NAME = "org.henbru.antidos.AntiDoS";
 
+	/**
+	 * Request attribute indicating whether a request carried a valid returning visitor cookie (Boolean).
+	 */
+	public static final String RETURNING_VISITOR_ATTRIBUTE_NAME = "org.henbru.antidos.RETURNING_VISITOR";
+
+	/**
+	 * Request attribute indicating whether a request was a first contact without a valid visitor cookie (Boolean).
+	 */
+	public static final String FIRST_CONTACT_ATTRIBUTE_NAME = "org.henbru.antidos.FIRST_CONTACT";
+
+	/**
+	 * Request attribute containing the visit counter from the validated visitor cookie (Integer).
+	 */
+	public static final String VISITOR_COUNTER_ATTRIBUTE_NAME = "org.henbru.antidos.VISITOR_COUNTER";
+
 	public AntiDoSValve() {
 		super(true);
 	}
@@ -193,6 +211,18 @@ public class AntiDoSValve extends ValveBase {
 	private volatile int httpStatusCode = DEFAULT_HTTP_STATUS_CODE;
 	private volatile Boolean asyncEviction = null;
 	private volatile int maxBlockLogsPerSecond = AntiDoSLogThrottler.DEFAULT_MAX_LOGS_PER_SECOND;
+
+	private volatile boolean visitorCookieEnabled = false;
+	private volatile String visitorCookieName = "_adv";
+	private volatile String visitorCookieSecret = null;
+	private volatile int visitorCookieTtlSeconds = 900;
+	private volatile float visitorCookieRefreshRatio = 0.5f;
+	private volatile int visitorCookieSubnetMaskV4 = 24;
+	private volatile int visitorCookieSubnetMaskV6 = 64;
+	private volatile String visitorCookiePath = "/";
+	private volatile String visitorCookieSameSite = "Lax";
+	private volatile String visitorCookieSecure = "auto";
+	private volatile AntiDoSVisitorTokenService visitorTokenService = null;
 
 	/**
 	 * Monitor operation mode. If not set the default mode is used
@@ -763,6 +793,134 @@ public class AntiDoSValve extends ValveBase {
 		return isCollectorLeaseActive();
 	}
 
+	public boolean isVisitorCookieEnabled() {
+		return visitorCookieEnabled;
+	}
+
+	public void setVisitorCookieEnabled(boolean visitorCookieEnabled) {
+		this.visitorCookieEnabled = visitorCookieEnabled;
+	}
+
+	public void setVisitorCookieEnabled(String visitorCookieEnabled) {
+		if (visitorCookieEnabled != null) {
+			this.visitorCookieEnabled = Boolean.parseBoolean(visitorCookieEnabled.trim());
+		}
+	}
+
+	public String getVisitorCookieName() {
+		return visitorCookieName;
+	}
+
+	public void setVisitorCookieName(String visitorCookieName) {
+		if (visitorCookieName != null && !visitorCookieName.trim().isEmpty()) {
+			this.visitorCookieName = visitorCookieName.trim();
+		}
+	}
+
+	public String getVisitorCookieSecret() {
+		return visitorCookieSecret;
+	}
+
+	public void setVisitorCookieSecret(String visitorCookieSecret) {
+		if (visitorCookieSecret == null || visitorCookieSecret.trim().isEmpty()) {
+			this.visitorCookieSecret = null;
+		} else {
+			this.visitorCookieSecret = visitorCookieSecret.trim();
+		}
+	}
+
+	public int getVisitorCookieTtlSeconds() {
+		return visitorCookieTtlSeconds;
+	}
+
+	public void setVisitorCookieTtlSeconds(int visitorCookieTtlSeconds) {
+		this.visitorCookieTtlSeconds = visitorCookieTtlSeconds;
+	}
+
+	public void setVisitorCookieTtlSeconds(String visitorCookieTtlSeconds) {
+		if (visitorCookieTtlSeconds != null && !visitorCookieTtlSeconds.trim().isEmpty()) {
+			this.visitorCookieTtlSeconds = Integer.parseInt(visitorCookieTtlSeconds.trim());
+		}
+	}
+
+	public float getVisitorCookieRefreshRatio() {
+		return visitorCookieRefreshRatio;
+	}
+
+	public void setVisitorCookieRefreshRatio(float visitorCookieRefreshRatio) {
+		this.visitorCookieRefreshRatio = visitorCookieRefreshRatio;
+	}
+
+	public void setVisitorCookieRefreshRatio(String visitorCookieRefreshRatio) {
+		if (visitorCookieRefreshRatio != null && !visitorCookieRefreshRatio.trim().isEmpty()) {
+			this.visitorCookieRefreshRatio = Float.parseFloat(visitorCookieRefreshRatio.trim());
+		}
+	}
+
+	public int getVisitorCookieSubnetMaskV4() {
+		return visitorCookieSubnetMaskV4;
+	}
+
+	public void setVisitorCookieSubnetMaskV4(int visitorCookieSubnetMaskV4) {
+		this.visitorCookieSubnetMaskV4 = visitorCookieSubnetMaskV4;
+	}
+
+	public void setVisitorCookieSubnetMaskV4(String mask) {
+		this.visitorCookieSubnetMaskV4 = parseSubnetMask(mask, 32);
+	}
+
+	public int getVisitorCookieSubnetMaskV6() {
+		return visitorCookieSubnetMaskV6;
+	}
+
+	public void setVisitorCookieSubnetMaskV6(int visitorCookieSubnetMaskV6) {
+		this.visitorCookieSubnetMaskV6 = visitorCookieSubnetMaskV6;
+	}
+
+	public void setVisitorCookieSubnetMaskV6(String mask) {
+		this.visitorCookieSubnetMaskV6 = parseSubnetMask(mask, 128);
+	}
+
+	public String getVisitorCookiePath() {
+		return visitorCookiePath;
+	}
+
+	public void setVisitorCookiePath(String visitorCookiePath) {
+		this.visitorCookiePath = (visitorCookiePath != null && !visitorCookiePath.trim().isEmpty())
+				? visitorCookiePath.trim() : "/";
+	}
+
+	public String getVisitorCookieSameSite() {
+		return visitorCookieSameSite;
+	}
+
+	public void setVisitorCookieSameSite(String visitorCookieSameSite) {
+		this.visitorCookieSameSite = (visitorCookieSameSite != null && !visitorCookieSameSite.trim().isEmpty())
+				? visitorCookieSameSite.trim() : "Lax";
+	}
+
+	public String getVisitorCookieSecure() {
+		return visitorCookieSecure;
+	}
+
+	public void setVisitorCookieSecure(String visitorCookieSecure) {
+		this.visitorCookieSecure = (visitorCookieSecure != null && !visitorCookieSecure.trim().isEmpty())
+				? visitorCookieSecure.trim() : "auto";
+	}
+
+	public AntiDoSVisitorTokenService getVisitorTokenService() {
+		return visitorTokenService;
+	}
+
+	public void setVisitorTokenService(AntiDoSVisitorTokenService visitorTokenService) {
+		this.visitorTokenService = visitorTokenService;
+	}
+
+	public void initVisitorTokenService() {
+		SecretKey key = AntiDoSVisitorTokenService.parseOrGenerateKey(this.visitorCookieSecret);
+		this.visitorTokenService = new AntiDoSVisitorTokenService(key);
+	}
+
 	/**
 	 * 
 	 * @param numberOfSlots The number of slots to be held. More slots allow a
@@ -1087,9 +1245,48 @@ public class AntiDoSValve extends ValveBase {
 			log.debug(name4logging + ", path: " + path);
 		}
 
-		boolean allowed = isRequestAllowed(ip, path);
+		boolean isReturningVisitor = false;
+		int visitorCounter = 0;
+		boolean issueNewCookie = false;
+		byte[] clientSubnetBytes = null;
+		long now = getTimeInMillis();
+
+		if (visitorCookieEnabled && visitorTokenService != null) {
+			clientSubnetBytes = extractVisitorSubnetBytes(ip);
+			String cookieVal = extractCookieValue(request, visitorCookieName);
+			if (cookieVal != null && clientSubnetBytes != null) {
+				TokenData tokenData = visitorTokenService.validateToken(cookieVal, clientSubnetBytes, now);
+				if (tokenData.isValid()) {
+					isReturningVisitor = true;
+					visitorCounter = tokenData.counter();
+					long remainingTtl = tokenData.expiresAtMillis() - now;
+					long fullTtl = (long) visitorCookieTtlSeconds * 1000L;
+					if (remainingTtl < (long) (fullTtl * visitorCookieRefreshRatio)) {
+						issueNewCookie = true;
+					}
+				} else {
+					issueNewCookie = true;
+				}
+			} else {
+				issueNewCookie = true;
+			}
+
+			request.setAttribute(RETURNING_VISITOR_ATTRIBUTE_NAME, isReturningVisitor);
+			request.setAttribute(FIRST_CONTACT_ATTRIBUTE_NAME, !isReturningVisitor);
+			request.setAttribute(VISITOR_COUNTER_ATTRIBUTE_NAME, visitorCounter);
+		}
+
+		boolean allowed = isRequestAllowed(ip, path, isReturningVisitor);
 		if (allowed || simulationMode) {
-			getNext().invoke(request, response);
+			if (visitorCookieEnabled && visitorTokenService != null && issueNewCookie && clientSubnetBytes != null) {
+				String newCookieVal = visitorTokenService.createToken(clientSubnetBytes, visitorCounter,
+						(long) visitorCookieTtlSeconds * 1000L, now);
+				String headerVal = buildSetCookieHeader(request, newCookieVal, visitorCookieTtlSeconds);
+				response.addHeader("Set-Cookie", headerVal);
+			}
+			if (getNext() != null) {
+				getNext().invoke(request, response);
+			}
 			return;
 		}
 
@@ -1103,8 +1300,73 @@ public class AntiDoSValve extends ValveBase {
 		} else {
 			// mark request:
 			response.getRequest().setAttribute(MARKING_ATTRIBUTE_NAME, name4logging);
-			getNext().invoke(request, response);
+			if (getNext() != null) {
+				getNext().invoke(request, response);
+			}
 		}
+	}
+
+	byte[] extractVisitorSubnetBytes(String ip) {
+		if (ip == null || ip.isEmpty()) {
+			return null;
+		}
+		byte[] v4 = parseIPv4Literal(ip);
+		if (v4 != null) {
+			int mask = this.visitorCookieSubnetMaskV4 > 0 ? this.visitorCookieSubnetMaskV4 : 32;
+			maskBytes(v4, mask);
+			return v4;
+		}
+		if (ip.indexOf(':') >= 0) {
+			try {
+				InetAddress addr = InetAddress.getByName(ip);
+				if (addr instanceof Inet6Address) {
+					byte[] bytes = addr.getAddress();
+					int mask = this.visitorCookieSubnetMaskV6 > 0 ? this.visitorCookieSubnetMaskV6 : 128;
+					maskBytes(bytes, mask);
+					return bytes;
+				}
+			} catch (UnknownHostException ignored) {
+			}
+		}
+		return null;
+	}
+
+	String extractCookieValue(Request request, String name) {
+		if (request == null || name == null) {
+			return null;
+		}
+		Cookie[] cookies = request.getCookies();
+		if (cookies != null) {
+			for (Cookie c : cookies) {
+				if (name.equals(c.getName())) {
+					return c.getValue();
+				}
+			}
+		}
+		return null;
+	}
+
+	String buildSetCookieHeader(Request request, String cookieValue, int ttlSeconds) {
+		StringBuilder sb = new StringBuilder(128);
+		sb.append(visitorCookieName).append('=').append(cookieValue);
+		sb.append("; Path=").append(visitorCookiePath != null ? visitorCookiePath : "/");
+		sb.append("; Max-Age=").append(ttlSeconds);
+		sb.append("; SameSite=").append(visitorCookieSameSite != null ? visitorCookieSameSite : "Lax");
+		sb.append("; HttpOnly");
+
+		boolean secure;
+		if ("true".equalsIgnoreCase(visitorCookieSecure)) {
+			secure = true;
+		} else if ("false".equalsIgnoreCase(visitorCookieSecure)) {
+			secure = false;
+		} else {
+			secure = (request != null && request.isSecure())
+					|| (request != null && "https".equalsIgnoreCase(request.getHeader("X-Forwarded-Proto")));
+		}
+		if (secure) {
+			sb.append("; Secure");
+		}
+		return sb.toString();
 	}
 
 	/**
@@ -1466,6 +1728,17 @@ public class AntiDoSValve extends ValveBase {
 			throw new LifecycleException(name4logging + ".ipv6SubnetMask is invalid: " + ipv6SubnetMask);
 		if (!isCollectorIntegrationValid())
 			throw new LifecycleException(name4logging + ".collectorIntegration is invalid: " + collectorIntegration);
+		if (visitorCookieEnabled) {
+			if (visitorCookieTtlSeconds <= 0) {
+				throw new LifecycleException(name4logging + ".visitorCookieTtlSeconds must be positive: " + visitorCookieTtlSeconds);
+			}
+			if (visitorCookieRefreshRatio <= 0.0f || visitorCookieRefreshRatio >= 1.0f) {
+				throw new LifecycleException(name4logging + ".visitorCookieRefreshRatio must be between 0.0 and 1.0: " + visitorCookieRefreshRatio);
+			}
+			if (visitorTokenService == null) {
+				initVisitorTokenService();
+			}
+		}
 
 		if (provideMonitor() == null) {
 			String monitorMsg = reloadMonitor();
@@ -1498,6 +1771,10 @@ public class AntiDoSValve extends ValveBase {
 					monitor.setAsyncEviction(asyncEviction);
 				}
 				monitor.setMaxBlockLogsPerSecond(maxBlockLogsPerSecond);
+
+				if (visitorCookieEnabled && visitorTokenService == null) {
+					initVisitorTokenService();
+				}
 
 				AntiDoSMonitor old = monitors.put(monitorName, monitor);
 				if (old != null && old != monitor) {
@@ -1672,7 +1949,47 @@ public class AntiDoSValve extends ValveBase {
 		}
 
 		if (isRequestURIInRelevantPaths(requestURI)) {
-			return !isIPAddressBlocked(ip);
+			return !isIPAddressBlocked(ip, false);
+		}
+
+		if (serverWideBlocking && isIPAddressCurrentlyBlocked(ip)) {
+			if (log.isDebugEnabled())
+				log.debug(name4logging + " Server-wide blocked: " + ip);
+
+			return false;
+		}
+
+		if (log.isDebugEnabled())
+			log.debug(name4logging + " Not in relevantPaths: " + requestURI);
+
+		return true;
+	}
+
+	public boolean isRequestAllowed(String ip, String requestURI, boolean returningVisitor) {
+		if (isIPAddressInAlwaysForbidden(ip)) {
+			alwaysForbiddenBlockedRequests.increment();
+			if (log.isDebugEnabled())
+				log.debug(name4logging + " In alwaysForbidden: " + ip);
+
+			return false;
+		}
+
+		if (isIPAddressInAlwaysAllowed(ip)) {
+			if (log.isDebugEnabled())
+				log.debug(name4logging + " Is in alwaysAllowedIPs: " + ip);
+
+			return true;
+		}
+
+		if (isRequestURIInNonRelevantPaths(requestURI)) {
+			if (log.isDebugEnabled())
+				log.debug(name4logging + " Is in nonRelevantPaths: " + requestURI);
+
+			return true;
+		}
+
+		if (isRequestURIInRelevantPaths(requestURI)) {
+			return !isIPAddressBlocked(ip, returningVisitor);
 		}
 
 		if (serverWideBlocking && isIPAddressCurrentlyBlocked(ip)) {
@@ -1699,6 +2016,19 @@ public class AntiDoSValve extends ValveBase {
 	 *                                  empty
 	 */
 	public boolean isIPAddressBlocked(String ip) throws IllegalArgumentException {
+		return isIPAddressBlocked(ip, false);
+	}
+
+	/**
+	 * This method checks if an IP address is blocked in the internal
+	 * {@link AntiDoSMonitor} instance, registering the access and whether it was a returning visitor.
+	 * 
+	 * @param ip               The IP address
+	 * @param returningVisitor true if request presented a valid authenticated visitor cookie
+	 * @return true if blocked, false if allowed
+	 * @throws IllegalArgumentException If the parameter is null or empty
+	 */
+	public boolean isIPAddressBlocked(String ip, boolean returningVisitor) throws IllegalArgumentException {
 		if (ip == null || ip.isEmpty()) {
 			throw new IllegalArgumentException("IP address must not be null or empty");
 		}
@@ -1725,7 +2055,7 @@ public class AntiDoSValve extends ValveBase {
 
 		boolean trackCardinality = isExtendedMetricsActive() && !counterName.equals(ip);
 		AntiDoSMonitor monitor = provideMonitor();
-		if (monitor == null || monitor.registerAndCheckRequest(counterName, ip, rawIpv4Bytes, trackCardinality, v4Mask, v6Mask)) {
+		if (monitor == null || monitor.registerAndCheckRequest(counterName, ip, rawIpv4Bytes, trackCardinality, v4Mask, v6Mask, returningVisitor)) {
 			if (log.isDebugEnabled())
 				if (monitor == null)
 					log.debug(name4logging + " not available");

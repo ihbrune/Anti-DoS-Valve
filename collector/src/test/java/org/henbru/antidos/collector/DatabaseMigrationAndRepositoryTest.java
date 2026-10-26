@@ -709,6 +709,10 @@ class DatabaseMigrationAndRepositoryTest {
 		assertEquals("198.51.100.22", found.alwaysForbiddenIPs());
 		assertEquals("auto", found.collectorIntegration());
 		assertEquals("AUTO", found.collectorIntegrationLabel());
+		assertFalse(found.visitorCookieEnabled());
+		assertEquals("_adv", found.visitorCookieName());
+		assertEquals("OFF", found.visitorCookieLabel());
+		assertEquals("badge-secondary", found.visitorCookieBadgeClass());
 		assertEquals(12345, found.configHash());
 		assertTrue(found.hasPathFilters());
 		assertTrue(found.hasIpLists());
@@ -738,6 +742,8 @@ class DatabaseMigrationAndRepositoryTest {
 				"/antidos-status",
 				null,
 				"true",
+				true,
+				"_mycookie",
 				now.plusSeconds(10),
 				99999
 		);
@@ -753,6 +759,10 @@ class DatabaseMigrationAndRepositoryTest {
 		assertEquals(150, afterUpdate.get().allowedRequestsPerSlot());
 		assertEquals("true", afterUpdate.get().collectorIntegration());
 		assertEquals("ALWAYS ON", afterUpdate.get().collectorIntegrationLabel());
+		assertTrue(afterUpdate.get().visitorCookieEnabled());
+		assertEquals("_mycookie", afterUpdate.get().visitorCookieName());
+		assertEquals("ACTIVE (_mycookie)", afterUpdate.get().visitorCookieLabel());
+		assertEquals("badge-success", afterUpdate.get().visitorCookieBadgeClass());
 		assertEquals(99999, afterUpdate.get().configHash());
 
 		List<org.henbru.antidos.collector.model.MonitoredValve> serverValves =

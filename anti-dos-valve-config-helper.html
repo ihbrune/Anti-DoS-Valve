@@ -80,7 +80,7 @@
     @media (min-width: 900px) {
       .layout {
         grid-template-columns: 1.15fr 0.85fr;
-        align-items: start;
+        align-items: stretch;
       }
     }
 
@@ -364,12 +364,23 @@
       margin-bottom: 16px;
     }
 
-    .status-field-group {
+    .status-field-group,
+    .visitor-cookie-field-group {
       background: #ffffff;
       padding: 12px 14px;
       border-radius: 6px;
       border: 1px solid #e2e8f0;
       margin-bottom: 12px;
+    }
+
+    .visitor-cookie-section {
+      margin-top: 24px;
+      padding: 18px 20px;
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-left: 4px solid #10b981;
+      border-radius: var(--radius);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
     }
 
     .field-desc {
@@ -380,6 +391,7 @@
 
     input[type="text"],
     input[type="number"],
+    input[type="password"],
     select {
       width: 100%;
       padding: 8px 12px;
@@ -394,10 +406,90 @@
 
     input[type="text"]:focus,
     input[type="number"]:focus,
+    input[type="password"]:focus,
     select:focus {
       outline: none;
       border-color: var(--border-focus);
       box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    }
+
+    .secret-input-wrapper {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .secret-input-wrapper input {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .btn-secret-gen {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      background: #f1f5f9;
+      color: #1e293b;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+
+    .btn-secret-gen:hover {
+      background: #e2e8f0;
+      color: #0f172a;
+      border-color: #94a3b8;
+    }
+
+    .btn-secret-gen:active {
+      transform: scale(0.98);
+      background: #cbd5e1;
+    }
+
+    .btn-secret-gen.generated {
+      background: #d1fae5;
+      color: #065f46;
+      border-color: #6ee7b7;
+    }
+
+    .btn-secret-clear {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 36px;
+      background: #f8fafc;
+      color: #64748b;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      line-height: 1;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+
+    .btn-secret-clear:hover {
+      background: #fee2e2;
+      color: #b91c1c;
+      border-color: #fca5a5;
+    }
+
+    @media (max-width: 640px) {
+      .secret-input-wrapper {
+        flex-wrap: wrap;
+      }
+      .btn-secret-gen {
+        flex: 1;
+        justify-content: center;
+      }
     }
 
     .checkbox-label {
@@ -418,7 +510,8 @@
     /* Output Section */
     .sticky-panel {
       position: sticky;
-      top: 24px;
+      top: min(24px, calc(100vh - var(--sticky-height, 800px) - 24px));
+      transition: top 0.15s ease-out;
     }
 
     .output-card {
@@ -1470,6 +1563,136 @@
                 <div id="hintStatusPassword" class="status-field-hint neutral"></div>
               </div>
             </div>
+
+            <!-- Optional Feature: Visitor Tracking & Reputation Cookies -->
+            <div class="visitor-cookie-section">
+              <div class="status-dashboard-header">
+                <div class="status-dashboard-title">
+                  <span class="status-dashboard-icon" style="color: #10b981;">&#127850;</span>
+                  <span>Visitor Tracking &amp; Reputation Cookies</span>
+                </div>
+                <span class="badge badge-optional-feature" style="background: #d1fae5; color: #047857; border-color: #a7f3d0;">Optional Feature</span>
+              </div>
+              <div class="status-dashboard-desc">
+                Issues encrypted, tamper-proof AES-256-GCM visitor tokens (<code>_adv</code>) bound to client IP subnets. Distinguishes first-contact requests from returning visitors without session cookies or server-side session state.
+              </div>
+
+              <!-- 20. visitorCookieEnabled -->
+              <div class="field-group checkbox-group" style="padding-top: 4px; margin-bottom: 12px;">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="visitorCookieEnabled" name="visitorCookieEnabled">
+                  <span>Enable Visitor Cookie Tracking (<code>visitorCookieEnabled="true"</code>)</span>
+                </label>
+              </div>
+
+              <div id="visitorCookieOptions" style="display: none;">
+                <!-- 21. visitorCookieName -->
+                <div class="field-group visitor-cookie-field-group">
+                  <div class="field-header">
+                    <label for="visitorCookieName" class="field-label">visitorCookieName</label>
+                    <span class="badge badge-optional">Optional</span>
+                  </div>
+                  <div class="field-desc">Cookie name used to track returning visitors. Default: <code>_adv</code>.</div>
+                  <input type="text" id="visitorCookieName" name="visitorCookieName" placeholder="_adv (Default: _adv)">
+                </div>
+
+                <!-- 22. visitorCookieSecret -->
+                <div class="field-group visitor-cookie-field-group">
+                  <div class="field-header">
+                    <label for="visitorCookieSecret" class="field-label">visitorCookieSecret</label>
+                    <span class="badge badge-optional">Optional</span>
+                  </div>
+                  <div class="field-desc">256-bit AES secret key (64 hex chars, 44 Base64 chars, or passphrase &ge; 16 chars). <strong>Leave empty to auto-generate a secure ephemeral key in memory on startup</strong> (recommended for single nodes; configure identical secret across multi-node clusters).</div>
+                  <div class="secret-input-wrapper">
+                    <input type="text" id="visitorCookieSecret" name="visitorCookieSecret" placeholder="Auto-generated ephemeral 256-bit AES key if empty" autocomplete="off" spellcheck="false">
+                    <button type="button" id="btnGenVisitorSecret" class="btn-secret-gen" title="Generate cryptographically secure 256-bit AES key (64 hex characters)">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                        <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                      </svg>
+                      <span>Generate 256-bit Key</span>
+                    </button>
+                    <button type="button" id="btnClearVisitorSecret" class="btn-secret-clear" title="Clear key (reverts to ephemeral key on startup)" style="display: none;">
+                      &times;
+                    </button>
+                  </div>
+                  <div id="hintVisitorCookieSecret" class="status-field-hint neutral"></div>
+                </div>
+
+                <!-- 23. visitorCookieTtlSeconds -->
+                <div class="field-group visitor-cookie-field-group">
+                  <div class="field-header">
+                    <label for="visitorCookieTtlSeconds" class="field-label">visitorCookieTtlSeconds</label>
+                    <span class="badge badge-optional">Optional</span>
+                  </div>
+                  <div class="field-desc">Validity lifetime of the visitor cookie in seconds (&ge; 1). Default: <code>900</code> (15 minutes).</div>
+                  <input type="number" id="visitorCookieTtlSeconds" name="visitorCookieTtlSeconds" min="1" step="1" placeholder="900 (Default: 900s / 15m)">
+                </div>
+
+                <!-- 24. visitorCookieRefreshRatio -->
+                <div class="field-group visitor-cookie-field-group">
+                  <div class="field-header">
+                    <label for="visitorCookieRefreshRatio" class="field-label">visitorCookieRefreshRatio</label>
+                    <span class="badge badge-optional">Optional</span>
+                  </div>
+                  <div class="field-desc">Threshold ratio of elapsed TTL before refreshing the cookie (0.0 &ndash; 1.0). Default: <code>0.5</code> (refreshes after 50% of TTL elapses, preventing race conditions under HTTP/2 multiplexing).</div>
+                  <input type="number" id="visitorCookieRefreshRatio" name="visitorCookieRefreshRatio" min="0.0" max="1.0" step="0.05" placeholder="0.5 (Default: 0.5)">
+                </div>
+
+                <!-- 25. visitorCookieSubnetMaskV4 -->
+                <div class="field-group visitor-cookie-field-group">
+                  <div class="field-header">
+                    <label for="visitorCookieSubnetMaskV4" class="field-label">visitorCookieSubnetMaskV4</label>
+                    <span class="badge badge-optional">Optional</span>
+                  </div>
+                  <div class="field-desc">IPv4 prefix length for cryptographic subnet binding (0 &ndash; 32). Default: <code>24</code> (/24 subnet binding).</div>
+                  <input type="number" id="visitorCookieSubnetMaskV4" name="visitorCookieSubnetMaskV4" min="0" max="32" step="1" placeholder="24 (Default: /24)">
+                </div>
+
+                <!-- 26. visitorCookieSubnetMaskV6 -->
+                <div class="field-group visitor-cookie-field-group">
+                  <div class="field-header">
+                    <label for="visitorCookieSubnetMaskV6" class="field-label">visitorCookieSubnetMaskV6</label>
+                    <span class="badge badge-optional">Optional</span>
+                  </div>
+                  <div class="field-desc">IPv6 prefix length for cryptographic subnet binding (0 &ndash; 128). Default: <code>64</code> (/64 subnet binding).</div>
+                  <input type="number" id="visitorCookieSubnetMaskV6" name="visitorCookieSubnetMaskV6" min="0" max="128" step="1" placeholder="64 (Default: /64)">
+                </div>
+
+                <!-- 27. visitorCookiePath -->
+                <div class="field-group visitor-cookie-field-group">
+                  <div class="field-header">
+                    <label for="visitorCookiePath" class="field-label">visitorCookiePath</label>
+                    <span class="badge badge-optional">Optional</span>
+                  </div>
+                  <div class="field-desc">Cookie path attribute. Default: <code>/</code>.</div>
+                  <input type="text" id="visitorCookiePath" name="visitorCookiePath" placeholder="/ (Default: /)">
+                </div>
+
+                <!-- 28. visitorCookieSameSite -->
+                <div class="field-group visitor-cookie-field-group">
+                  <div class="field-header">
+                    <label for="visitorCookieSameSite" class="field-label">visitorCookieSameSite</label>
+                    <span class="badge badge-optional">Optional</span>
+                  </div>
+                  <div class="field-desc">SameSite attribute for the cookie (<code>Lax</code>, <code>Strict</code>, <code>None</code>). Default: <code>Lax</code>.</div>
+                  <select id="visitorCookieSameSite" name="visitorCookieSameSite">
+                    <option value="" selected>Lax (Default)</option>
+                    <option value="Strict">Strict</option>
+                    <option value="None">None</option>
+                  </select>
+                </div>
+
+                <!-- 29. visitorCookieSecure -->
+                <div class="field-group checkbox-group visitor-cookie-field-group" style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="visitorCookieSecure" name="visitorCookieSecure" checked>
+                    <span>Emit Secure flag in Set-Cookie (<code>visitorCookieSecure="true"</code>, recommended for HTTPS)</span>
+                  </label>
+                </div>
+              </div>
+            </div>
           </form>
         </div>
       </div>
@@ -2035,7 +2258,17 @@
       { key: 'httpStatusCode', isRequired: false, defaultVal: 429 },
       { key: 'statusUri', isRequired: false, defaultVal: '' },
       { key: 'statusAllowedIPs', isRequired: false, defaultVal: '' },
-      { key: 'statusPassword', isRequired: false, defaultVal: '' }
+      { key: 'statusPassword', isRequired: false, defaultVal: '' },
+      { key: 'visitorCookieEnabled', isRequired: false, defaultVal: false, isBoolean: true },
+      { key: 'visitorCookieName', isRequired: false, defaultVal: '_adv' },
+      { key: 'visitorCookieSecret', isRequired: false, defaultVal: '' },
+      { key: 'visitorCookieTtlSeconds', isRequired: false, defaultVal: 900 },
+      { key: 'visitorCookieRefreshRatio', isRequired: false, defaultVal: 0.5 },
+      { key: 'visitorCookieSubnetMaskV4', isRequired: false, defaultVal: 24 },
+      { key: 'visitorCookieSubnetMaskV6', isRequired: false, defaultVal: 64 },
+      { key: 'visitorCookiePath', isRequired: false, defaultVal: '/' },
+      { key: 'visitorCookieSameSite', isRequired: false, defaultVal: 'Lax' },
+      { key: 'visitorCookieSecure', isRequired: false, defaultVal: true, isBoolean: true }
     ];
 
     const form = document.getElementById('valveForm');
@@ -2101,9 +2334,9 @@
 
         const val = preset.values[param.key];
         if (param.isBoolean) {
-          el.checked = Boolean(val);
+          el.checked = (val !== undefined && val !== null) ? Boolean(val) : Boolean(param.defaultVal);
         } else {
-          el.value = (val !== undefined && val !== null) ? val : '';
+          el.value = (val !== undefined && val !== null) ? val : (param.defaultVal !== undefined ? param.defaultVal : '');
         }
       });
 
@@ -2112,6 +2345,7 @@
       updateEvictionIndicators();
       updateSubnetMaskIndicators();
       updateStatusDashboardIndicators();
+      updateVisitorCookieIndicators();
       updateMonitorNameIndicators();
       runSimulation();
       saveStateToLocalStorage();
@@ -2142,7 +2376,12 @@
         // Filtering logic for compact output
         if (onlyChanged) {
           if (param.isBoolean) {
-            if (!val) return; // Default false omitted
+            if (param.key === 'visitorCookieSecure') {
+              // Default is true; omit if true or if visitor cookie feature is disabled
+              if (val === true || !document.getElementById('visitorCookieEnabled').checked) return;
+            } else {
+              if (!val) return; // Default false omitted
+            }
           } else if (!param.isRequired) {
             if (val === '') return;
             if (param.key === 'monitorMode' && val === 'BLOCKING') return;
@@ -2151,6 +2390,15 @@
             if (param.key === 'ipv6SubnetMask' && (val === '128' || val === '-1')) return;
             if (param.key === 'collectorIntegration' && (val === 'auto' || val === '')) return;
             if ((param.key === 'statusAllowedIPs' || param.key === 'statusPassword') && !document.getElementById('statusUri').value.trim()) return;
+            if (param.key === 'visitorCookieName' && val === '_adv') return;
+            if (param.key === 'visitorCookieSecret' && val === '') return;
+            if (param.key === 'visitorCookieTtlSeconds' && (val === '900' || val === 900)) return;
+            if (param.key === 'visitorCookieRefreshRatio' && (val === '0.5' || val === 0.5)) return;
+            if (param.key === 'visitorCookieSubnetMaskV4' && (val === '24' || val === 24)) return;
+            if (param.key === 'visitorCookieSubnetMaskV6' && (val === '64' || val === 64)) return;
+            if (param.key === 'visitorCookiePath' && val === '/') return;
+            if (param.key === 'visitorCookieSameSite' && (val === 'Lax' || val === '')) return;
+            if (param.key.startsWith('visitorCookie') && param.key !== 'visitorCookieEnabled' && !document.getElementById('visitorCookieEnabled').checked) return;
           }
         }
 
@@ -2165,9 +2413,7 @@
         // Add attribute if required, or if non-empty, or if full output mode
         if (param.isRequired || val !== '' || !onlyChanged) {
           if (param.isBoolean) {
-            if (val || !onlyChanged) {
-              lines.push(`       ${param.key}="${val}"`);
-            }
+            lines.push(`       ${param.key}="${val}"`);
           } else {
             if (onlyChanged && !param.isRequired && val === '') {
               return;
@@ -2485,6 +2731,49 @@
           pwdInput.classList.remove('input-invalid');
           pwdHint.className = 'status-field-hint valid';
           pwdHint.innerHTML = `<span>&#10003;</span><div><strong>Custom password configured:</strong> ${rawPwd.length} characters. Authenticate via <code>?token=...</code> or <code>Authorization: Bearer &lt;token&gt;</code>.</div>`;
+        }
+      }
+    }
+
+    function updateVisitorCookieIndicators() {
+      const enabledCheckbox = document.getElementById('visitorCookieEnabled');
+      const optionsContainer = document.getElementById('visitorCookieOptions');
+      const secretInput = document.getElementById('visitorCookieSecret');
+      const secretHint = document.getElementById('hintVisitorCookieSecret');
+
+      if (!enabledCheckbox) return;
+
+      if (optionsContainer) {
+        optionsContainer.style.display = enabledCheckbox.checked ? 'block' : 'none';
+      }
+
+      if (secretInput && secretHint) {
+        const secret = secretInput.value.trim();
+        const clearBtn = document.getElementById('btnClearVisitorSecret');
+        if (clearBtn) {
+          clearBtn.style.display = secret ? 'inline-flex' : 'none';
+        }
+
+        if (!secret) {
+          secretInput.classList.remove('input-invalid');
+          secretHint.className = 'status-field-hint neutral';
+          secretHint.innerHTML = '<span>&#9432;</span><div><strong>Ephemeral Key (single node):</strong> A secure 256-bit AES key will be generated in memory on startup.</div>';
+        } else if (/^[0-9a-fA-F]{64}$/.test(secret)) {
+          secretInput.classList.remove('input-invalid');
+          secretHint.className = 'status-field-hint valid';
+          secretHint.innerHTML = '<span>&#10003;</span><div><strong>Valid Hex Key:</strong> 256-bit AES key (64 hex characters / 32 bytes). Configure identical key on all cluster nodes.</div>';
+        } else if (/^[A-Za-z0-9+/]{43}=$/.test(secret) || /^[A-Za-z0-9+/]{44}$/.test(secret)) {
+          secretInput.classList.remove('input-invalid');
+          secretHint.className = 'status-field-hint valid';
+          secretHint.innerHTML = '<span>&#10003;</span><div><strong>Valid Base64 Key:</strong> 256-bit AES key (32 bytes). Configure identical key on all cluster nodes.</div>';
+        } else if (secret.length >= 16) {
+          secretInput.classList.remove('input-invalid');
+          secretHint.className = 'status-field-hint valid';
+          secretHint.innerHTML = `<span>&#10003;</span><div><strong>Passphrase:</strong> Valid passphrase (${secret.length} characters &ge; 16). Key derived via SHA-256.</div>`;
+        } else {
+          secretInput.classList.add('input-invalid');
+          secretHint.className = 'status-field-hint invalid';
+          secretHint.innerHTML = '<span>&#9888;</span><div><strong>Key too short:</strong> Passphrase must be at least 16 characters (or exactly 64 hex / 44 base64 chars).</div>';
         }
       }
     }
@@ -3412,6 +3701,7 @@
         updateEvictionIndicators();
         updateSubnetMaskIndicators();
         updateStatusDashboardIndicators();
+        updateVisitorCookieIndicators();
         updateMonitorNameIndicators();
         runSimulation();
 
@@ -3430,6 +3720,7 @@
       updateEvictionIndicators();
       updateSubnetMaskIndicators();
       updateStatusDashboardIndicators();
+      updateVisitorCookieIndicators();
       updateMonitorNameIndicators();
       runSimulation();
       saveStateToLocalStorage();
@@ -3440,6 +3731,7 @@
       updateEvictionIndicators();
       updateSubnetMaskIndicators();
       updateStatusDashboardIndicators();
+      updateVisitorCookieIndicators();
       updateMonitorNameIndicators();
       runSimulation();
       saveStateToLocalStorage();
@@ -3493,6 +3785,55 @@
       }
     });
 
+    // Generate 256-bit Hex Key for visitorCookieSecret
+    function generateSecureHexSecret(numBytes = 32) {
+      const bytes = new Uint8Array(numBytes);
+      window.crypto.getRandomValues(bytes);
+      let hex = '';
+      for (let i = 0; i < bytes.length; i++) {
+        hex += bytes[i].toString(16).padStart(2, '0');
+      }
+      return hex;
+    }
+
+    const btnGenVisitorSecret = document.getElementById('btnGenVisitorSecret');
+    if (btnGenVisitorSecret) {
+      btnGenVisitorSecret.addEventListener('click', () => {
+        const secretInput = document.getElementById('visitorCookieSecret');
+        if (!secretInput) return;
+        secretInput.value = generateSecureHexSecret(32);
+        updateVisitorCookieIndicators();
+        updateXml();
+        saveStateToLocalStorage();
+
+        // Brief visual feedback
+        const origHtml = btnGenVisitorSecret.innerHTML;
+        btnGenVisitorSecret.classList.add('generated');
+        btnGenVisitorSecret.innerHTML = `
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span>Key Generated!</span>
+        `;
+        setTimeout(() => {
+          btnGenVisitorSecret.classList.remove('generated');
+          btnGenVisitorSecret.innerHTML = origHtml;
+        }, 1500);
+      });
+    }
+
+    const btnClearVisitorSecret = document.getElementById('btnClearVisitorSecret');
+    if (btnClearVisitorSecret) {
+      btnClearVisitorSecret.addEventListener('click', () => {
+        const secretInput = document.getElementById('visitorCookieSecret');
+        if (!secretInput) return;
+        secretInput.value = '';
+        updateVisitorCookieIndicators();
+        updateXml();
+        saveStateToLocalStorage();
+      });
+    }
+
     // Reset button
     const resetBtn = document.getElementById('resetBtn');
     if (resetBtn) {
@@ -3500,6 +3841,16 @@
         clearSavedState();
         applyPreset('test');
       });
+    }
+
+    // Keep sticky-panel height in sync for bottom-aligned sticky positioning
+    const stickyPanel = document.querySelector('.sticky-panel');
+    if (stickyPanel && window.ResizeObserver) {
+      new ResizeObserver(entries => {
+        for (const entry of entries) {
+          stickyPanel.style.setProperty('--sticky-height', entry.target.offsetHeight + 'px');
+        }
+      }).observe(stickyPanel);
     }
 
     // Initialize: Try restoring saved configuration from localStorage; fall back to 'test' preset

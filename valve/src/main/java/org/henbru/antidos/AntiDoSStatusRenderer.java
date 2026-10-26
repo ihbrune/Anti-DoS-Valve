@@ -45,10 +45,14 @@ public class AntiDoSStatusRenderer {
 		this.valve = valve;
 	}
 
-	static record CounterEntry(String key, int count, int retained, int effective, boolean locked, int distinctClients)
+	static record CounterEntry(String key, int count, int retained, int effective, boolean locked, int distinctClients, int returningCount)
 			implements Comparable<CounterEntry> {
+		public CounterEntry(String key, int count, int retained, int effective, boolean locked, int distinctClients) {
+			this(key, count, retained, effective, locked, distinctClients, 0);
+		}
+
 		public CounterEntry(String key, int count, int retained, int effective, boolean locked) {
-			this(key, count, retained, effective, locked, 1);
+			this(key, count, retained, effective, locked, 1, 0);
 		}
 
 		@Override
@@ -198,7 +202,7 @@ public class AntiDoSStatusRenderer {
 				int count = c.getCount();
 				int rawRetained = c.getRetainedCounts();
 				int retained = rawRetained > 0 ? rawRetained : 0;
-				list.add(new CounterEntry(entry.getKey(), count, retained, count + retained, locked, c.getDistinctClients()));
+				list.add(new CounterEntry(entry.getKey(), count, retained, count + retained, locked, c.getDistinctClients(), c.getReturningCount()));
 			}
 			Collections.sort(list);
 			return new FilteredEntries(list, maxOrder);
@@ -222,13 +226,13 @@ public class AntiDoSStatusRenderer {
 				if (effective < worst.effective()) {
 					continue;
 				}
-				CounterEntry candidate = new CounterEntry(entry.getKey(), count, retained, effective, locked, c.getDistinctClients());
+				CounterEntry candidate = new CounterEntry(entry.getKey(), count, retained, effective, locked, c.getDistinctClients(), c.getReturningCount());
 				if (candidate.compareTo(worst) < 0) {
 					minHeap.poll();
 					minHeap.offer(candidate);
 				}
 			} else {
-				minHeap.offer(new CounterEntry(entry.getKey(), count, retained, effective, locked, c.getDistinctClients()));
+				minHeap.offer(new CounterEntry(entry.getKey(), count, retained, effective, locked, c.getDistinctClients(), c.getReturningCount()));
 			}
 		}
 
@@ -263,7 +267,7 @@ public class AntiDoSStatusRenderer {
 				int retained = rawRetained > 0 ? rawRetained : 0;
 				int effective = count + retained;
 				if (effective >= min) {
-					list.add(new CounterEntry(entry.getKey(), count, retained, effective, locked, c.getDistinctClients()));
+					list.add(new CounterEntry(entry.getKey(), count, retained, effective, locked, c.getDistinctClients(), c.getReturningCount()));
 				}
 			}
 		}
@@ -941,6 +945,13 @@ public class AntiDoSStatusRenderer {
 		sb.append("    <tr><th>System Settings</th><td>Log Throttling: <code>").append(logThrottling)
 				.append("</code> &bull; Async Eviction: <code>").append(asyncEvict).append("</code></td></tr>\n");
 
+		String visitorCookieStatus = target.isVisitorCookieEnabled()
+				? "Enabled (name: <code>" + escapeHtml(target.getVisitorCookieName()) + "</code>, TTL: <strong>"
+						+ target.getVisitorCookieTtlSeconds() + "s</strong>, masks: /" + target.getVisitorCookieSubnetMaskV4()
+						+ " v4, /" + target.getVisitorCookieSubnetMaskV6() + " v6)"
+				: "Disabled";
+		sb.append("    <tr><th>Visitor Cookie</th><td>").append(visitorCookieStatus).append("</td></tr>\n");
+
 		sb.append("  </table>\n</div>\n");
 
 		// Card 2: Slot Timeline
@@ -1244,6 +1255,8 @@ public class AntiDoSStatusRenderer {
 				.append("    \"ipv6SubnetMask\": ").append(target.getIpv6SubnetMask()).append(",\n")
 				.append("    \"collectorIntegration\": \"").append(escapeJson(target.getCollectorIntegration())).append("\",\n")
 				.append("    \"collectorActive\": ").append(target.isExtendedMetricsActive()).append(",\n")
+				.append("    \"visitorCookieEnabled\": ").append(target.isVisitorCookieEnabled()).append(",\n")
+				.append("    \"visitorCookieName\": \"").append(escapeJson(target.getVisitorCookieName())).append("\",\n")
 				.append("    \"maxIPCacheSize\": ").append(maxActive).append(",\n")
 				.append("    \"maxBlockedIPCacheSize\": ").append(maxBlocked).append(",\n")
 				.append("    \"currentActiveCounters\": ").append(activeCounters).append(",\n")
@@ -1351,6 +1364,7 @@ public class AntiDoSStatusRenderer {
 					.append("      \"effective\": ").append(e.effective()).append(",\n")
 					.append("      \"limit\": ").append(target.getAllowedRequestsPerSlot()).append(",\n")
 					.append("      \"distinctClients\": ").append(e.distinctClients()).append(",\n")
+					.append("      \"returningCount\": ").append(e.returningCount()).append(",\n")
 					.append("      \"status\": \"BLOCKED\"\n")
 					.append("    }");
 		}
@@ -1393,7 +1407,8 @@ public class AntiDoSStatusRenderer {
 					.append("      \"effective\": ").append(e.effective()).append(",\n")
 					.append("      \"limit\": ").append(target.getAllowedRequestsPerSlot()).append(",\n")
 					.append("      \"quotaPercent\": ").append(pct).append(",\n")
-					.append("      \"distinctClients\": ").append(e.distinctClients()).append("\n")
+					.append("      \"distinctClients\": ").append(e.distinctClients()).append(",\n")
+					.append("      \"returningCount\": ").append(e.returningCount()).append("\n")
 					.append("    }");
 		}
 		sb.append("\n  ]\n}\n");

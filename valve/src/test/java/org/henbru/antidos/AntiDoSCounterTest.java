@@ -73,4 +73,17 @@ class AntiDoSCounterTest {
 		rec.touch(42L);
 		assertEquals(42L, rec.getAccessOrder());
 	}
+
+	@Test
+	void testReturningCount() {
+		AntiDoSCounter rec = new AntiDoSCounter();
+		assertEquals(0, rec.getReturningCount());
+		rec.incrementReturningCount();
+		assertEquals(1, rec.getReturningCount());
+		rec.addAndGetReturningCount(4);
+		assertEquals(5, rec.getReturningCount());
+		rec.setReturningCount(10);
+		assertEquals(10, rec.getReturningCount());
+		assertTrue(rec.toString().contains("Returning:10"));
+	}
 }

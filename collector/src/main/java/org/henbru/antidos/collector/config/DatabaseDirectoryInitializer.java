@@ -63,11 +63,19 @@ public class DatabaseDirectoryInitializer implements BeanFactoryPostProcessor {
 					String url = hikari.getJdbcUrl();
 					if (url != null && url.startsWith(SQLITE_PREFIX)) {
 						hikari.setConnectionInitSql("PRAGMA journal_mode=WAL;");
-						if (!url.contains("busy_timeout")) {
-							String separator = url.contains("?") ? "&" : "?";
-							hikari.setJdbcUrl(url + separator + "busy_timeout=10000");
+						String updatedUrl = url;
+						if (!updatedUrl.contains("busy_timeout")) {
+							String separator = updatedUrl.contains("?") ? "&" : "?";
+							updatedUrl = updatedUrl + separator + "busy_timeout=60000";
+						} else if (updatedUrl.contains("busy_timeout=10000")) {
+							updatedUrl = updatedUrl.replace("busy_timeout=10000", "busy_timeout=60000");
 						}
-						log.info("Configured SQLite WAL mode and busy_timeout=10000 on HikariDataSource");
+						if (!updatedUrl.contains("synchronous")) {
+							String separator = updatedUrl.contains("?") ? "&" : "?";
+							updatedUrl = updatedUrl + separator + "synchronous=NORMAL";
+						}
+						hikari.setJdbcUrl(updatedUrl);
+						log.info("Configured SQLite WAL mode, synchronous=NORMAL, and busy_timeout=60000 on HikariDataSource");
 					}
 				}
 				return bean;

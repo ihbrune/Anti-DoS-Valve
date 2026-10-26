@@ -14,9 +14,9 @@
 #
 # spring:
 #   datasource:
-#     url: "jdbc:sqlite:/var/lib/antidos/antidos-collector.db?busy_timeout=10000"
+#     url: "jdbc:sqlite:/var/lib/antidos/antidos-collector.db?busy_timeout=60000"
 #     # Or in user home:
-#     # url: "jdbc:sqlite:${user.home}/.antidos/antidos-collector.db?busy_timeout=10000"
+#     # url: "jdbc:sqlite:${user.home}/.antidos/antidos-collector.db?busy_timeout=60000"
 #
 # Or switch to PostgreSQL for high-volume enterprise deployments:
 # spring:
