@@ -266,13 +266,16 @@ class DashboardControllerTest {
 				.andExpect(content().string(containsString("Node Incidents")))
 				.andExpect(content().string(containsString("Monitored Valves &amp; Active Tracking Configuration")))
 				.andExpect(content().string(containsString("Global Default")))
-				.andExpect(content().string(containsString("Blocked Client Incidents on this Server")))
+				.andExpect(content().string(containsString("Client Traffic &amp; Incidents on this Server")))
+				.andExpect(content().string(containsString("All Traffic")))
+				.andExpect(content().string(containsString("Blocked Only")))
+				.andExpect(content().string(containsString("Active Monitored")))
 				.andExpect(content().string(containsString("55555")))
 				.andExpect(content().string(containsString("TEST-VALVE")))
 				.andExpect(content().string(containsString("AI Bot")))
 				.andExpect(content().string(containsString("AS8075")))
 				.andExpect(content().string(containsString("198.51.100.42")))
-				.andExpect(content().string(not(containsString("198.51.100.99"))))
+				.andExpect(content().string(containsString("198.51.100.99")))
 				.andExpect(content().string(containsString("View Incidents &rarr;")))
 				.andExpect(content().string(containsString("Discovered Valve Runtime Configurations")))
 				.andExpect(content().string(containsString("Primary edge rate limiter")))
@@ -288,6 +291,23 @@ class DashboardControllerTest {
 				.andExpect(content().string(containsString("/js/htmx-lite.js")))
 				.andExpect(content().string(containsString("id=\"note-modal-container\"")))
 				.andExpect(content().string(containsString("targetType=ASN")));
+
+		// BLOCKED filter
+		mockMvc.perform(get("/server/Demo-Server").param("status", "BLOCKED"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Blocked Client Incidents on this Server")))
+				.andExpect(content().string(containsString("198.51.100.42")))
+				.andExpect(content().string(containsString("count-blocked")))
+				.andExpect(content().string(not(containsString("count-active"))))
+				.andExpect(content().string(not(containsString("198.51.100.99"))));
+
+		// ACTIVE filter
+		mockMvc.perform(get("/server/Demo-Server").param("status", "ACTIVE"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Active Monitored Clients on this Server")))
+				.andExpect(content().string(containsString("198.51.100.99")))
+				.andExpect(content().string(containsString("count-active")))
+				.andExpect(content().string(not(containsString("count-blocked"))));
 	}
 
 	@Test

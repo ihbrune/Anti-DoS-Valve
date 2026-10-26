@@ -88,7 +88,7 @@
     <section style="margin-bottom: 28px;">
         <div class="section-header">
             <div class="section-title">&#x1F6E1; Monitored Valves &amp; Active Tracking Configuration</div>
-            <a th:if="${selectedValve != null}" th:href="@{'/server/' + ${serverId}}" class="btn" style="padding: 2px 8px; font-size: 11px;">
+            <a th:if="${selectedValve != null}" th:href="@{'/server/' + ${serverId}(status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})}" class="btn" style="padding: 2px 8px; font-size: 11px;">
                 &times; Clear Valve Filter (<span th:text="${selectedValve}"></span>)
             </a>
         </div>
@@ -145,7 +145,7 @@
                                 <span th:if="${v.source.name() == 'SYSTEM_DEFAULT'}" class="badge badge-secondary" title="System default fallback" th:text="${v.source.label}">System Default</span>
                             </td>
                             <td style="text-align: right;">
-                                <a th:href="@{'/server/' + ${serverId}(valve=${v.valveName})}"
+                                <a th:href="@{'/server/' + ${serverId}(valve=${v.valveName}, status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})}"
                                    class="btn"
                                    style="padding: 2px 8px; font-size: 11px;"
                                    title="Filter slots timeline for this valve">
@@ -399,18 +399,49 @@
         </div>
     </section>
 
-    <!-- Blocked Clients on this Server -->
-    <section>
-        <div class="section-header">
-            <div class="section-title">&#x1F6A8; Blocked Client Incidents on this Server</div>
-            <a th:href="@{'/events?servers=' + ${serverId}}" class="btn" style="border-color: var(--border-accent); color: var(--color-primary);" title="Explore all incidents for this server node in Incident Explorer">
+    <!-- Client Traffic & Incidents on this Server -->
+    <section id="server-events-section">
+        <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                <div class="section-title" style="margin-bottom: 0;">
+                    <span th:if="${selectedStatus == 'BLOCKED'}">&#x1F6A8; Blocked Client Incidents on this Server</span>
+                    <span th:if="${selectedStatus == 'ACTIVE'}">&#x1F539; Active Monitored Clients on this Server</span>
+                    <span th:if="${selectedStatus != 'BLOCKED' and selectedStatus != 'ACTIVE'}">&#x26A1; Client Traffic &amp; Incidents on this Server</span>
+                </div>
+                <div class="filter-btn-group">
+                    <a th:href="@{'/server/' + ${serverId}(valve=${selectedValve}, status='ALL')}"
+                       class="filter-btn"
+                       th:classappend="${selectedStatus == 'ALL' or selectedStatus == '' or selectedStatus == null ? 'active' : ''}"
+                       title="Show all recorded client events (Blocked &amp; Active)">
+                        All Traffic
+                    </a>
+                    <a th:href="@{'/server/' + ${serverId}(valve=${selectedValve}, status='BLOCKED')}"
+                       class="filter-btn"
+                       th:classappend="${selectedStatus == 'BLOCKED' ? 'active' : ''}"
+                       title="Show only rate-limited or blocked client incidents">
+                        &#x1F6A8; Blocked Only
+                    </a>
+                    <a th:href="@{'/server/' + ${serverId}(valve=${selectedValve}, status='ACTIVE')}"
+                       class="filter-btn"
+                       th:classappend="${selectedStatus == 'ACTIVE' ? 'active' : ''}"
+                       title="Show only active monitored clients within rate limits">
+                        &#x1F539; Active Monitored
+                    </a>
+                </div>
+            </div>
+            <a th:href="@{/events(servers=${serverId}, status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})}"
+               class="btn"
+               style="border-color: var(--border-accent); color: var(--color-primary);"
+               title="Explore incidents for this server node in Incident Explorer">
                 Explore Node Incidents &rarr;
             </a>
         </div>
         <div class="table-card">
             <div class="table-responsive">
                 <div th:if="${#lists.isEmpty(recentEvents)}" class="empty-state">
-                    <p>No blocked clients recorded on this node.</p>
+                    <p th:if="${selectedStatus == 'BLOCKED'}">No blocked clients recorded on this node.</p>
+                    <p th:if="${selectedStatus == 'ACTIVE'}">No active monitored clients recorded on this node.</p>
+                    <p th:if="${selectedStatus != 'BLOCKED' and selectedStatus != 'ACTIVE'}">No client traffic events recorded on this node.</p>
                 </div>
                 <table th:unless="${#lists.isEmpty(recentEvents)}">
                     <thead>

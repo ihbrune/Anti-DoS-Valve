@@ -356,7 +356,13 @@ public class DashboardController {
 	public String serverDetails(
 			@PathVariable(name = "serverId") String serverId,
 			@RequestParam(name = "valve", required = false) String valve,
+			@RequestParam(name = "status", required = false, defaultValue = "ALL") String status,
 			Model model) {
+		String effectiveStatus = (status != null && !status.isBlank()) ? status.trim().toUpperCase() : "ALL";
+		if (!"BLOCKED".equals(effectiveStatus) && !"ACTIVE".equals(effectiveStatus)) {
+			effectiveStatus = "ALL";
+		}
+
 		EndpointHeartbeat hb = heartbeatRepository.findByServerId(serverId).orElse(null);
 		List<SlotSnapshot> recentSlots = slotSnapshotRepository.findRecent(serverId, valve, 50);
 		List<ClientEvent> recentEvents = clientEventRepository.findRecentEventsFiltered(
@@ -368,7 +374,7 @@ public class DashboardController {
 				null,
 				null,
 				null,
-				"BLOCKED",
+				effectiveStatus,
 				100,
 				0);
 
@@ -386,7 +392,20 @@ public class DashboardController {
 						"BLOCKED",
 						500,
 						0)
-				: recentEvents;
+				: ("BLOCKED".equals(effectiveStatus)
+						? recentEvents
+						: clientEventRepository.findRecentEventsFiltered(
+								List.of(serverId),
+								valve != null ? List.of(valve) : null,
+								null,
+								null,
+								null,
+								null,
+								null,
+								null,
+								"BLOCKED",
+								100,
+								0));
 
 		Map<String, List<ClientEvent>> slotEventsMap = new HashMap<>();
 		for (ClientEvent event : slotEvents) {
@@ -439,6 +458,7 @@ public class DashboardController {
 		model.addAttribute("runtimeValves", displayedRuntimeValves);
 		model.addAttribute("runtimeValvesMap", runtimeValvesMap);
 		model.addAttribute("selectedValve", valve);
+		model.addAttribute("selectedStatus", effectiveStatus);
 		model.addAttribute("recentSlots", recentSlots);
 		model.addAttribute("recentEvents", recentEvents);
 		model.addAttribute("slotEventsMap", slotEventsMap);
