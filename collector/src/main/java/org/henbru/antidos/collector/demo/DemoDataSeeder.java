@@ -613,28 +613,6 @@ public class DemoDataSeeder {
 			int retainedCount,
 			boolean locked,
 			boolean completed,
-			Instant lastUpdatedAt
-	) {
-		return createEnrichedEvent(
-				serverId, valveName, slotKey, slotTime, ip, asn, asOrg, country, type,
-				requestCount, retainedCount, locked, completed, lastUpdatedAt, 1
-		);
-	}
-
-	private ClientEvent createEnrichedEvent(
-			String serverId,
-			String valveName,
-			long slotKey,
-			Instant slotTime,
-			String ip,
-			Long asn,
-			String asOrg,
-			String country,
-			org.henbru.antidos.collector.model.ClientType type,
-			int requestCount,
-			int retainedCount,
-			boolean locked,
-			boolean completed,
 			Instant lastUpdatedAt,
 			int distinctClients
 	) {

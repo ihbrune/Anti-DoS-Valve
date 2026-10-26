@@ -5,17 +5,17 @@ import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import jakarta.annotation.PreDestroy;
+
 import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.config.EndpointConfig;
 import org.henbru.antidos.collector.config.ValveRuleResolver;
 import org.henbru.antidos.collector.enrichment.EntityResolver;
 import org.henbru.antidos.collector.model.ClientEvent;
 import org.henbru.antidos.collector.model.EndpointHeartbeat;
-import org.henbru.antidos.collector.model.MonitoredValve;
 import org.henbru.antidos.collector.model.NetworkEntity;
 import org.henbru.antidos.collector.model.PollEventLog;
 import org.henbru.antidos.collector.model.SlotSnapshot;
@@ -25,11 +25,12 @@ import org.henbru.antidos.collector.storage.ClientEventRepository;
 import org.henbru.antidos.collector.storage.HeartbeatRepository;
 import org.henbru.antidos.collector.storage.PollEventLogRepository;
 import org.henbru.antidos.collector.storage.SlotSnapshotRepository;
-import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+
+import jakarta.annotation.PreDestroy;
 
 /**
  * Service that orchestrates periodic polling, gap catch-up, and telemetry persistence for monitored endpoints.
@@ -390,7 +391,7 @@ public class CollectorPollerService {
 
 			boolean isVisitorTrackingActive = (details.valve() != null && Boolean.TRUE.equals(details.valve().visitorCookieEnabled()))
 					|| (monitoredValveRepository != null && monitoredValveRepository.findByServerIdAndValveName(endpoint.getName(), valveName)
-							.map(MonitoredValve::visitorCookieEnabled)
+							.map(v -> v.visitorCookieEnabled())
 							.orElse(false));
 
 			// 1. Ingest blocked clients (status = BLOCKED, locked = true)
@@ -553,11 +554,7 @@ public class CollectorPollerService {
 		this.knownConfigHashes.clear();
 	}
 
-	private record SlotIngestResult(int slotsCount, int eventsCount, int blockedEventsCount, String warning, long networkDurationMs) {
-		public SlotIngestResult(int slotsCount, int eventsCount, String warning, long networkDurationMs) {
-			this(slotsCount, eventsCount, 0, warning, networkDurationMs);
-		}
-	}
+	private record SlotIngestResult(int slotsCount, int eventsCount, int blockedEventsCount, String warning, long networkDurationMs) {}
 	private record IngestResult(int slotsIngested, int eventsIngested, int blockedEventsIngested, List<String> warnings, long networkDurationMs) {}
 
 	private static Instant parseInstantOrFallback(String str, Instant fallback) {

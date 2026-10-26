@@ -17,7 +17,6 @@ import org.springframework.web.bind.annotation.PostMapping;
  * telemetry cascades, threat intel indices, and operational maintenance triggers.
  */
 @Controller
-@SuppressWarnings("null")
 public class SystemController {
 
 	private final SystemStatusService systemStatusService;
