@@ -70,6 +70,8 @@ public class DemoModeService {
 			properties.getValveRules().put("Primary-Rate-Limiter", new org.henbru.antidos.collector.config.ValveRuleConfig(true, 15, "1000"));
 			// Scenario 3: Overlapping Valve -> disable active tracking to avoid double-counting IPs
 			properties.getValveRules().put("IPv6-Rate-Limiter", new org.henbru.antidos.collector.config.ValveRuleConfig(false, 10, "0"));
+			// Scenario 4: Zero-Tolerance Honeypot -> capture every probe immediately
+			properties.getValveRules().put("HONEYPOT-PROBE-VALVE", new org.henbru.antidos.collector.config.ValveRuleConfig(true, 1, "500"));
 		}
 
 		if (printBanner) {
@@ -104,7 +106,7 @@ public class DemoModeService {
 					"demo-token",
 					false,
 					true,
-					List.of("Primary-Rate-Limiter", "Subnet-Guard", "IPv6-Rate-Limiter")
+					List.of("Primary-Rate-Limiter", "Subnet-Guard", "IPv6-Rate-Limiter", "HONEYPOT-PROBE-VALVE")
 			));
 			demoEndpoints.add(new EndpointConfig(
 					"Demo-API-Gateway",
@@ -133,7 +135,7 @@ public class DemoModeService {
 						"demo-token",
 						false,
 						true,
-						List.of("Primary-Rate-Limiter", "Subnet-Guard", "IPv6-Rate-Limiter")
+						List.of("Primary-Rate-Limiter", "Subnet-Guard", "IPv6-Rate-Limiter", "HONEYPOT-PROBE-VALVE")
 				));
 				demoEndpoints.add(new EndpointConfig(
 						"Demo-API-Gateway " + letter,

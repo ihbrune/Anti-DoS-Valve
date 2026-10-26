@@ -51,6 +51,9 @@ public class MockValveSimulator {
 				if (matchesFilter(filterValve, "IPv6-Rate-Limiter")) {
 					valves.add(buildEdgeIpv6Summary(nodeId, currentSlotKey, lastCompletedSlotKey, 3));
 				}
+				if (matchesFilter(filterValve, "HONEYPOT-PROBE-VALVE")) {
+					valves.add(buildEdgeHoneypotSummary(nodeId, currentSlotKey, lastCompletedSlotKey, 4));
+				}
 			}
 			case "api-gateway" -> {
 				if (matchesFilter(filterValve, "API-DoS-Shield")) {
@@ -338,6 +341,49 @@ public class MockValveSimulator {
 		);
 	}
 
+	private ValveOverviewDto.ValveSummaryDto buildEdgeHoneypotSummary(String nodeId, long currentKey, long lastCompletedKey, int order) {
+		SlotMetrics cur = calculateMetrics(nodeId, "HONEYPOT-PROBE-VALVE", currentKey);
+		SlotMetrics prev = calculateMetrics(nodeId, "HONEYPOT-PROBE-VALVE", lastCompletedKey);
+
+		long offset = (nodeId != null) ? Math.abs(nodeId.hashCode() % 10_000L) : 0L;
+		long cumulative = 24_000L + offset + (currentKey % 50_000L) * 120L;
+		return new ValveOverviewDto.ValveSummaryDto(
+				"HONEYPOT-PROBE-VALVE",
+				"Zero-tolerance honeypot trap blocking scanners and probers across the entire server on first access (*.php, *.cgi, *.aspx, /.env).",
+				order,
+				"BLOCKING",
+				false,
+				true,
+				429,
+				0,
+				SLOT_LENGTH_SECONDS,
+				NUMBER_OF_SLOTS,
+				0.0f,
+				32,
+				64,
+				500,
+				1000,
+				".*\\.(php|cgi|aspx)$|.*/wp-.*|.*/\\.env.*",
+				null,
+				"127.0.0.1",
+				null,
+				"/antidos-status",
+				null,
+				0L,
+				cur.activeCounters(),
+				cur.blockedCounters(),
+				currentKey,
+				lastCompletedKey,
+				cumulative,
+				prev.totalRequests(),
+				prev.activeCounters(),
+				prev.blockedCounters(),
+				NUMBER_OF_SLOTS,
+				false,
+				false
+		);
+	}
+
 	private ValveOverviewDto.ValveSummaryDto buildApiShieldSummary(String nodeId, long currentKey, long lastCompletedKey, int order) {
 		SlotMetrics cur = calculateMetrics(nodeId, "API-DoS-Shield", currentKey);
 		SlotMetrics prev = calculateMetrics(nodeId, "API-DoS-Shield", lastCompletedKey);
@@ -465,6 +511,9 @@ public class MockValveSimulator {
 				if ("IPv6-Rate-Limiter".equalsIgnoreCase(valveName)) {
 					yield calculateIpv6Metrics(slotKey, rnd);
 				}
+				if ("HONEYPOT-PROBE-VALVE".equalsIgnoreCase(valveName)) {
+					yield calculateHoneypotMetrics(slotKey, rnd);
+				}
 				yield calculateEdgePrimaryMetrics(slotKey, rnd);
 			}
 			case "staging-node" -> calculateStagingMetrics(slotKey, rnd);
@@ -587,6 +636,27 @@ public class MockValveSimulator {
 		}
 
 		return new SlotMetrics(totalRequests, activeCounters, blocked.size(), blocked);
+	}
+
+	private SlotMetrics calculateHoneypotMetrics(long slotKey, Random rnd) {
+		int probeCount = 1 + rnd.nextInt(3);
+		List<ValveDetailsDto.BlockedClientDto> blocked = new ArrayList<>();
+		String lastUpdate = DateTimeFormatter.ISO_INSTANT.format(
+				Instant.ofEpochMilli(slotKey * SLOT_LENGTH_MILLIS + 1500)
+		);
+		String[] scannerIps = {
+				"185.220.101.5",
+				"89.248.163.74",
+				"194.26.29.112",
+				"45.154.255.88"
+		};
+		for (int i = 0; i < probeCount; i++) {
+			String ip = scannerIps[(int) ((slotKey + i) % scannerIps.length)];
+			blocked.add(new ValveDetailsDto.BlockedClientDto(
+					ip, 1, 0, 1, true, lastUpdate, 1, 0, null
+			));
+		}
+		return new SlotMetrics(probeCount, 0, blocked.size(), blocked);
 	}
 
 	private SlotMetrics calculateStagingMetrics(long slotKey, Random rnd) {

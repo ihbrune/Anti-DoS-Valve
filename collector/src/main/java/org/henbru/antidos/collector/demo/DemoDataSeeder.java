@@ -396,6 +396,52 @@ public class DemoDataSeeder {
 						null, edgeServer, "IPv6-Rate-Limiter", slotKey,
 						startTime, endTime, edgeIpv6Reqs, edgeIpv6Active, edgeIpv6Blocked, true, endTime
 				));
+
+				// Server 1 - Valve 4: HONEYPOT-PROBE-VALVE (zero-tolerance trap catching vulnerability scanners & crawler probes)
+				long edgeHoneypotReqs = 0L;
+				int edgeHoneypotBlocked = 0;
+
+				if ((slotKey + idx * 7) % 31 == 0) {
+					edgeHoneypotBlocked++;
+					edgeHoneypotReqs++;
+					events.add(createEnrichedEvent(
+							edgeServer, "HONEYPOT-PROBE-VALVE", slotKey, startTime,
+							"194.26.29.112", 49981L, "Censys Vulnerability Scanner", "NL", org.henbru.antidos.collector.model.ClientType.DATACENTER,
+							1, 0, true, true, endTime, 1
+					));
+				}
+				if ((slotKey + idx * 11) % 43 == 0) {
+					edgeHoneypotBlocked++;
+					edgeHoneypotReqs++;
+					events.add(createEnrichedEvent(
+							edgeServer, "HONEYPOT-PROBE-VALVE", slotKey, startTime,
+							"185.220.101.5", 208294L, "Zwiebelfreunde (Tor Exit)", "DE", org.henbru.antidos.collector.model.ClientType.TOR_EXIT_NODE,
+							1, 0, true, true, endTime, 1
+					));
+				}
+				if ((slotKey + idx * 13) % 57 == 0) {
+					edgeHoneypotBlocked++;
+					edgeHoneypotReqs++;
+					events.add(createEnrichedEvent(
+							edgeServer, "HONEYPOT-PROBE-VALVE", slotKey, startTime,
+							"89.248.163.74", 49981L, "Recubed B.V. (Port Scanner)", "NL", org.henbru.antidos.collector.model.ClientType.DATACENTER,
+							1, 0, true, true, endTime, 1
+					));
+				}
+				if ((slotKey + idx * 17) % 71 == 0) {
+					edgeHoneypotBlocked++;
+					edgeHoneypotReqs++;
+					events.add(createEnrichedEvent(
+							edgeServer, "HONEYPOT-PROBE-VALVE", slotKey, startTime,
+							"45.154.255.88", 45102L, "Alibaba Cloud Scraper", "SG", org.henbru.antidos.collector.model.ClientType.DATACENTER,
+							1, 0, true, true, endTime, 1
+					));
+				}
+
+				snapshots.add(new SlotSnapshot(
+						null, edgeServer, "HONEYPOT-PROBE-VALVE", slotKey,
+						startTime, endTime, edgeHoneypotReqs, 0, edgeHoneypotBlocked, true, endTime
+				));
 			}
 
 			// -----------------------------------------------------------------
@@ -514,8 +560,8 @@ public class DemoDataSeeder {
 					int activeEvs = 40 + rnd.nextInt(30);
 					logs.add(new PollEventLog(
 							null, name, url,
-							pollTime, "SUCCESS", 200, 12L + rnd.nextInt(15), 3, 3, activeEvs, 0,
-							"Polled 3 valve(s), 3 slot(s), " + activeEvs + " event(s)", null
+							pollTime, "SUCCESS", 200, 12L + rnd.nextInt(15), 4, 4, activeEvs, 0,
+							"Polled 4 valve(s), 4 slot(s), " + activeEvs + " event(s)", null
 					));
 				} else if (name.contains("API")) {
 					boolean underAttack = (h >= 12 && h <= 15) || (h <= 1);

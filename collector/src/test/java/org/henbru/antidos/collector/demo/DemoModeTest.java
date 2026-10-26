@@ -107,10 +107,11 @@ class DemoModeTest {
 		// Verify that ValveStatusClient can deserialize it into ValveOverviewDto
 		ValveOverviewDto overview = objectMapper.readValue(overviewJson, ValveOverviewDto.class);
 		assertNotNull(overview);
-		assertEquals(3, overview.valves().size(), "Edge node should provide Primary-Rate-Limiter, Subnet-Guard, and IPv6-Rate-Limiter");
+		assertEquals(4, overview.valves().size(), "Edge node should provide Primary-Rate-Limiter, Subnet-Guard, IPv6-Rate-Limiter, and HONEYPOT-PROBE-VALVE");
 		assertEquals("Primary-Rate-Limiter", overview.valves().getFirst().monitorName());
 		assertEquals("Subnet-Guard", overview.valves().get(1).monitorName());
 		assertEquals("IPv6-Rate-Limiter", overview.valves().get(2).monitorName());
+		assertEquals("HONEYPOT-PROBE-VALVE", overview.valves().get(3).monitorName());
 
 		// Fetch details JSON via MockMvc
 		String detailsJson = mockMvc.perform(get("/mock-valve/api-gateway/antidos-status")
@@ -136,7 +137,7 @@ class DemoModeTest {
 		ValveOverviewDto overview = simulator.buildOverview("edge-eu", null);
 		assertNotNull(overview);
 		assertNotNull(overview.serverTime());
-		assertEquals(3, overview.valves().size(), "Edge node should provide 3 valves");
+		assertEquals(4, overview.valves().size(), "Edge node should provide 4 valves");
 
 		ValveOverviewDto.ValveSummaryDto primary = overview.valves().getFirst();
 		assertEquals("Primary-Rate-Limiter", primary.monitorName());
@@ -161,6 +162,17 @@ class DemoModeTest {
 		assertNotNull(ipv6Details.selectedSlot());
 		assertTrue(ipv6Details.blockedClients().stream().anyMatch(c -> c.key().contains(":")),
 				"IPv6-Rate-Limiter should produce IPv6 client blocks");
+
+		ValveOverviewDto.ValveSummaryDto honeypotSummary = overview.valves().get(3);
+		assertEquals("HONEYPOT-PROBE-VALVE", honeypotSummary.monitorName());
+		assertEquals(0, honeypotSummary.allowedRequestsPerSlot(), "Honeypot should have allowedRequestsPerSlot = 0");
+		assertTrue(honeypotSummary.serverWideBlocking(), "Honeypot should enforce server-wide blocking");
+
+		ValveDetailsDto honeypotDetails = simulator.buildDetails("edge-eu", "HONEYPOT-PROBE-VALVE", "previous", "all");
+		assertNotNull(honeypotDetails);
+		assertNotNull(honeypotDetails.selectedSlot());
+		assertFalse(honeypotDetails.blockedClients().isEmpty(), "HONEYPOT-PROBE-VALVE should produce blocked probers");
+		assertEquals("HONEYPOT-PROBE-VALVE", honeypotDetails.valve().monitorName());
 
 		ValveDetailsDto apiDetails = simulator.buildDetails("api-gateway", "API-DoS-Shield", "previous", "all");
 		assertNotNull(apiDetails);
@@ -190,7 +202,7 @@ class DemoModeTest {
 				.getResponse()
 				.getContentAsString();
 		ValveOverviewDto overview = objectMapper.readValue(validResponse, ValveOverviewDto.class);
-		assertEquals(3, overview.valves().size());
+		assertEquals(4, overview.valves().size());
 		assertEquals("Primary-Rate-Limiter", overview.valves().getFirst().monitorName());
 	}
 
@@ -267,6 +279,13 @@ class DemoModeTest {
 				"Subnet rollup should group rotating IPv6 clients into canonical /64 prefix");
 		assertTrue(rollup.stream().anyMatch(o -> o.clientKey().contains("/24")),
 				"Subnet rollup should contain /24 subnets");
+
+		// 8. Verify Honeypot events are seeded
+		var honeypotEvents = clientEventRepository.findRecentEventsFiltered(
+				java.util.List.of("Demo-Edge-EU"), java.util.List.of("HONEYPOT-PROBE-VALVE"), null, null, null, 10, 0);
+		assertFalse(honeypotEvents.isEmpty(), "Should have seeded Honeypot events for HONEYPOT-PROBE-VALVE");
+		assertTrue(honeypotEvents.getFirst().isHoneypot(), "Event should be recognized as Honeypot event");
+		assertEquals(1, honeypotEvents.getFirst().requestCount(), "Honeypot events should record individual probe hits");
 	}
 
 	@Test
