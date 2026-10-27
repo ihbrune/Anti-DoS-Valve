@@ -25,6 +25,7 @@ public class CollectorScheduler {
 	private final org.henbru.antidos.collector.enrichment.CrawlerSyncService crawlerSyncService;
 	private final org.henbru.antidos.collector.storage.NetworkEntityRepository networkEntityRepository;
 	private final org.henbru.antidos.collector.enrichment.EntityResolver entityResolver;
+	private final org.henbru.antidos.collector.report.DailyReportService dailyReportService;
 	private final CollectorProperties properties;
 
 	public CollectorScheduler(
@@ -35,6 +36,7 @@ public class CollectorScheduler {
 			org.henbru.antidos.collector.enrichment.CrawlerSyncService crawlerSyncService,
 			org.henbru.antidos.collector.storage.NetworkEntityRepository networkEntityRepository,
 			org.henbru.antidos.collector.enrichment.EntityResolver entityResolver,
+			org.henbru.antidos.collector.report.DailyReportService dailyReportService,
 			CollectorProperties properties) {
 		this.pollerService = pollerService;
 		this.slotSnapshotRepository = slotSnapshotRepository;
@@ -43,6 +45,7 @@ public class CollectorScheduler {
 		this.crawlerSyncService = crawlerSyncService;
 		this.networkEntityRepository = networkEntityRepository;
 		this.entityResolver = entityResolver;
+		this.dailyReportService = dailyReportService;
 		this.properties = properties;
 	}
 
@@ -125,6 +128,21 @@ public class CollectorScheduler {
 		log.info("Retention cleanup completed in {}ms: purged {} slot snapshots, {} client events, {} poll event logs, {} orphan entities, and expired {} stale entities for re-enrichment",
 				durationMs, deletedSlots, deletedEvents, deletedLogs, deletedEntities, expiredEntities);
 		return result;
+	}
+
+	/**
+	 * Daily operational report generation: runs at 01:00 AM (2 hours prior to 03:00 AM retention cleanup)
+	 * to compile and persist normalized fleet metrics and incident forensics for yesterday.
+	 */
+	@Scheduled(cron = "${collector.report.cron:0 0 1 * * *}")
+	public void runScheduledDailyReport() {
+		if (properties.isReportEnabled() && dailyReportService != null) {
+			try {
+				dailyReportService.generateReportForYesterday();
+			} catch (Exception e) {
+				log.error("Unexpected error in scheduled daily report generation: {}", e.getMessage(), e);
+			}
+		}
 	}
 
 	/**

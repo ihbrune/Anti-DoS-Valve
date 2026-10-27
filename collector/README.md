@@ -191,6 +191,7 @@ The Collector acts as the long-term memory, brain, and investigative workbench f
 | **Subnet Profiling & Surge Detection** | Computes 30-day moving daily baselines and hourly curves per subnet | Detects stealthy scraping surges (e.g. 5x normal volume) and dormancy breakouts from previously silent subnets. |
 | **Forensic 2D Cluster Analysis** | Scatters subnets by Total Requests vs. Distinct IPs | Exposes residential proxy botnets (hundreds of IPs per subnet each sending only 1–3 requests to evade edge limits). |
 | **Persistent Operator Knowledge (`/notes`)** | Stores manual analyst notes and forensic verdict badges | Completely immune to data retention cleanups; preserves institutional knowledge permanently across the fleet. |
+| **Permanent Operational Reports (`/reports`)** | Compiles daily executive summaries & normalized peak performance metrics | Runs automatically at 01:00 AM before nightly retention cleanups; preserves fleet & server statistics in Markdown forever. |
 
 ---
 

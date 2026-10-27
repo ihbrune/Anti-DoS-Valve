@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Optional;
 import org.henbru.antidos.collector.model.ClientEvent;
 import org.henbru.antidos.collector.model.ClientType;
+import org.henbru.antidos.collector.model.DailyReport;
 import org.henbru.antidos.collector.model.EndpointHeartbeat;
 import org.henbru.antidos.collector.model.PollEventLog;
 import org.henbru.antidos.collector.model.SlotSnapshot;
@@ -59,6 +60,9 @@ class DatabaseMigrationAndRepositoryTest {
 
 	@Autowired
 	private org.henbru.antidos.collector.storage.SubnetProfileRepository subnetProfileRepository;
+
+	@Autowired
+	private org.henbru.antidos.collector.storage.DailyReportRepository dailyReportRepository;
 
 	@Test
 	void testHeartbeatRepositoryUpsertAndFind() {
@@ -993,6 +997,69 @@ class DatabaseMigrationAndRepositoryTest {
 		assertTrue(loadedProfile.get().isAuthenticatedTracked24h());
 		assertEquals(75.0, loadedProfile.get().returningRatio24h(), 0.01);
 		assertEquals(20.0, loadedProfile.get().authenticatedRatio24h(), 0.01);
+	}
+
+	@Test
+	void testDailyReportRepositoryUpsertAndQuery() {
+		String testDate = "2026-10-15";
+		dailyReportRepository.deleteByReportDate(testDate);
+
+		DailyReport report = new DailyReport(
+				null,
+				testDate,
+				"NORMAL",
+				1500000L,
+				1200L,
+				85.5,
+				3.2,
+				"MAIN_VALVE",
+				"NODE_1",
+				2,
+				5,
+				"# Daily Report 2026-10-15\nEverything fine.",
+				Instant.now(),
+				Instant.now()
+		);
+
+		dailyReportRepository.upsert(report);
+
+		Optional<DailyReport> loaded = dailyReportRepository.findByReportDate(testDate);
+		assertTrue(loaded.isPresent());
+		assertEquals("NORMAL", loaded.get().status());
+		assertEquals(1500000L, loaded.get().totalRequests());
+		assertEquals(1200L, loaded.get().totalBlocked());
+		assertEquals(85.5, loaded.get().peakRequestsPerSec(), 0.01);
+		assertEquals("MAIN_VALVE", loaded.get().peakValveName());
+		assertEquals("NODE_1", loaded.get().peakServerId());
+		assertTrue(loaded.get().reportMarkdown().contains("# Daily Report"));
+
+		// Test update (upsert)
+		DailyReport updated = new DailyReport(
+				null,
+				testDate,
+				"ATTACK_MITIGATED",
+				2000000L,
+				50000L,
+				195.0,
+				12.5,
+				"MAIN_VALVE",
+				"NODE_1",
+				2,
+				25,
+				"# Daily Report 2026-10-15 (Updated)\nAttack mitigated.",
+				report.createdAt(),
+				Instant.now()
+		);
+		dailyReportRepository.upsert(updated);
+
+		Optional<DailyReport> reloaded = dailyReportRepository.findByReportDate(testDate);
+		assertTrue(reloaded.isPresent());
+		assertEquals("ATTACK_MITIGATED", reloaded.get().status());
+		assertEquals(2000000L, reloaded.get().totalRequests());
+		assertEquals(50000L, reloaded.get().totalBlocked());
+		assertEquals(195.0, reloaded.get().peakRequestsPerSec(), 0.01);
+
+		assertTrue(dailyReportRepository.findAllReportDates().contains(testDate));
 	}
 }
 

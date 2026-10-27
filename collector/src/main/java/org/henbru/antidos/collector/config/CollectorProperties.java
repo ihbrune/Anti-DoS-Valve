@@ -24,6 +24,8 @@ public class CollectorProperties {
 	private int rollupWindowMinutes = 60;
 	private int rollupRetentionDays = 180;
 	private boolean rollupEnabled = true;
+	private boolean reportEnabled = true;
+	private String reportCron = "0 0 1 * * *"; // Daily at 01:00 AM (2 hours prior to 03:00 AM retention cleanup)
 	private List<EndpointConfig> endpoints = new ArrayList<>();
 	private EnrichmentConfig enrichment = new EnrichmentConfig();
 
@@ -165,5 +167,21 @@ public class CollectorProperties {
 
 	public void setRollupEnabled(boolean rollupEnabled) {
 		this.rollupEnabled = rollupEnabled;
+	}
+
+	public boolean isReportEnabled() {
+		return reportEnabled;
+	}
+
+	public void setReportEnabled(boolean reportEnabled) {
+		this.reportEnabled = reportEnabled;
+	}
+
+	public String getReportCron() {
+		return reportCron;
+	}
+
+	public void setReportCron(String reportCron) {
+		this.reportCron = reportCron;
 	}
 }

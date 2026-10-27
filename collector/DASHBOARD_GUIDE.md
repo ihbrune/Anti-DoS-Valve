@@ -20,6 +20,7 @@ The Collector interface is built around high-throughput, real-time observability
   * **Profiles (`/profiles`):** Dedicated baseline inventory, 30-day moving daily frequencies, 24h surge multipliers, dormancy breakouts, and residential proxy cluster triage.
   * **Incident Explorer (`/events`):** High-resolution log search with CIDR subnets, exact time horizons, and classification tags.
   * **Network Notes (`/notes`):** Persistent operator knowledge archive and forensic memory for ASNs and Subnets, completely immune to data retention cleanups.
+  * **Operational Reports (`/reports`):** Permanent daily executive summaries & normalized peak performance metrics, generated at 01:00 AM before data retention cleanups.
   * **Event Log (`/poll-log`):** Background collection audit trail, latency tracking, and automatic recovery events.
   * **Crawlers & Bots (`/crawlers`):** Official search engine and AI scraper IP ranges with synchronization metrics.
   * **System & Config (`/system`):** Retention policies, database internals, polling cascades, and manual maintenance triggers.

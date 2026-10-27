@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<div th:fragment="reportContent" id="report-display-container">
+    <div th:if="${selectedReport != null}">
+        <!-- Report Action Header -->
+        <div class="card" style="padding: 16px 20px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <div style="font-size: 20px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                        <span>&#x1F4C5;</span>
+                        <span th:text="'Report for ' + ${selectedReport.reportDate()}">Report for 2026-10-26</span>
+                    </div>
+                    <span th:class="'badge ' + ${selectedReport.statusBadgeClass()}"
+                          style="font-size: 12px; padding: 4px 10px;"
+                          th:text="${selectedReport.statusIcon() + ' ' + selectedReport.statusLabel()}">
+                        OPERATIONAL
+                    </span>
+                    <div style="display: flex; gap: 8px; font-size: 12.5px; color: var(--text-muted); align-items: center; margin-left: 6px;">
+                        <span><strong>Total:</strong> <span th:text="${#numbers.formatDecimal(selectedReport.totalRequests(), 0, 'POINT', 0, 'COMMA')}">1.482.910</span> req</span>
+                        <span>&bull;</span>
+                        <span><strong>Blocks:</strong> <span th:text="${#numbers.formatDecimal(selectedReport.totalBlocked(), 0, 'POINT', 0, 'COMMA')}">2.140</span> (<span th:text="${selectedReport.formattedBlockRate()}">0.14%</span>)</span>
+                        <span>&bull;</span>
+                        <span><strong>Peak Rate:</strong> <span th:text="${selectedReport.formattedPeakRequestsPerSec()}">142.0</span> req/s</span>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <button type="button" class="btn" id="btnCopyMarkdown" onclick="copyReportMarkdown()" title="Copy Markdown source to clipboard">
+                        <span>&#x1F4CB;</span> <span id="copyBtnText">Copy Markdown</span>
+                    </button>
+                    <a th:href="@{'/reports/' + ${selectedReport.reportDate()} + '/download'}" class="btn" title="Download raw Markdown report as a file">
+                        <span>&#x1F4BE;</span> Download .md
+                    </a>
+                    <form th:action="@{/reports/generate}" method="post" style="display: inline-block;">
+                        <input type="hidden" name="date" th:value="${selectedReport.reportDate()}">
+                        <button type="submit" class="btn btn-secondary" title="Re-aggregate and overwrite report for this date">
+                            <span>&#x1F504;</span> Re-aggregate
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rendered Markdown Body -->
+        <div class="card doc-content" style="padding: 32px 36px; line-height: 1.65; box-shadow: var(--shadow-sm);">
+            <div th:utext="${renderedHtml}">
+                <!-- Rendered Markdown HTML -->
+            </div>
+        </div>
+
+        <!-- Hidden raw markdown for clipboard copy -->
+        <textarea id="raw-markdown-content" style="display: none;" th:text="${selectedReport.reportMarkdown()}"></textarea>
+    </div>
+
+    <!-- Empty State -->
+    <div th:unless="${selectedReport != null}" class="card empty-state" style="padding: 64px 32px; text-align: center;">
+        <div style="font-size: 48px; margin-bottom: 16px; opacity: 0.85;">&#x1F4C4;</div>
+        <h3 style="font-size: 20px; margin-bottom: 10px; color: var(--text-primary);">No report selected or available</h3>
+        <p style="color: var(--text-muted); max-width: 520px; margin: 0 auto 24px auto; line-height: 1.5;">
+            Select a past date from the archive on the left, or generate a fresh operational summary using the quick-actions bar above.
+        </p>
+        <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+            <form th:action="@{/reports/generate}" method="post" style="display: inline-block;">
+                <input type="hidden" name="date" th:value="${yesterdayDate}">
+                <button type="submit" class="btn btn-primary">
+                    <span>&#x26A1;</span> Generate Report for Yesterday (<span th:text="${yesterdayDate}"></span>)
+                </button>
+            </form>
+            <form th:action="@{/reports/generate}" method="post" style="display: inline-block;">
+                <input type="hidden" name="date" th:value="${todayDate}">
+                <button type="submit" class="btn">
+                    <span>&#x1F50D;</span> Live Preview for Today (<span th:text="${todayDate}"></span>)
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
