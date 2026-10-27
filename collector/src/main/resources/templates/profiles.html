@@ -73,13 +73,64 @@
     </header>
 
     <!-- Header & Title -->
-    <div class="section-header" style="margin-bottom: 20px;">
+    <div class="section-header" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
         <div>
             <div class="section-title">
                 <span>&#x26A1;</span> Subnet Profiles &amp; Baseline Radar
             </div>
             <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
                 Inspect long-term 30-day baseline frequencies, 24h surge multiples, dormancy breakouts, and distributed proxy clusters across all observed subnets.
+            </div>
+        </div>
+        <!-- Data Freshness & Catch-Up Action -->
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <div th:if="${freshness != null}" class="badge"
+                 th:classappend="${freshness.hasUnaggregatedEvents() ? 'badge-warning' : 'badge-success'}"
+                 style="padding: 6px 12px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;"
+                 th:title="${freshness.latestRollupEnd() != null ? 'Abgeschlossene Rollups bis ' + #temporals.format(freshness.latestRollupEnd(), 'dd.MM.yyyy HH:mm') + ' Uhr' : 'Noch keine Rollups vorhanden'}">
+                <span th:text="${freshness.hasUnaggregatedEvents() ? '&#x26A0;&#xFE0F;' : '&#x2705;'}">&#x26A0;&#xFE0F;</span>
+                <span>
+                    <strong>Datenstand:</strong>
+                    <span th:if="${freshness.latestRollupEnd() != null}" th:text="${#temporals.format(freshness.latestRollupEnd(), 'dd.MM. HH:mm')} + ' Uhr'">27.10. 21:00 Uhr</span>
+                    <span th:if="${freshness.latestRollupEnd() == null}">Keine Rollup-Daten</span>
+                </span>
+                <span th:if="${freshness.hasUnaggregatedEvents()}" style="opacity: 0.85; font-size: 11px;"
+                      th:text="'(' + ${freshness.unaggregatedMinutes()} + 'm Verzögerung)'">(20m Verzögerung)</span>
+            </div>
+            <form method="post" th:action="@{/profiles/refresh}" style="margin: 0;">
+                <input type="hidden" name="activityPattern" th:value="${activityPattern}">
+                <input type="hidden" name="minRequests" th:value="${minRequests}">
+                <input type="hidden" name="clientQuery" th:value="${clientQuery}">
+                <input type="hidden" name="asn" th:value="${selectedAsn}">
+                <input type="hidden" name="sortBy" th:value="${sortBy}">
+                <input type="hidden" name="limit" th:value="${limit}">
+                <button type="submit" class="btn" style="font-size: 11px; padding: 5px 10px;" title="Rollups und Profile jetzt bis zum letzten abgeschlossenen Fenster aktualisieren">
+                    <span>&#x1F504;</span> Aktualisieren
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Data Lag Information Banner -->
+    <div th:if="${freshness != null and freshness.hasUnaggregatedEvents()}"
+         style="margin-bottom: 20px; padding: 12px 18px; border-radius: var(--radius-md); background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); display: flex; align-items: flex-start; gap: 14px;">
+        <span style="font-size: 22px; line-height: 1;">&#x2139;&#xFE0F;</span>
+        <div style="font-size: 12.5px; line-height: 1.5; color: var(--text-primary);">
+            <div style="font-weight: 700; margin-bottom: 2px;">
+                Hinweis zum Datenstand: Nicht alle Ereignisse sind bisher in den Profilen verarbeitet
+            </div>
+            <div>
+                Die Profilstatistiken (24h-Anfragen, Sperren, Surge-Faktor) basieren auf stündlich aggregierten Rollups mit Datenstand bis
+                <strong th:text="${freshness.latestRollupEnd() != null ? #temporals.format(freshness.latestRollupEnd(), 'dd.MM.yyyy HH:mm') + ' Uhr' : 'unbekannt'}">27.10.2026 21:00 Uhr</strong>.
+                Neuere Rohdaten liegen bis <strong th:text="${freshness.latestEventTime() != null ? #temporals.format(freshness.latestEventTime(), 'HH:mm') + ' Uhr' : 'jetzt'}">21:48 Uhr</strong> vor.
+                Ereignisse der vergangenen <strong th:text="${freshness.unaggregatedMinutes()} + ' Minuten'">48 Minuten</strong>
+                (einschließlich kürzlich erfolgter 429-Sperren) werden erst nach Abschluss des laufenden Stundenfensters in die Profil-Aggregate übernommen.
+            </div>
+            <div style="margin-top: 6px; font-size: 11.5px; color: var(--text-muted);">
+                Aktuelle Echtzeit-Vorfälle und Sperren der letzten Minuten finden Sie sofort im
+                <a href="/events" style="color: var(--color-primary); font-weight: 600; text-decoration: underline;">Incident Explorer</a>
+                oder unter
+                <a href="/offenders" style="color: var(--color-primary); font-weight: 600; text-decoration: underline;">Top Offenders</a>.
             </div>
         </div>
     </div>
@@ -281,9 +332,16 @@
             </div>
         </div>
 
-        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px;">
-            <a href="/profiles" class="btn" style="font-size: 11px;">Reset Filters</a>
-            <button type="submit" class="btn btn-primary" style="font-size: 11px;">Apply Filters</button>
+        <!-- Filter Actions Bar (Left-aligned) -->
+        <div class="filter-actions">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button type="submit" class="btn btn-primary" style="font-size: 11px;">
+                    <span>&#x1F50E;</span> Apply Filters
+                </button>
+                <a href="/profiles" class="btn" style="font-size: 11px;">
+                    Reset Filters
+                </a>
+            </div>
         </div>
     </form>
 

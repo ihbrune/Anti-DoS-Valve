@@ -235,6 +235,12 @@ public class SubnetRollupRepository {
 		return ts != null ? Optional.of(ts.toInstant()) : Optional.empty();
 	}
 
+	public Optional<Instant> findLatestBucketEnd() {
+		String sql = "SELECT MAX(bucket_end) FROM client_subnet_rollups";
+		Timestamp ts = jdbcTemplate.queryForObject(sql, Timestamp.class);
+		return ts != null ? Optional.of(ts.toInstant()) : Optional.empty();
+	}
+
 	public List<org.henbru.antidos.collector.model.TimelinePoint> findTimeline(
 			List<String> servers,
 			List<String> valves,

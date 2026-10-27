@@ -592,5 +592,29 @@ class DashboardControllerTest {
 				.andExpect(content().string(containsString("Subnet Profiles &amp; Baseline Radar")))
 				.andExpect(content().string(containsString("Real-Time KPI Summary Cards")));
 	}
+
+	@Test
+	void testProfilesFilterActionsLeftAlignedAndFreshness() throws Exception {
+		mockMvc.perform(get("/profiles"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Datenstand:")))
+				.andExpect(content().string(containsString("class=\"filter-actions\"")))
+				.andExpect(content().string(containsString("Apply Filters")))
+				.andExpect(content().string(containsString("Reset Filters")));
+	}
+
+	@Test
+	void testProfilesRefreshPost() throws Exception {
+		mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/profiles/refresh"))
+				.andExpect(status().is3xxRedirection())
+				.andExpect(header().string("Location", "/profiles"));
+	}
+
+	@Test
+	void testProfilesTableLinksStayInProfiles() throws Exception {
+		mockMvc.perform(get("/fragments/profiles-table"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(not(containsString("/events(clientQuery="))));
+	}
 }
 

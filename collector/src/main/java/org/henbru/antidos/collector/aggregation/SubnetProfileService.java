@@ -24,15 +24,27 @@ public class SubnetProfileService {
 
 	private final SubnetProfileRepository profileRepository;
 	private final CollectorProperties properties;
+	private final org.henbru.antidos.collector.storage.SubnetRollupRepository rollupRepository;
+	private final org.henbru.antidos.collector.storage.ClientEventRepository clientEventRepository;
 
 	@Autowired
-	public SubnetProfileService(SubnetProfileRepository profileRepository, CollectorProperties properties) {
+	public SubnetProfileService(
+			SubnetProfileRepository profileRepository,
+			CollectorProperties properties,
+			@Autowired(required = false) org.henbru.antidos.collector.storage.SubnetRollupRepository rollupRepository,
+			@Autowired(required = false) org.henbru.antidos.collector.storage.ClientEventRepository clientEventRepository) {
 		this.profileRepository = profileRepository;
 		this.properties = properties;
+		this.rollupRepository = rollupRepository;
+		this.clientEventRepository = clientEventRepository;
+	}
+
+	public SubnetProfileService(SubnetProfileRepository profileRepository, CollectorProperties properties) {
+		this(profileRepository, properties, null, null);
 	}
 
 	public SubnetProfileService(SubnetProfileRepository profileRepository) {
-		this(profileRepository, new CollectorProperties());
+		this(profileRepository, new CollectorProperties(), null, null);
 	}
 
 	/**
@@ -101,6 +113,24 @@ public class SubnetProfileService {
 
 	public org.henbru.antidos.collector.model.SubnetProfileStats getProfileStats() {
 		return profileRepository.getProfileStats();
+	}
+
+	public org.henbru.antidos.collector.model.SubnetProfileFreshness getProfileFreshness() {
+		Instant latestRollupEnd = (rollupRepository != null)
+				? rollupRepository.findLatestBucketEnd().orElse(null)
+				: null;
+		Instant latestEventTime = (clientEventRepository != null)
+				? clientEventRepository.findLatestSlotTime().orElse(null)
+				: null;
+		Instant lastUpdated = profileRepository.findLatestUpdatedAt().orElse(null);
+		int windowMinutes = properties != null ? properties.getRollupWindowMinutes() : 60;
+
+		return org.henbru.antidos.collector.model.SubnetProfileFreshness.of(
+				latestRollupEnd,
+				latestEventTime,
+				lastUpdated,
+				windowMinutes
+		);
 	}
 }
 

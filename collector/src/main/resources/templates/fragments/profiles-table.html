@@ -21,7 +21,14 @@
                     <th>Classification</th>
                     <th>First Seen &amp; Dormancy</th>
                     <th>30-Day Daily Baseline</th>
-                    <th>Last 24h Activity</th>
+                    <th>
+                        Last 24h Activity
+                        <div th:if="${freshness != null and freshness.latestRollupEnd() != null}"
+                             style="font-size: 10px; font-weight: normal; color: var(--text-muted); margin-top: 1px;"
+                             th:title="'Rollup-Datenstand bis ' + ${#temporals.format(freshness.latestRollupEnd(), 'dd.MM.yyyy HH:mm')} + ' Uhr'">
+                            (Stand: <span th:text="${#temporals.format(freshness.latestRollupEnd(), 'HH:mm')}">21:00</span>)
+                        </div>
+                    </th>
                     <th>24h Unique IPs &amp; Spread</th>
                     <th>Surge Multiplier &amp; Threat Forensics</th>
                     <th style="text-align: right;">Forensics</th>
@@ -33,9 +40,10 @@
                     <td>
                         <div style="display: flex; flex-direction: column; gap: 3px;">
                             <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                <a th:href="@{/events(clientQuery=${p.subnetGroup()})}"
+                                <a th:href="@{/profiles(clientQuery=${p.subnetGroup()})}"
                                    class="ip-mono badge badge-warning"
                                    style="text-decoration: underline; font-weight: 600; font-size: 12px;"
+                                   title="Filter profiles by this subnet"
                                    th:text="${p.subnetGroup()}">198.51.100.0/24</a>
                                 <th:block th:if="${p.subnetGroup() != null and subnetAnnotations != null and subnetAnnotations.containsKey(p.subnetGroup())}">
                                     <span th:with="a=${subnetAnnotations.get(p.subnetGroup())}"
@@ -54,7 +62,11 @@
                                 </th:block>
                                 <span th:if="${p.countryCode() != null}" class="badge badge-secondary" style="padding: 1px 5px; font-size: 10px;" th:text="${p.countryCode()}">DE</span>
                                 <span th:if="${p.asn() != null}" style="display: inline-flex; align-items: center; gap: 3px;">
-                                    <a th:href="@{/events(asn=${p.asn()})}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px; text-decoration: none;" th:title="${p.asOrg()}" th:text="'AS' + ${p.asn()}">AS3320</a>
+                                    <a th:href="@{/profiles(asn=${p.asn()})}"
+                                       class="badge badge-info"
+                                       style="padding: 1px 6px; font-size: 9px; text-decoration: none;"
+                                       th:title="${p.asOrg() != null ? p.asOrg() + ' - Filter profiles by this ASN' : 'Filter profiles by this ASN'}"
+                                       th:text="'AS' + ${p.asn()}">AS3320</a>
                                     <th:block th:if="${asnAnnotations != null and asnAnnotations.containsKey(p.asn())}">
                                         <span th:with="a=${asnAnnotations.get(p.asn())}"
                                               class="badge-note"
@@ -183,8 +195,13 @@
 
         <!-- Table Footer & Status -->
         <div style="padding: 12px 18px; font-size: 12px; color: var(--text-muted); background: rgba(15, 23, 42, 0.5); border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-            <div>
-                Showing <strong th:text="${#lists.size(subnetProfiles)}">50</strong> of <strong th:text="${totalProfiles}">120</strong> persistent subnet profiles.
+            <div style="display: flex; align-items: center; gap: 14px;">
+                <span>
+                    Showing <strong th:text="${#lists.size(subnetProfiles)}">50</strong> of <strong th:text="${totalProfiles}">120</strong> persistent subnet profiles.
+                </span>
+                <span th:if="${freshness != null and freshness.latestRollupEnd() != null}" style="font-size: 11px; opacity: 0.85;">
+                    &bull; Rollup-Datenstand: <strong th:text="${#temporals.format(freshness.latestRollupEnd(), 'dd.MM.yyyy HH:mm')} + ' Uhr'">27.10. 21:00</strong>
+                </span>
             </div>
             <div th:if="${hasMore}">
                 <button type="button"

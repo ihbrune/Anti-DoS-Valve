@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import org.henbru.antidos.collector.model.ClientEvent;
 import org.henbru.antidos.collector.model.ClientType;
@@ -763,6 +764,12 @@ public class ClientEventRepository {
 		return jdbcTemplate.update(
 				"DELETE FROM client_events WHERE server_id = ? AND valve_name = ?",
 				serverId, valveName);
+	}
+
+	public Optional<Instant> findLatestSlotTime() {
+		String sql = "SELECT MAX(slot_time) FROM client_events";
+		Timestamp ts = jdbcTemplate.queryForObject(sql, Timestamp.class);
+		return ts != null ? Optional.of(ts.toInstant()) : Optional.empty();
 	}
 }
 

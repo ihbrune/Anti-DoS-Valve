@@ -260,4 +260,29 @@ class SubnetProfileServiceTest {
 		assertEquals(1, newSubnets.size());
 		assertEquals("198.51.200.0/24", newSubnets.getFirst().subnetGroup());
 	}
+
+	@Test
+	void testProfileFreshnessComputation() {
+		org.henbru.antidos.collector.model.SubnetProfileFreshness freshness = profileService.getProfileFreshness();
+		assertNotNull(freshness);
+		assertEquals(60, freshness.rollupWindowMinutes());
+
+		// Insert a rollup ending 30 minutes ago
+		Instant now = Instant.now();
+		Instant rollupEnd = now.minus(30, ChronoUnit.MINUTES);
+		Instant rollupStart = rollupEnd.minus(60, ChronoUnit.MINUTES);
+
+		ClientSubnetRollup rollup = new ClientSubnetRollup(
+				null, rollupStart, rollupEnd, 60, "srv-1", "valve-1", "198.51.100.0/24",
+				100, 100, 0, 5, 20, 20, 1, 3320L, "Telekom", "DE", ClientType.RESIDENTIAL,
+				now, 0, 0, 0, 0
+		);
+		rollupRepository.batchUpsert(List.of(rollup));
+
+		// Re-evaluate freshness
+		freshness = profileService.getProfileFreshness();
+		assertNotNull(freshness);
+		assertNotNull(freshness.latestRollupEnd());
+		assertTrue(freshness.hasData());
+	}
 }

@@ -55,6 +55,7 @@ public class DashboardController {
 	private final org.henbru.antidos.collector.annotation.NetworkAnnotationService annotationService;
 	private final org.henbru.antidos.collector.aggregation.SubnetProfileService subnetProfileService;
 	private final org.henbru.antidos.collector.poller.CollectorPollerService collectorPollerService;
+	private final org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService;
 
 	@org.springframework.beans.factory.annotation.Autowired
 	public DashboardController(
@@ -77,7 +78,9 @@ public class DashboardController {
 			@org.springframework.beans.factory.annotation.Autowired(required = false)
 			org.henbru.antidos.collector.aggregation.SubnetProfileService subnetProfileService,
 			@org.springframework.beans.factory.annotation.Autowired(required = false)
-			org.henbru.antidos.collector.poller.CollectorPollerService collectorPollerService) {
+			org.henbru.antidos.collector.poller.CollectorPollerService collectorPollerService,
+			@org.springframework.beans.factory.annotation.Autowired(required = false)
+			org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService) {
 		this.heartbeatRepository = heartbeatRepository;
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
@@ -92,6 +95,7 @@ public class DashboardController {
 		this.annotationService = annotationService;
 		this.subnetProfileService = subnetProfileService;
 		this.collectorPollerService = collectorPollerService;
+		this.rollupAggregationService = rollupAggregationService;
 	}
 
 	public DashboardController(
@@ -104,7 +108,7 @@ public class DashboardController {
 			org.henbru.antidos.collector.config.CollectorProperties properties,
 			org.henbru.antidos.collector.config.ValveRuleResolver valveRuleResolver) {
 		this(heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
-				subnetRollupRepository, documentationService, properties, valveRuleResolver, null, null, null, null, null, null);
+				subnetRollupRepository, documentationService, properties, valveRuleResolver, null, null, null, null, null, null, null);
 	}
 
 	public DashboardController(
@@ -116,7 +120,7 @@ public class DashboardController {
 			DocumentationService documentationService,
 			org.henbru.antidos.collector.config.CollectorProperties properties) {
 		this(heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
-				subnetRollupRepository, documentationService, properties, new org.henbru.antidos.collector.config.ValveRuleResolver(properties), null, null, null, null, null, null);
+				subnetRollupRepository, documentationService, properties, new org.henbru.antidos.collector.config.ValveRuleResolver(properties), null, null, null, null, null, null, null);
 	}
 
 	@org.springframework.web.bind.annotation.ModelAttribute("demoMode")
@@ -355,6 +359,32 @@ public class DashboardController {
 			Model model) {
 		populateProfilesModel(activityPattern, minRequests, clientQuery, asn, clientTypes, sortBy, limit, offset, model);
 		return "fragments/profiles-table :: profilesTable";
+	}
+
+	@org.springframework.web.bind.annotation.PostMapping("/profiles/refresh")
+	public String refreshProfiles(
+			@RequestParam(name = "activityPattern", required = false, defaultValue = "ALL") String activityPattern,
+			@RequestParam(name = "minRequests", required = false) Long minRequests,
+			@RequestParam(name = "clientQuery", required = false) String clientQuery,
+			@RequestParam(name = "asn", required = false) String asn,
+			@RequestParam(name = "clientTypes", required = false) List<String> clientTypes,
+			@RequestParam(name = "sortBy", required = false, defaultValue = "SURGE") String sortBy,
+			@RequestParam(name = "limit", defaultValue = "50") int limit,
+			@RequestParam(name = "offset", defaultValue = "0") int offset,
+			Model model) {
+		if (rollupAggregationService != null) {
+			try {
+				rollupAggregationService.executeManualCatchUp(6);
+			} catch (Exception ignored) {
+			}
+		} else if (subnetProfileService != null) {
+			try {
+				subnetProfileService.refreshProfiles();
+			} catch (Exception ignored) {
+			}
+		}
+		populateProfilesModel(activityPattern, minRequests, clientQuery, asn, clientTypes, sortBy, limit, offset, model);
+		return "redirect:/profiles";
 	}
 
 	@GetMapping("/server/{serverId}")
@@ -837,9 +867,14 @@ public class DashboardController {
 		boolean hasMore = (offset + profiles.size()) < totalProfiles;
 		int nextOffset = offset + limit;
 
+		org.henbru.antidos.collector.model.SubnetProfileFreshness freshness = (subnetProfileService != null)
+				? subnetProfileService.getProfileFreshness()
+				: null;
+
 		model.addAttribute("subnetProfiles", profiles);
 		model.addAttribute("totalProfiles", totalProfiles);
 		model.addAttribute("profileStats", stats);
+		model.addAttribute("freshness", freshness);
 		model.addAttribute("activityPattern", activityPattern != null ? activityPattern : "ALL");
 		model.addAttribute("minRequests", minRequests != null ? minRequests : 0L);
 		model.addAttribute("clientQuery", clientQuery != null ? clientQuery : "");
