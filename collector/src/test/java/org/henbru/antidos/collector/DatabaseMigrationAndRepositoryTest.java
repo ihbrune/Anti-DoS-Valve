@@ -777,7 +777,25 @@ class DatabaseMigrationAndRepositoryTest {
 
 		List<String> distinct = monitoredValveRepository.findDistinctValveNames();
 		assertTrue(distinct.contains("Primary-Rate-Limiter"));
+		assertTrue(afterUpdate.get().isActive());
+
+		// Test syncActiveValves and deleteByServerIdAndValveName
+		monitoredValveRepository.upsert(new org.henbru.antidos.collector.model.MonitoredValve(
+				"VALVE-NODE-1", "Secondary-Limiter", "Secondary", 2, "BLOCKING", false, false, 429,
+				50, 60, 5, 0.8f, 32, 64, 10000, 10000, null, null, null, null, null, null, now, 11111));
+		assertEquals(2, monitoredValveRepository.findByServerId("VALVE-NODE-1").size());
+
+		// Sync with only Primary-Rate-Limiter active
+		monitoredValveRepository.syncActiveValves("VALVE-NODE-1", List.of("Primary-Rate-Limiter"));
+		assertTrue(monitoredValveRepository.findByServerIdAndValveName("VALVE-NODE-1", "Primary-Rate-Limiter").get().isActive());
+		assertFalse(monitoredValveRepository.findByServerIdAndValveName("VALVE-NODE-1", "Secondary-Limiter").get().isActive());
+
+		// Delete Secondary-Limiter
+		int deleted = monitoredValveRepository.deleteByServerIdAndValveName("VALVE-NODE-1", "Secondary-Limiter");
+		assertEquals(1, deleted);
+		assertTrue(monitoredValveRepository.findByServerIdAndValveName("VALVE-NODE-1", "Secondary-Limiter").isEmpty());
 	}
+
 
 	@Autowired
 	private org.henbru.antidos.collector.storage.NetworkAnnotationRepository networkAnnotationRepository;

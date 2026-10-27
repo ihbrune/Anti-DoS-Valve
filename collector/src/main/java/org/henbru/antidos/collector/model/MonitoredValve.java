@@ -33,10 +33,51 @@ public record MonitoredValve(
 		boolean visitorCookieEnabled,
 		String visitorCookieName,
 		Instant lastUpdatedAt,
-		int configHash
+		int configHash,
+		boolean isActive
 ) {
 	/**
-	 * Backwards-compatible constructor defaulting visitorCookieEnabled to false and visitorCookieName to "_adv".
+	 * Backwards-compatible constructor defaulting isActive to true.
+	 */
+	public MonitoredValve(
+			String serverId,
+			String valveName,
+			String description,
+			int pipelineOrder,
+			String monitorMode,
+			boolean simulationMode,
+			boolean serverWideBlocking,
+			int httpStatusCode,
+			int allowedRequestsPerSlot,
+			int slotLength,
+			int numberOfSlots,
+			float shareOfRetainedFormerRequests,
+			int ipv4SubnetMask,
+			int ipv6SubnetMask,
+			int maxIPCacheSize,
+			int maxBlockedIPCacheSize,
+			String relevantPaths,
+			String nonRelevantPaths,
+			String alwaysAllowedIPs,
+			String alwaysForbiddenIPs,
+			String statusUri,
+			String statusAllowedIPs,
+			String collectorIntegration,
+			boolean visitorCookieEnabled,
+			String visitorCookieName,
+			Instant lastUpdatedAt,
+			int configHash
+	) {
+		this(serverId, valveName, description, pipelineOrder, monitorMode, simulationMode,
+				serverWideBlocking, httpStatusCode, allowedRequestsPerSlot, slotLength, numberOfSlots,
+				shareOfRetainedFormerRequests, ipv4SubnetMask, ipv6SubnetMask, maxIPCacheSize,
+				maxBlockedIPCacheSize, relevantPaths, nonRelevantPaths, alwaysAllowedIPs,
+				alwaysForbiddenIPs, statusUri, statusAllowedIPs, collectorIntegration,
+				visitorCookieEnabled, visitorCookieName, lastUpdatedAt, configHash, true);
+	}
+
+	/**
+	 * Backwards-compatible constructor defaulting visitorCookieEnabled to false, visitorCookieName to "_adv", and isActive to true.
 	 */
 	public MonitoredValve(
 			String serverId,
@@ -70,11 +111,11 @@ public record MonitoredValve(
 				shareOfRetainedFormerRequests, ipv4SubnetMask, ipv6SubnetMask, maxIPCacheSize,
 				maxBlockedIPCacheSize, relevantPaths, nonRelevantPaths, alwaysAllowedIPs,
 				alwaysForbiddenIPs, statusUri, statusAllowedIPs, collectorIntegration,
-				false, "_adv", lastUpdatedAt, configHash);
+				false, "_adv", lastUpdatedAt, configHash, true);
 	}
 
 	/**
-	 * Backwards-compatible constructor defaulting collectorIntegration to "auto" and visitor cookie tracking to false.
+	 * Backwards-compatible constructor defaulting collectorIntegration to "auto", visitor cookie tracking to false, and isActive to true.
 	 */
 	public MonitoredValve(
 			String serverId,
@@ -107,7 +148,7 @@ public record MonitoredValve(
 				shareOfRetainedFormerRequests, ipv4SubnetMask, ipv6SubnetMask, maxIPCacheSize,
 				maxBlockedIPCacheSize, relevantPaths, nonRelevantPaths, alwaysAllowedIPs,
 				alwaysForbiddenIPs, statusUri, statusAllowedIPs, "auto",
-				false, "_adv", lastUpdatedAt, configHash);
+				false, "_adv", lastUpdatedAt, configHash, true);
 	}
 
 	public boolean isBlocking() {

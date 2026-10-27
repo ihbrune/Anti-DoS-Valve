@@ -275,14 +275,21 @@ public class ApiController {
 
 	@GetMapping("/valves")
 	public List<org.henbru.antidos.collector.model.MonitoredValve> listValves(
-			@RequestParam(name = "serverId", required = false) String serverId) {
+			@RequestParam(name = "serverId", required = false) String serverId,
+			@RequestParam(name = "activeOnly", required = false, defaultValue = "false") boolean activeOnly) {
 		if (monitoredValveRepository == null) {
 			return List.of();
 		}
+		List<org.henbru.antidos.collector.model.MonitoredValve> list;
 		if (serverId != null && !serverId.isBlank()) {
-			return monitoredValveRepository.findByServerId(serverId.trim());
+			list = monitoredValveRepository.findByServerId(serverId.trim());
+		} else {
+			list = monitoredValveRepository.findAll();
 		}
-		return monitoredValveRepository.findAll();
+		if (activeOnly) {
+			return list.stream().filter(org.henbru.antidos.collector.model.MonitoredValve::isActive).toList();
+		}
+		return list;
 	}
 
 	@GetMapping("/valves/{valveName}")

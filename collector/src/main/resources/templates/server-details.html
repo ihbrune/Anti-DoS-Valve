@@ -62,7 +62,13 @@
         </div>
     </header>
 
+    <!-- Flash / Status Alert Message -->
+    <div th:if="${message != null}" class="alert alert-success" style="margin-bottom: 24px; padding: 12px 18px; border-radius: var(--radius-sm); font-size: 13px;" th:text="${message}">
+        Operation successful.
+    </div>
+
     <!-- Server Header Card -->
+
     <div th:if="${server != null}" class="endpoint-card" style="margin-bottom: 28px;">
         <div class="endpoint-header">
             <div>
@@ -114,6 +120,8 @@
                             <td>
                                 <strong style="font-size: 13px;" th:text="${v.valveName}">Primary-Rate-Limiter</strong>
                                 <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px;" th:if="${runtimeValvesMap != null and runtimeValvesMap[v.valveName] != null}">
+                                    <span th:if="${runtimeValvesMap[v.valveName].isActive()}" class="badge badge-success" style="font-size: 9.5px; padding: 1px 5px; background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);" title="Active on server - reported in latest telemetry">&#x25CF; ACTIVE</span>
+                                    <span th:unless="${runtimeValvesMap[v.valveName].isActive()}" class="badge badge-secondary" style="font-size: 9.5px; padding: 1px 5px; background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);" title="Inactive on server - no longer reported in telemetry">&#x23F8; INACTIVE</span>
                                     <span th:if="${runtimeValvesMap[v.valveName].isHoneypot()}" class="badge badge-warning" style="font-size: 9.5px; padding: 1px 5px; background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);" title="Zero-Tolerance Honeypot Valve">&#x1F36F; HONEYPOT</span>
                                     <span th:if="${runtimeValvesMap[v.valveName].isBlocking()}" class="badge badge-danger" style="font-size: 9.5px; padding: 1px 5px;" th:text="'BLOCKING (' + ${runtimeValvesMap[v.valveName].httpStatusCode} + ')'">BLOCKING (429)</span>
                                     <span th:unless="${runtimeValvesMap[v.valveName].isBlocking()}" class="badge badge-purple" style="font-size: 9.5px; padding: 1px 5px;">MARKING</span>
@@ -121,6 +129,9 @@
                                     <span class="badge" th:classappend="${runtimeValvesMap[v.valveName].collectorIntegrationBadgeClass()}" style="font-size: 9.5px; padding: 1px 5px;" th:title="'Collector integration mode: ' + ${runtimeValvesMap[v.valveName].collectorIntegration()}" th:text="'COLLECTOR: ' + ${runtimeValvesMap[v.valveName].collectorIntegrationLabel()}">COLLECTOR: AUTO</span>
                                     <span class="badge" th:classappend="${runtimeValvesMap[v.valveName].visitorCookieBadgeClass()}" style="font-size: 9.5px; padding: 1px 5px;" th:title="'Visitor cookie tracking: ' + ${runtimeValvesMap[v.valveName].visitorCookieLabel()}" th:text="'COOKIE: ' + ${runtimeValvesMap[v.valveName].visitorCookieLabel()}">COOKIE: OFF</span>
                                     <span style="font-size: 11px; color: var(--text-muted);" th:text="${runtimeValvesMap[v.valveName].allowedRequestsPerSlot == 0 ? '0 req (Zero Tolerance) / ' + runtimeValvesMap[v.valveName].slotLength + 's' : runtimeValvesMap[v.valveName].allowedRequestsPerSlot + ' req / ' + runtimeValvesMap[v.valveName].slotLength + 's'}">50 req / 60s</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px;" th:if="${runtimeValvesMap == null or runtimeValvesMap[v.valveName] == null}">
+                                    <span class="badge badge-secondary" style="font-size: 9.5px; padding: 1px 5px; opacity: 0.8;" title="Historical slots recorded, but no active runtime telemetry discovered">&#x1F4DC; HISTORICAL (NO LIVE CONFIG)</span>
                                 </div>
                             </td>
                             <td>
@@ -166,6 +177,7 @@
             <div class="section-title">
                 &#x2699;&#xFE0F; Discovered Valve Runtime Configurations
                 <span th:if="${selectedValve != null}" style="font-size: 13px; font-weight: normal; color: var(--text-muted);" th:text="'(Filtered: ' + ${selectedValve} + ')'"></span>
+                <span th:if="${inactiveValvesCount != null and inactiveValvesCount > 0}" class="badge badge-secondary" style="font-size: 10px; margin-left: 8px; vertical-align: middle; background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);" th:text="${inactiveValvesCount} + ' inactive'">1 inactive</span>
             </div>
             <div style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 8px;" th:if="${!#lists.isEmpty(runtimeValves)}">
                 <span>Synchronized from Valve JSON API &bull; </span>
@@ -181,10 +193,13 @@
         </div>
 
         <div th:unless="${#lists.isEmpty(runtimeValves)}" style="display: flex; flex-direction: column; gap: 16px;">
-            <div th:each="rv : ${runtimeValves}" class="table-card" style="padding: 18px 22px;">
+            <div th:each="rv : ${runtimeValves}" class="table-card"
+                 th:style="${rv.isActive() ? 'padding: 18px 22px;' : 'padding: 18px 22px; opacity: 0.92; border: 1px solid rgba(239, 68, 68, 0.35); background: rgba(30, 41, 59, 0.3);'}">
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 14px;">
                     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                         <span style="font-size: 16px; font-weight: 700; color: var(--text-primary);" th:text="${rv.valveName}">Primary-Rate-Limiter</span>
+                        <span th:if="${rv.isActive()}" class="badge badge-success" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">&#x25CF; ACTIVE</span>
+                        <span th:unless="${rv.isActive()}" class="badge badge-secondary" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);">&#x23F8; INACTIVE</span>
                         <span th:if="${rv.isHoneypot()}" class="badge badge-warning" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);" title="Zero-Tolerance Honeypot Valve">&#x1F36F; HONEYPOT</span>
                         <span class="badge badge-info" th:text="'#' + ${rv.pipelineOrder} + ' IN PIPELINE'">#1 IN PIPELINE</span>
                         <span th:if="${rv.isBlocking()}" class="badge badge-danger" th:text="'MODE: BLOCKING (' + ${rv.httpStatusCode} + ')'">MODE: BLOCKING (429)</span>
@@ -198,6 +213,28 @@
                         Last Synced: <span style="font-weight: 600; color: var(--text-secondary);" th:text="${rv.lastUpdatedAt != null ? #temporals.format(rv.lastUpdatedAt, 'dd.MM.yyyy HH:mm:ss') : 'Unknown'}">24.10 22:30:00</span>
                     </div>
                 </div>
+
+                <!-- Inactive Banner with Delete Actions -->
+                <div th:unless="${rv.isActive()}" style="font-size: 12px; color: #f59e0b; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <strong style="color: #f59e0b;">&#x26A0;&#xFE0F; Inaktive Valve-Konfiguration:</strong>
+                        <span style="color: var(--text-secondary);">Dieser Valve wurde im jüngsten Server-Poll nicht mehr gemeldet (wurde umbenannt oder entfernt).</span>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <form th:action="@{'/server/' + ${serverId} + '/valves/' + ${rv.valveName} + '/delete'}" method="post" style="display: inline;" onsubmit="return confirm('Möchten Sie diese veraltete Valve-Konfiguration entfernen? (Historische Slot-Messdaten bleiben erhalten)');">
+                            <button type="submit" class="btn" style="padding: 3px 10px; font-size: 11px; color: var(--text-primary); border-color: var(--border-color);" title="Entfernt nur die Konfiguration (Metriken/Logs bleiben erhalten)">
+                                Konfiguration entfernen
+                            </button>
+                        </form>
+                        <form th:action="@{'/server/' + ${serverId} + '/valves/' + ${rv.valveName} + '/delete'}" method="post" style="display: inline;" onsubmit="return confirm('ACHTUNG: Möchten Sie diese Valve samt ALLEN historischen Snapshots und Messdaten endgültig aus der Datenbank löschen?');">
+                            <input type="hidden" name="deleteHistory" value="true" />
+                            <button type="submit" class="btn" style="padding: 3px 10px; font-size: 11px; color: #ef4444; border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.08);" title="Löscht Valve und die gesamte Historie vollständig">
+                                &#x1F5D1; Vollständig löschen (inkl. Historie)
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
 
                 <div th:if="${rv.description != null and !rv.description.isBlank()}"
                      style="font-size: 12px; color: var(--text-secondary); background: rgba(56, 189, 248, 0.06); border-left: 3px solid var(--color-primary); padding: 8px 12px; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; margin-bottom: 14px; line-height: 1.4;"

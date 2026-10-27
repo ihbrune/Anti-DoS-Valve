@@ -8,9 +8,11 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest
@@ -352,6 +354,47 @@ class DashboardControllerTest {
 				.andExpect(content().string(containsString("(Filtered: NON-EXISTENT)")))
 				.andExpect(content().string(containsString("No live runtime configuration discovered yet for valve '<span>NON-EXISTENT</span>'.")));
 	}
+
+	@Test
+	void testInactiveValveDisplayAndDelete() throws Exception {
+		java.time.Instant now = java.time.Instant.now();
+		monitoredValveRepository.upsert(new org.henbru.antidos.collector.model.MonitoredValve(
+				"Demo-Server", "ACTIVE-VALVE", "Active valve", 1,
+				"BLOCKING", false, false, 429,
+				100, 60, 5, 0.8f,
+				32, 64, 10000, 5000,
+				"/api/*", null, null, null,
+				"/antidos-status", null, "auto", false, "_adv", now, 111, true
+		));
+		monitoredValveRepository.upsert(new org.henbru.antidos.collector.model.MonitoredValve(
+				"Demo-Server", "OLD-RENAMED-VALVE", "Old renamed valve", 2,
+				"BLOCKING", false, false, 429,
+				100, 60, 5, 0.8f,
+				32, 64, 10000, 5000,
+				"/api/*", null, null, null,
+				"/antidos-status", null, "auto", false, "_adv", now, 222, false
+		));
+
+		// 1. Check server details page renders INACTIVE badge and alert banner
+		mockMvc.perform(get("/server/Demo-Server"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("ACTIVE-VALVE")))
+				.andExpect(content().string(containsString("OLD-RENAMED-VALVE")))
+				.andExpect(content().string(containsString("INACTIVE")))
+				.andExpect(content().string(containsString("Inaktive Valve-Konfiguration:")))
+				.andExpect(content().string(containsString("Konfiguration entfernen")));
+
+		// 2. Perform delete on OLD-RENAMED-VALVE
+		mockMvc.perform(post("/server/Demo-Server/valves/OLD-RENAMED-VALVE/delete"))
+				.andExpect(status().is3xxRedirection())
+				.andExpect(redirectedUrl("/server/Demo-Server"))
+				.andExpect(flash().attribute("message", containsString("OLD-RENAMED-VALVE")));
+
+		// 3. Verify it was deleted from repository
+		assertTrue(monitoredValveRepository.findByServerIdAndValveName("Demo-Server", "OLD-RENAMED-VALVE").isEmpty());
+		assertTrue(monitoredValveRepository.findByServerIdAndValveName("Demo-Server", "ACTIVE-VALVE").isPresent());
+	}
+
 
 	@Test
 	void testHelpPageLoadsUiGuideByDefault() throws Exception {

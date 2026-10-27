@@ -29,6 +29,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 /**
@@ -53,6 +54,7 @@ public class DashboardController {
 	private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 	private final org.henbru.antidos.collector.annotation.NetworkAnnotationService annotationService;
 	private final org.henbru.antidos.collector.aggregation.SubnetProfileService subnetProfileService;
+	private final org.henbru.antidos.collector.poller.CollectorPollerService collectorPollerService;
 
 	@org.springframework.beans.factory.annotation.Autowired
 	public DashboardController(
@@ -73,7 +75,9 @@ public class DashboardController {
 			@org.springframework.beans.factory.annotation.Autowired(required = false)
 			org.henbru.antidos.collector.annotation.NetworkAnnotationService annotationService,
 			@org.springframework.beans.factory.annotation.Autowired(required = false)
-			org.henbru.antidos.collector.aggregation.SubnetProfileService subnetProfileService) {
+			org.henbru.antidos.collector.aggregation.SubnetProfileService subnetProfileService,
+			@org.springframework.beans.factory.annotation.Autowired(required = false)
+			org.henbru.antidos.collector.poller.CollectorPollerService collectorPollerService) {
 		this.heartbeatRepository = heartbeatRepository;
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
@@ -87,6 +91,7 @@ public class DashboardController {
 		this.objectMapper = objectMapper != null ? objectMapper : new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
 		this.annotationService = annotationService;
 		this.subnetProfileService = subnetProfileService;
+		this.collectorPollerService = collectorPollerService;
 	}
 
 	public DashboardController(
@@ -99,7 +104,7 @@ public class DashboardController {
 			org.henbru.antidos.collector.config.CollectorProperties properties,
 			org.henbru.antidos.collector.config.ValveRuleResolver valveRuleResolver) {
 		this(heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
-				subnetRollupRepository, documentationService, properties, valveRuleResolver, null, null, null, null, null);
+				subnetRollupRepository, documentationService, properties, valveRuleResolver, null, null, null, null, null, null);
 	}
 
 	public DashboardController(
@@ -111,7 +116,7 @@ public class DashboardController {
 			DocumentationService documentationService,
 			org.henbru.antidos.collector.config.CollectorProperties properties) {
 		this(heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
-				subnetRollupRepository, documentationService, properties, new org.henbru.antidos.collector.config.ValveRuleResolver(properties), null, null, null, null, null);
+				subnetRollupRepository, documentationService, properties, new org.henbru.antidos.collector.config.ValveRuleResolver(properties), null, null, null, null, null, null);
 	}
 
 	@org.springframework.web.bind.annotation.ModelAttribute("demoMode")
@@ -442,6 +447,21 @@ public class DashboardController {
 		for (String vName : valveNames) {
 			configuredValves.add(valveRuleResolver.resolve(endpoint, vName));
 		}
+		configuredValves.sort((a, b) -> {
+			org.henbru.antidos.collector.model.MonitoredValve ma = runtimeValvesMap.get(a.valveName());
+			org.henbru.antidos.collector.model.MonitoredValve mb = runtimeValvesMap.get(b.valveName());
+			boolean aActive = ma != null && ma.isActive();
+			boolean bActive = mb != null && mb.isActive();
+			if (aActive != bActive) {
+				return aActive ? -1 : 1;
+			}
+			int orderA = ma != null ? ma.pipelineOrder() : 999;
+			int orderB = mb != null ? mb.pipelineOrder() : 999;
+			if (orderA != orderB) {
+				return Integer.compare(orderA, orderB);
+			}
+			return a.valveName().compareToIgnoreCase(b.valveName());
+		});
 
 		List<org.henbru.antidos.collector.model.MonitoredValve> displayedRuntimeValves = runtimeValves;
 		if (valve != null && !valve.isBlank()) {
@@ -450,6 +470,20 @@ public class DashboardController {
 					.filter(mv -> mv.valveName().equalsIgnoreCase(trimmed))
 					.toList();
 		}
+		displayedRuntimeValves = displayedRuntimeValves.stream()
+				.sorted((a, b) -> {
+					if (a.isActive() != b.isActive()) {
+						return a.isActive() ? -1 : 1;
+					}
+					if (a.pipelineOrder() != b.pipelineOrder()) {
+						return Integer.compare(a.pipelineOrder(), b.pipelineOrder());
+					}
+					return a.valveName().compareToIgnoreCase(b.valveName());
+				})
+				.toList();
+
+		long activeValvesCount = runtimeValves.stream().filter(org.henbru.antidos.collector.model.MonitoredValve::isActive).count();
+		long inactiveValvesCount = runtimeValves.size() - activeValvesCount;
 
 		model.addAttribute("server", hb);
 		model.addAttribute("serverId", serverId);
@@ -457,12 +491,51 @@ public class DashboardController {
 		model.addAttribute("configuredValves", configuredValves);
 		model.addAttribute("runtimeValves", displayedRuntimeValves);
 		model.addAttribute("runtimeValvesMap", runtimeValvesMap);
+		model.addAttribute("activeValvesCount", activeValvesCount);
+		model.addAttribute("inactiveValvesCount", inactiveValvesCount);
 		model.addAttribute("selectedValve", valve);
 		model.addAttribute("selectedStatus", effectiveStatus);
 		model.addAttribute("recentSlots", recentSlots);
 		model.addAttribute("recentEvents", recentEvents);
 		model.addAttribute("slotEventsMap", slotEventsMap);
 		return "server-details";
+	}
+
+	@PostMapping("/server/{serverId}/valves/{valveName}/delete")
+	public String deleteValve(
+			@PathVariable(name = "serverId") String serverId,
+			@PathVariable(name = "valveName") String valveName,
+			@RequestParam(name = "deleteHistory", required = false, defaultValue = "false") boolean deleteHistory,
+			org.springframework.web.servlet.mvc.support.RedirectAttributes redirectAttributes) {
+
+		int configsDeleted = (monitoredValveRepository != null)
+				? monitoredValveRepository.deleteByServerIdAndValveName(serverId, valveName)
+				: 0;
+
+		int slotsDeleted = 0;
+		int eventsDeleted = 0;
+		if (deleteHistory) {
+			if (slotSnapshotRepository != null) {
+				slotsDeleted = slotSnapshotRepository.deleteByServerIdAndValveName(serverId, valveName);
+			}
+			if (clientEventRepository != null) {
+				eventsDeleted = clientEventRepository.deleteByServerIdAndValveName(serverId, valveName);
+			}
+		}
+
+		if (collectorPollerService != null) {
+			collectorPollerService.forgetValveConfig(serverId, valveName);
+		}
+
+		if (deleteHistory) {
+			redirectAttributes.addFlashAttribute("message",
+					"Valve '" + valveName + "' vollständig gelöscht (" + configsDeleted + " Konfiguration, "
+							+ slotsDeleted + " Snapshots, " + eventsDeleted + " Ereignisse entfernt).");
+		} else {
+			redirectAttributes.addFlashAttribute("message",
+					"Valve-Konfiguration für '" + valveName + "' entfernt.");
+		}
+		return "redirect:/server/" + serverId;
 	}
 
 	@GetMapping("/poll-log")

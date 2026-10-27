@@ -205,12 +205,14 @@ public class CollectorPollerService {
 					valveCount
 			));
 
+			java.util.Set<String> activeIncludedValveNames = new java.util.HashSet<>();
 			if (overview.valves() != null && !overview.valves().isEmpty()) {
 				for (ValveOverviewDto.ValveSummaryDto v : overview.valves()) {
 					if (!endpoint.isValveIncluded(v.monitorName())) {
 						log.debug("Skipping valve '{}' on '{}' (excluded by endpoint configuration)", v.monitorName(), endpoint.getName());
 						continue;
 					}
+					activeIncludedValveNames.add(v.monitorName());
 					valvesPolled++;
 					updateValveConfigIfChanged(endpoint.getName(), v, now);
 					IngestResult result = ingestValve(endpoint, v, now);
@@ -220,6 +222,9 @@ public class CollectorPollerService {
 					warnings.addAll(result.warnings());
 					totalNetworkMs += result.networkDurationMs();
 				}
+			}
+			if (monitoredValveRepository != null) {
+				monitoredValveRepository.syncActiveValves(endpoint.getName(), activeIncludedValveNames);
 			}
 
 			long totalDuration = System.currentTimeMillis() - start;
@@ -554,12 +559,17 @@ public class CollectorPollerService {
 				v.visitorCookieEnabled(),
 				v.visitorCookieName() != null && !v.visitorCookieName().isBlank() ? v.visitorCookieName() : "_adv",
 				now,
-				configHash
+				configHash,
+				true
 		);
 	}
 
 	public void clearConfigHashes() {
 		this.knownConfigHashes.clear();
+	}
+
+	public void forgetValveConfig(String serverId, String valveName) {
+		this.knownConfigHashes.remove(serverId + "#" + valveName);
 	}
 
 	private record SlotIngestResult(int slotsCount, int eventsCount, int blockedEventsCount, String warning, long networkDurationMs) {}

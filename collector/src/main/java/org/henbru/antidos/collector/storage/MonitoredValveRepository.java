@@ -2,9 +2,14 @@ package org.henbru.antidos.collector.storage;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import org.henbru.antidos.collector.model.MonitoredValve;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.lang.NonNull;
@@ -15,6 +20,8 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public class MonitoredValveRepository {
+
+	private static final Logger log = LoggerFactory.getLogger(MonitoredValveRepository.class);
 
 	private final JdbcTemplate jdbcTemplate;
 
@@ -50,7 +57,8 @@ public class MonitoredValveRepository {
 			rs.getBoolean("visitor_cookie_enabled"),
 			rs.getString("visitor_cookie_name"),
 			toInstant(rs.getTimestamp("last_updated_at")),
-			rs.getInt("config_hash")
+			rs.getInt("config_hash"),
+			rs.getBoolean("is_active")
 	);
 
 	private static Instant toInstant(Timestamp ts) {
@@ -67,9 +75,9 @@ public class MonitoredValveRepository {
 				    relevant_paths, non_relevant_paths, always_allowed_ips, always_forbidden_ips,
 				    status_uri, status_allowed_ips, collector_integration,
 				    visitor_cookie_enabled, visitor_cookie_name,
-				    last_updated_at, config_hash
+				    last_updated_at, config_hash, is_active
 				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (server_id, valve_name) DO UPDATE SET
 				    description = EXCLUDED.description,
 				    pipeline_order = EXCLUDED.pipeline_order,
@@ -95,7 +103,8 @@ public class MonitoredValveRepository {
 				    visitor_cookie_enabled = EXCLUDED.visitor_cookie_enabled,
 				    visitor_cookie_name = EXCLUDED.visitor_cookie_name,
 				    last_updated_at = EXCLUDED.last_updated_at,
-				    config_hash = EXCLUDED.config_hash
+				    config_hash = EXCLUDED.config_hash,
+				    is_active = EXCLUDED.is_active
 				""";
 
 		jdbcTemplate.update(sql,
@@ -125,7 +134,8 @@ public class MonitoredValveRepository {
 				v.visitorCookieEnabled(),
 				v.visitorCookieName(),
 				v.lastUpdatedAt() != null ? Timestamp.from(v.lastUpdatedAt()) : Timestamp.from(Instant.now()),
-				v.configHash()
+				v.configHash(),
+				v.isActive()
 		);
 	}
 
@@ -156,5 +166,60 @@ public class MonitoredValveRepository {
 
 	public int deleteByServerId(String serverId) {
 		return jdbcTemplate.update("DELETE FROM monitored_valves WHERE server_id = ?", serverId);
+	}
+
+	public int deleteByServerIdAndValveName(String serverId, String valveName) {
+		return jdbcTemplate.update(
+				"DELETE FROM monitored_valves WHERE server_id = ? AND valve_name = ?",
+				serverId, valveName);
+	}
+
+	/**
+	 * Synchronizes the active/inactive state of valves for a given server based on the latest poll.
+	 * Any valve for this server not contained in {@code activeValveNames} will be set to {@code is_active = false}.
+	 * Any valve contained in {@code activeValveNames} will be ensured to have {@code is_active = true}.
+	 *
+	 * @param serverId the identifier of the server/endpoint
+	 * @param activeValveNames collection of valve names discovered in the latest poll
+	 */
+	public void syncActiveValves(String serverId, Collection<String> activeValveNames) {
+		if (serverId == null || serverId.isBlank()) {
+			return;
+		}
+		if (activeValveNames == null || activeValveNames.isEmpty()) {
+			int deactivated = jdbcTemplate.update(
+					"UPDATE monitored_valves SET is_active = ? WHERE server_id = ? AND is_active = ?",
+					false, serverId, true);
+			if (deactivated > 0) {
+				log.info("Marked all {} valve(s) on '{}' as inactive (no active valves reported)", deactivated, serverId);
+			}
+			return;
+		}
+
+		String placeholders = String.join(",", Collections.nCopies(activeValveNames.size(), "?"));
+
+		// 1. Deactivate missing valves
+		String deactSql = "UPDATE monitored_valves SET is_active = ? WHERE server_id = ? AND is_active = ? AND valve_name NOT IN (" + placeholders + ")";
+		List<Object> deactParams = new ArrayList<>();
+		deactParams.add(false);
+		deactParams.add(serverId);
+		deactParams.add(true);
+		deactParams.addAll(activeValveNames);
+		int deactivated = jdbcTemplate.update(deactSql, deactParams.toArray());
+		if (deactivated > 0) {
+			log.info("Marked {} valve(s) on '{}' as inactive (no longer reported)", deactivated, serverId);
+		}
+
+		// 2. Reactivate any valves that were previously marked inactive
+		String actSql = "UPDATE monitored_valves SET is_active = ? WHERE server_id = ? AND is_active = ? AND valve_name IN (" + placeholders + ")";
+		List<Object> actParams = new ArrayList<>();
+		actParams.add(true);
+		actParams.add(serverId);
+		actParams.add(false);
+		actParams.addAll(activeValveNames);
+		int reactivated = jdbcTemplate.update(actSql, actParams.toArray());
+		if (reactivated > 0) {
+			log.info("Re-activated {} valve(s) on '{}' (reported again)", reactivated, serverId);
+		}
 	}
 }

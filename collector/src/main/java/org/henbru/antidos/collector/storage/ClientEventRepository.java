@@ -758,4 +758,11 @@ public class ClientEventRepository {
 			});
 		}
 	}
+
+	public int deleteByServerIdAndValveName(String serverId, String valveName) {
+		return jdbcTemplate.update(
+				"DELETE FROM client_events WHERE server_id = ? AND valve_name = ?",
+				serverId, valveName);
+	}
 }
+

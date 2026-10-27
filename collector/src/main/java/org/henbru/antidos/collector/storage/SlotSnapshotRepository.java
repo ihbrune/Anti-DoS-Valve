@@ -189,4 +189,11 @@ public class SlotSnapshotRepository {
 				"DELETE FROM slot_snapshots WHERE start_time < ?",
 				Timestamp.from(cutoff));
 	}
+
+	public int deleteByServerIdAndValveName(String serverId, String valveName) {
+		return jdbcTemplate.update(
+				"DELETE FROM slot_snapshots WHERE server_id = ? AND valve_name = ?",
+				serverId, valveName);
+	}
 }
+

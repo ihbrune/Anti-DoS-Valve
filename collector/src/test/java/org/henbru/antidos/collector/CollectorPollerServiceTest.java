@@ -587,6 +587,45 @@ class CollectorPollerServiceTest {
 		assertNotNull(entity.tags());
 		assertTrue(entity.tags().contains("HONEYPOT_TRIGGERED"));
 	}
+
+	@Test
+	void testPollRenamedValveDeactivatesOldValve() throws Exception {
+		EndpointConfig endpoint = new EndpointConfig(
+				"RENAME-NODE", "http://localhost:8080/antidos-status", null, false, true
+		);
+
+		// 1. Initial poll with old valve name "OLD_VALVE_NAME"
+		ValveOverviewDto.ValveSummaryDto oldValve = new ValveOverviewDto.ValveSummaryDto(
+				"OLD_VALVE_NAME", 1, "BLOCKING", false, true, 50, 60, 5, 5, 1, 100L, 99L, 100L, 0L, 1, 0
+		);
+		when(statusClient.fetchOverview(any())).thenReturn(new ValveOverviewDto("2026-10-18T10:00:00Z", List.of(oldValve), null));
+		when(statusClient.fetchSlotDetails(any(), any(), any(), any(), any(), any())).thenReturn(
+				new ValveDetailsDto("2026-10-18T10:00:00Z", null, null, 0, "all", List.of(), null)
+		);
+
+		pollerService.pollEndpoint(endpoint);
+
+		var oldValveOpt = monitoredValveRepository.findByServerIdAndValveName("RENAME-NODE", "OLD_VALVE_NAME");
+		assertTrue(oldValveOpt.isPresent());
+		assertTrue(oldValveOpt.get().isActive());
+
+		// 2. Server renames valve to "NEW_VALVE_NAME" -> Poll returns only new valve
+		ValveOverviewDto.ValveSummaryDto newValve = new ValveOverviewDto.ValveSummaryDto(
+				"NEW_VALVE_NAME", 1, "BLOCKING", false, true, 50, 60, 5, 5, 1, 101L, 100L, 150L, 0L, 1, 0
+		);
+		when(statusClient.fetchOverview(any())).thenReturn(new ValveOverviewDto("2026-10-18T10:00:15Z", List.of(newValve), null));
+
+		pollerService.pollEndpoint(endpoint);
+
+		var oldValveOptAfter = monitoredValveRepository.findByServerIdAndValveName("RENAME-NODE", "OLD_VALVE_NAME");
+		assertTrue(oldValveOptAfter.isPresent());
+		assertFalse(oldValveOptAfter.get().isActive(), "Old valve should be marked inactive after renaming");
+
+		var newValveOpt = monitoredValveRepository.findByServerIdAndValveName("RENAME-NODE", "NEW_VALVE_NAME");
+		assertTrue(newValveOpt.isPresent());
+		assertTrue(newValveOpt.get().isActive(), "New valve should be active");
+	}
 }
+
 
 
