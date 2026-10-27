@@ -773,6 +773,14 @@ public class AntiDoSValve extends ValveBase {
 		lastCollectorScrapeTime.set(getTimeInMillis());
 	}
 
+	public long getLastCollectorScrapeTime() {
+		return lastCollectorScrapeTime.get();
+	}
+
+	public void setLastCollectorScrapeTime(long time) {
+		lastCollectorScrapeTime.set(time);
+	}
+
 	/**
 	 * @return true if a collector has queried the status endpoint within the last 2 minutes
 	 */
@@ -1468,6 +1476,11 @@ public class AntiDoSValve extends ValveBase {
 
 		if (isJson) {
 			touchCollectorLease();
+			for (AntiDoSValve v : getValvesToRender()) {
+				if (filterValve == null || filterValve.trim().isEmpty() || v.getMonitorName().equalsIgnoreCase(filterValve.trim())) {
+					v.touchCollectorLease();
+				}
+			}
 			statusRenderer.renderStatusJson(response, filterValve, view, slot, limit, blockedLimit, activeLimit,
 					sinceBlockedOrder, sinceActiveOrder, activeMinCount);
 		} else {

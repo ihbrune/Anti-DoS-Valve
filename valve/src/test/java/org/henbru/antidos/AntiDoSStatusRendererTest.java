@@ -507,5 +507,85 @@ class AntiDoSStatusRendererTest {
 		String detailsHtml = renderer.buildStatusHtmlDetails("RENDERER_TEST");
 		assertTrue(detailsHtml.contains("2 IPs"));
 	}
+
+	@Test
+	void testFormatDuration() {
+		assertEquals("0s", AntiDoSStatusRenderer.formatDuration(0));
+		assertEquals("45s", AntiDoSStatusRenderer.formatDuration(45));
+		assertEquals("59s", AntiDoSStatusRenderer.formatDuration(59));
+		assertEquals("1m 0s", AntiDoSStatusRenderer.formatDuration(60));
+		assertEquals("2m 15s", AntiDoSStatusRenderer.formatDuration(135));
+		assertEquals("1h 0m", AntiDoSStatusRenderer.formatDuration(3600));
+		assertEquals("1h 1m", AntiDoSStatusRenderer.formatDuration(3665));
+		assertEquals("3h 25m", AntiDoSStatusRenderer.formatDuration(12300));
+	}
+
+	@Test
+	void testLastCollectorAccessRendering() {
+		// 1. Initial state: never accessed
+		valve.setLastCollectorScrapeTime(0);
+		String overviewHtmlNever = renderer.buildStatusHtml(null);
+		assertTrue(overviewHtmlNever.contains("Last Access: <span style=\"color:var(--muted);\">never</span>"));
+		String detailsHtmlNever = renderer.buildStatusHtmlDetails("RENDERER_TEST");
+		assertTrue(detailsHtmlNever.contains("Last Access: <span style=\"color:var(--muted);\">never</span>"));
+
+		String overviewJsonNever = renderer.buildStatusJson(null);
+		assertTrue(overviewJsonNever.contains("\"lastCollectorAccess\": null"));
+		String detailsJsonNever = renderer.buildStatusJsonDetails("RENDERER_TEST");
+		assertTrue(detailsJsonNever.contains("\"lastCollectorAccess\": null"));
+
+		// 2. Accessed 20 seconds ago
+		long now = valve.getTimeInMillis();
+		valve.setLastCollectorScrapeTime(now - 20_000L);
+
+		String overviewHtmlRecent = renderer.buildStatusHtml(null);
+		assertTrue(overviewHtmlRecent.contains("Last Access: "));
+		assertTrue(overviewHtmlRecent.contains("(20s ago)"));
+
+		String detailsHtmlRecent = renderer.buildStatusHtmlDetails("RENDERER_TEST");
+		assertTrue(detailsHtmlRecent.contains("Last Access: "));
+		assertTrue(detailsHtmlRecent.contains("(20s ago)"));
+
+		String overviewJsonRecent = renderer.buildStatusJson(null);
+		assertFalse(overviewJsonRecent.contains("\"lastCollectorAccess\": null"));
+		assertTrue(overviewJsonRecent.contains("\"lastCollectorAccess\": \""));
+
+		String detailsJsonRecent = renderer.buildStatusJsonDetails("RENDERER_TEST");
+		assertFalse(detailsJsonRecent.contains("\"lastCollectorAccess\": null"));
+		assertTrue(detailsJsonRecent.contains("\"lastCollectorAccess\": \""));
+	}
+
+	@Test
+	void testReturningColumnRendering() {
+		AntiDoSMonitor mon = valve.provideMonitor();
+
+		// 1. Visitor cookie disabled: column "Returning" must NOT be rendered
+		valve.setVisitorCookieEnabled(false);
+		mon.registerAndCheckRequest("10.50.0.1");
+
+		String htmlNoCookie = renderer.buildStatusHtmlDetails("RENDERER_TEST");
+		assertFalse(htmlNoCookie.contains("<th>Returning</th>"));
+		assertFalse(htmlNoCookie.contains("<th title=\"Requests carrying valid visitor cookie\">Returning</th>"));
+
+		// 2. Visitor cookie enabled: column "Returning" must be rendered between Effective and Limit
+		valve.setVisitorCookieEnabled(true);
+		// Register a returning visitor request
+		mon.registerAndCheckRequest("10.50.0.2", "10.50.0.2", null, false, 32, 128, true);
+
+		String htmlWithCookie = renderer.buildStatusHtmlDetails("RENDERER_TEST");
+		assertTrue(htmlWithCookie.contains("<th title=\"Requests carrying valid visitor cookie\">Returning</th>"));
+		// Badge 'returning</span>' should no longer exist next to the IP
+		assertFalse(htmlWithCookie.contains("returning</span>"));
+
+		// Table header order check: Effective -> Returning -> Limit
+		int idxEffective = htmlWithCookie.indexOf("<th>Effective</th>");
+		int idxReturning = htmlWithCookie.indexOf("Returning</th>");
+		int idxLimit = htmlWithCookie.indexOf("<th>Limit</th>");
+		assertTrue(idxEffective < idxReturning, "Effective should come before Returning");
+		assertTrue(idxReturning < idxLimit, "Returning should come before Limit");
+
+		// Table row check: 10.50.0.2 has returningCount = 1
+		assertTrue(htmlWithCookie.contains("<td>1</td>"));
+	}
 }
 

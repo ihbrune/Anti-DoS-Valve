@@ -617,6 +617,44 @@ class AntiDoSValveTest {
 	}
 
 	@Test
+	void testMultiValveCollectorLeaseTouch() throws Exception {
+		AntiDoSValve.clearActiveValves();
+		org.apache.catalina.core.StandardEngine engine = new org.apache.catalina.core.StandardEngine();
+
+		AntiDoSValve valve1 = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve1, "VALVE_1");
+		valve1.setContainer(engine);
+		valve1.setStatusUri("/antidos-status");
+		valve1.setStatusPassword("secret");
+		valve1.setCollectorIntegration("auto");
+		valve1.start();
+
+		AntiDoSValve valve2 = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve2, "VALVE_2");
+		valve2.setContainer(engine);
+		valve2.setStatusPassword("secret");
+		valve2.setCollectorIntegration("auto");
+		valve2.start();
+
+		assertFalse(valve1.isCollectorLeaseActive());
+		assertFalse(valve2.isCollectorLeaseActive());
+
+		// 1. JSON scrape on valve1 without filter -> touches BOTH valves
+		TestRequest jsonReq = new TestRequest("/antidos-status", "127.0.0.1");
+		jsonReq.setParameter("token", "secret");
+		jsonReq.setParameter("format", "json");
+		TestResponse jsonResp = new TestResponse();
+		valve1.invoke(jsonReq, jsonResp);
+
+		assertTrue(valve1.isCollectorLeaseActive());
+		assertTrue(valve2.isCollectorLeaseActive());
+
+		valve1.stop();
+		valve2.stop();
+		AntiDoSValve.clearActiveValves();
+	}
+
+	@Test
 	void testSubnetCardinalityTrackingWithCollectorIntegration() {
 		AntiDoSValve valve = new AntiDoSValve();
 		setValidAntiDoSMonitorconfiguration(valve, "SUBNET_CARDINALITY_TEST");

@@ -235,7 +235,7 @@ Summarizes all Valve instances configured on the node and how the Collector inge
 ### 3. Discovered Valve Runtime Configurations
 Automatically discovered and synchronized from the live Valve JSON API (`?format=json`) into the Collector database without requiring manual configuration. An in-memory hash check guarantees zero redundant database writes during steady-state polling.
 
-* **Pipeline Order & Mode Badges:** Displays pipeline placement (`#1 IN PIPELINE`), operational mode (`BLOCKING` or `MARKING`), simulation flags, server-wide blocking flags, `COLLECTOR: AUTO / ALWAYS ON / DISABLED` mode badge, and `COOKIE: ACTIVE / OFF` reputation tracking badge.
+* **Pipeline Order & Mode Badges:** Displays pipeline placement (`#1 IN PIPELINE`), operational mode (`BLOCKING` or `MARKING`), simulation flags, server-wide blocking flags, `COLLECTOR: AUTO / ALWAYS ON / DISABLED` mode badge, and `COOKIE: ACTIVE (<name>) / OFF` reputation tracking badge (e.g., `COOKIE: ACTIVE (_adv)` or reflecting any custom `visitorCookieName` configured on the Valve).
 * **Valve Description:** Custom operational description configured directly in Tomcat's `server.xml`.
 * **Rate Limit Threshold Card:**
   * **Allowed Volume:** Requests permitted per time slice (e.g., `100 req / 60s`).
@@ -249,7 +249,7 @@ Automatically discovered and synchronized from the live Valve JSON API (`?format
 * **Collector Integration Mode Card:**
   * Displays the configured collector integration mode (`auto`: dynamic 60s active lease upon collector poll, `true`: permanently active independent of pollers, or `false`: disabled, no collector events generated).
 * **Visitor Tracking & Cookies Card:**
-  * Displays whether encrypted visitor tracking is active (`ACTIVE` or `DISABLED`) and the configured cookie name (e.g., `_adv`), confirming that request streams carry returning visitor telemetry.
+  * Displays whether encrypted visitor tracking is active (`ACTIVE` or `DISABLED`) and the dynamically discovered cookie name (e.g., `Cookie: _adv` or a custom name like `Cookie: my_app_cookie`), confirming that request streams carry returning visitor telemetry.
 * **Status Dashboard URI Card:**
   * Internal status path (e.g., `/antidos-status`) and allowed client IP ranges configured for administrative access.
 * **Configured Path Filters & IP Lists (Collapsible):**
@@ -384,6 +384,7 @@ Events are streamed with configurable limits (`25`, `50`, `100`, `250`) and offs
   * **Verified Returning Visitors (`🍪 85% (K)`):** Displays green/neutral ratio badges when requests present valid HMAC-signed visitor cookies.
   * **Zero Returning / First-Contact (`🍪 0% (0/N)`):** Highlighted with an amber warning badge when a burst of requests arrives with 0 valid visitor cookies (characteristic of rotating proxy farms, headless scrapers, and botnet probes).
   * **Untracked Valve (`—`):** Explicit dash displayed when the originating Valve has cookie tracking disabled (`visitorCookieEnabled="false"`). Prevents misinterpreting unmonitored endpoints as 0% returning traffic.
+  * **Custom Cookie Names:** Telemetry collection and returning visitor ratios operate identically whether using the default `_adv` cookie name or a custom `visitorCookieName`; the Collector automatically identifies and binds the configured cookie name from overview telemetry.
 
 ---
 

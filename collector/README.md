@@ -157,12 +157,12 @@ The Valve maintains strictly bounded, lock-free in-memory counters for the curre
 
 ### 3. Subnet-Bound HMAC Visitor Cookies (`returningCount`)
 * Differentiating legitimate human shoppers from scraping bots is critical during high traffic.
-* When `visitorCookieEnabled="true"`, the Valve issues a compact, cryptographically signed HTTP cookie (`_adv`).
+* When `visitorCookieEnabled="true"`, the Valve issues a compact, cryptographically signed HTTP cookie (default name: `_adv`, customizable via `visitorCookieName`).
 * **Cryptographic Subnet Binding:** The token contains an HMAC-SHA256 signature calculated over:
   $$\text{HMAC}(\text{Secret}, \text{ClientSubnet} \parallel \text{IssuedTimestamp})$$
   * Even if an attacker captures or copies a cookie, it cannot be reused from another subnet or distributed across a residential proxy botnet.
 * The Valve verifies the token lock-free in memory. Valid tokens increment a lightweight `returningCount` in `AntiDoSCounter`.
-* **Telemetry Output:** Reports what fraction of requests in an active or blocked subnet originated from verified returning visitors versus completely stateless, cookie-less crawlers.
+* **Telemetry Output & Fleet Auto-Discovery:** The Valve reports cookie state (`visitorCookieEnabled`, `visitorCookieName`, `visitorCookieDomain`) directly in its overview telemetry (`?format=json`). The Collector dynamically discovers custom cookie names without requiring default `_adv`, automatically displaying `COOKIE: ACTIVE (<name>)` and tracking returning visitor ratios per subnet.
 
 ### 4. Dormant Telemetry via Rolling Collector Lease (`collectorIntegration="auto"`)
 * Extended telemetry tracking (such as bitmask updates and cookie verifications) has an extremely low, but non-zero CPU and memory footprint.

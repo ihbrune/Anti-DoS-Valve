@@ -302,7 +302,7 @@ When enabled, the Valve automatically issues an unforgeable, compact (~58 charac
 ### Visitor Cookie Parameters
 
 * `visitorCookieEnabled`: `true` or `false` (default: `false`).
-* `visitorCookieName`: Name of the HTTP cookie (default: `"_adv"`).
+* `visitorCookieName`: Name of the HTTP cookie (default: `"_adv"`). Can be set to any valid cookie name (e.g. `visitorCookieName="my_app_visitor"`). Custom names are dynamically discovered by the status telemetry and the Anti-DoS Collector, which displays `COOKIE: ACTIVE (<name>)` and binds metrics automatically without requiring the default name.
 * `visitorCookieSecret`: 256-bit or 128-bit secret key (64 or 32 hex characters, or Base64 string). If omitted, an ephemeral 256-bit AES key is automatically generated on startup (for single-server deployments). In multi-server clusters, configure the same secret key across all nodes to allow instant stateless cross-server validation without database or session replication.
 * `visitorCookieTtlSeconds`: Token lifetime in seconds (default: `900` = 15 minutes).
 * `visitorCookieRefreshRatio`: Fraction of TTL that must elapse before a refreshed cookie with incremented visit counter is emitted (default: `0.5` = 50% elapsed). This throttling mechanism completely prevents HTTP/2 parallel asset request race conditions and header bloat.

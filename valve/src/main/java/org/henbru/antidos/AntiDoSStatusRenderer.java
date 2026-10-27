@@ -457,6 +457,20 @@ public class AntiDoSStatusRenderer {
 		return valve.getTimeInMillis();
 	}
 
+	static String formatDuration(long seconds) {
+		if (seconds < 60) {
+			return seconds + "s";
+		}
+		if (seconds < 3600) {
+			long m = seconds / 60;
+			long s = seconds % 60;
+			return m + "m " + s + "s";
+		}
+		long h = seconds / 3600;
+		long m = (seconds % 3600) / 60;
+		return h + "h " + m + "m";
+	}
+
 	public String buildStatusHtml(String filterValve) {
 		return buildStatusHtml(filterValve, null);
 	}
@@ -685,7 +699,12 @@ public class AntiDoSStatusRenderer {
 			String cBadge = "auto".equalsIgnoreCase(cMode)
 					? (cActive ? " <span class=\"badge badge-active\">Active (Lease)</span>" : " <span class=\"badge\" style=\"background:var(--accent-subtle);\">Idle</span>")
 					: (cActive ? " <span class=\"badge badge-active\">Forced On</span>" : " <span class=\"badge\" style=\"background:var(--accent-subtle);\">Disabled</span>");
-			sb.append("    <tr><th>Collector Integration</th><td><code>").append(escapeHtml(cMode)).append("</code>").append(cBadge).append("</td></tr>\n");
+			long lastScrape = v.getLastCollectorScrapeTime();
+			String lastScrapeHtml = lastScrape <= 0
+					? "<span style=\"color:var(--muted);\">never</span>"
+					: sdf.format(new Date(lastScrape)) + " (" + formatDuration(Math.max(0, (getTimeInMillis() - lastScrape) / 1000)) + " ago)";
+			sb.append("    <tr><th>Collector Integration</th><td><code>").append(escapeHtml(cMode)).append("</code>").append(cBadge)
+					.append(" &bull; Last Access: ").append(lastScrapeHtml).append("</td></tr>\n");
 
 			// Cache usage & slots
 			sb.append("    <tr><th>Active IP Cache</th><td>").append(activeCounters).append(" / ").append(maxActive)
@@ -926,7 +945,12 @@ public class AntiDoSStatusRenderer {
 		String cBadgeTarget = "auto".equalsIgnoreCase(cModeTarget)
 				? (cActiveTarget ? " <span class=\"badge badge-active\">Active (Lease)</span>" : " <span class=\"badge\" style=\"background:var(--accent-subtle);\">Idle</span>")
 				: (cActiveTarget ? " <span class=\"badge badge-active\">Forced On</span>" : " <span class=\"badge\" style=\"background:var(--accent-subtle);\">Disabled</span>");
-		sb.append("    <tr><th>Collector Integration</th><td><code>").append(escapeHtml(cModeTarget)).append("</code>").append(cBadgeTarget).append("</td></tr>\n");
+		long lastScrapeTarget = target.getLastCollectorScrapeTime();
+		String lastScrapeTargetHtml = lastScrapeTarget <= 0
+				? "<span style=\"color:var(--muted);\">never</span>"
+				: sdf.format(new Date(lastScrapeTarget)) + " (" + formatDuration(Math.max(0, (getTimeInMillis() - lastScrapeTarget) / 1000)) + " ago)";
+		sb.append("    <tr><th>Collector Integration</th><td><code>").append(escapeHtml(cModeTarget)).append("</code>").append(cBadgeTarget)
+				.append(" &bull; Last Access: ").append(lastScrapeTargetHtml).append("</td></tr>\n");
 
 		sb.append("    <tr><th>Active IP Cache</th><td>").append(activeCounters).append(" / ").append(maxActive)
 				.append(" <div class=\"metric-bar\"><div class=\"metric-fill ").append(activeFillClass)
@@ -1042,8 +1066,11 @@ public class AntiDoSStatusRenderer {
 		if (blockedDisplay == 0) {
 			sb.append("  <div style=\"color:var(--muted);padding:4px 0;\">No blocked clients in ").append(escapeHtml(slotLabel.toLowerCase())).append(".</div>\n");
 		} else {
+			boolean showReturning = target.isVisitorCookieEnabled();
 			sb.append("  <table class=\"data-table\">\n")
-					.append("    <thead><tr><th>IP / Subnet Key</th><th>Slot Requests</th><th>Retained</th><th>Effective</th><th>Limit</th><th>Status</th></tr></thead>\n")
+					.append("    <thead><tr><th>IP / Subnet Key</th><th>Slot Requests</th><th>Retained</th><th>Effective</th>")
+					.append(showReturning ? "<th title=\"Requests carrying valid visitor cookie\">Returning</th>" : "")
+					.append("<th>Limit</th><th>Status</th></tr></thead>\n")
 					.append("    <tbody>\n");
 			for (int i = 0; i < blockedDisplay; i++) {
 				CounterEntry e = blockedList.get(i);
@@ -1052,15 +1079,14 @@ public class AntiDoSStatusRenderer {
 					sb.append(" <span class=\"badge\" style=\"font-size:0.75rem;padding:2px 6px;border-radius:4px;background:var(--accent-subtle);color:var(--text);margin-left:6px;\" title=\"Distinct client IPs in this subnet\">")
 							.append(e.distinctClients()).append(" IPs</span>");
 				}
-				if (target.isVisitorCookieEnabled() && e.returningCount() > 0) {
-					sb.append(" <span class=\"badge\" style=\"font-size:0.75rem;padding:2px 6px;border-radius:4px;background:var(--accent-subtle);color:var(--text);margin-left:6px;\" title=\"Requests carrying valid visitor cookie\">")
-							.append(e.returningCount()).append(" returning</span>");
-				}
 				sb.append("</td>")
 						.append("<td>").append(e.count()).append("</td>")
 						.append("<td>").append(e.retained()).append("</td>")
-						.append("<td><strong>").append(e.effective()).append("</strong></td>")
-						.append("<td>").append(allowedReqs).append("</td>")
+						.append("<td><strong>").append(e.effective()).append("</strong></td>");
+				if (showReturning) {
+					sb.append("<td>").append(e.returningCount()).append("</td>");
+				}
+				sb.append("<td>").append(allowedReqs).append("</td>")
 						.append("<td><span class=\"badge badge-blocking\">BLOCKED</span></td></tr>\n");
 			}
 			sb.append("    </tbody>\n  </table>\n");
@@ -1081,8 +1107,11 @@ public class AntiDoSStatusRenderer {
 		if (activeDisplay == 0) {
 			sb.append("  <div style=\"color:var(--muted);padding:4px 0;\">No active clients in ").append(escapeHtml(slotLabel.toLowerCase())).append(".</div>\n");
 		} else {
+			boolean showReturning = target.isVisitorCookieEnabled();
 			sb.append("  <table class=\"data-table\">\n")
-					.append("    <thead><tr><th>IP / Subnet Key</th><th>Slot Requests</th><th>Retained</th><th>Effective</th><th>Limit</th><th>Quota Usage</th></tr></thead>\n")
+					.append("    <thead><tr><th>IP / Subnet Key</th><th>Slot Requests</th><th>Retained</th><th>Effective</th>")
+					.append(showReturning ? "<th title=\"Requests carrying valid visitor cookie\">Returning</th>" : "")
+					.append("<th>Limit</th><th>Quota Usage</th></tr></thead>\n")
 					.append("    <tbody>\n");
 			for (int i = 0; i < activeDisplay; i++) {
 				CounterEntry e = activeList.get(i);
@@ -1093,15 +1122,14 @@ public class AntiDoSStatusRenderer {
 					sb.append(" <span class=\"badge\" style=\"font-size:0.75rem;padding:2px 6px;border-radius:4px;background:var(--accent-subtle);color:var(--text);margin-left:6px;\" title=\"Distinct client IPs in this subnet\">")
 							.append(e.distinctClients()).append(" IPs</span>");
 				}
-				if (target.isVisitorCookieEnabled() && e.returningCount() > 0) {
-					sb.append(" <span class=\"badge\" style=\"font-size:0.75rem;padding:2px 6px;border-radius:4px;background:var(--accent-subtle);color:var(--text);margin-left:6px;\" title=\"Requests carrying valid visitor cookie\">")
-							.append(e.returningCount()).append(" returning</span>");
-				}
 				sb.append("</td>")
 						.append("<td>").append(e.count()).append("</td>")
 						.append("<td>").append(e.retained()).append("</td>")
-						.append("<td><strong>").append(e.effective()).append("</strong></td>")
-						.append("<td>").append(allowedReqs).append("</td>")
+						.append("<td><strong>").append(e.effective()).append("</strong></td>");
+				if (showReturning) {
+					sb.append("<td>").append(e.returningCount()).append("</td>");
+				}
+				sb.append("<td>").append(allowedReqs).append("</td>")
 						.append("<td>").append(pct).append("% <div class=\"metric-bar\"><div class=\"metric-fill ").append(fillClass)
 						.append("\" style=\"width:").append(pct).append("%\"></div></div></td></tr>\n");
 			}
@@ -1169,6 +1197,7 @@ public class AntiDoSStatusRenderer {
 					.append("      \"ipv6SubnetMask\": ").append(v.getIpv6SubnetMask()).append(",\n")
 					.append("      \"collectorIntegration\": \"").append(escapeJson(v.getCollectorIntegration())).append("\",\n")
 					.append("      \"collectorActive\": ").append(v.isExtendedMetricsActive()).append(",\n")
+					.append("      \"lastCollectorAccess\": ").append(v.getLastCollectorScrapeTime() > 0 ? "\"" + sdf.format(new Date(v.getLastCollectorScrapeTime())) + "\"" : "null").append(",\n")
 					.append("      \"visitorCookieEnabled\": ").append(v.isVisitorCookieEnabled()).append(",\n")
 					.append("      \"visitorCookieName\": \"").append(escapeJson(v.getVisitorCookieName())).append("\",\n")
 					.append("      \"visitorCookieDomain\": ").append(v.getVisitorCookieDomain() != null ? "\"" + escapeJson(v.getVisitorCookieDomain()) + "\"" : "null").append(",\n")
@@ -1269,6 +1298,7 @@ public class AntiDoSStatusRenderer {
 				.append("    \"ipv6SubnetMask\": ").append(target.getIpv6SubnetMask()).append(",\n")
 				.append("    \"collectorIntegration\": \"").append(escapeJson(target.getCollectorIntegration())).append("\",\n")
 				.append("    \"collectorActive\": ").append(target.isExtendedMetricsActive()).append(",\n")
+				.append("    \"lastCollectorAccess\": ").append(target.getLastCollectorScrapeTime() > 0 ? "\"" + sdf.format(new Date(target.getLastCollectorScrapeTime())) + "\"" : "null").append(",\n")
 				.append("    \"visitorCookieEnabled\": ").append(target.isVisitorCookieEnabled()).append(",\n")
 				.append("    \"visitorCookieName\": \"").append(escapeJson(target.getVisitorCookieName())).append("\",\n")
 				.append("    \"visitorCookieDomain\": ").append(target.getVisitorCookieDomain() != null ? "\"" + escapeJson(target.getVisitorCookieDomain()) + "\"" : "null").append(",\n")
