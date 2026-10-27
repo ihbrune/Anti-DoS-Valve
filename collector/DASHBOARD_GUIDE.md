@@ -339,16 +339,36 @@ At the top of the screen, six real-time metric cards provide an immediate high-l
 ### 3. Transparent Metric Columns & Calculations
 Every record in the table presents its metrics with full mathematical transparency:
 * **Subnet & Provider:** Displays the CIDR group, country code, ASN badge, and interactive `+📝` / verdict badge to access or record operator notes.
+  * **In-Page Subnet & ASN Filtering:** Clicking any **ASN badge** (e.g., `AS3320`) or **Subnet prefix badge** (e.g., `198.51.100.0/24`) instantly applies that filter to the Subnet Profiles table on the current page (`/profiles?asn=...` or `/profiles?clientQuery=...`), allowing operators to rapidly inspect adjacent subnets in the same autonomous system or network segment without losing their profile context.
 * **Classification:** Color-coded client type tag.
 * **First Seen & Dormancy History:** Exact discovery timestamp, `✨ New` indicator if $<7\text{ days}$, and `💤 Xd Dormancy Break` if the subnet had a silent gap $\ge 14\text{ days}$ prior to its recent activity.
 * **30-Day Daily Baseline:** Moving daily average calculated across the prior 29 days:
   $$\text{Baseline} = \frac{\sum \text{Requests}_{\text{prior 29d}}}{29.0}$$
-* **Last 24h Activity:** Total requests and rate-limiting blocks during the current 24-hour window, supplemented by the sample-size-weighted 24h returning visitor cookie badge (`🍪 X%`) and authenticated badge (`🔐 Y%`) when visitor tracking is active.
+* **Last 24h Activity (Stand: HH:mm):** Total requests and rate-limiting blocks during the current 24-hour window (calculated up to the latest completed rollup hour), supplemented by the sample-size-weighted 24h returning visitor cookie badge (`🍪 X%`) and authenticated badge (`🔐 Y%`) when visitor tracking is active.
 * **24h Unique IPs & Spread:** Distinct client IP count and the average requests per IP ($\frac{\text{Requests}_{24\text{h}}}{\text{IPs}_{24\text{h}}}$).
 * **Surge Multiplier & Threat Forensics:**
   * **Surge Badge:** $\text{Surge} = \frac{\text{Requests}_{24\text{h}}}{\text{Baseline}}$. Formatted with clear danger/warning colors (e.g., `⚡ 25.0x Surge`). Tooltips explicitly show the formula calculation: `24h volume (500) is 25.0x above 30-day baseline average (20.0/day)`.
   * **Residential IP Pool Rotation Badge:** Displayed when distributed multi-IP evasion heuristics trigger.
-* **Forensics Action:** Direct `Events →` link opening `/events?clientQuery=...` pre-filtered for the subnet.
+* **Forensics Action:** Direct `Events →` link opening `/events?clientQuery=...` pre-filtered for the subnet to drill down into raw request-by-request incident telemetry.
+
+### 4. Data Freshness, Rollup Architecture & In-Flight Events
+Subnet profiles operate on an intentional two-tier telemetry architecture balancing long-term statistical durability with real-time incident responsiveness:
+* **Hourly Rollup Aggregation:** Subnet profile statistics (including the 24h activity counters and 30-day baseline averages) are calculated from hourly bucket aggregations (`client_subnet_rollups`, default 60-minute window). Rollup jobs evaluate strictly **completed** historical windows every 15 minutes.
+* **Why Recent Blocks May Temporarily Show 0 in 24h Profile Stats:**
+  * Raw client traffic from the ongoing, uncompleted hour is recorded in real-time in `client_events`.
+  * However, this in-flight traffic is only committed to `client_subnet_rollups` and recalculated into `subnet_profiles` once the current 60-minute interval closes.
+  * *Example Scenario:* If an IP or subnet launches an attack that generates thousands of HTTP 429 rate-limiting blocks 20 minutes ago, the raw blocked events are immediately visible in **Incident Explorer (`/events`)** and **Top Offenders (`/offenders`)**, but the Subnet Profiles table may temporarily show e.g. `5.872 reqs · 0 blocked` until the current hour finishes and the rollup job aggregates those blocks.
+* **Data Freshness Badge (`Datenstand`):**
+  * Displayed directly in the page header next to the title (e.g., `Datenstand: 27.10. 21:00 Uhr (22m Verzögerung)`).
+  * Clearly informs operators of the exact cutoff timestamp for historical aggregation and the current delay in minutes.
+* **Unaggregated Events Alert Banner:**
+  * If the Collector detects incoming traffic or rate-limiting events in the current ongoing window that have not yet been aggregated into profile statistics, an amber informational banner is automatically displayed above the search filter.
+  * The banner states the exact number of minutes of unaggregated traffic, explains the hourly rollup cutoff, and provides direct one-click links to `/events` and `/offenders` for unbuffered live forensics.
+* **On-Demand Profile Refresh (`Aktualisieren`):**
+  * Operators can click the **Aktualisieren** button located directly inside the header freshness badge.
+  * This triggers an immediate manual catch-up aggregation for recently completed hourly buckets (`POST /profiles/refresh`), recalculates profile metrics across all active subnets, and reloads the table with the freshest possible baseline data.
+* **Table Footer Status:**
+  * The status bar at the bottom of the profiles table displays the exact `Rollup-Datenstand: dd.MM.yyyy HH:mm Uhr` for auditing and compliance transparency.
 
 ---
 
