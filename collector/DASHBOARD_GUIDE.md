@@ -343,33 +343,81 @@ Every record in the table presents its metrics with full mathematical transparen
   * **In-Page Subnet & ASN Filtering:** Clicking any **ASN badge** (e.g., `AS3320`) or **Subnet prefix badge** (e.g., `198.51.100.0/24`) instantly applies that filter to the Subnet Profiles table on the current page (`/profiles?asn=...` or `/profiles?clientQuery=...`), allowing operators to rapidly inspect adjacent subnets in the same autonomous system or network segment without losing their profile context.
 * **Classification:** Color-coded client type tag.
 * **First Seen & Dormancy History:** Exact discovery timestamp, `✨ New` indicator if $<7\text{ days}$, and `💤 Xd Dormancy Break` if the subnet had a silent gap $\ge 14\text{ days}$ prior to its recent activity.
-* **30-Day Daily Baseline:** Moving daily average calculated across the prior 29 days:
-  $$\text{Baseline} = \frac{\sum \text{Requests}_{\text{prior 29d}}}{29.0}$$
+* **30-Day Daily Baseline:** Moving daily average calculated across the prior history up to 29 days:
+  $$\text{Baseline} = \frac{\sum \text{Requests}_{\text{prior}}}{N_{\text{days}}}$$
+  Where $N_{\text{days}} = \min(29.0, \max(1.0, \text{Available Prior Days}))$. On fresh installations or recently added subnets, $N_{\text{days}}$ scales dynamically with elapsed time rather than assuming a rigid 29-day lookback (see *Dynamic Baseline Calibration* below).
 * **Last 24h Activity (Stand: HH:mm):** Total requests and rate-limiting blocks during the current 24-hour window (calculated up to the latest completed rollup hour), supplemented by the sample-size-weighted 24h returning visitor cookie badge (`🍪 X%`) and authenticated badge (`🔐 Y%`) when visitor tracking is active.
 * **24h Unique IPs & Spread:** Distinct client IP count and the average requests per IP ($\frac{\text{Requests}_{24\text{h}}}{\text{IPs}_{24\text{h}}}$).
 * **Surge Multiplier & Threat Forensics:**
-  * **Surge Badge:** $\text{Surge} = \frac{\text{Requests}_{24\text{h}}}{\text{Baseline}}$. Formatted with clear danger/warning colors (e.g., `⚡ 25.0x Surge`). Tooltips explicitly show the formula calculation: `24h volume (500) is 25.0x above 30-day baseline average (20.0/day)`.
+  * **Surge Badge:** $\text{Surge} = \frac{\text{Requests}_{24\text{h}}}{\text{Baseline}}$. Formatted with clear danger/warning colors (e.g., `⚡ 25.0x Surge` for extreme spikes, `⚡ 6.2x Surge` for moderate surges). Tooltips explicitly show the formula calculation: `24h volume (500) is 25.0x above 30-day baseline average (20.0/day)`.
+  * **Initialization & Early Phase Indicators:**
+    * `⏳ Initialisierung`: Displayed when a subnet is newly active in the last 24h with zero prior history ($N_{\text{days}} < 1.0$ or $\text{Requests}_{\text{prior}} = 0$). Surge multiplier defaults to `0.0x` (never triggering false alarms).
+    * `⏳ Frühphase`: Displayed alongside the surge multiplier during the first 7 days of calibration to remind analysts that the baseline is still maturing.
   * **Residential IP Pool Rotation Badge:** Displayed when distributed multi-IP evasion heuristics trigger.
 * **Forensics Action:** Direct `Events →` link opening `/events?clientQuery=...` pre-filtered for the subnet to drill down into raw request-by-request incident telemetry.
 
-### 4. Data Freshness, Rollup Architecture & In-Flight Events
+### 4. Dynamic Baseline Calibration & The 3-Phase Model (Fresh Deployments)
+
+Calculating rolling statistical baselines in distributed environments presents a classic bootstrapping problem:
+* In a mature deployment with $\ge 30\text{ days}$ of continuous metrics, dividing prior volume by $29.0$ provides smooth, dependable daily traffic baselines.
+* However, on a **freshly installed Collector** (e.g., running for only 2 or 3 days), or when a **brand-new subnet** begins transmitting for the first time, hardcoding a fixed 29-day divisor causes severe distortions:
+  1. **Artificially Depressed Baselines:** A subnet generating a legitimate, steady volume of 50 requests/day for 2 days would be assigned a distorted baseline of $\frac{100}{29.0} = 3.4\text{ req/day}$.
+  2. **False Surge Alarms:** Normal daily traffic of 50 requests today would register as a terrifying $\frac{50}{3.4} \approx 14.7\times$ surge!
+  3. **The First-Day Anomaly:** Subnets seen only on Day 1 (zero prior requests) would divide by zero or fall back to treating raw 24-hour volume as the multiplier, flagging virtually every active network as a catastrophic attack.
+
+To solve this without blinding operators during the critical first month of operations, the Anti-DoS Collector employs an automated **3-Phase Calibration Lifecycle**:
+
+| Phase | System / Subnet History | Baseline Divisor ($N$) | Surge Multiplier Behavior | UI Indicator & Badges |
+|---|---|---|---|---|
+| **Phase 1: Initialization** | $< 24\text{ hours}$ prior data | $0.0$ (Not yet established) | $\text{Surge} = 0.0\times$ (Exempt from alarms) | `⏳ Initialisierung` (Grey badge) |
+| **Phase 2: Dynamic Calibration** | $1 \text{ to } 29\text{ days}$ prior data | $N = \min(29.0, \frac{\text{Prior Hours}}{24.0})$ | $\text{Surge} = \frac{\text{Requests}_{24\text{h}}}{\text{Baseline}}$ (Adaptive) | Calibration Banner on `/profiles` + `⏳ Frühphase` (Days 1–7) |
+| **Phase 3: Mature Baseline** | $\ge 30\text{ days}$ history | $N = 29.0$ (Full 30-day window) | Full rolling statistical smoothing | Standard `⚡ X.Xx Surge` badge |
+
+#### Detailed Phase Walkthrough:
+
+1. **Phase 1: Initialization (< 24h Prior Data / Brand-New Subnets):**
+   * *When it applies:* The Collector has been running for under 24 hours, OR a subnet has active traffic in the current 24-hour window but zero recorded traffic prior to that window ($\text{Requests}_{\text{prior}} = 0$).
+   * *Forensic Behavior:* The baseline is set to `0.0` and the surge factor is set to `0.0x`.
+   * *No False Alarms:* The subnet **does not trigger** the `⚡ High Surge (≥5×)` alert and is omitted from the `SURGE` filter. Instead, newly discovered subnets are surfaced cleanly under `✨ New Subnets (<7d)` and `Active in Last 24h`.
+   * *Visual Badge:* A neutral badge `⏳ Initialisierung` is displayed with an informative tooltip (`Noch keine 24h-Historie vorhanden`).
+
+2. **Phase 2: Dynamic Calibration (Days 1 to 29):**
+   * *When it applies:* The database contains between 1 and 29 days of history prior to the current 24-hour window.
+   * *Adaptive Divisor Formula:* Rather than dividing by 29, the system queries the earliest recorded rollup start timestamp (`MIN(bucket_start)`) and calculates the actual elapsed history:
+     $$N = \min\left(29.0, \max\left(1.0, \frac{\text{Hours between } \text{MIN}(\text{bucket\_start}) \text{ and } \text{Cutoff}_{24\text{h}}}{24.0}\right)\right)$$
+     $$\text{Baseline}_{\text{dynamic}} = \frac{\text{Requests}_{\text{prior}}}{N}$$
+   * *Concrete Example:*
+     * Suppose a Collector was deployed 3 days ago (yielding $N = 2.0$ days of completed history prior to the current 24h window).
+     * Subnet `198.51.100.0/24` sent 100 requests during those first 2 days, and sends 50 requests today.
+     * **Legacy calculation (flawed):** $\text{Baseline} = \frac{100}{29} = 3.4 \implies \text{Surge} = \frac{50}{3.4} = 14.7\times$ (False Critical Alarm!).
+     * **Dynamic calibration:** $\text{Baseline} = \frac{100}{2.0} = 50.0\text{ req/day} \implies \text{Surge} = \frac{50}{50.0} = 1.0\times$ (Completely Normal traffic).
+   * *Informational UI Banner:* A blue notice appears at the top of `/profiles`:
+     > ℹ️ **Baseline-Kalibrierungsphase aktiv:** Datenbasis umfasst aktuell 3 Tage (10% von 30 Tagen). Die Baseline-Berechnung passt sich dynamisch an die verfügbare Historie an.
+   * *Early Phase Tag:* For subnets whose baseline is calculated with under 7 days of prior history, a subtle tag `⏳ Frühphase` appears beside the multiplier to remind analysts that statistical variance is naturally higher than in a mature 30-day baseline.
+
+3. **Phase 3: Fully Mature Baseline (≥ 30 Days):**
+   * Once 30 full days of telemetry have accumulated, $N$ reaches its cap of $29.0$.
+   * Daily baselines provide robust, long-term moving averages resilient against day-of-week seasonality.
+   * The calibration banner on `/profiles` disappears automatically.
+
+### 5. Data Freshness, Rollup Architecture & In-Flight Events
 Subnet profiles operate on an intentional two-tier telemetry architecture balancing long-term statistical durability with real-time incident responsiveness:
 * **Hourly Rollup Aggregation:** Subnet profile statistics (including the 24h activity counters and 30-day baseline averages) are calculated from hourly bucket aggregations (`client_subnet_rollups`, default 60-minute window). Rollup jobs evaluate strictly **completed** historical windows every 15 minutes.
 * **Why Recent Blocks May Temporarily Show 0 in 24h Profile Stats:**
-  * Raw client traffic from the ongoing, uncompleted hour is recorded in real-time in `client_events`.
-  * However, this in-flight traffic is only committed to `client_subnet_rollups` and recalculated into `subnet_profiles` once the current 60-minute interval closes.
-  * *Example Scenario:* If an IP or subnet launches an attack that generates thousands of HTTP 429 rate-limiting blocks 20 minutes ago, the raw blocked events are immediately visible in **Incident Explorer (`/events`)** and **Top Offenders (`/offenders`)**, but the Subnet Profiles table may temporarily show e.g. `5.872 reqs · 0 blocked` until the current hour finishes and the rollup job aggregates those blocks.
+   * Raw client traffic from the ongoing, uncompleted hour is recorded in real-time in `client_events`.
+   * However, this in-flight traffic is only committed to `client_subnet_rollups` and recalculated into `subnet_profiles` once the current 60-minute interval closes.
+   * *Example Scenario:* If an IP or subnet launches an attack that generates thousands of HTTP 429 rate-limiting blocks 20 minutes ago, the raw blocked events are immediately visible in **Incident Explorer (`/events`)** and **Top Offenders (`/offenders`)**, but the Subnet Profiles table may temporarily show e.g. `5.872 reqs · 0 blocked` until the current hour finishes and the rollup job aggregates those blocks.
 * **Data Freshness Badge (`Datenstand`):**
-  * Displayed directly in the page header next to the title (e.g., `Datenstand: 27.10. 21:00 Uhr (22m Verzögerung)`).
-  * Clearly informs operators of the exact cutoff timestamp for historical aggregation and the current delay in minutes.
+   * Displayed directly in the page header next to the title (e.g., `Datenstand: 27.10. 21:00 Uhr (22m Verzögerung)`).
+   * Clearly informs operators of the exact cutoff timestamp for historical aggregation and the current delay in minutes.
 * **Unaggregated Events Alert Banner:**
-  * If the Collector detects incoming traffic or rate-limiting events in the current ongoing window that have not yet been aggregated into profile statistics, an amber informational banner is automatically displayed above the search filter.
-  * The banner states the exact number of minutes of unaggregated traffic, explains the hourly rollup cutoff, and provides direct one-click links to `/events` and `/offenders` for unbuffered live forensics.
+   * If the Collector detects incoming traffic or rate-limiting events in the current ongoing window that have not yet been aggregated into profile statistics, an amber informational banner is automatically displayed above the search filter.
+   * The banner states the exact number of minutes of unaggregated traffic, explains the hourly rollup cutoff, and provides direct one-click links to `/events` and `/offenders` for unbuffered live forensics.
 * **On-Demand Profile Refresh (`Aktualisieren`):**
-  * Operators can click the **Aktualisieren** button located directly inside the header freshness badge.
-  * This triggers an immediate manual catch-up aggregation for recently completed hourly buckets (`POST /profiles/refresh`), recalculates profile metrics across all active subnets, and reloads the table with the freshest possible baseline data.
+   * Operators can click the **Aktualisieren** button located directly inside the header freshness badge.
+   * This triggers an immediate manual catch-up aggregation for recently completed hourly buckets (`POST /profiles/refresh`), recalculates profile metrics across all active subnets, and reloads the table with the freshest possible baseline data.
 * **Table Footer Status:**
-  * The status bar at the bottom of the profiles table displays the exact `Rollup-Datenstand: dd.MM.yyyy HH:mm Uhr` for auditing and compliance transparency.
+   * The status bar at the bottom of the profiles table displays the exact `Rollup-Datenstand: dd.MM.yyyy HH:mm Uhr` for auditing and compliance transparency.
 
 ---
 

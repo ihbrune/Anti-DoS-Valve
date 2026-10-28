@@ -150,9 +150,9 @@ class SubnetProfileServiceTest {
 		assertEquals(4, all.size());
 		assertEquals(4, profileRepository.countProfilesFiltered("ALL", null, null, null, null, null));
 
-		// Filter SURGE (>= 5.0x) -> newProfile (100x), dormantProfile (200x), surgeProfile (12x), proxyPool (6x)
+		// Filter SURGE (>= 5.0x with baseline > 0) -> dormantProfile (200x), surgeProfile (12x), proxyPool (6x)
 		List<SubnetProfile> surgeOnly = profileRepository.findProfilesFiltered("SURGE", null, null, null, null, null, "SURGE", 10, 0);
-		assertEquals(4, surgeOnly.size());
+		assertEquals(3, surgeOnly.size());
 
 		// Filter DORMANT (>= 14d) -> dormantProfile (25d)
 		List<SubnetProfile> dormantOnly = profileRepository.findProfilesFiltered("DORMANT", null, null, null, null, null, "DORMANT", 10, 0);
@@ -178,11 +178,11 @@ class SubnetProfileServiceTest {
 		Instant cutoff24h = now.minus(24, ChronoUnit.HOURS);
 		Instant cutoff30d = now.minus(30, ChronoUnit.DAYS);
 
-		// Subnet A: Historical traffic 15 days ago (290 requests across 29 days -> ~10 req/day baseline)
-		Instant past15d = now.minus(15, ChronoUnit.DAYS);
+		// Subnet A: Historical traffic 28 days ago (270 requests across 27 available prior days -> 10 req/day baseline)
+		Instant past28d = now.minus(28, ChronoUnit.DAYS);
 		ClientSubnetRollup pastRollup = new ClientSubnetRollup(
-				null, past15d, past15d.plus(1, ChronoUnit.HOURS), 60, "Node-1", "Limiter", "198.51.100.0/24",
-				290L, 290L, 0L, 1, 290, 290, 1, 13335L, "Cloudflare", "US", ClientType.RESIDENTIAL
+				null, past28d, past28d.plus(1, ChronoUnit.HOURS), 60, "Node-1", "Limiter", "198.51.100.0/24",
+				270L, 270L, 0L, 1, 270, 270, 1, 13335L, "Cloudflare", "US", ClientType.RESIDENTIAL
 		);
 
 		// Subnet A: Massive burst in the last 24 hours (100 requests -> surge factor = 100 / 10 = 10.0x)
@@ -205,11 +205,13 @@ class SubnetProfileServiceTest {
 		assertEquals(2, computed.size());
 
 		SubnetProfile profA = computed.stream().filter(p -> p.subnetGroup().equals("198.51.100.0/24")).findFirst().orElseThrow();
-		assertEquals(390L, profA.totalLifetimeRequests());
+		assertEquals(370L, profA.totalLifetimeRequests());
 		assertEquals(100L, profA.last24hRequests());
 		assertEquals(20L, profA.last24hBlockedRequests());
 		assertEquals(10.0, profA.baselineDailyAvg(), 0.5);
 		assertEquals(10.0, profA.last24hSurgeFactor(), 0.5);
+		assertTrue(profA.isHighSurge(5.0));
+		assertFalse(profA.isInitializing());
 		assertTrue(profA.daysDormantBeforeLastSeen() >= 14, "Should detect 14+ days dormancy before recent burst");
 
 		SubnetProfile profB = computed.stream().filter(p -> p.subnetGroup().equals("203.0.113.0/24")).findFirst().orElseThrow();
@@ -217,7 +219,10 @@ class SubnetProfileServiceTest {
 		assertEquals(50L, profB.last24hRequests());
 		assertEquals(0.0, profB.baselineDailyAvg());
 		assertEquals(999, profB.daysDormantBeforeLastSeen(), "Brand new subnet should have dormancy code 999");
-		assertEquals(50.0, profB.last24hSurgeFactor());
+		assertEquals(0.0, profB.last24hSurgeFactor(), "Brand new subnet active only in last 24h should have 0.0 surge factor (initializing)");
+		assertTrue(profB.isInitializing());
+		assertFalse(profB.isHighSurge(5.0));
+		assertTrue(profB.isNewSubnet(7));
 
 		// Test end-to-end service refresh
 		int refreshed = profileService.refreshProfiles();
@@ -226,6 +231,38 @@ class SubnetProfileServiceTest {
 		Optional<SubnetProfile> persistedA = profileService.findBySubnetGroup("198.51.100.0/24");
 		assertTrue(persistedA.isPresent());
 		assertEquals(10.0, persistedA.get().last24hSurgeFactor(), 0.5);
+	}
+
+	@Test
+	void testDynamicCalibrationOnFreshInstallation() {
+		Instant now = Instant.now().truncatedTo(ChronoUnit.HOURS);
+		Instant cutoff24h = now.minus(24, ChronoUnit.HOURS);
+		Instant cutoff30d = now.minus(30, ChronoUnit.DAYS);
+
+		// System running for only 3 days total (2 days prior to cutoff24h)
+		Instant twoDaysPrior = now.minus(72, ChronoUnit.HOURS);
+		ClientSubnetRollup pastRollup = new ClientSubnetRollup(
+				null, twoDaysPrior, twoDaysPrior.plus(1, ChronoUnit.HOURS), 60, "Node-1", "Limiter", "192.0.2.0/24",
+				100L, 100L, 0L, 1, 100, 100, 1, 24940L, "Hetzner", "DE", ClientType.DATACENTER
+		);
+
+		// Current 24h window has 50 requests
+		Instant currentRollup = now.minus(2, ChronoUnit.HOURS);
+		ClientSubnetRollup current = new ClientSubnetRollup(
+				null, currentRollup, currentRollup.plus(1, ChronoUnit.HOURS), 60, "Node-1", "Limiter", "192.0.2.0/24",
+				50L, 50L, 0L, 1, 50, 50, 1, 24940L, "Hetzner", "DE", ClientType.DATACENTER
+		);
+
+		rollupRepository.batchUpsert(List.of(pastRollup, current));
+
+		List<SubnetProfile> computed = profileRepository.computeProfilesFromRollups(cutoff24h, cutoff30d);
+		SubnetProfile prof = computed.stream().filter(p -> p.subnetGroup().equals("192.0.2.0/24")).findFirst().orElseThrow();
+
+		// Baseline divisor is ~2.0 days (not 29!), so baseline = 100 / 2 = 50 req/day
+		assertEquals(50.0, prof.baselineDailyAvg(), 5.0);
+		// Surge = 50 / 50 = ~1.0x (Normal), NOT 29x surge!
+		assertEquals(1.0, prof.last24hSurgeFactor(), 0.3);
+		assertFalse(prof.isHighSurge(5.0));
 	}
 
 	@Test

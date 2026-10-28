@@ -114,6 +114,27 @@
         </div>
     </div>
 
+    <!-- Baseline Calibration Phase Banner -->
+    <div th:if="${freshness != null and freshness.isCalibrating()}"
+         style="margin-bottom: 20px; padding: 12px 18px; border-radius: var(--radius-md); background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.35); display: flex; align-items: flex-start; gap: 14px;">
+        <span style="font-size: 22px; line-height: 1;">&#x2696;&#xFE0F;</span>
+        <div style="font-size: 12.5px; line-height: 1.5; color: var(--text-primary);">
+            <div style="font-weight: 700; margin-bottom: 2px;">
+                Baseline-Kalibrierung aktiv (<span th:text="${freshness.calibrationProgressText()}">Tag 2 von 7</span>)
+            </div>
+            <div>
+                Das System baut derzeit seine 30-Tage-Historie auf. Baselines und Surge-Faktoren werden dynamisch anhand der bisherigen <strong th:text="${freshness.historyDaysText()}">2 Tage</strong> Datenbasis berechnet. Subnetze ohne Vortageshistorie befinden sich in der Initialisierung.
+                <button type="button"
+                        hx-get="/fragments/help?doc=ui&section=subnet-profiles"
+                        hx-target="#help-drawer-content"
+                        onclick="openHelpDrawer()"
+                        style="background: none; border: none; padding: 0; color: #2563eb; text-decoration: underline; font-size: 12.5px; font-weight: 600; cursor: pointer; margin-left: 6px; display: inline;">
+                    Mehr erfahren im In-App Guide &rarr;
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Data Lag Information Banner -->
     <div th:if="${freshness != null and freshness.hasUnaggregatedEvents()}"
          style="margin-bottom: 20px; padding: 12px 18px; border-radius: var(--radius-md); background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); display: flex; align-items: flex-start; gap: 14px;">

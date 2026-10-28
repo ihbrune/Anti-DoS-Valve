@@ -10,16 +10,30 @@ import java.time.temporal.ChronoUnit;
 public record SubnetProfileFreshness(
 		Instant latestRollupEnd,
 		Instant latestEventTime,
+		Instant earliestRollupStart,
 		Instant lastProfilesRefreshedAt,
 		int rollupWindowMinutes,
 		boolean hasUnaggregatedEvents,
 		long unaggregatedMinutes,
-		long rollupAgeMinutes
+		long rollupAgeMinutes,
+		double historyDays,
+		boolean isCalibrating,
+		boolean isInitializing
 ) {
 
 	public static SubnetProfileFreshness of(
 			Instant latestRollupEnd,
 			Instant latestEventTime,
+			Instant lastProfilesRefreshedAt,
+			int rollupWindowMinutes
+	) {
+		return of(latestRollupEnd, latestEventTime, null, lastProfilesRefreshedAt, rollupWindowMinutes);
+	}
+
+	public static SubnetProfileFreshness of(
+			Instant latestRollupEnd,
+			Instant latestEventTime,
+			Instant earliestRollupStart,
 			Instant lastProfilesRefreshedAt,
 			int rollupWindowMinutes
 	) {
@@ -44,19 +58,48 @@ public record SubnetProfileFreshness(
 			}
 		}
 
+		double historyDays = 0.0;
+		if (earliestRollupStart != null) {
+			long hours = ChronoUnit.HOURS.between(earliestRollupStart, now);
+			historyDays = Math.round((hours / 24.0) * 10.0) / 10.0;
+		}
+
+		boolean isInitializing = historyDays < 1.0;
+		boolean isCalibrating = historyDays < 7.0;
+
 		return new SubnetProfileFreshness(
 				latestRollupEnd,
 				latestEventTime,
+				earliestRollupStart,
 				lastProfilesRefreshedAt,
 				rollupWindowMinutes,
 				hasUnaggregated,
 				unaggregatedMinutes,
-				rollupAgeMinutes
+				rollupAgeMinutes,
+				historyDays,
+				isCalibrating,
+				isInitializing
 		);
 	}
 
 	public boolean hasData() {
 		return latestRollupEnd != null;
+	}
+
+	public String calibrationProgressText() {
+		if (isInitializing) {
+			return "Tag 1 (Initialisierung)";
+		}
+		int day = (int) Math.floor(historyDays) + 1;
+		return "Tag " + Math.min(day, 7) + " von 7 (Kalibrierung)";
+	}
+
+	public String historyDaysText() {
+		if (historyDays < 1.0) {
+			long hours = (earliestRollupStart != null) ? ChronoUnit.HOURS.between(earliestRollupStart, Instant.now()) : 0;
+			return hours + " Stunden";
+		}
+		return historyDays + " Tage";
 	}
 
 	public boolean isFresh() {

@@ -382,7 +382,7 @@ The database separates real-time transient telemetry, persistent subnet aggregat
 2. **`slot_snapshots`:** Completed and active 1-minute time slots per server and valve instance with total request and client counts.
 3. **`client_events`:** Granular rate-limit events (both blocked attacks and tracked active clients) with numeric IPv4/IPv6 boundaries (`ip_v4_start`, `ip_v4_end`) for sub-millisecond range lookups.
 4. **`client_subnet_rollups`:** Persistent 1-hour time-bucket aggregations per `/24` (IPv4) or `/64` (IPv6) subnet partition with distinct client tracking, request percentiles, and botnet heuristic metrics.
-5. **`subnet_profiles`:** Long-term frequency baselines (30-day lookback), dormancy periods (inactivity before reappearance), and 24-hour surge multipliers per subnet partition for rapid detection of dormant breakouts and residential proxy sweeps.
+5. **`subnet_profiles`:** Long-term frequency baselines (30-day lookback with dynamic 3-phase calibration on new deployments), dormancy periods (inactivity before reappearance), and 24-hour surge multipliers per subnet partition for rapid detection of dormant breakouts and residential proxy sweeps.
 6. **`network_annotations`:** Persistent operator knowledge, threat notes, and verdict badges (Legitimate, Suspicious, Malicious, etc.) assigned to specific IPs, subnets, or ASNs.
 7. **`rollup_signatures`:** Optional User-Agent and client signature dimensions linked to subnet rollups for distributed fingerprinting.
 8. **`network_entity`:** Normalized directory of enriched client IPs and subnets with ASN, geolocation, threat classification, and first/last seen timestamps.

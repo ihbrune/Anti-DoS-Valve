@@ -119,6 +119,9 @@ public class SubnetProfileService {
 		Instant latestRollupEnd = (rollupRepository != null)
 				? rollupRepository.findLatestBucketEnd().orElse(null)
 				: null;
+		Instant earliestRollupStart = (rollupRepository != null)
+				? rollupRepository.findEarliestBucketStart().orElse(null)
+				: null;
 		Instant latestEventTime = (clientEventRepository != null)
 				? clientEventRepository.findLatestSlotTime().orElse(null)
 				: null;
@@ -128,6 +131,7 @@ public class SubnetProfileService {
 		return org.henbru.antidos.collector.model.SubnetProfileFreshness.of(
 				latestRollupEnd,
 				latestEventTime,
+				earliestRollupStart,
 				lastUpdated,
 				windowMinutes
 		);

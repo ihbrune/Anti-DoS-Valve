@@ -241,6 +241,12 @@ public class SubnetRollupRepository {
 		return ts != null ? Optional.of(ts.toInstant()) : Optional.empty();
 	}
 
+	public Optional<Instant> findEarliestBucketStart() {
+		String sql = "SELECT MIN(bucket_start) FROM client_subnet_rollups";
+		Timestamp ts = jdbcTemplate.queryForObject(sql, Timestamp.class);
+		return ts != null ? Optional.of(ts.toInstant()) : Optional.empty();
+	}
+
 	public List<org.henbru.antidos.collector.model.TimelinePoint> findTimeline(
 			List<String> servers,
 			List<String> valves,

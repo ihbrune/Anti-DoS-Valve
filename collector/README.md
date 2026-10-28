@@ -13,7 +13,7 @@ The documentation suite is tailored for distinct operational roles:
   * Real-Time Fleet Overview, Monitored Server Detail Views & Configuration Drift
   * Visual Analytics Cockpit: Attack Timelines, Bot-Mix Composition & Traffic Breakdown
   * Forensic 2D Cluster Scatterplots (Residential Proxy Botnet Detection)
-  * Subnet Profiling & Surge Detection (30-day moving baselines, surge multipliers, dormancy breakouts)
+  * Subnet Profiling & Surge Detection (30-day moving baselines with dynamic fresh-system calibration, surge multipliers, dormancy breakouts)
   * Persistent Operator Knowledge Store (`/notes` & forensic verdict badges)
   * Incident Explorer with multi-server CIDR filtering and exact time horizons
   * Verified Search Engine & AI Crawler Feed Verification

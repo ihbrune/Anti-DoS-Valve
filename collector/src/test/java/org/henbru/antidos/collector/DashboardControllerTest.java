@@ -38,6 +38,9 @@ class DashboardControllerTest {
 	@Autowired
 	private org.henbru.antidos.collector.storage.PollEventLogRepository pollEventLogRepository;
 
+	@Autowired
+	private org.henbru.antidos.collector.storage.SubnetProfileRepository subnetProfileRepository;
+
 	@Test
 	void testIndexPageLoads() throws Exception {
 		mockMvc.perform(get("/"))
@@ -528,6 +531,27 @@ class DashboardControllerTest {
 
 	@Test
 	void testOffendersAutoPivotToProfilesWhenPatternProvided() throws Exception {
+		subnetProfileRepository.batchUpsert(List.of(new org.henbru.antidos.collector.model.SubnetProfile(
+				"198.51.100.0/24",
+				Instant.now().minusSeconds(86400 * 10),
+				Instant.now(),
+				0,
+				500L,
+				500L,
+				0L,
+				10.0,
+				5,
+				200L,
+				200L,
+				5,
+				0L,
+				20.0,
+				13335L,
+				"Cloudflare",
+				"US",
+				org.henbru.antidos.collector.model.ClientType.RESIDENTIAL
+		)));
+
 		mockMvc.perform(get("/fragments/offenders-table")
 						.param("groupBy", "CLIENT")
 						.param("activityPattern", "SURGE"))

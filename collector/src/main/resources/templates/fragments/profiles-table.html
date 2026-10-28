@@ -161,16 +161,23 @@
                     <td>
                         <div style="display: flex; flex-direction: column; gap: 4px;">
                             <div>
-                                <span th:if="${p.last24hSurgeFactor() >= 10.0}" class="badge badge-danger" style="font-weight: 700; font-size: 11px;"
-                                      th:title="'24h volume (' + ${p.last24hRequests()} + ') is ' + ${p.last24hSurgeFactor()} + 'x above 30-day baseline average (' + ${p.baselineDailyAvg()} + '/day)'">
+                                <span th:if="${p.last24hSurgeFactor() >= 10.0 and p.baselineDailyAvg() > 0.0}" class="badge badge-danger" style="font-weight: 700; font-size: 11px;"
+                                      th:title="'24h volume (' + ${p.last24hRequests()} + ') is ' + ${p.last24hSurgeFactor()} + 'x above baseline average (' + ${p.baselineDailyAvg()} + '/day)'">
                                     &#x26A1; <span th:text="${#numbers.formatDecimal(p.last24hSurgeFactor(), 1, 1)} + 'x Surge'"></span>
                                 </span>
-                                <span th:if="${p.last24hSurgeFactor() >= 3.0 and p.last24hSurgeFactor() < 10.0}" class="badge badge-warning" style="font-weight: 600; font-size: 11px;"
-                                      th:title="'24h volume (' + ${p.last24hRequests()} + ') is ' + ${p.last24hSurgeFactor()} + 'x above 30-day baseline average (' + ${p.baselineDailyAvg()} + '/day)'">
+                                <span th:if="${p.last24hSurgeFactor() >= 3.0 and p.last24hSurgeFactor() < 10.0 and p.baselineDailyAvg() > 0.0}" class="badge badge-warning" style="font-weight: 600; font-size: 11px;"
+                                      th:title="'24h volume (' + ${p.last24hRequests()} + ') is ' + ${p.last24hSurgeFactor()} + 'x above baseline average (' + ${p.baselineDailyAvg()} + '/day)'">
                                     &#x26A1; <span th:text="${#numbers.formatDecimal(p.last24hSurgeFactor(), 1, 1)} + 'x Surge'"></span>
                                 </span>
-                                <span th:if="${p.last24hSurgeFactor() < 3.0}" class="badge badge-secondary" style="font-size: 10px;">
+                                <span th:if="${p.last24hSurgeFactor() >= 1.0 and p.last24hSurgeFactor() < 3.0 and p.baselineDailyAvg() > 0.0}" class="badge badge-secondary" style="font-size: 10px;">
                                     Normal (<span th:text="${#numbers.formatDecimal(p.last24hSurgeFactor(), 1, 1)} + 'x'"></span>)
+                                </span>
+                                <span th:if="${p.last24hSurgeFactor() > 0.0 and p.last24hSurgeFactor() < 1.0 and p.baselineDailyAvg() > 0.0}" class="badge badge-secondary" style="font-size: 10px; opacity: 0.8;">
+                                    Low (<span th:text="${#numbers.formatDecimal(p.last24hSurgeFactor(), 1, 1)} + 'x'"></span>)
+                                </span>
+                                <span th:if="${p.last24hSurgeFactor() <= 0.0 or p.baselineDailyAvg() <= 0.0}" class="badge badge-secondary" style="font-size: 10px; opacity: 0.85;"
+                                      title="Keine Vortages-Baseline vorhanden (Subnetz neu oder System in Initialisierung)">
+                                    &#x23F3; Initialisierung
                                 </span>
                             </div>
                             <span th:if="${p.isPotentialResidentialProxyPool()}" class="badge badge-danger" style="font-size: 10px;"

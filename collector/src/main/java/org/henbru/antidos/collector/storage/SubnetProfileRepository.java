@@ -251,7 +251,7 @@ public class SubnetProfileRepository {
 				SELECT
 				    COUNT(*) AS total_count,
 				    COUNT(CASE WHEN last_24h_requests > 0 THEN 1 END) AS active_24h,
-				    COUNT(CASE WHEN last_24h_requests > 0 AND last_24h_surge_factor >= 5.0 THEN 1 END) AS high_surge,
+				    COUNT(CASE WHEN last_24h_requests > 0 AND baseline_daily_avg > 0.0 AND last_24h_surge_factor >= 5.0 THEN 1 END) AS high_surge,
 				    COUNT(CASE WHEN last_24h_requests > 0 AND (days_dormant_before_last_seen >= 900 OR first_seen_at >= ?) THEN 1 END) AS new_subnets,
 				    COUNT(CASE WHEN last_24h_requests > 0 AND days_dormant_before_last_seen >= 14 AND days_dormant_before_last_seen < 900 THEN 1 END) AS dormant_breaks,
 				    COUNT(CASE WHEN last_24h_requests > 0 AND last_24h_distinct_clients >= 5 AND (last_24h_requests * 1.0 / CASE WHEN last_24h_distinct_clients = 0 THEN 1 ELSE last_24h_distinct_clients END) <= 20.0 THEN 1 END) AS proxy_pools
@@ -307,6 +307,17 @@ public class SubnetProfileRepository {
 		Timestamp ts24h = Timestamp.from(cutoff24h);
 		Timestamp ts30d = Timestamp.from(cutoff30d);
 
+		String sqlEarliest = "SELECT MIN(bucket_start) FROM client_subnet_rollups";
+		Timestamp tsEarliest = jdbcTemplate.queryForObject(sqlEarliest, Timestamp.class);
+		Instant earliestRollup = tsEarliest != null ? tsEarliest.toInstant() : null;
+
+		double availablePriorDays = 0.0;
+		if (earliestRollup != null && earliestRollup.isBefore(cutoff24h)) {
+			long priorHours = ChronoUnit.HOURS.between(earliestRollup, cutoff24h);
+			availablePriorDays = Math.max(1.0, priorHours / 24.0);
+		}
+		final double effectiveDivisor = Math.min(29.0, availablePriorDays);
+
 		return jdbcTemplate.query(sql, (rs, rowNum) -> {
 			String subnetGroup = rs.getString("subnet_group");
 			Instant firstSeen = rs.getTimestamp("first_seen").toInstant();
@@ -335,15 +346,16 @@ public class SubnetProfileRepository {
 				daysDormant = 999; // Brand new within lookback window
 			}
 
-			// 29 days of prior lookback
-			double baselineDailyAvg = reqPrior > 0 ? (double) reqPrior / 29.0 : 0.0;
+			// Dynamic baseline divisor: uses actual available prior days (1..29) instead of hardcoding 29.
+			// When availablePriorDays < 1.0 (system in Phase 1 / < 24h history), baseline is not yet established.
+			double baselineDailyAvg = (effectiveDivisor > 0.0 && reqPrior > 0)
+					? (double) reqPrior / effectiveDivisor
+					: 0.0;
 			double surgeFactor;
 			if (baselineDailyAvg > 0.0) {
 				surgeFactor = Math.round(((double) req24h / baselineDailyAvg) * 10.0) / 10.0;
-			} else if (req24h > 0) {
-				surgeFactor = (double) req24h; // Spike from zero
 			} else {
-				surgeFactor = 1.0;
+				surgeFactor = 0.0; // Initializing / no baseline established yet
 			}
 
 			long peakDaily = Math.max(req24h, (long) Math.ceil(baselineDailyAvg));
@@ -397,7 +409,7 @@ public class SubnetProfileRepository {
 					params.add(Timestamp.from(Instant.now().minus(7, ChronoUnit.DAYS)));
 				}
 				case "DORMANT" -> sql.append(" AND last_24h_requests > 0 AND days_dormant_before_last_seen >= 14 AND days_dormant_before_last_seen < 900");
-				case "SURGE" -> sql.append(" AND last_24h_requests > 0 AND last_24h_surge_factor >= 5.0");
+				case "SURGE" -> sql.append(" AND last_24h_requests > 0 AND baseline_daily_avg > 0.0 AND last_24h_surge_factor >= 5.0");
 				case "PROXY_POOL" -> sql.append(" AND last_24h_requests > 0 AND last_24h_distinct_clients >= 5 AND (last_24h_requests * 1.0 / CASE WHEN last_24h_distinct_clients = 0 THEN 1 ELSE last_24h_distinct_clients END) <= 20.0");
 				default -> {}
 			}

@@ -149,10 +149,35 @@ public record SubnetProfile(
 	}
 
 	/**
-	 * Checks if current 24-hour traffic exhibits a significant surge over the historical baseline.
+	 * Checks if current 24-hour traffic exhibits a significant surge over an established historical baseline.
+	 * Returns false if no baseline has been established yet (baselineDailyAvg <= 0.0).
 	 */
 	public boolean isHighSurge(double thresholdMultiplier) {
-		return last24hSurgeFactor >= thresholdMultiplier;
+		return baselineDailyAvg > 0.0 && last24hSurgeFactor >= thresholdMultiplier;
+	}
+
+	/**
+	 * Returns true if this subnet profile has no established baseline yet (Phase 1 / brand new).
+	 */
+	public boolean isInitializing() {
+		return baselineDailyAvg <= 0.0 || last24hSurgeFactor <= 0.0;
+	}
+
+	/**
+	 * Returns true if this subnet profile is in the early baseline phase (< 7 days of observation).
+	 */
+	public boolean isEarlyBaseline() {
+		if (firstSeenAt == null) return true;
+		return ChronoUnit.HOURS.between(firstSeenAt, Instant.now()) < (7 * 24);
+	}
+
+	/**
+	 * Returns the number of days this subnet has been tracked (1..30).
+	 */
+	public int daysOfHistory() {
+		if (firstSeenAt == null) return 1;
+		long days = ChronoUnit.DAYS.between(firstSeenAt, Instant.now());
+		return (int) Math.min(30, Math.max(1, days));
 	}
 
 	/**
