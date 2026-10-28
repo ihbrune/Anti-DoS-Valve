@@ -324,7 +324,12 @@
     </section>
 
     <!-- Recent Slots Timeline -->
-    <section>
+    <section id="server-slots-section"
+             hx-trigger="annotationChanged from:body"
+             th:hx-get="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})} : @{'/server/' + ${serverId}(status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})}"
+             hx-select="#server-slots-section"
+             hx-target="#server-slots-section"
+             hx-swap="outerHTML">
         <div class="section-header">
             <div class="section-title">&#x23F1; Slot History &amp; Timeline</div>
         </div>
@@ -443,7 +448,12 @@
     </section>
 
     <!-- Client Traffic & Incidents on this Server -->
-    <section id="server-events-section">
+    <section id="server-events-section"
+             hx-trigger="annotationChanged from:body"
+             th:hx-get="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})} : @{'/server/' + ${serverId}(status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})}"
+             hx-select="#server-events-section"
+             hx-target="#server-events-section"
+             hx-swap="outerHTML">
         <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
             <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
                 <div class="section-title" style="margin-bottom: 0;">
@@ -452,19 +462,34 @@
                     <span th:if="${selectedStatus != 'BLOCKED' and selectedStatus != 'ACTIVE'}">&#x26A1; Client Traffic &amp; Incidents on this Server</span>
                 </div>
                 <div class="filter-btn-group">
-                    <a th:href="@{'/server/' + ${serverId}(valve=${selectedValve}, status='ALL')}"
+                    <a th:href="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status='ALL')} : @{'/server/' + ${serverId}(status='ALL')}"
+                       th:hx-get="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status='ALL')} : @{'/server/' + ${serverId}(status='ALL')}"
+                       hx-select="#server-events-section"
+                       hx-target="#server-events-section"
+                       hx-swap="outerHTML"
+                       hx-push-url="true"
                        class="filter-btn"
                        th:classappend="${selectedStatus == 'ALL' or selectedStatus == '' or selectedStatus == null ? 'active' : ''}"
                        title="Show all recorded client events (Blocked &amp; Active)">
                         All Traffic
                     </a>
-                    <a th:href="@{'/server/' + ${serverId}(valve=${selectedValve}, status='BLOCKED')}"
+                    <a th:href="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status='BLOCKED')} : @{'/server/' + ${serverId}(status='BLOCKED')}"
+                       th:hx-get="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status='BLOCKED')} : @{'/server/' + ${serverId}(status='BLOCKED')}"
+                       hx-select="#server-events-section"
+                       hx-target="#server-events-section"
+                       hx-swap="outerHTML"
+                       hx-push-url="true"
                        class="filter-btn"
                        th:classappend="${selectedStatus == 'BLOCKED' ? 'active' : ''}"
                        title="Show only rate-limited or blocked client incidents">
                         &#x1F6A8; Blocked Only
                     </a>
-                    <a th:href="@{'/server/' + ${serverId}(valve=${selectedValve}, status='ACTIVE')}"
+                    <a th:href="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status='ACTIVE')} : @{'/server/' + ${serverId}(status='ACTIVE')}"
+                       th:hx-get="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status='ACTIVE')} : @{'/server/' + ${serverId}(status='ACTIVE')}"
+                       hx-select="#server-events-section"
+                       hx-target="#server-events-section"
+                       hx-swap="outerHTML"
+                       hx-push-url="true"
                        class="filter-btn"
                        th:classappend="${selectedStatus == 'ACTIVE' ? 'active' : ''}"
                        title="Show only active monitored clients within rate limits">

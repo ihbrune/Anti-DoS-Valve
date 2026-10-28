@@ -397,12 +397,13 @@ public class DashboardController {
 		if (!"BLOCKED".equals(effectiveStatus) && !"ACTIVE".equals(effectiveStatus)) {
 			effectiveStatus = "ALL";
 		}
+		String effectiveValve = (valve != null && !valve.isBlank()) ? valve.trim() : null;
 
 		EndpointHeartbeat hb = heartbeatRepository.findByServerId(serverId).orElse(null);
-		List<SlotSnapshot> recentSlots = slotSnapshotRepository.findRecent(serverId, valve, 50);
+		List<SlotSnapshot> recentSlots = slotSnapshotRepository.findRecent(serverId, effectiveValve, 50);
 		List<ClientEvent> recentEvents = clientEventRepository.findRecentEventsFiltered(
 				List.of(serverId),
-				valve != null ? List.of(valve) : null,
+				effectiveValve != null ? List.of(effectiveValve) : null,
 				null,
 				null,
 				null,
@@ -417,7 +418,7 @@ public class DashboardController {
 		List<ClientEvent> slotEvents = (minStartTime != null)
 				? clientEventRepository.findRecentEventsFiltered(
 						List.of(serverId),
-						valve != null ? List.of(valve) : null,
+						effectiveValve != null ? List.of(effectiveValve) : null,
 						minStartTime,
 						null,
 						null,
@@ -431,7 +432,7 @@ public class DashboardController {
 						? recentEvents
 						: clientEventRepository.findRecentEventsFiltered(
 								List.of(serverId),
-								valve != null ? List.of(valve) : null,
+								effectiveValve != null ? List.of(effectiveValve) : null,
 								null,
 								null,
 								null,
@@ -494,10 +495,9 @@ public class DashboardController {
 		});
 
 		List<org.henbru.antidos.collector.model.MonitoredValve> displayedRuntimeValves = runtimeValves;
-		if (valve != null && !valve.isBlank()) {
-			String trimmed = valve.trim();
+		if (effectiveValve != null) {
 			displayedRuntimeValves = runtimeValves.stream()
-					.filter(mv -> mv.valveName().equalsIgnoreCase(trimmed))
+					.filter(mv -> mv.valveName().equalsIgnoreCase(effectiveValve))
 					.toList();
 		}
 		displayedRuntimeValves = displayedRuntimeValves.stream()
@@ -523,7 +523,7 @@ public class DashboardController {
 		model.addAttribute("runtimeValvesMap", runtimeValvesMap);
 		model.addAttribute("activeValvesCount", activeValvesCount);
 		model.addAttribute("inactiveValvesCount", inactiveValvesCount);
-		model.addAttribute("selectedValve", valve);
+		model.addAttribute("selectedValve", effectiveValve);
 		model.addAttribute("selectedStatus", effectiveStatus);
 		model.addAttribute("recentSlots", recentSlots);
 		model.addAttribute("recentEvents", recentEvents);

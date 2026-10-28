@@ -356,6 +356,55 @@ class DashboardControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("(Filtered: NON-EXISTENT)")))
 				.andExpect(content().string(containsString("No live runtime configuration discovered yet for valve '<span>NON-EXISTENT</span>'.")));
+
+		// 4. Request with empty valve parameter (e.g. ?valve=&status=ALL) does not treat empty string as valve name
+		mockMvc.perform(get("/server/Demo-Server").param("valve", "").param("status", "ALL"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Valve A description")))
+				.andExpect(content().string(containsString("Valve B description")))
+				.andExpect(content().string(not(containsString("(Filtered:"))))
+				.andExpect(content().string(not(containsString("?valve=&"))))
+				.andExpect(content().string(containsString("href=\"/server/Demo-Server?status=ALL\"")))
+				.andExpect(content().string(containsString("href=\"/server/Demo-Server?status=BLOCKED\"")))
+				.andExpect(content().string(containsString("href=\"/server/Demo-Server?status=ACTIVE\"")))
+				.andExpect(content().string(containsString("id=\"server-slots-section\"")))
+				.andExpect(content().string(containsString("id=\"server-events-section\"")))
+				.andExpect(content().string(containsString("hx-trigger=\"annotationChanged from:body\"")));
+	}
+
+	@Test
+	void testServerDetailsNoteStatusAndAnnotationUpdate() throws Exception {
+		java.time.Instant now = java.time.Instant.now();
+		clientEventRepository.batchUpsert(List.of(
+				new org.henbru.antidos.collector.model.ClientEvent(
+						null, "Demo-Server", "TEST-VALVE", 66666L,
+						now.minusSeconds(30), "198.51.100.42",
+						4, 32, null, null, null, null, "198.51.100.0/24",
+						15, 0, false, org.henbru.antidos.collector.model.ClientEvent.STATUS_BLOCKED, true, now,
+						8075L, "OpenAI / Microsoft", "US",
+						org.henbru.antidos.collector.model.ClientType.AI_CRAWLER,
+						org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+				)
+		));
+
+		// 1. Initial page load without notes contains note modal trigger and add-note button
+		mockMvc.perform(get("/server/Demo-Server"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("+📝")))
+				.andExpect(content().string(containsString("id=\"note-modal-container\"")));
+
+		// 2. Add an annotation for 198.51.100.0/24
+		annotationService.saveAnnotation(null,
+				org.henbru.antidos.collector.model.AnnotationTargetType.SUBNET,
+				"198.51.100.0/24",
+				org.henbru.antidos.collector.model.AnnotationVerdict.SUSPICIOUS,
+				"Suspicious crawler subnet");
+
+		// 3. Next fetch (as triggered by annotationChanged from:body) reflects the updated note badge
+		mockMvc.perform(get("/server/Demo-Server"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Subnet Note: Suspicious")))
+				.andExpect(content().string(containsString("badge-warning")));
 	}
 
 	@Test
