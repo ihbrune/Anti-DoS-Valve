@@ -49,7 +49,6 @@ public class DailyReportService {
 	private final MonitoredValveRepository valveRepository;
 	private final ClientEventRepository clientEventRepository;
 	private final AnnotationMarkdownService markdownService;
-	private final CollectorProperties properties;
 
 	public DailyReportService(
 			JdbcTemplate jdbcTemplate,
@@ -64,7 +63,6 @@ public class DailyReportService {
 		this.valveRepository = valveRepository;
 		this.clientEventRepository = clientEventRepository;
 		this.markdownService = markdownService;
-		this.properties = properties;
 	}
 
 	public Optional<DailyReport> getReport(String reportDate) {
@@ -181,12 +179,6 @@ public class DailyReportService {
 				Instant peakBlockTime,
 				double peakUtilizationPercent
 		) {
-			public double blockedSlotRatioPercent() {
-				return slotCount > 0 ? (blockedSlotCount * 100.0) / slotCount : 0.0;
-			}
-			public double blockRatePercent() {
-				return totalRequests > 0 ? (blockedRequests * 100.0) / totalRequests : 0.0;
-			}
 		}
 
 		List<ValveAggregate> valveAggregates = new ArrayList<>();

@@ -33,6 +33,7 @@ import org.springframework.web.multipart.MultipartFile;
  * and interactive HTMX modal endpoints for creating, editing, viewing, and deleting notes.
  */
 @Controller
+@SuppressWarnings("null")
 public class NotesController {
 
 	private final NetworkAnnotationService annotationService;

@@ -26,6 +26,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
  * and endpoints for viewing, downloading, and on-demand generation.
  */
 @Controller
+@SuppressWarnings("null")
 public class DailyReportController {
 
 	private static final Logger log = LoggerFactory.getLogger(DailyReportController.class);
