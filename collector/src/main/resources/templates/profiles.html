@@ -90,15 +90,15 @@
             <div th:if="${freshness != null}" class="badge"
                  th:classappend="${freshness.hasUnaggregatedEvents() ? 'badge-warning' : 'badge-success'}"
                  style="padding: 6px 12px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;"
-                 th:title="${freshness.latestRollupEnd() != null ? 'Abgeschlossene Rollups bis ' + #temporals.format(freshness.latestRollupEnd(), 'dd.MM.yyyy HH:mm') + ' Uhr' : 'Noch keine Rollups vorhanden'}">
+                 th:title="${freshness.latestRollupEnd() != null ? 'Completed rollups up to ' + #temporals.format(freshness.latestRollupEnd(), 'yyyy-MM-dd HH:mm') : 'No rollups recorded yet'}">
                 <span th:text="${freshness.hasUnaggregatedEvents() ? '&#x26A0;&#xFE0F;' : '&#x2705;'}">&#x26A0;&#xFE0F;</span>
                 <span>
-                    <strong>Datenstand:</strong>
-                    <span th:if="${freshness.latestRollupEnd() != null}" th:text="${#temporals.format(freshness.latestRollupEnd(), 'dd.MM. HH:mm')} + ' Uhr'">27.10. 21:00 Uhr</span>
-                    <span th:if="${freshness.latestRollupEnd() == null}">Keine Rollup-Daten</span>
+                    <strong>Data Cutoff:</strong>
+                    <span th:if="${freshness.latestRollupEnd() != null}" th:text="${#temporals.format(freshness.latestRollupEnd(), 'yyyy-MM-dd HH:mm')}">2026-10-28 09:00</span>
+                    <span th:if="${freshness.latestRollupEnd() == null}">No rollup data</span>
                 </span>
                 <span th:if="${freshness.hasUnaggregatedEvents()}" style="opacity: 0.85; font-size: 11px;"
-                      th:text="'(' + ${freshness.unaggregatedMinutes()} + 'm Verzögerung)'">(20m Verzögerung)</span>
+                      th:text="'(' + ${freshness.unaggregatedMinutes()} + 'm lag)'">(20m lag)</span>
             </div>
             <form method="post" th:action="@{/profiles/refresh}" style="margin: 0;">
                 <input type="hidden" name="activityPattern" th:value="${activityPattern}">
@@ -107,8 +107,8 @@
                 <input type="hidden" name="asn" th:value="${selectedAsn}">
                 <input type="hidden" name="sortBy" th:value="${sortBy}">
                 <input type="hidden" name="limit" th:value="${limit}">
-                <button type="submit" class="btn" style="font-size: 11px; padding: 5px 10px;" title="Rollups und Profile jetzt bis zum letzten abgeschlossenen Fenster aktualisieren">
-                    <span>&#x1F504;</span> Aktualisieren
+                <button type="submit" class="btn" style="font-size: 11px; padding: 5px 10px;" title="Catch up rollups and recalculate profiles up to the latest completed window">
+                    <span>&#x1F504;</span> Refresh
                 </button>
             </form>
         </div>
@@ -120,16 +120,16 @@
         <span style="font-size: 22px; line-height: 1;">&#x2696;&#xFE0F;</span>
         <div style="font-size: 12.5px; line-height: 1.5; color: var(--text-primary);">
             <div style="font-weight: 700; margin-bottom: 2px;">
-                Baseline-Kalibrierung aktiv (<span th:text="${freshness.calibrationProgressText()}">Tag 2 von 7</span>)
+                Baseline Calibration Active (<span th:text="${freshness.calibrationProgressText()}">Day 2 of 7</span>)
             </div>
             <div>
-                Das System baut derzeit seine 30-Tage-Historie auf. Baselines und Surge-Faktoren werden dynamisch anhand der bisherigen <strong th:text="${freshness.historyDaysText()}">2 Tage</strong> Datenbasis berechnet. Subnetze ohne Vortageshistorie befinden sich in der Initialisierung.
+                The system is currently accumulating its 30-day traffic history. Baselines and surge multipliers are dynamically calibrated based on the available <strong th:text="${freshness.historyDaysText()}">2 days</strong> of telemetry. Subnets without prior history are in the initialization phase.
                 <button type="button"
                         hx-get="/fragments/help?doc=ui&section=subnet-profiles"
                         hx-target="#help-drawer-content"
                         onclick="openHelpDrawer()"
                         style="background: none; border: none; padding: 0; color: #2563eb; text-decoration: underline; font-size: 12.5px; font-weight: 600; cursor: pointer; margin-left: 6px; display: inline;">
-                    Mehr erfahren im In-App Guide &rarr;
+                    Learn more in the In-App Guide &rarr;
                 </button>
             </div>
         </div>
@@ -141,19 +141,19 @@
         <span style="font-size: 22px; line-height: 1;">&#x2139;&#xFE0F;</span>
         <div style="font-size: 12.5px; line-height: 1.5; color: var(--text-primary);">
             <div style="font-weight: 700; margin-bottom: 2px;">
-                Hinweis zum Datenstand: Nicht alle Ereignisse sind bisher in den Profilen verarbeitet
+                Data Freshness Notice: In-flight events are not yet aggregated into profiles
             </div>
             <div>
-                Die Profilstatistiken (24h-Anfragen, Sperren, Surge-Faktor) basieren auf stündlich aggregierten Rollups mit Datenstand bis
-                <strong th:text="${freshness.latestRollupEnd() != null ? #temporals.format(freshness.latestRollupEnd(), 'dd.MM.yyyy HH:mm') + ' Uhr' : 'unbekannt'}">27.10.2026 21:00 Uhr</strong>.
-                Neuere Rohdaten liegen bis <strong th:text="${freshness.latestEventTime() != null ? #temporals.format(freshness.latestEventTime(), 'HH:mm') + ' Uhr' : 'jetzt'}">21:48 Uhr</strong> vor.
-                Ereignisse der vergangenen <strong th:text="${freshness.unaggregatedMinutes()} + ' Minuten'">48 Minuten</strong>
-                (einschließlich kürzlich erfolgter 429-Sperren) werden erst nach Abschluss des laufenden Stundenfensters in die Profil-Aggregate übernommen.
+                Profile statistics (24h requests, blocks, surge factor) are calculated from hourly aggregated rollups with data cutoff up to
+                <strong th:text="${freshness.latestRollupEnd() != null ? #temporals.format(freshness.latestRollupEnd(), 'yyyy-MM-dd HH:mm') : 'unknown'}">2026-10-28 09:00</strong>.
+                Raw events are recorded up to <strong th:text="${freshness.latestEventTime() != null ? #temporals.format(freshness.latestEventTime(), 'HH:mm') : 'now'}">09:18</strong>.
+                In-flight events from the past <strong th:text="${freshness.unaggregatedMinutes()} + ' minutes'">18 minutes</strong>
+                (including recent 429 blocks) will be incorporated into profile rollups once the active hourly window completes.
             </div>
             <div style="margin-top: 6px; font-size: 11.5px; color: var(--text-muted);">
-                Aktuelle Echtzeit-Vorfälle und Sperren der letzten Minuten finden Sie sofort im
+                Real-time incidents and rate-limit blocks from the past few minutes are available immediately in
                 <a href="/events" style="color: var(--color-primary); font-weight: 600; text-decoration: underline;">Incident Explorer</a>
-                oder unter
+                or under
                 <a href="/offenders" style="color: var(--color-primary); font-weight: 600; text-decoration: underline;">Top Offenders</a>.
             </div>
         </div>

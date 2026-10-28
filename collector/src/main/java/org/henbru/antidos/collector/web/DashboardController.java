@@ -559,11 +559,11 @@ public class DashboardController {
 
 		if (deleteHistory) {
 			redirectAttributes.addFlashAttribute("message",
-					"Valve '" + valveName + "' vollständig gelöscht (" + configsDeleted + " Konfiguration, "
-							+ slotsDeleted + " Snapshots, " + eventsDeleted + " Ereignisse entfernt).");
+					"Valve '" + valveName + "' permanently deleted (" + configsDeleted + " configuration, "
+							+ slotsDeleted + " snapshots, " + eventsDeleted + " events removed).");
 		} else {
 			redirectAttributes.addFlashAttribute("message",
-					"Valve-Konfiguration für '" + valveName + "' entfernt.");
+					"Valve configuration for '" + valveName + "' removed.");
 		}
 		return "redirect:/server/" + serverId;
 	}

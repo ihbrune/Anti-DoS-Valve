@@ -88,18 +88,18 @@ public record SubnetProfileFreshness(
 
 	public String calibrationProgressText() {
 		if (isInitializing) {
-			return "Tag 1 (Initialisierung)";
+			return "Day 1 (Initializing)";
 		}
 		int day = (int) Math.floor(historyDays) + 1;
-		return "Tag " + Math.min(day, 7) + " von 7 (Kalibrierung)";
+		return "Day " + Math.min(day, 7) + " of 7 (Calibrating)";
 	}
 
 	public String historyDaysText() {
 		if (historyDays < 1.0) {
 			long hours = (earliestRollupStart != null) ? ChronoUnit.HOURS.between(earliestRollupStart, Instant.now()) : 0;
-			return hours + " Stunden";
+			return hours + " hours";
 		}
-		return historyDays + " Tage";
+		return historyDays + " days";
 	}
 
 	public boolean isFresh() {

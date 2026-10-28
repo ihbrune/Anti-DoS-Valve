@@ -220,19 +220,19 @@
                 <!-- Inactive Banner with Delete Actions -->
                 <div th:unless="${rv.isActive()}" style="font-size: 12px; color: #f59e0b; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
                     <div>
-                        <strong style="color: #f59e0b;">&#x26A0;&#xFE0F; Inaktive Valve-Konfiguration:</strong>
-                        <span style="color: var(--text-secondary);">Dieser Valve wurde im jüngsten Server-Poll nicht mehr gemeldet (wurde umbenannt oder entfernt).</span>
+                        <strong style="color: #f59e0b;">&#x26A0;&#xFE0F; Inactive Valve Configuration:</strong>
+                        <span style="color: var(--text-secondary);">This valve was not reported in the latest server poll (may have been renamed or removed).</span>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                        <form th:action="@{'/server/' + ${serverId} + '/valves/' + ${rv.valveName} + '/delete'}" method="post" style="display: inline;" onsubmit="return confirm('Möchten Sie diese veraltete Valve-Konfiguration entfernen? (Historische Slot-Messdaten bleiben erhalten)');">
-                            <button type="submit" class="btn" style="padding: 3px 10px; font-size: 11px; color: var(--text-primary); border-color: var(--border-color);" title="Entfernt nur die Konfiguration (Metriken/Logs bleiben erhalten)">
-                                Konfiguration entfernen
+                        <form th:action="@{'/server/' + ${serverId} + '/valves/' + ${rv.valveName} + '/delete'}" method="post" style="display: inline;" onsubmit="return confirm('Do you want to remove this inactive valve configuration? (Historical telemetry slot data will be preserved)');">
+                            <button type="submit" class="btn" style="padding: 3px 10px; font-size: 11px; color: var(--text-primary); border-color: var(--border-color);" title="Removes only the configuration (metrics and logs are preserved)">
+                                Remove Configuration
                             </button>
                         </form>
-                        <form th:action="@{'/server/' + ${serverId} + '/valves/' + ${rv.valveName} + '/delete'}" method="post" style="display: inline;" onsubmit="return confirm('ACHTUNG: Möchten Sie diese Valve samt ALLEN historischen Snapshots und Messdaten endgültig aus der Datenbank löschen?');">
+                        <form th:action="@{'/server/' + ${serverId} + '/valves/' + ${rv.valveName} + '/delete'}" method="post" style="display: inline;" onsubmit="return confirm('WARNING: Are you sure you want to permanently delete this valve and ALL historical snapshots and telemetry metrics from the database?');">
                             <input type="hidden" name="deleteHistory" value="true" />
-                            <button type="submit" class="btn" style="padding: 3px 10px; font-size: 11px; color: #ef4444; border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.08);" title="Löscht Valve und die gesamte Historie vollständig">
-                                &#x1F5D1; Vollständig löschen (inkl. Historie)
+                            <button type="submit" class="btn" style="padding: 3px 10px; font-size: 11px; color: #ef4444; border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.08);" title="Permanently deletes valve and all historical telemetry">
+                                &#x1F5D1; Delete Completely (incl. History)
                             </button>
                         </form>
                     </div>

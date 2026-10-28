@@ -384,8 +384,8 @@ class DashboardControllerTest {
 				.andExpect(content().string(containsString("ACTIVE-VALVE")))
 				.andExpect(content().string(containsString("OLD-RENAMED-VALVE")))
 				.andExpect(content().string(containsString("INACTIVE")))
-				.andExpect(content().string(containsString("Inaktive Valve-Konfiguration:")))
-				.andExpect(content().string(containsString("Konfiguration entfernen")));
+				.andExpect(content().string(containsString("Inactive Valve Configuration:")))
+				.andExpect(content().string(containsString("Remove Configuration")));
 
 		// 2. Perform delete on OLD-RENAMED-VALVE
 		mockMvc.perform(post("/server/Demo-Server/valves/OLD-RENAMED-VALVE/delete"))
@@ -621,7 +621,7 @@ class DashboardControllerTest {
 	void testProfilesFilterActionsLeftAlignedAndFreshness() throws Exception {
 		mockMvc.perform(get("/profiles"))
 				.andExpect(status().isOk())
-				.andExpect(content().string(containsString("Datenstand:")))
+				.andExpect(content().string(containsString("Data Cutoff:")))
 				.andExpect(content().string(containsString("class=\"filter-actions\"")))
 				.andExpect(content().string(containsString("Apply Filters")))
 				.andExpect(content().string(containsString("Reset Filters")));

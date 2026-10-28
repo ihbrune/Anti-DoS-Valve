@@ -56,6 +56,8 @@ This document serves as an onboarding and development guide for human developers
      * Always preserve or prepend license and copyright comment banners (`/*! ... */`) at the top of minified files.
      * Place the full license text in a corresponding `.LICENSE.txt` file next to each vendored script (e.g. `htmx.min.js.LICENSE.txt`, `chart.umd.min.js.LICENSE.txt`).
      * Keep [NOTICE.md](NOTICE.md) in the project root synchronized with all component versions, copyrights, and license texts.
+5. **English-Only User Interface & Documentation:**
+   * All user interface text (Thymeleaf templates, HTML attributes, badges, alert banners, tooltips, buttons, modals, status labels, confirmation dialogs, and error messages) and all user-facing documentation (`DASHBOARD_GUIDE.md`, `README.md`, `SETUP_GUIDE.md`) must strictly be written in **English**, even when discussing tasks or communicating in other languages (such as German).
 
 ---
 

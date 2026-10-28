@@ -142,8 +142,8 @@
                                         Low (<span th:text="${#numbers.formatDecimal(p.last24hSurgeFactor(), 1, 1)} + 'x'"></span>)
                                     </span>
                                     <span th:if="${p.last24hSurgeFactor() <= 0.0 or p.baselineDailyAvg() <= 0.0}" class="badge badge-secondary" style="font-size: 10px; opacity: 0.85;"
-                                          title="Keine Vortages-Baseline vorhanden (Subnetz neu oder System in Initialisierung)">
-                                        &#x23F3; Initialisierung
+                                          title="No prior baseline established (new subnet or system initializing)">
+                                        &#x23F3; Initializing
                                     </span>
                                 </div>
                                 <span th:if="${p.isPotentialResidentialProxyPool()}" class="badge badge-danger" style="animation: pulse 2s infinite; font-size: 10px;"

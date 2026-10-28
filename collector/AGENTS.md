@@ -52,6 +52,8 @@ This document serves as the architectural reference and development guide for hu
    * Preserved copies of external JS libraries (`static/js/`) must retain/include their copyright and license header comments (`/*! ... */`).
    * Accompany every vendored script with its corresponding `.LICENSE.txt` file (e.g. `htmx.min.js.LICENSE.txt`, `chart.umd.min.js.LICENSE.txt`).
    * Keep the project-wide `NOTICE.md` updated whenever adding or updating vendored packages.
+6. **English-Only User Interface & Documentation:**
+   * All user interface copy (Thymeleaf templates, HTML attributes, badges, alert banners, tooltips, buttons, modals, table headers, status indicators, confirmation dialogs, and error messages) as well as user-facing markdown guides (`DASHBOARD_GUIDE.md`, `SETUP_GUIDE.md`, `README.md`) must strictly be written in **English**. Even when communicating with developers or operators in other languages (such as German), all UI text and documentation must remain consistently in English.
 
 ---
 
