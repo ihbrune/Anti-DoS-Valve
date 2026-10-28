@@ -133,6 +133,11 @@ public class AntiDoSValve extends ValveBase {
 	 */
 	public static final String VISITOR_COUNTER_ATTRIBUTE_NAME = "org.henbru.antidos.VISITOR_COUNTER";
 
+	/**
+	 * Request attribute containing the immutable {@link AntiDoSVisitorContext} shared across upstream and downstream valves.
+	 */
+	public static final String VISITOR_CONTEXT_ATTRIBUTE_NAME = "org.henbru.antidos.VISITOR_CONTEXT";
+
 	public AntiDoSValve() {
 		super(true);
 	}
@@ -1293,7 +1298,12 @@ public class AntiDoSValve extends ValveBase {
 		byte[] clientSubnetBytes = null;
 		long now = getTimeInMillis();
 
-		if (visitorCookieEnabled && visitorTokenService != null) {
+		Object upstreamCtxObj = request.getAttribute(VISITOR_CONTEXT_ATTRIBUTE_NAME);
+		if (upstreamCtxObj instanceof AntiDoSVisitorContext upstreamCtx) {
+			isReturningVisitor = upstreamCtx.valid();
+			visitorCounter = upstreamCtx.counter();
+			clientSubnetBytes = upstreamCtx.subnetBytes();
+		} else if (visitorCookieEnabled && visitorTokenService != null) {
 			clientSubnetBytes = extractVisitorSubnetBytes(ip);
 			String cookieVal = extractCookieValue(request, visitorCookieName);
 			if (cookieVal != null && clientSubnetBytes != null) {
@@ -1313,6 +1323,12 @@ public class AntiDoSValve extends ValveBase {
 				issueNewCookie = true;
 			}
 
+			request.setAttribute(VISITOR_CONTEXT_ATTRIBUTE_NAME, new AntiDoSVisitorContext(
+					isReturningVisitor,
+					visitorCounter,
+					visitorCookieSubnetMaskV4,
+					visitorCookieSubnetMaskV6,
+					clientSubnetBytes));
 			request.setAttribute(RETURNING_VISITOR_ATTRIBUTE_NAME, isReturningVisitor);
 			request.setAttribute(FIRST_CONTACT_ATTRIBUTE_NAME, !isReturningVisitor);
 			request.setAttribute(VISITOR_COUNTER_ATTRIBUTE_NAME, visitorCounter);

@@ -313,12 +313,19 @@ When enabled, the Valve automatically issues an unforgeable, compact (~58 charac
 * `visitorCookieSameSite`: Cookie `SameSite` attribute (`"Lax"`, `"Strict"`, or `"None"`, default: `"Lax"`).
 * `visitorCookieSecure`: `"auto"` (sets `Secure` if request is HTTPS or `X-Forwarded-Proto: https`), `"true"`, or `"false"` (default: `"auto"`).
 
-### Inter-Valve Request Attributes
+### Inter-Valve Request Attributes & Multi-Valve Inheritance
 
 The Valve automatically populates request attributes for all downstream Valves, filters, and servlets:
 * `org.henbru.antidos.RETURNING_VISITOR`: `Boolean.TRUE` if the request carried a valid, unexpired cookie matching the client subnet, `Boolean.FALSE` otherwise.
 * `org.henbru.antidos.FIRST_CONTACT`: `Boolean.TRUE` if the client was unseen or lacked a valid cookie, `Boolean.FALSE` otherwise.
 * `org.henbru.antidos.VISITOR_COUNTER`: `Integer` visit sequence counter extracted from the token (starts at `1`, increments on refreshes up to `65535`).
+* `org.henbru.antidos.VISITOR_CONTEXT`: Immutable `AntiDoSVisitorContext` containing validation state, visit counter, and subnet parameters.
+
+> [!NOTE]
+> **Automatic Multi-Valve Inheritance in Multi-Tier Setups:**
+> If you have multiple Valves configured along Tomcat's pipeline (e.g. at `<Engine>`, `<Host>`, or across several `<Context>` containers), you only need to configure and enable `visitorCookieEnabled="true"` (along with secret and expiration parameters) in the top-level upstream Valve.
+>
+> When the upstream Valve validates the visitor cookie, it stores the immutable `AntiDoSVisitorContext` in the request attributes. All downstream Valves automatically detect this context and inherit the returning visitor status for their own rate-limiting calculations and monitor counters without any configuration needed (`visitorCookieEnabled` does not even have to be set on downstream Valves). This completely eliminates redundant cookie parsing and cryptographic operations across multi-valve pipelines.
 
 ## slotLength
 

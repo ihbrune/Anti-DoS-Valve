@@ -1764,6 +1764,73 @@ class AntiDoSValveTest {
 		valve.stop();
 	}
 
+	@Test
+	void testVisitorContextSharedAcrossUpstreamAndDownstreamValves() throws Exception {
+		// Upstream valve (e.g. Host tier) with visitor cookies enabled
+		AntiDoSValve upstreamValve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(upstreamValve, "UPSTREAM_HOST_VALVE");
+		upstreamValve.setVisitorCookieEnabled(true);
+		upstreamValve.setVisitorCookieSecret("upstream-secret-99999");
+		upstreamValve.setVisitorCookieSubnetMaskV4(24);
+		upstreamValve.setVisitorCookieSubnetMaskV6(64);
+		upstreamValve.setRelevantPaths("/.*");
+		upstreamValve.start();
+
+		// Downstream valve (e.g. Context tier) without visitorCookieEnabled configured
+		AntiDoSValve downstreamValve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(downstreamValve, "DOWNSTREAM_CONTEXT_VALVE");
+		downstreamValve.setRelevantPaths("/.*");
+		downstreamValve.start();
+
+		// Wire downstream valve as next in pipeline
+		upstreamValve.setNext(downstreamValve);
+
+		String clientIp = "192.168.1.80";
+
+		// Step 1: Initial request without cookie
+		TestRequest req1 = new TestRequest("/app/resource", clientIp);
+		TestResponse resp1 = new TestResponse();
+		upstreamValve.invoke(req1, resp1);
+
+		AntiDoSVisitorContext ctx1 = (AntiDoSVisitorContext) req1.getAttribute(AntiDoSValve.VISITOR_CONTEXT_ATTRIBUTE_NAME);
+		assertNotNull(ctx1, "VISITOR_CONTEXT attribute must be set by upstream valve");
+		assertFalse(ctx1.valid());
+		assertEquals(0, ctx1.counter());
+		assertEquals(24, ctx1.subnetMaskV4());
+		assertEquals(64, ctx1.subnetMaskV6());
+		assertNotNull(ctx1.subnetBytes());
+
+		// Verify downstream monitor received returningVisitor = false
+		AntiDoSMonitor downMon = downstreamValve.provideMonitor();
+		AntiDoSCounter downCounter1 = downMon.getSlotByKey(downMon.getCurrentSlotKey()).getCounter(clientIp);
+		assertNotNull(downCounter1);
+		assertEquals(1, downCounter1.getCount());
+		assertEquals(0, downCounter1.getReturningCount());
+
+		// Extract issued cookie
+		String setCookie = resp1.getSetCookies().get(0);
+		String cookieVal = setCookie.substring(5, setCookie.indexOf(";"));
+
+		// Step 2: Returning request with cookie
+		TestRequest req2 = new TestRequest("/app/resource", clientIp);
+		req2.setCookies(new Cookie[]{new Cookie("_adv", cookieVal)});
+		TestResponse resp2 = new TestResponse();
+		upstreamValve.invoke(req2, resp2);
+
+		AntiDoSVisitorContext ctx2 = (AntiDoSVisitorContext) req2.getAttribute(AntiDoSValve.VISITOR_CONTEXT_ATTRIBUTE_NAME);
+		assertNotNull(ctx2);
+		assertTrue(ctx2.valid(), "VISITOR_CONTEXT must indicate valid returning visitor");
+		assertEquals(1, ctx2.counter());
+
+		// Verify downstream monitor automatically recognized returningVisitor = true
+		AntiDoSCounter downCounter2 = downMon.getSlotByKey(downMon.getCurrentSlotKey()).getCounter(clientIp);
+		assertEquals(2, downCounter2.getCount());
+		assertEquals(1, downCounter2.getReturningCount(), "Downstream valve must record returning visit via shared context");
+
+		upstreamValve.stop();
+		downstreamValve.stop();
+	}
+
 	private static class TestRequest extends Request {
 		private final String testUri;
 		private final String testRemoteAddr;
