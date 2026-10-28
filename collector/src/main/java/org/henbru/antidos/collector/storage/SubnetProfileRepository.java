@@ -213,6 +213,7 @@ public class SubnetProfileRepository {
 		appendFilterConditions(sql, params, activityPattern, minRequests24h, subnetQuery, asn, asOrg, clientTypes);
 
 		String orderClause = switch (sortBy != null ? sortBy.toUpperCase() : "SURGE") {
+			case "BLOCKED" -> "last_24h_blocked_requests DESC, last_24h_requests DESC";
 			case "REQUESTS" -> "last_24h_requests DESC, last_24h_surge_factor DESC";
 			case "DORMANT" -> "days_dormant_before_last_seen DESC, last_24h_requests DESC";
 			case "FIRST_SEEN" -> "first_seen_at DESC";

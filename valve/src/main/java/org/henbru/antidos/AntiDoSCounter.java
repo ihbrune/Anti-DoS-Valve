@@ -239,6 +239,13 @@ public class AntiDoSCounter {
 		return tracker != null ? tracker.getDistinctCount() : 1;
 	}
 
+	/**
+	 * @return true if cardinality tracking was active and has recorded distinct client IPs.
+	 */
+	public boolean hasCardinalityTracker() {
+		return this.cardinalityTracker != null;
+	}
+
 	@Override
 	public String toString() {
 		return "Count:" + getCount() + " Retained:" + getRetainedCounts() + " Locked:" + (locked ? "yes" : "no")

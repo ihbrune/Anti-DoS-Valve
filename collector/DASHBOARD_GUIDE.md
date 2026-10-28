@@ -314,10 +314,23 @@ Chronological log of all rate-limiting incidents detected specifically on this s
 
 Accessible via `/offenders`. The premier forensic tool for identifying volumetric scrapers, brute-force bots, and distributed proxy clusters.
 
-### 1. Aggregation Modes
-* **Individual IP Mode (`groupBy=NONE`):**
-  Ranks single IP addresses by total block count. Ideal for catching aggressive single-source crawlers, vulnerability scanners, or script kiddies.
-* **Subnet Rollup Mode (`groupBy=ROLLUP`):**
+### 1. Key Metrics & Request Volume Accuracy
+* **Blocked Requests (429):** The exact number of HTTP 429 (`Too Many Requests`) rate-limiting blocks enforced by the Valve against the client, subnet, or ASN during the selected time window.
+  * When blocks have occurred, the value is highlighted in a vivid danger badge (e.g. `<span class="badge badge-danger">1,250</span>`).
+  * If the client generated requests but stayed within configured rate limits (0 blocks enforced), a neutral, muted `0` badge is shown (replacing legacy slot incident counters to prevent false impressions of attacks).
+* **Total Requests (Raw Volume):** The accurate sum of all attempted requests (`SUM(request_count)`) during the window.
+  * Decayed slot carry-overs (`retained_count`) are explicitly excluded from summation to prevent double- or triple-counting across sliding time windows.
+  * When blocked requests are present alongside total traffic, an inline percentage indicator is displayed (e.g. `1,450 (85%)`) indicating the proportion of rejected malicious requests.
+
+### 2. Ranking & Sort Priority
+Operators can toggle how offending entities are prioritized and sorted:
+* **🛑 Most Blocked Requests (429) (`sortBy=BLOCKED`):** (Default) Ranks clients, subnets, or ASNs strictly by the volume of enforced 429 blocks descending. Ideal for acute incident response and immediate attack mitigation triage.
+* **📊 Highest Total Volume (`sortBy=REQUESTS`):** Ranks entities by total attempted request load (active + blocked) descending. Enables operators to immediately spot high-throughput crawlers, search engines, or hosting providers (e.g., Hetzner Cloud, Amazon AWS) that issue tens of thousands of requests while remaining just under the rate-limiting threshold.
+
+### 3. Aggregation Modes
+* **Individual IP Mode (`groupBy=CLIENT`):**
+  Ranks single IP addresses by total block count or traffic volume. Ideal for catching aggressive single-source crawlers, vulnerability scanners, or script kiddies.
+* **Subnet Rollup Mode (`groupBy=SUBNET`):**
   Aggregates incidents into enclosing network boundaries:
   * IPv4 addresses are grouped into standard **`/24` subnets** (256 addresses).
   * IPv6 addresses are grouped into **`/64` subscriber blocks**.
@@ -330,10 +343,10 @@ Accessible via `/offenders`. The premier forensic tool for identifying volumetri
   * **First Seen & Dormancy Tracking:** Detects brand-new subnets (`✨ New`) and breakouts from prolonged periods of zero/minimal activity (`💤 28d Dormancy Break`).
   * **Pattern Filtering:** Rapid one-click triage by pattern (`⚡ High Surge (≥5x)`, `✨ New (<7d)`, `💤 Dormancy Break (≥14d)`, or `🔄 Residential IP Pool Rotation`).
 * **ASN Rollup Mode (`groupBy=ASN`):**
-  Groups all incidents by Autonomous System Number (e.g., `AS16509 Amazon.com`, `AS14061 DigitalOcean`, `AS8075 Microsoft`).
+  Groups all incidents by Autonomous System Number (e.g., `AS16509 Amazon.com`, `AS14061 DigitalOcean`, `AS8075 Microsoft`, `AS24940 Hetzner Online`).
   Unmasks whether an attack wave originates from bulletproof hosters, cheap cloud providers, or compromised consumer ISPs.
 
-### 2. Rotating Proxy Cluster Detection
+### 4. Rotating Proxy Cluster Detection
 When analyzing subnets or ASNs, the system automatically runs heuristic cluster analysis:
 * **Cluster Badge (`⚡ ROTATING PROXY CLUSTER`):** Highlighted in warning amber when a high ratio of distinct client IPs within a single `/24` or ASN generate synchronized bursts.
 * **Attribution Badges:** Each offender row displays:
@@ -341,8 +354,10 @@ When analyzing subnets or ASNs, the system automatically runs heuristic cluster 
   * ISO Country Code & Flag.
   * Client Type classification tag (`DATACENTER`, `RESIDENTIAL`, `AI_CRAWLER`, etc.).
 
-### 3. Forensic Drilldown & Operator Notes
-* **`Incident Explorer →` Drilldown:** Clicking the action button on any offender row automatically transitions to `/events`, pre-populating the search filter with the exact IP or CIDR mask (`/24` or `/64`) for high-resolution event inspection.
+### 5. Forensic Drilldown & Operator Notes
+* **Context-Sensitive Investigation Links:**
+  * For entities with active rate-limiting blocks, a `View Incidents →` button links directly to `/events` pre-filtered for that target.
+  * For entities with zero blocks (e.g. heavy crawlers), a `View Events →` button links directly to `/events` to audit logged unblocked traffic.
 * **Inline Network Notes (`+📝` & Verdict Badges):**
   * Beside each identified Subnet and ASN, operators can click `+📝` to record investigative notes directly without leaving the table.
   * When a note already exists, a color-coded verdict badge (🟢 Legitimate, 🔵 Internal, 🟡 Suspicious, 🔴 Malicious, ⚪ Info) is displayed. Clicking it opens the note in a modal with full Markdown rendering, editing capabilities, and forensic quick-links.

@@ -1,112 +1,143 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
+
 <body>
 
-<!-- Fragment: offenderTable -->
-<div th:fragment="offenderTable" class="table-responsive" id="offender-container"
-     hx-trigger="annotationChanged from:body"
-     th:hx-get="@{/fragments/top-offenders(hours=${selectedHours != null ? selectedHours : 24})}"
-     hx-swap="outerHTML">
-    <div th:if="${#lists.isEmpty(topOffenders)}" class="empty-state">
-        <p>No blocked clients recorded in the selected time window.</p>
+    <!-- Fragment: offenderTable -->
+    <div th:fragment="offenderTable" class="table-responsive" id="offender-container"
+        hx-trigger="annotationChanged from:body"
+        th:hx-get="@{/fragments/top-offenders(hours=${selectedHours != null ? selectedHours : 24})}"
+        hx-swap="outerHTML">
+        <div th:if="${#lists.isEmpty(topOffenders)}" class="empty-state">
+            <p>No blocked clients recorded in the selected time window.</p>
+        </div>
+
+        <table th:unless="${#lists.isEmpty(topOffenders)}">
+            <thead>
+                <tr>
+                    <th>Client IP / Subnet</th>
+                    <th>Classification</th>
+                    <th>Blocked Requests (429)</th>
+                    <th>Total Requests</th>
+                    <th>Targeted Servers</th>
+                    <th>First Seen</th>
+                    <th>Last Seen</th>
+                    <th style="text-align: right;">Forensics</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr th:each="offender : ${topOffenders}">
+                    <td>
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <a th:href="@{/events(clientQuery=${offender.clientKey})}" class="ip-mono"
+                                    style="text-decoration: underline; color: inherit; font-weight: 600;"
+                                    title="View all incidents for this client or subnet"
+                                    th:text="${offender.clientKey}">192.168.1.100</a>
+                                <!-- Subnet Note (matches canonical /24 or /64 prefix) -->
+                                <th:block th:if="${offender.subnetGroup != null and !offender.subnetGroup.isBlank()}">
+                                    <th:block
+                                        th:if="${subnetAnnotations != null and subnetAnnotations.containsKey(offender.subnetGroup)}">
+                                        <span th:with="a=${subnetAnnotations.get(offender.subnetGroup)}"
+                                            class="badge-note" th:classappend="${a.verdict().badgeClass()}"
+                                            th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${offender.subnetGroup}, context='table')}"
+                                            hx-target="#note-modal-container"
+                                            th:title="'Subnet Note: ' + ${a.verdict().displayName()}"
+                                            th:text="${a.verdict().icon()}">🟢</span>
+                                    </th:block>
+                                    <th:block
+                                        th:if="${subnetAnnotations == null or !subnetAnnotations.containsKey(offender.subnetGroup)}">
+                                        <span class="btn-add-note"
+                                            th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${offender.subnetGroup}, context='table')}"
+                                            hx-target="#note-modal-container"
+                                            title="Add note for this subnet">+📝</span>
+                                    </th:block>
+                                </th:block>
+                                <span th:if="${offender.countryCode != null}" class="badge badge-secondary"
+                                    style="padding: 1px 5px; font-size: 10px;"
+                                    th:text="${offender.countryCode}">DE</span>
+                                <span th:if="${offender.asn != null}"
+                                    style="display: inline-flex; align-items: center; gap: 3px;">
+                                    <a th:href="@{/events(asn=${offender.asn})}" class="badge badge-info"
+                                        style="padding: 1px 6px; font-size: 9px; text-decoration: none;"
+                                        th:title="${offender.asOrg + ' - Click to filter incidents'}"
+                                        th:text="'AS' + ${offender.asn}">AS24940</a>
+                                    <th:block
+                                        th:if="${asnAnnotations != null and asnAnnotations.containsKey(offender.asn)}">
+                                        <span th:with="a=${asnAnnotations.get(offender.asn)}" class="badge-note"
+                                            th:classappend="${a.verdict().badgeClass()}"
+                                            th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${offender.asn}, context='table')}"
+                                            hx-target="#note-modal-container"
+                                            th:title="'ASN Note: ' + ${a.verdict().displayName()}"
+                                            th:text="${a.verdict().icon()}">🟢</span>
+                                    </th:block>
+                                    <th:block
+                                        th:if="${asnAnnotations == null or !asnAnnotations.containsKey(offender.asn)}">
+                                        <span class="btn-add-note"
+                                            th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${offender.asn}, context='table')}"
+                                            hx-target="#note-modal-container" title="Add note for this ASN">+📝</span>
+                                    </th:block>
+                                </span>
+                            </div>
+                            <span th:if="${offender.asOrg != null}" style="font-size: 11px; color: var(--text-muted);"
+                                th:text="${offender.asOrg}">Hetzner Online GmbH</span>
+                        </div>
+                    </td>
+                    <td>
+                        <span th:if="${offender.clientType != null and offender.clientType.name() == 'DATACENTER'}"
+                            class="badge badge-warning" title="Hosting / Datacenter / Cloud">&#x1F3E2; Datacenter</span>
+                        <span th:if="${offender.clientType != null and offender.clientType.name() == 'SEARCH_ENGINE'}"
+                            class="badge badge-success" title="Verified Search Engine Crawler">&#x1F50D; Search
+                            Engine</span>
+                        <span th:if="${offender.clientType != null and offender.clientType.name() == 'AI_CRAWLER'}"
+                            class="badge badge-purple" title="Verified AI Bot / LLM Crawler">&#x1F916; AI Bot</span>
+                        <span th:if="${offender.clientType != null and offender.clientType.name() == 'RESIDENTIAL'}"
+                            class="badge badge-secondary" title="Consumer / Residential ISP">&#x1F3E0;
+                            Residential</span>
+                        <span th:if="${offender.clientType != null and offender.clientType.name() == 'MOBILE'}"
+                            class="badge badge-info" title="Mobile Carrier / CGNAT">&#x1F4F1; Mobile</span>
+                        <span th:if="${offender.clientType != null and offender.clientType.name() == 'PRIVATE_NETWORK'}"
+                            class="badge badge-info" title="Private Intranet / RFC 1918 / Local Network">&#x1F512;
+                            Private Net</span>
+                        <span th:if="${offender.clientType == null or offender.clientType.name() == 'UNKNOWN'}"
+                            class="badge badge-secondary" style="padding: 1px 6px; font-size: 9px; opacity: 0.75;"
+                            title="Unclassified / No ASN match">Unclassified</span>
+                    </td>
+                    <td>
+                        <span th:if="${offender.totalBlockedRequests > 0}" class="badge badge-danger"
+                            th:text="${#numbers.formatInteger(offender.totalBlockedRequests, 1, 'POINT')}">12</span>
+                        <span th:unless="${offender.totalBlockedRequests > 0}" class="badge badge-secondary"
+                            style="opacity: 0.7;" title="No blocked requests">0</span>
+                    </td>
+                    <td>
+                        <strong th:text="${#numbers.formatInteger(offender.totalRequests, 1, 'POINT')}">1,450</strong>
+                        <span th:if="${offender.totalRequests > 0 and offender.totalBlockedRequests > 0}"
+                            style="font-size: 11px; color: var(--text-muted); margin-left: 4px;"
+                            th:title="${#numbers.formatDecimal((offender.totalBlockedRequests * 100.0) / offender.totalRequests, 1, 1)} + '% of requests blocked'"
+                            th:text="'(' + ${#numbers.formatPercent((offender.totalBlockedRequests * 1.0) / offender.totalRequests, 1, 0)} + ')'">
+                            (85%)
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge badge-info" th:text="${offender.distinctServersTargeted} + ' Nodes'">1
+                            Nodes</span>
+                    </td>
+                    <td th:text="${#temporals.format(offender.firstSeen, 'dd.MM HH:mm')}">11.10 08:30</td>
+                    <td th:text="${#temporals.format(offender.lastSeen, 'dd.MM HH:mm')}">11.10 09:45</td>
+                    <td style="text-align: right;">
+                        <a th:href="@{/events(clientQuery=${offender.clientKey})}" class="btn"
+                            style="padding: 2px 8px; font-size: 11px;"
+                            th:title="${offender.totalBlockedRequests > 0 ? 'View all incidents for this client or subnet' : 'View all logged traffic events for this client or subnet'}">
+                            <span
+                                th:text="${offender.totalBlockedRequests > 0 ? 'View Incidents &rarr;' : 'View Events &rarr;'}">View
+                                Incidents &rarr;</span>
+                        </a>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
     </div>
 
-    <table th:unless="${#lists.isEmpty(topOffenders)}">
-        <thead>
-            <tr>
-                <th>Client IP / Subnet</th>
-                <th>Classification</th>
-                <th>Total Block Incidents</th>
-                <th>Total Requests Attempted</th>
-                <th>Targeted Servers</th>
-                <th>First Seen</th>
-                <th>Last Seen</th>
-                <th style="text-align: right;">Forensics</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr th:each="offender : ${topOffenders}">
-                <td>
-                    <div style="display: flex; flex-direction: column; gap: 4px;">
-                        <div style="display: flex; align-items: center; gap: 6px;">
-                            <a th:href="@{/events(clientQuery=${offender.clientKey})}"
-                               class="ip-mono"
-                               style="text-decoration: underline; color: inherit; font-weight: 600;"
-                               title="View all incidents for this client or subnet"
-                               th:text="${offender.clientKey}">192.168.1.100</a>
-                            <!-- Subnet Note (matches canonical /24 or /64 prefix) -->
-                            <th:block th:if="${offender.subnetGroup != null and !offender.subnetGroup.isBlank()}">
-                                <th:block th:if="${subnetAnnotations != null and subnetAnnotations.containsKey(offender.subnetGroup)}">
-                                    <span th:with="a=${subnetAnnotations.get(offender.subnetGroup)}"
-                                          class="badge-note"
-                                          th:classappend="${a.verdict().badgeClass()}"
-                                          th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${offender.subnetGroup}, context='table')}"
-                                          hx-target="#note-modal-container"
-                                          th:title="'Subnet Note: ' + ${a.verdict().displayName()}"
-                                          th:text="${a.verdict().icon()}">🟢</span>
-                                </th:block>
-                                <th:block th:if="${subnetAnnotations == null or !subnetAnnotations.containsKey(offender.subnetGroup)}">
-                                    <span class="btn-add-note"
-                                          th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${offender.subnetGroup}, context='table')}"
-                                          hx-target="#note-modal-container"
-                                          title="Add note for this subnet">+📝</span>
-                                </th:block>
-                            </th:block>
-                            <span th:if="${offender.countryCode != null}" class="badge badge-secondary" style="padding: 1px 5px; font-size: 10px;" th:text="${offender.countryCode}">DE</span>
-                            <span th:if="${offender.asn != null}" style="display: inline-flex; align-items: center; gap: 3px;">
-                                <a th:href="@{/events(asn=${offender.asn})}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px; text-decoration: none;" th:title="${offender.asOrg + ' - Click to filter incidents'}" th:text="'AS' + ${offender.asn}">AS24940</a>
-                                <th:block th:if="${asnAnnotations != null and asnAnnotations.containsKey(offender.asn)}">
-                                    <span th:with="a=${asnAnnotations.get(offender.asn)}"
-                                          class="badge-note"
-                                          th:classappend="${a.verdict().badgeClass()}"
-                                          th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${offender.asn}, context='table')}"
-                                          hx-target="#note-modal-container"
-                                          th:title="'ASN Note: ' + ${a.verdict().displayName()}"
-                                          th:text="${a.verdict().icon()}">🟢</span>
-                                </th:block>
-                                <th:block th:if="${asnAnnotations == null or !asnAnnotations.containsKey(offender.asn)}">
-                                    <span class="btn-add-note"
-                                          th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${offender.asn}, context='table')}"
-                                          hx-target="#note-modal-container"
-                                          title="Add note for this ASN">+📝</span>
-                                </th:block>
-                            </span>
-                        </div>
-                        <span th:if="${offender.asOrg != null}" style="font-size: 11px; color: var(--text-muted);" th:text="${offender.asOrg}">Hetzner Online GmbH</span>
-                    </div>
-                </td>
-                <td>
-                    <span th:if="${offender.clientType != null and offender.clientType.name() == 'DATACENTER'}" class="badge badge-warning" title="Hosting / Datacenter / Cloud">&#x1F3E2; Datacenter</span>
-                    <span th:if="${offender.clientType != null and offender.clientType.name() == 'SEARCH_ENGINE'}" class="badge badge-success" title="Verified Search Engine Crawler">&#x1F50D; Search Engine</span>
-                    <span th:if="${offender.clientType != null and offender.clientType.name() == 'AI_CRAWLER'}" class="badge badge-purple" title="Verified AI Bot / LLM Crawler">&#x1F916; AI Bot</span>
-                    <span th:if="${offender.clientType != null and offender.clientType.name() == 'RESIDENTIAL'}" class="badge badge-secondary" title="Consumer / Residential ISP">&#x1F3E0; Residential</span>
-                    <span th:if="${offender.clientType != null and offender.clientType.name() == 'MOBILE'}" class="badge badge-info" title="Mobile Carrier / CGNAT">&#x1F4F1; Mobile</span>
-                    <span th:if="${offender.clientType != null and offender.clientType.name() == 'PRIVATE_NETWORK'}" class="badge badge-info" title="Private Intranet / RFC 1918 / Local Network">&#x1F512; Private Net</span>
-                    <span th:if="${offender.clientType == null or offender.clientType.name() == 'UNKNOWN'}" class="badge badge-secondary" style="padding: 1px 6px; font-size: 9px; opacity: 0.75;" title="Unclassified / No ASN match">Unclassified</span>
-                </td>
-                <td>
-                    <span class="badge badge-danger" th:text="${offender.totalBlockIncidents}">12</span>
-                </td>
-                <td>
-                    <strong th:text="${#numbers.formatInteger(offender.totalBlockedRequests, 1, 'POINT')}">1,450</strong>
-                </td>
-                <td>
-                    <span class="badge badge-info" th:text="${offender.distinctServersTargeted} + ' Nodes'">1 Nodes</span>
-                </td>
-                <td th:text="${#temporals.format(offender.firstSeen, 'dd.MM HH:mm')}">11.10 08:30</td>
-                <td th:text="${#temporals.format(offender.lastSeen, 'dd.MM HH:mm')}">11.10 09:45</td>
-                <td style="text-align: right;">
-                    <a th:href="@{/events(clientQuery=${offender.clientKey})}"
-                       class="btn"
-                       style="padding: 2px 8px; font-size: 11px;"
-                       title="View all incidents for this client or subnet">
-                        View Incidents &rarr;
-                    </a>
-                </td>
-            </tr>
-        </tbody>
-    </table>
-</div>
-
 </body>
+
 </html>

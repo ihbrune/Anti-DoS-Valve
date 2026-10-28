@@ -6,6 +6,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+
 import org.henbru.antidos.collector.model.ClientEvent;
 import org.henbru.antidos.collector.model.EndpointHeartbeat;
 import org.henbru.antidos.collector.model.PollEventLog;
@@ -275,7 +276,7 @@ public class DemoDataSeeder {
 
 				// Residential Proxy Evasion Swarms (bypassing per-IP limits: high distinct clients, low requests/IP, locked = false)
 				// 2. Deutsche Telekom Residential Proxy Swarm (82 IPs) - active in recent 24h
-				if ((slotKey + idx * 13) % 23 == 0) {
+				if ((hoursAgo <= 6 && (slotKey + idx * 13) % 5 == 0) || (slotKey + idx * 13) % 23 == 0) {
 					events.add(createEnrichedEvent(
 							edgeServer, "Subnet-Guard", slotKey, startTime,
 							"185.246.221.0/24", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,

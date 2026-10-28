@@ -505,7 +505,35 @@ class AntiDoSStatusRendererTest {
 		assertTrue(html.contains("Forced On"));
 
 		String detailsHtml = renderer.buildStatusHtmlDetails("RENDERER_TEST");
+		assertTrue(detailsHtml.contains("Distinct IPs"));
 		assertTrue(detailsHtml.contains("2 IPs"));
+	}
+
+	@Test
+	void testSubnetMonitoringDistinctClientsIdleVsActive() {
+		// 1. Subnet monitoring active (/24) but collectorIntegration is idle ("false")
+		valve.setIpv4SubnetMask(24);
+		valve.setCollectorIntegration("false");
+		valve.reloadMonitor();
+
+		valve.isIPAddressBlocked("10.50.0.1");
+		valve.isIPAddressBlocked("10.50.0.2");
+
+		String detailsHtmlIdle = renderer.buildStatusHtmlDetails("RENDERER_TEST");
+		assertTrue(detailsHtmlIdle.contains("Distinct IPs"));
+		assertTrue(detailsHtmlIdle.contains("Active Subnets"));
+		// Cardinality tracking was inactive, so slot cell should show '-'
+		assertTrue(detailsHtmlIdle.contains("title=\"Cardinality tracking inactive (Collector integration idle or disabled)\">-</td>"));
+
+		// 2. Subnet monitoring disabled (/32)
+		valve.setIpv4SubnetMask(32);
+		valve.setIpv6SubnetMask(128);
+		valve.reloadMonitor();
+
+		valve.isIPAddressBlocked("10.50.0.1");
+		String detailsHtmlSingleIp = renderer.buildStatusHtmlDetails("RENDERER_TEST");
+		assertFalse(detailsHtmlSingleIp.contains("Distinct IPs"));
+		assertTrue(detailsHtmlSingleIp.contains("Active IPs"));
 	}
 
 	@Test

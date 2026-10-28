@@ -732,6 +732,13 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
+	 * @return <code>true</code> if subnet aggregation / monitoring is active (IPv4 prefix &lt; 32 or IPv6 prefix &lt; 128)
+	 */
+	public boolean isSubnetAggregationActive() {
+		return (ipv4SubnetMask > 0 && ipv4SubnetMask < 32) || (ipv6SubnetMask > 0 && ipv6SubnetMask < 128);
+	}
+
+	/**
 	 * @return The collector integration mode ("auto", "true", or "false"). Default is "auto".
 	 */
 	public String getCollectorIntegration() {

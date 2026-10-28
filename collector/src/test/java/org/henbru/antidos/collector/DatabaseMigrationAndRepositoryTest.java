@@ -6,6 +6,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+
 import org.henbru.antidos.collector.model.ClientEvent;
 import org.henbru.antidos.collector.model.ClientType;
 import org.henbru.antidos.collector.model.DailyReport;
@@ -18,12 +19,15 @@ import org.henbru.antidos.collector.storage.HeartbeatRepository;
 import org.henbru.antidos.collector.storage.PollEventLogRepository;
 import org.henbru.antidos.collector.storage.SlotSnapshotRepository;
 import org.henbru.antidos.collector.util.IpNetworkUtil;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
 class DatabaseMigrationAndRepositoryTest {
@@ -142,7 +146,8 @@ class DatabaseMigrationAndRepositoryTest {
 
 		TopOffenderSummary primary = top.getFirst();
 		assertEquals("198.51.100.42", primary.clientKey());
-		assertEquals(130L, primary.totalBlockedRequests()); // 60 from NODE-A + 70 from NODE-B
+		assertEquals(120L, primary.totalBlockedRequests()); // 50 from NODE-A + 70 from NODE-B (without retained_count)
+		assertEquals(120L, primary.totalRequests());
 		assertEquals(2, primary.distinctServersTargeted()); // Targeted both NODE-A and NODE-B!
 
 		// Count distinct clients
@@ -311,9 +316,60 @@ class DatabaseMigrationAndRepositoryTest {
 				.findFirst()
 				.orElse(null);
 		assertNotNull(as3320, "Should have grouped entries under AS3320");
-		assertEquals(120L, as3320.totalBlockedRequests(), "Should sum 50 + 70 requests from e1 and e2");
+		assertEquals(120L, as3320.totalRequests(), "Should sum 50 + 70 requests from e1 and e2");
+		assertEquals(0L, as3320.totalBlockedRequests(), "Should have 0 blocked requests since e1 and e2 were active");
 		assertEquals(2, as3320.distinctClientsCount(), "Should have 2 distinct IPs in AS3320");
 		assertEquals(2, as3320.distinctServersTargeted(), "Should span 2 servers (PROD-1, PROD-2)");
+	}
+
+	@Test
+	void testTopOffendersRankingByBlockedVsVolume() {
+		Instant now = Instant.now();
+		try {
+			// Attacker: 200 requests, 200 blocked (status = BLOCKED)
+			ClientEvent attacker = new ClientEvent(
+					null, "SERVER-RANK-1", "VALVE-1", 400L, now.minus(15, ChronoUnit.MINUTES), "198.51.100.99",
+					4, 32, null, null, null, null, "198.51.100.0/24",
+					200, 50, true, ClientEvent.STATUS_BLOCKED, true, now,
+					13335L, "Cloudflare, Inc.", "US", ClientType.DATACENTER, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+			);
+			// High volume crawler: 2,500 requests, 0 blocked (status = ACTIVE)
+			ClientEvent heavyCrawler = new ClientEvent(
+					null, "SERVER-RANK-1", "VALVE-1", 400L, now.minus(10, ChronoUnit.MINUTES), "203.0.113.88",
+					4, 32, null, null, null, null, "203.0.113.0/24",
+					2500, 0, false, ClientEvent.STATUS_ACTIVE, true, now,
+					24940L, "Hetzner Online GmbH", "DE", ClientType.DATACENTER, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+			);
+
+			clientEventRepository.batchUpsert(List.of(attacker, heavyCrawler));
+
+			// 1. Ranking by BLOCKED requests (default for Top Offenders)
+			List<TopOffenderSummary> rankedByBlocked = clientEventRepository.findTopOffendersFiltered(
+					List.of("SERVER-RANK-1"), null, now.minus(1, ChronoUnit.HOURS), null, null, null, null, null, null, "CLIENT", "BLOCKED", 10);
+			assertFalse(rankedByBlocked.isEmpty());
+
+			TopOffenderSummary firstBlocked = rankedByBlocked.getFirst();
+			assertEquals("198.51.100.99", firstBlocked.clientKey(), "Attacker with 200 blocks should be ranked #1");
+			assertEquals(200L, firstBlocked.totalBlockedRequests());
+			assertEquals(200L, firstBlocked.totalRequests(), "retained_count (50) must not be added to total requests");
+
+			TopOffenderSummary secondBlocked = rankedByBlocked.stream().filter(o -> "203.0.113.88".equals(o.clientKey())).findFirst().orElse(null);
+			assertNotNull(secondBlocked);
+			assertEquals(0L, secondBlocked.totalBlockedRequests());
+			assertEquals(2500L, secondBlocked.totalRequests());
+
+			// 2. Ranking by REQUEST volume (Active + Blocked)
+			List<TopOffenderSummary> rankedByVolume = clientEventRepository.findTopOffendersFiltered(
+					List.of("SERVER-RANK-1"), null, now.minus(1, ChronoUnit.HOURS), null, null, null, null, null, null, "CLIENT", "REQUESTS", 10);
+			assertFalse(rankedByVolume.isEmpty());
+
+			TopOffenderSummary firstVolume = rankedByVolume.getFirst();
+			assertEquals("203.0.113.88", firstVolume.clientKey(), "Heavy crawler with 2500 requests should be ranked #1 by volume");
+			assertEquals(0L, firstVolume.totalBlockedRequests());
+			assertEquals(2500L, firstVolume.totalRequests());
+		} finally {
+			jdbcTemplate.update("DELETE FROM client_events WHERE server_id = 'SERVER-RANK-1'");
+		}
 	}
 
 	@Test

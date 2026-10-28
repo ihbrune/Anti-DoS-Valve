@@ -13,10 +13,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
+import org.henbru.antidos.collector.docs.DocumentationService;
 import org.henbru.antidos.collector.model.ClientEvent;
 import org.henbru.antidos.collector.model.EndpointHeartbeat;
-import org.henbru.antidos.collector.docs.DocumentationService;
 import org.henbru.antidos.collector.model.FleetSummary;
 import org.henbru.antidos.collector.model.PollEventLog;
 import org.henbru.antidos.collector.model.SlotSnapshot;
@@ -31,6 +30,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
 
 /**
  * Controller serving the main Web UI, specialized forensic investigation views, and dynamic HTMX fragments.
@@ -304,7 +305,7 @@ public class DashboardController {
 			@RequestParam(name = "groupBy", defaultValue = "CLIENT") String groupBy,
 			@RequestParam(name = "activityPattern", required = false, defaultValue = "ALL") String activityPattern,
 			@RequestParam(name = "minRequests", required = false) Long minRequests,
-			@RequestParam(name = "sortBy", required = false, defaultValue = "SURGE") String sortBy,
+			@RequestParam(name = "sortBy", required = false) String sortBy,
 			@RequestParam(name = "limit", defaultValue = "25") int limit,
 			Model model) {
 		populateOffendersModel(servers, valves, fromStr, toStr, clientQuery, clientTypes, asn, status, groupBy, activityPattern, minRequests, sortBy, limit, model);
@@ -324,7 +325,7 @@ public class DashboardController {
 			@RequestParam(name = "groupBy", defaultValue = "CLIENT") String groupBy,
 			@RequestParam(name = "activityPattern", required = false, defaultValue = "ALL") String activityPattern,
 			@RequestParam(name = "minRequests", required = false) Long minRequests,
-			@RequestParam(name = "sortBy", required = false, defaultValue = "SURGE") String sortBy,
+			@RequestParam(name = "sortBy", required = false) String sortBy,
 			@RequestParam(name = "limit", defaultValue = "25") int limit,
 			Model model) {
 		populateOffendersModel(servers, valves, fromStr, toStr, clientQuery, clientTypes, asn, status, groupBy, activityPattern, minRequests, sortBy, limit, model);
@@ -729,6 +730,15 @@ public class DashboardController {
 				: ("ROLLUP".equalsIgnoreCase(groupBy) ? "ROLLUP"
 				: ("ASN".equalsIgnoreCase(groupBy) ? "ASN" : ("SUBNET".equalsIgnoreCase(groupBy) ? "SUBNET" : "CLIENT")));
 
+		String effectiveSortBy = sortBy;
+		if (effectiveSortBy == null || effectiveSortBy.isBlank()) {
+			effectiveSortBy = "PROFILES".equals(effectiveGroupBy) ? "SURGE" : "BLOCKED";
+		} else if ("PROFILES".equals(effectiveGroupBy) && "BLOCKED".equalsIgnoreCase(effectiveSortBy)) {
+			effectiveSortBy = "SURGE";
+		} else if (!"PROFILES".equals(effectiveGroupBy) && ("SURGE".equalsIgnoreCase(effectiveSortBy) || "DISTINCT_IPS".equalsIgnoreCase(effectiveSortBy) || "DORMANT".equalsIgnoreCase(effectiveSortBy))) {
+			effectiveSortBy = "BLOCKED";
+		}
+
 		if (hasPatternFilter && "CLIENT".equals(effectiveGroupBy)) {
 			effectiveGroupBy = "PROFILES";
 		}
@@ -743,7 +753,7 @@ public class DashboardController {
 			}
 
 			List<org.henbru.antidos.collector.model.SubnetProfile> profiles = (subnetProfileService != null)
-					? subnetProfileService.findProfilesFiltered(activityPattern, minRequests, clientQuery, parsedAsn, asOrgQuery, clientTypes, sortBy, limit, 0)
+					? subnetProfileService.findProfilesFiltered(activityPattern, minRequests, clientQuery, parsedAsn, asOrgQuery, clientTypes, effectiveSortBy, limit, 0)
 					: List.of();
 			long totalProfiles = (subnetProfileService != null)
 					? subnetProfileService.countProfilesFiltered(activityPattern, minRequests, clientQuery, parsedAsn, asOrgQuery, clientTypes)
@@ -787,7 +797,7 @@ public class DashboardController {
 		}
 		default -> {
 			List<TopOffenderSummary> topOffenders = clientEventRepository.findTopOffendersFiltered(
-					servers, valves, fromTime, toTime, clientQuery, clientTypes, parsedAsn, asOrgQuery, normalizedStatus, effectiveGroupBy, limit);
+					servers, valves, fromTime, toTime, clientQuery, clientTypes, parsedAsn, asOrgQuery, normalizedStatus, effectiveGroupBy, effectiveSortBy, limit);
 
 			if (hasPatternFilter && "SUBNET".equals(effectiveGroupBy) && subnetProfileService != null) {
 				List<org.henbru.antidos.collector.model.SubnetProfile> matched = subnetProfileService.findProfilesFiltered(
@@ -817,7 +827,7 @@ public class DashboardController {
 		model.addAttribute("groupBy", effectiveGroupBy);
 		model.addAttribute("activityPattern", activityPattern != null ? activityPattern : "ALL");
 		model.addAttribute("minRequests", minRequests != null ? minRequests : 0L);
-		model.addAttribute("sortBy", sortBy != null ? sortBy : "SURGE");
+		model.addAttribute("sortBy", effectiveSortBy);
 		model.addAttribute("limit", limit);
 
 		model.addAttribute("availableServers", getAvailableServerIds());

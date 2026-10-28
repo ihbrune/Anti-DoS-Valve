@@ -311,7 +311,7 @@ public class ClientEventRepository {
 	}
 
 	public List<TopOffenderSummary> findTopOffenders(Instant since, int limit) {
-		return findTopOffendersFiltered(null, null, since, null, null, null, null, null, "CLIENT", limit);
+		return findTopOffendersFiltered(null, null, since, null, null, null, null, null, null, "CLIENT", "BLOCKED", limit);
 	}
 
 	public List<ClientEvent> findRecentEvents(String serverId, String filterIp, int limit) {
@@ -447,6 +447,7 @@ public class ClientEventRepository {
 			String asOrg,
 			String status,
 			String groupBy,
+			String sortBy,
 			int limit
 	) {
 		String groupCol;
@@ -466,8 +467,8 @@ public class ClientEventRepository {
 				.append("MAX(country_code) AS country_code, ")
 				.append("MAX(client_type) AS client_type, ")
 				.append("CASE WHEN MAX(distinct_clients) > COUNT(DISTINCT client_key) THEN MAX(distinct_clients) ELSE COUNT(DISTINCT client_key) END AS distinct_clients, ")
-				.append("COUNT(*) AS total_incidents, ")
-				.append("SUM(request_count + retained_count) AS total_requests, ")
+				.append("SUM(CASE WHEN UPPER(status) = 'BLOCKED' THEN request_count ELSE 0 END) AS total_blocked_requests, ")
+				.append("SUM(request_count) AS total_requests, ")
 				.append("COUNT(DISTINCT server_id) AS distinct_servers, ")
 				.append("MIN(slot_time) AS first_seen, ")
 				.append("MAX(slot_time) AS last_seen ")
@@ -478,7 +479,11 @@ public class ClientEventRepository {
 		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn, asOrg, status);
 
 		sql.append("GROUP BY ").append(groupCol).append(" ");
-		sql.append("ORDER BY total_requests DESC LIMIT ?");
+		if ("REQUESTS".equalsIgnoreCase(sortBy) || "VOLUME".equalsIgnoreCase(sortBy)) {
+			sql.append("ORDER BY total_requests DESC, total_blocked_requests DESC LIMIT ?");
+		} else {
+			sql.append("ORDER BY total_blocked_requests DESC, total_requests DESC LIMIT ?");
+		}
 		params.add(Math.max(1, Math.min(limit, 500)));
 
 		return jdbcTemplate.query(sql.toString(), (rs, rowNum) -> {
@@ -488,7 +493,7 @@ public class ClientEventRepository {
 
 			return new TopOffenderSummary(
 					rs.getString("client_key") != null ? rs.getString("client_key") : "unknown",
-					rs.getLong("total_incidents"),
+					rs.getLong("total_blocked_requests"),
 					rs.getLong("total_requests"),
 					rs.getInt("distinct_servers"),
 					"",
@@ -501,6 +506,22 @@ public class ClientEventRepository {
 					rs.getInt("distinct_clients")
 			);
 		}, params.toArray());
+	}
+
+	public List<TopOffenderSummary> findTopOffendersFiltered(
+			List<String> serverIds,
+			List<String> valveNames,
+			Instant fromTime,
+			Instant toTime,
+			String clientQuery,
+			List<String> clientTypes,
+			Long asn,
+			String asOrg,
+			String status,
+			String groupBy,
+			int limit
+	) {
+		return findTopOffendersFiltered(serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn, asOrg, status, groupBy, "BLOCKED", limit);
 	}
 
 	public List<TopOffenderSummary> findTopOffendersFiltered(

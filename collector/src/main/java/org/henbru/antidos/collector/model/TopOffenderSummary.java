@@ -7,8 +7,8 @@ import java.time.Instant;
  */
 public record TopOffenderSummary(
 		String clientKey,
-		long totalBlockIncidents,
 		long totalBlockedRequests,
+		long totalRequests,
 		int distinctServersTargeted,
 		String serversList,
 		Instant firstSeen,
@@ -22,8 +22,8 @@ public record TopOffenderSummary(
 
 	public TopOffenderSummary(
 			String clientKey,
-			long totalBlockIncidents,
 			long totalBlockedRequests,
+			long totalRequests,
 			int distinctServersTargeted,
 			String serversList,
 			Instant firstSeen,
@@ -31,8 +31,8 @@ public record TopOffenderSummary(
 	) {
 		this(
 				clientKey,
-				totalBlockIncidents,
 				totalBlockedRequests,
+				totalRequests,
 				distinctServersTargeted,
 				serversList,
 				firstSeen,
@@ -46,15 +46,22 @@ public record TopOffenderSummary(
 	}
 
 	/**
+	 * Backward compatibility alias for views or callers referencing totalBlockIncidents.
+	 */
+	public long totalBlockIncidents() {
+		return totalBlockedRequests;
+	}
+
+	/**
 	 * Indicates a distributed residential proxy botnet pattern where requests are fanned out
 	 * across many rotating IPs with low requests per IP.
 	 */
 	public boolean isRotatingProxyCluster() {
-		return distinctClientsCount >= 3 && ((double) totalBlockedRequests / distinctClientsCount) < 15.0;
+		return distinctClientsCount >= 3 && ((double) totalRequests / distinctClientsCount) < 15.0;
 	}
 
 	public double requestsPerClient() {
-		return distinctClientsCount > 0 ? (double) totalBlockedRequests / distinctClientsCount : 0.0;
+		return distinctClientsCount > 0 ? (double) totalRequests / distinctClientsCount : 0.0;
 	}
 
 	/**

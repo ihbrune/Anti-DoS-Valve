@@ -691,7 +691,7 @@ public class DailyReportService {
 			sb.append("✅ *Keine blockierten Clients für diesen Tag erfasst. Das System lief vollständig unbeeinträchtigt.*\n\n");
 		} else {
 			sb.append("### Top 10 Auffälligste geblockte Adressen / Subnetze\n\n");
-			sb.append("| IP / Subnetz | Gesamt-Anfragen | Block-Vorfälle | ASN / Betreiber | Land | Client-Typ |\n");
+			sb.append("| IP / Subnetz | Gesamt-Anfragen | Block-Anfragen | ASN / Betreiber | Land | Client-Typ |\n");
 			sb.append("| :--- | :--- | :--- | :--- | :--- | :--- |\n");
 
 			for (TopOffenderSummary top : topClients) {
@@ -700,8 +700,8 @@ public class DailyReportService {
 				String clientType = top.clientType() != null ? top.clientType().name() : "UNKNOWN";
 
 				sb.append("| `").append(top.clientKey()).append("` | ")
+						.append(numFmt.format(top.totalRequests())).append(" | ")
 						.append(numFmt.format(top.totalBlockedRequests())).append(" | ")
-						.append(numFmt.format(top.totalBlockIncidents())).append(" | ")
 						.append(asnStr).append(" | ")
 						.append(country).append(" | `")
 						.append(clientType).append("` |\n");
@@ -711,7 +711,7 @@ public class DailyReportService {
 
 		if (!topAsns.isEmpty()) {
 			sb.append("### Hauptverursachende Autonome Systeme (ASNs)\n\n");
-			sb.append("| ASN | Betreiber / Organisation | Anfragen | Vorfälle |\n");
+			sb.append("| ASN | Betreiber / Organisation | Gesamt-Anfragen | Block-Anfragen |\n");
 			sb.append("| :--- | :--- | :--- | :--- |\n");
 
 			for (TopOffenderSummary asnTop : topAsns) {
@@ -719,8 +719,8 @@ public class DailyReportService {
 				String org = asnTop.asOrg() != null && !asnTop.asOrg().isBlank() ? asnTop.asOrg() : "–";
 				sb.append("| `").append(asnLabel).append("` | ")
 						.append(org).append(" | ")
-						.append(numFmt.format(asnTop.totalBlockedRequests())).append(" | ")
-						.append(numFmt.format(asnTop.totalBlockIncidents())).append(" |\n");
+						.append(numFmt.format(asnTop.totalRequests())).append(" | ")
+						.append(numFmt.format(asnTop.totalBlockedRequests())).append(" |\n");
 			}
 			sb.append("\n");
 		}
