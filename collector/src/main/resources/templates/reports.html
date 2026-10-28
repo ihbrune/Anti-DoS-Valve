@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -22,22 +23,26 @@
             display: block;
             color: inherit;
         }
+
         .report-archive-item:hover {
             border-color: var(--primary);
             background: var(--bg-card-hover, rgba(59, 130, 246, 0.05));
             transform: translateX(2px);
         }
+
         .report-archive-item.active {
             border-color: var(--primary);
             background: var(--bg-card-active, rgba(59, 130, 246, 0.1));
             box-shadow: 0 0 0 1px var(--primary);
         }
+
         .report-layout {
             display: grid;
             grid-template-columns: 320px 1fr;
             gap: 20px;
             align-items: start;
         }
+
         @media (max-width: 992px) {
             .report-layout {
                 grid-template-columns: 1fr;
@@ -45,194 +50,218 @@
         }
     </style>
 </head>
+
 <body>
 
-<div class="app-container">
-    <!-- Navbar -->
-    <header class="navbar">
-        <a href="/" class="brand">
-            <div class="brand-icon">&#x1F6E1;</div>
-            <div>
-                <div class="brand-title">Anti-DoS Fleet Manager</div>
-                <div class="brand-subtitle">Operational Reports &amp; Archive</div>
-            </div>
-        </a>
-        <div class="nav-actions">
-            <div class="nav-links">
-                <a href="/" class="btn" title="Return to Fleet Overview Dashboard">
-                    <span>&#x2190;</span> Dashboard
-                </a>
-                <a href="/analytics" class="btn" title="Visual trend curves, bot-mix, and residential proxy cluster scatterplot">
-                    <span>&#x1F4CA;</span> Analytics
-                </a>
-                <a href="/offenders" class="btn" title="View aggregated high-volume offenders and ASN rollup">
-                    <span>&#x26A0;</span> Top Offenders
-                </a>
-                <a href="/profiles" class="btn" title="Subnet Traffic Profiles, 30-Day Baselines &amp; Surge Radar">
-                    <span>&#x26A1;</span> Profiles
-                </a>
-                <a href="/events" class="btn" title="Multi-Server Incident Explorer with advanced filtering">
-                    <span>&#x1F4CB;</span> Incidents
-                </a>
-                <a href="/notes" class="btn" title="Investigative Annotations &amp; Network Notes">
-                    <span>&#x1F4DD;</span> Notes
-                </a>
-                <a href="/reports" class="btn active" title="Permanent Operational Daily Summary Reports">
-                    <span>&#x1F4D1;</span> Reports
-                </a>
-                <a href="/poll-log" class="btn" title="View polling event audit log">
-                    <span>&#x1F4DC;</span> Event Log
-                </a>
-                <a href="/crawlers" class="btn" title="Verified Search Engine &amp; AI Crawler IP Range Feeds">
-                    <span>&#x1F916;</span> Crawlers
-                </a>
-            </div>
-            <div class="nav-divider"></div>
-            <div class="nav-utilities">
-                <a href="/system" class="nav-util-btn" title="System status, telemetry rules &amp; configuration" aria-label="System &amp; Configuration">
-                    <span>&#x2699;</span>
-                </a>
-                <button type="button" class="nav-util-btn history-toggle-btn"
-                        onclick="openHistoryDrawer()"
-                        title="Recent Investigation History (IPs, Subnets &amp; ASNs)"
-                        aria-label="Investigation History">
-                    <span>&#x1F552;</span>
-                    <span class="history-badge-count" style="display:none;"></span>
-                </button>
-                <button type="button" class="nav-util-btn"
-                        hx-get="/fragments/help?doc=ui&section=operational-daily-reports"
-                        hx-target="#help-drawer-content"
-                        onclick="openHelpDrawer()"
-                        title="Open Reports Help Guide"
-                        aria-label="Help Guide">
-                    <span>&#x2753;</span>
-                </button>
-                <a href="/help" class="nav-util-btn" title="Full offline documentation repository" aria-label="Documentation">
-                    <span>&#x1F4D6;</span>
-                </a>
-                <button type="button" class="nav-util-btn btn-theme-toggle" onclick="toggleTheme()" title="Switch Light / Dark Theme" aria-label="Toggle theme">
-                    <span class="theme-icon-sun">&#x2600;&#xFE0F;</span>
-                    <span class="theme-icon-moon">&#x1F319;</span>
-                </button>
-            </div>
-        </div>
-    </header>
-
-    <!-- Flash Messages -->
-    <div th:if="${successMessage != null}" class="alert alert-success" style="margin-bottom: 20px; padding: 12px 18px; border-radius: var(--radius-md);" role="alert">
-        <span style="font-size: 16px;">&#x2705;</span> <span th:text="${successMessage}">Success</span>
-    </div>
-    <div th:if="${errorMessage != null}" class="alert alert-danger" style="margin-bottom: 20px; padding: 12px 18px; border-radius: var(--radius-md);" role="alert">
-        <span style="font-size: 16px;">&#x26A0;&#xFE0F;</span> <span th:text="${errorMessage}">Error</span>
-    </div>
-
-    <!-- Header & Action Toolbar -->
-    <div class="page-header" style="margin-bottom: 24px;">
-        <div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap;">
-            <div>
-                <h1 style="font-size: 26px; font-weight: 800; margin-bottom: 6px; display: flex; align-items: center; gap: 10px;">
-                    <span>&#x1F4D1;</span> Operational Day Reports &amp; Archive
-                </h1>
-                <p style="color: var(--text-muted); font-size: 14px; margin: 0;">
-                    Permanent daily fleet summaries &amp; normalized peak performance metrics &ndash; completely immune to nightly data retention cleanups.
-                </p>
-            </div>
-            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                <!-- Generate Report Form -->
-                <form th:action="@{/reports/generate}" method="post" style="display: flex; gap: 8px; align-items: center;">
-                    <input type="date" name="date" class="form-input" th:value="${yesterdayDate}" style="padding: 7px 12px; font-size: 13px; width: 145px;" required>
-                    <button type="submit" class="btn btn-primary" title="Compile and store daily report for the selected date">
-                        <span>&#x26A1;</span> Generate Report
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Main Content Layout (Archive Sidebar + Detail Content) -->
-    <div class="report-layout">
-        <!-- Sidebar: Archive List -->
-        <aside>
-            <div class="card" style="padding: 16px; margin-bottom: 16px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <div style="font-size: 14px; font-weight: 700; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.5px;">
-                        Report Archive (<span th:text="${reports.size()}">0</span>)
-                    </div>
-                    <span style="font-size: 11px; color: var(--text-muted);">Max 90 days</span>
+    <div class="app-container">
+        <!-- Navbar -->
+        <header class="navbar">
+            <a href="/" class="brand">
+                <div class="brand-icon">&#x1F6E1;</div>
+                <div>
+                    <div class="brand-title">Anti-DoS Fleet Manager</div>
+                    <div class="brand-subtitle">Operational Reports &amp; Archive</div>
                 </div>
-
-                <!-- Empty State -->
-                <div th:if="${#lists.isEmpty(reports)}" style="text-align: center; padding: 24px 12px; color: var(--text-muted); font-size: 13px;">
-                    <div>&#x1F4ED;</div>
-                    <div style="margin-top: 6px;">No archived reports found yet.</div>
-                </div>
-
-                <!-- Report List Items -->
-                <div style="max-height: 640px; overflow-y: auto; padding-right: 4px;">
-                    <a th:each="r : ${reports}"
-                       th:href="@{'/reports?date=' + ${r.reportDate()}}"
-                       hx-get="@{'/reports/' + ${r.reportDate()} + '/content'}"
-                       hx-target="#report-display-container"
-                       hx-push-url="@{'/reports?date=' + ${r.reportDate()}}"
-                       onclick="highlightActiveReport(this)"
-                       th:class="'report-archive-item ' + (${selectedDate != null and selectedDate.equals(r.reportDate())} ? 'active' : '')">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                            <strong style="font-size: 14px; color: var(--text-primary);" th:text="${r.reportDate()}">2026-10-26</strong>
-                            <span th:class="'badge ' + ${r.statusBadgeClass()}" style="font-size: 10px; padding: 2px 6px;" th:text="${r.statusLabel()}">OPERATIONAL</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-muted);">
-                            <span><span th:text="${#numbers.formatDecimal(r.totalRequests(), 0, 'POINT', 0, 'COMMA')}">1.482.910</span> req</span>
-                            <span>Peak: <strong th:text="${r.formattedPeakRequestsPerSec()}">142.0</strong> req/s</span>
-                        </div>
+            </a>
+            <div class="nav-actions">
+                <div class="nav-links">
+                    <a href="/" class="btn" title="Return to Fleet Overview Dashboard">
+                        <span>&#x2190;</span> Dashboard
+                    </a>
+                    <a href="/analytics" class="btn"
+                        title="Visual trend curves, bot-mix, and residential proxy cluster scatterplot">
+                        <span>&#x1F4CA;</span> Analytics
+                    </a>
+                    <a href="/offenders" class="btn" title="View aggregated high-volume offenders and ASN rollup">
+                        <span>&#x26A0;</span> Top Offenders
+                    </a>
+                    <a href="/profiles" class="btn" title="Subnet Traffic Profiles, 30-Day Baselines &amp; Surge Radar">
+                        <span>&#x26A1;</span> Profiles
+                    </a>
+                    <a href="/events" class="btn" title="Multi-Server Incident Explorer with advanced filtering">
+                        <span>&#x1F4CB;</span> Incidents
+                    </a>
+                    <a href="/notes" class="btn" title="Investigative Annotations &amp; Network Notes">
+                        <span>&#x1F4DD;</span> Notes
+                    </a>
+                    <a href="/reports" class="btn active" title="Permanent Operational Daily Summary Reports">
+                        <span>&#x1F4D1;</span> Reports
+                    </a>
+                    <a href="/poll-log" class="btn" title="View polling event audit log">
+                        <span>&#x1F4DC;</span> Event Log
+                    </a>
+                    <a href="/crawlers" class="btn" title="Verified Search Engine &amp; AI Crawler IP Range Feeds">
+                        <span>&#x1F916;</span> Crawlers
                     </a>
                 </div>
+                <div class="nav-divider"></div>
+                <div class="nav-utilities">
+                    <a href="/system" class="nav-util-btn" title="System status, telemetry rules &amp; configuration"
+                        aria-label="System &amp; Configuration">
+                        <span>&#x2699;</span>
+                    </a>
+                    <button type="button" class="nav-util-btn history-toggle-btn" onclick="openHistoryDrawer()"
+                        title="Recent Investigation History (IPs, Subnets &amp; ASNs)"
+                        aria-label="Investigation History">
+                        <span>&#x1F552;</span>
+                        <span class="history-badge-count" style="display:none;"></span>
+                    </button>
+                    <button type="button" class="nav-util-btn"
+                        hx-get="/fragments/help?doc=ui&section=operational-daily-reports"
+                        hx-target="#help-drawer-content" onclick="openHelpDrawer()" title="Open Reports Help Guide"
+                        aria-label="Help Guide">
+                        <span>&#x2753;</span>
+                    </button>
+                    <a href="/help" class="nav-util-btn" title="Full offline documentation repository"
+                        aria-label="Documentation">
+                        <span>&#x1F4D6;</span>
+                    </a>
+                    <button type="button" class="nav-util-btn btn-theme-toggle" onclick="toggleTheme()"
+                        title="Switch Light / Dark Theme" aria-label="Toggle theme">
+                        <span class="theme-icon-sun">&#x2600;&#xFE0F;</span>
+                        <span class="theme-icon-moon">&#x1F319;</span>
+                    </button>
+                </div>
             </div>
+        </header>
 
-            <!-- Retention Note Card -->
-            <div class="card" style="padding: 14px 16px; background: rgba(59, 130, 246, 0.04); border-color: rgba(59, 130, 246, 0.2); font-size: 12px; color: var(--text-muted); line-height: 1.5;">
-                <strong style="color: var(--text-primary); display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
-                    <span>&#x1F512;</span> Permanent Knowledge
-                </strong>
-                Daily reports are created automatically at <strong>01:00 AM</strong> before raw slot data is pruned, and are <strong>never deleted</strong> by nightly retention cleanups.
+        <!-- Flash Messages -->
+        <div th:if="${successMessage != null}" class="alert alert-success"
+            style="margin-bottom: 20px; padding: 12px 18px; border-radius: var(--radius-md);" role="alert">
+            <span style="font-size: 16px;">&#x2705;</span> <span th:text="${successMessage}">Success</span>
+        </div>
+        <div th:if="${errorMessage != null}" class="alert alert-danger"
+            style="margin-bottom: 20px; padding: 12px 18px; border-radius: var(--radius-md);" role="alert">
+            <span style="font-size: 16px;">&#x26A0;&#xFE0F;</span> <span th:text="${errorMessage}">Error</span>
+        </div>
+
+        <!-- Header & Action Toolbar -->
+        <div class="page-header" style="margin-bottom: 24px;">
+            <div
+                style="display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap;">
+                <div>
+                    <h1
+                        style="font-size: 26px; font-weight: 800; margin-bottom: 6px; display: flex; align-items: center; gap: 10px;">
+                        <span>&#x1F4D1;</span> Operational Day Reports &amp; Archive
+                    </h1>
+                    <p style="color: var(--text-muted); font-size: 14px; margin: 0;">
+                        Permanent daily fleet summaries &amp; normalized peak performance metrics &ndash; completely
+                        immune to nightly data retention cleanups.
+                    </p>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <!-- Generate Report Form -->
+                    <form th:action="@{/reports/generate}" method="post"
+                        style="display: flex; gap: 8px; align-items: center;">
+                        <input type="date" name="date" class="form-input" th:value="${yesterdayDate}"
+                            style="padding: 7px 12px; font-size: 13px; width: 145px;" required>
+                        <button type="submit" class="btn btn-primary"
+                            title="Compile and store daily report for the selected date">
+                            <span>&#x26A1;</span> Generate Report
+                        </button>
+                    </form>
+                </div>
             </div>
-        </aside>
+        </div>
 
-        <!-- Main Display: Rendered Report Fragment -->
-        <main>
-            <div th:replace="~{fragments/report-content :: reportContent}"></div>
-        </main>
+        <!-- Main Content Layout (Archive Sidebar + Detail Content) -->
+        <div class="report-layout">
+            <!-- Sidebar: Archive List -->
+            <aside>
+                <div class="card" style="padding: 16px; margin-bottom: 16px;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div
+                            style="font-size: 14px; font-weight: 700; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.5px;">
+                            Report Archive (<span th:text="${reports.size()}">0</span>)
+                        </div>
+                        <span style="font-size: 11px; color: var(--text-muted);">Max 90 days</span>
+                    </div>
+
+                    <!-- Empty State -->
+                    <div th:if="${#lists.isEmpty(reports)}"
+                        style="text-align: center; padding: 24px 12px; color: var(--text-muted); font-size: 13px;">
+                        <div>&#x1F4ED;</div>
+                        <div style="margin-top: 6px;">No archived reports found yet.</div>
+                    </div>
+
+                    <!-- Report List Items -->
+                    <div style="max-height: 640px; overflow-y: auto; padding-right: 4px;">
+                        <a th:each="r : ${reports}" th:href="@{'/reports?date=' + ${r.reportDate()}}"
+                            th:hx-get="@{'/reports/' + ${r.reportDate()} + '/content'}"
+                            hx-target="#report-display-container" hx-swap="outerHTML"
+                            th:hx-push-url="@{'/reports?date=' + ${r.reportDate()}}"
+                            onclick="highlightActiveReport(this)"
+                            th:class="'report-archive-item ' + (${selectedDate != null and selectedDate.equals(r.reportDate())} ? 'active' : '')">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <strong style="font-size: 14px; color: var(--text-primary);"
+                                    th:text="${r.reportDate()}">2026-10-26</strong>
+                                <span th:class="'badge ' + ${r.statusBadgeClass()}"
+                                    style="font-size: 10px; padding: 2px 6px;"
+                                    th:text="${r.statusLabel()}">OPERATIONAL</span>
+                            </div>
+                            <div
+                                style="display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-muted);">
+                                <span><span
+                                        th:text="${#numbers.formatDecimal(r.totalRequests(), 0, 'POINT', 0, 'COMMA')}">1.482.910</span>
+                                    req</span>
+                                <span>Peak: <strong th:text="${r.formattedPeakRequestsPerSec()}">142.0</strong>
+                                    req/s</span>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Retention Note Card -->
+                <div class="card"
+                    style="padding: 14px 16px; background: rgba(59, 130, 246, 0.04); border-color: rgba(59, 130, 246, 0.2); font-size: 12px; color: var(--text-muted); line-height: 1.5;">
+                    <strong
+                        style="color: var(--text-primary); display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                        <span>&#x1F512;</span> Permanent Knowledge
+                    </strong>
+                    Daily reports are created automatically at <strong>01:00 AM</strong> before raw slot data is pruned,
+                    and are <strong>never deleted</strong> by nightly retention cleanups.
+                </div>
+            </aside>
+
+            <!-- Main Display: Rendered Report Fragment -->
+            <main>
+                <div th:replace="~{fragments/report-content :: reportContent}"></div>
+            </main>
+        </div>
+
+        <!-- Contextual Slide-Over Help Drawer -->
+        <div th:replace="~{fragments/help-drawer :: helpDrawer}"></div>
     </div>
 
-    <!-- Contextual Slide-Over Help Drawer -->
-    <div th:replace="~{fragments/help-drawer :: helpDrawer}"></div>
-</div>
+    <script>
+        function copyReportMarkdown() {
+            const textarea = document.getElementById('raw-markdown-content');
+            const btnText = document.getElementById('copyBtnText');
+            if (!textarea) return;
 
-<script>
-    function copyReportMarkdown() {
-        const textarea = document.getElementById('raw-markdown-content');
-        const btnText = document.getElementById('copyBtnText');
-        if (!textarea) return;
-
-        navigator.clipboard.writeText(textarea.value).then(() => {
-            if (btnText) {
-                const orig = btnText.innerText;
-                btnText.innerText = 'Copied!';
-                setTimeout(() => {
-                    btnText.innerText = orig;
-                }, 2000);
-            }
-        }).catch(err => {
-            console.error('Failed to copy markdown: ', err);
-        });
-    }
-
-    function highlightActiveReport(elt) {
-        document.querySelectorAll('.report-archive-item').forEach(el => el.classList.remove('active'));
-        if (elt) {
-            elt.classList.add('active');
+            navigator.clipboard.writeText(textarea.value).then(() => {
+                if (btnText) {
+                    const orig = btnText.innerText;
+                    btnText.innerText = 'Copied!';
+                    setTimeout(() => {
+                        btnText.innerText = orig;
+                    }, 2000);
+                }
+            }).catch(err => {
+                console.error('Failed to copy markdown: ', err);
+            });
         }
-    }
-</script>
+
+        function highlightActiveReport(elt) {
+            document.querySelectorAll('.report-archive-item').forEach(el => el.classList.remove('active'));
+            if (elt) {
+                elt.classList.add('active');
+            }
+        }
+    </script>
 
 </body>
+
 </html>

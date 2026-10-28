@@ -146,4 +146,63 @@ class DailyReportServiceTest {
 		assertEquals("NORMAL", report.status());
 		assertNotNull(report.reportMarkdown());
 	}
+
+	@Test
+	void testBlockedRequestsAndSlotRatioReporting() {
+		LocalDate ratioDate = LocalDate.of(2026, 10, 21);
+		dailyReportRepository.deleteByReportDate(ratioDate.toString());
+		jdbcTemplate.update("DELETE FROM slot_snapshots WHERE server_id = 'SRV-RATIO'");
+		jdbcTemplate.update("DELETE FROM client_events WHERE server_id = 'SRV-RATIO'");
+		jdbcTemplate.update("DELETE FROM monitored_valves WHERE server_id = 'SRV-RATIO'");
+
+		ZonedDateTime startDay = ratioDate.atStartOfDay(ZoneId.systemDefault());
+		Instant baseTime = startDay.plusHours(8).toInstant();
+
+		monitoredValveRepository.upsert(new MonitoredValve(
+				"SRV-RATIO", "RATIO-VALVE", "Test Ratio Valve", 1, "BLOCKING", false, false,
+				429, 500, 10, 10, 0.5f, 24, 64, 10000, 5000, "", "", "", "", "/status", "*", "auto",
+				false, "_adv", Instant.now(), 9999, true
+		));
+
+		// 1 slot with blocked counters
+		slotSnapshotRepository.upsert(new SlotSnapshot(
+				null, "SRV-RATIO", "RATIO-VALVE", 5001L, baseTime, baseTime.plus(10, ChronoUnit.SECONDS),
+				100L, 20, 5, true, baseTime.plus(10, ChronoUnit.SECONDS)
+		));
+
+		// 3 clean slots without blocks
+		for (int i = 1; i <= 3; i++) {
+			Instant t = baseTime.plus(i * 10, ChronoUnit.SECONDS);
+			slotSnapshotRepository.upsert(new SlotSnapshot(
+					null, "SRV-RATIO", "RATIO-VALVE", 5001L + i, t, t.plus(10, ChronoUnit.SECONDS),
+					100L, 10, 0, true, t.plus(10, ChronoUnit.SECONDS)
+			));
+		}
+
+		// Insert actual blocked client event with 85 blocked requests
+		jdbcTemplate.update("""
+				INSERT INTO client_events (
+					server_id, valve_name, slot_key, slot_time, client_key, request_count, status, client_type, enrichment_status, last_updated_at
+				) VALUES (?, ?, ?, ?, ?, ?, 'BLOCKED', 'DATACENTER', 'COMPLETED', ?)
+				""", "SRV-RATIO", "RATIO-VALVE", 5001L, java.sql.Timestamp.from(baseTime), "203.0.113.42", 85L, java.sql.Timestamp.from(baseTime));
+
+		DailyReport report = dailyReportService.generateDailyReport(ratioDate);
+		assertNotNull(report);
+		assertEquals(400L, report.totalRequests());
+		assertEquals(85L, report.totalBlocked(), "Total blocked must come from client_events request_count sum");
+
+		String md = report.reportMarkdown();
+		assertNotNull(md);
+
+		// Check Executive Summary contains slot ratio and blocked requests
+		assertTrue(md.contains("Betroffene Slots mit Sperren"), "Markdown should have Betroffene Slots mit Sperren");
+		assertTrue(md.contains("1 von 4 (25,00%)"), "Should show 1 von 4 (25,00%)");
+		assertTrue(md.contains("85"), "Should show 85 blocked requests");
+
+		// Check Section 2 Table contains new columns
+		assertTrue(md.contains("Geblockte Requests"), "Table header should have Geblockte Requests");
+		assertTrue(md.contains("Betroffene Slots (Anteil)"), "Table header should have Betroffene Slots (Anteil)");
+		assertTrue(md.contains("1 / 4 (25,00%)"), "Table row should show 1 / 4 (25,00%)");
+		assertTrue(md.contains("21,25%"), "Block quote for 85 / 400 should be 21,25%");
+	}
 }

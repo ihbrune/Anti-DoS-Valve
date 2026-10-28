@@ -118,9 +118,11 @@ public class DailyReportService {
 			valveConfigMap.put(mv.serverId() + "#" + mv.valveName(), mv);
 		}
 
-		// 2. Aggregate Slot Snapshots (Fleet Totals)
+		// 2. Aggregate Slot Snapshots & Client Events (Fleet Totals)
 		long totalRequests = 0;
 		long totalBlocked = 0;
+		long fleetBlockedSlots = 0;
+		long fleetTotalSlots = 0;
 		int serverCount = 0;
 
 		try {
@@ -129,10 +131,27 @@ public class DailyReportService {
 					Long.class, Timestamp.from(startInstant), Timestamp.from(endInstant));
 			totalRequests = reqSum != null ? reqSum : 0L;
 
-			Long blockSum = jdbcTemplate.queryForObject(
+			Long blockedReqSum = jdbcTemplate.queryForObject(
+					"SELECT COALESCE(SUM(request_count), 0) FROM client_events WHERE status = 'BLOCKED' AND slot_time >= ? AND slot_time < ?",
+					Long.class, Timestamp.from(startInstant), Timestamp.from(endInstant));
+
+			Long blockedCountersSum = jdbcTemplate.queryForObject(
 					"SELECT COALESCE(SUM(blocked_counters), 0) FROM slot_snapshots WHERE start_time >= ? AND start_time < ?",
 					Long.class, Timestamp.from(startInstant), Timestamp.from(endInstant));
-			totalBlocked = blockSum != null ? blockSum : 0L;
+
+			totalBlocked = (blockedReqSum != null && blockedReqSum > 0)
+					? blockedReqSum
+					: (blockedCountersSum != null ? blockedCountersSum : 0L);
+
+			Long blkSlots = jdbcTemplate.queryForObject(
+					"SELECT COALESCE(SUM(CASE WHEN blocked_counters > 0 THEN 1 ELSE 0 END), 0) FROM slot_snapshots WHERE start_time >= ? AND start_time < ?",
+					Long.class, Timestamp.from(startInstant), Timestamp.from(endInstant));
+			fleetBlockedSlots = blkSlots != null ? blkSlots : 0L;
+
+			Long totSlots = jdbcTemplate.queryForObject(
+					"SELECT COUNT(*) FROM slot_snapshots WHERE start_time >= ? AND start_time < ?",
+					Long.class, Timestamp.from(startInstant), Timestamp.from(endInstant));
+			fleetTotalSlots = totSlots != null ? totSlots : 0L;
 
 			Integer srvCnt = jdbcTemplate.queryForObject(
 					"SELECT COUNT(DISTINCT server_id) FROM slot_snapshots WHERE start_time >= ? AND start_time < ?",
@@ -147,8 +166,9 @@ public class DailyReportService {
 				String serverId,
 				String valveName,
 				long totalRequests,
-				long totalBlocked,
+				long blockedRequests,
 				int slotCount,
+				int blockedSlotCount,
 				int configuredSlotLength,
 				int allowedRequestsPerSlot,
 				double peakReqRatePerSec,
@@ -160,7 +180,14 @@ public class DailyReportService {
 				long peakBlockDurationSec,
 				Instant peakBlockTime,
 				double peakUtilizationPercent
-		) {}
+		) {
+			public double blockedSlotRatioPercent() {
+				return slotCount > 0 ? (blockedSlotCount * 100.0) / slotCount : 0.0;
+			}
+			public double blockRatePercent() {
+				return totalRequests > 0 ? (blockedRequests * 100.0) / totalRequests : 0.0;
+			}
+		}
 
 		List<ValveAggregate> valveAggregates = new ArrayList<>();
 		double fleetPeakReqRate = 0.0;
@@ -177,12 +204,31 @@ public class DailyReportService {
 		long fleetPeakBlockRaw = 0;
 		long fleetPeakBlockDuration = 0;
 
+		// Query blocked requests per valve from client_events
+		Map<String, Long> valveBlockedReqsMap = new HashMap<>();
+		try {
+			String blkReqQuery = """
+					SELECT server_id, valve_name, COALESCE(SUM(request_count), 0) AS blocked_reqs
+					FROM client_events
+					WHERE status = 'BLOCKED' AND slot_time >= ? AND slot_time < ?
+					GROUP BY server_id, valve_name
+					""";
+			List<Map<String, Object>> blkRows = jdbcTemplate.queryForList(
+					blkReqQuery, Timestamp.from(startInstant), Timestamp.from(endInstant));
+			for (Map<String, Object> r : blkRows) {
+				valveBlockedReqsMap.put(r.get("server_id") + "#" + r.get("valve_name"), ((Number) r.get("blocked_reqs")).longValue());
+			}
+		} catch (Exception e) {
+			log.warn("Error querying valve blocked requests for {}: {}", dateStr, e.getMessage());
+		}
+
 		try {
 			String valveQuery = """
 					SELECT server_id, valve_name,
 					       COALESCE(SUM(total_requests), 0) AS req_sum,
-					       COALESCE(SUM(blocked_counters), 0) AS block_sum,
-					       COUNT(*) AS slot_count
+					       COALESCE(SUM(blocked_counters), 0) AS block_counters_sum,
+					       COUNT(*) AS slot_count,
+					       COALESCE(SUM(CASE WHEN blocked_counters > 0 THEN 1 ELSE 0 END), 0) AS blocked_slot_count
 					FROM slot_snapshots
 					WHERE start_time >= ? AND start_time < ?
 					GROUP BY server_id, valve_name
@@ -196,8 +242,14 @@ public class DailyReportService {
 				String sId = (String) row.get("server_id");
 				String vName = (String) row.get("valve_name");
 				long vReqSum = ((Number) row.get("req_sum")).longValue();
-				long vBlockSum = ((Number) row.get("block_sum")).longValue();
+				long vBlockCountersSum = ((Number) row.get("block_counters_sum")).longValue();
 				int slotCount = ((Number) row.get("slot_count")).intValue();
+				int blockedSlotCount = ((Number) row.get("blocked_slot_count")).intValue();
+
+				long vBlockedRequests = valveBlockedReqsMap.getOrDefault(sId + "#" + vName, 0L);
+				if (vBlockedRequests == 0 && vBlockCountersSum > 0) {
+					vBlockedRequests = vBlockCountersSum;
+				}
 
 				MonitoredValve cfg = valveConfigMap.get(sId + "#" + vName);
 				int slotLen = cfg != null && cfg.slotLength() > 0 ? cfg.slotLength() : 10;
@@ -275,7 +327,7 @@ public class DailyReportService {
 						? ((double) peakRawReq / allowedPerSlot) * 100.0 : 0.0;
 
 				valveAggregates.add(new ValveAggregate(
-						sId, vName, vReqSum, vBlockSum, slotCount, slotLen, allowedPerSlot,
+						sId, vName, vReqSum, vBlockedRequests, slotCount, blockedSlotCount, slotLen, allowedPerSlot,
 						peakReqRate, peakRawReq, peakReqDuration, peakReqTime,
 						peakBlockRate, peakRawBlk, peakBlkDuration, peakBlkTime,
 						peakUtilization
@@ -439,6 +491,7 @@ public class DailyReportService {
 		// 7. Render Markdown Content
 		String markdown = buildMarkdownReport(
 				reportDate, status, totalRequests, totalBlocked, blockRateFleet,
+				fleetBlockedSlots, fleetTotalSlots,
 				serverCount, distinctBlockedClients, totalIncidents,
 				fleetPeakReqRate, fleetPeakReqRaw, fleetPeakReqDuration, peakReqServer, peakReqValve, fleetPeakReqTime,
 				fleetPeakBlockRate, fleetPeakBlockRaw, fleetPeakBlockDuration, peakBlockServer, peakBlockValve, fleetPeakBlockTime,
@@ -476,6 +529,8 @@ public class DailyReportService {
 			long totalRequests,
 			long totalBlocked,
 			double blockRateFleet,
+			long fleetBlockedSlots,
+			long fleetTotalSlots,
 			int serverCount,
 			int distinctBlockedClients,
 			int totalIncidents,
@@ -516,15 +571,19 @@ public class DailyReportService {
 		sb.append("---\n\n");
 
 		// Executive Summary
+		double fleetSlotRatio = fleetTotalSlots > 0 ? (fleetBlockedSlots * 100.0) / fleetTotalSlots : 0.0;
+
 		sb.append("## 📊 1. Executive Summary (Flotten-Überblick)\n\n");
 		sb.append("| Metrik | Tageswert | Erläuterung & Kontext |\n");
 		sb.append("| :--- | :--- | :--- |\n");
 		sb.append("| **Gesamtanzahl Requests** | **").append(numFmt.format(totalRequests)).append("** | Über alle überwachten Valves und Nodes gezählte Anfragen |\n");
 		sb.append("| **Blockierte Requests** | **").append(numFmt.format(totalBlocked)).append("** | Verweigerte Anfragen (HTTP 429) |\n");
 		sb.append("| **Flottenweite Block-Quote** | **").append(String.format(Locale.GERMANY, "%.2f%%", blockRateFleet)).append("** | Anteil abgewiesener Anfragen an der Gesamtlast |\n");
+		sb.append("| **Betroffene Slots mit Sperren** | **").append(numFmt.format(fleetBlockedSlots)).append(" von ").append(numFmt.format(fleetTotalSlots))
+				.append(" (").append(String.format(Locale.GERMANY, "%.2f%%", fleetSlotRatio)).append(")** | Zeitabschnitte (Slots) mit Quotenüberschreitungen |\n");
 		sb.append("| **Aktive Nodes / Valves** | **").append(serverCount).append(" Server / ").append(rawValveAggregates.size()).append(" Valves** | An der Erfassung beteiligte Instanzen |\n");
 		sb.append("| **Geblockte Clients** | **").append(numFmt.format(distinctBlockedClients)).append(" eindeutige IPs** | In Einzelsperren oder Subnetzsperren involviert |\n");
-		sb.append("| **Block-Vorfälle (Incidents)** | **").append(numFmt.format(totalIncidents)).append("** | Registrierte Blockade-Slots mit Quotenüberschreitung |\n");
+		sb.append("| **Block-Vorfälle (Client-Events)** | **").append(numFmt.format(totalIncidents)).append("** | Protokollierte Vorfälle in der Event-Historie |\n");
 
 		// Peak Request Rate
 		sb.append("| **Peak Request-Rate (normalisiert)** | **`")
@@ -575,14 +634,16 @@ public class DailyReportService {
 				List<Object> valves = entry.getValue();
 
 				sb.append("### Server `").append(sId).append("` (").append(valves.size()).append(" Valves)\n\n");
-				sb.append("| Valve | Slotlänge | Gesamt-Requests | Blockaden | Quote | Peak-Rate (norm.) | Peak-Slot (raw) | Peak-Auslastung |\n");
-				sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
+				sb.append("| Valve | Slotlänge | Gesamt-Requests | Geblockte Requests | Block-Quote | Betroffene Slots (Anteil) | Peak-Rate (norm.) | Peak-Slot (raw) | Peak-Auslastung |\n");
+				sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
 
 				for (Object vObj : valves) {
 					try {
 						String vName = (String) vObj.getClass().getMethod("valveName").invoke(vObj);
 						long vReq = (Long) vObj.getClass().getMethod("totalRequests").invoke(vObj);
-						long vBlk = (Long) vObj.getClass().getMethod("totalBlocked").invoke(vObj);
+						long vBlkReq = (Long) vObj.getClass().getMethod("blockedRequests").invoke(vObj);
+						int slotCnt = (Integer) vObj.getClass().getMethod("slotCount").invoke(vObj);
+						int blkSlotCnt = (Integer) vObj.getClass().getMethod("blockedSlotCount").invoke(vObj);
 						int slotLen = (Integer) vObj.getClass().getMethod("configuredSlotLength").invoke(vObj);
 						int allowed = (Integer) vObj.getClass().getMethod("allowedRequestsPerSlot").invoke(vObj);
 						double pReqRate = (Double) vObj.getClass().getMethod("peakReqRatePerSec").invoke(vObj);
@@ -590,14 +651,17 @@ public class DailyReportService {
 						long pReqDur = (Long) vObj.getClass().getMethod("peakReqDurationSec").invoke(vObj);
 						double pUtil = (Double) vObj.getClass().getMethod("peakUtilizationPercent").invoke(vObj);
 
-						double vQuote = vReq > 0 ? (vBlk * 100.0) / vReq : 0.0;
+						double vQuote = vReq > 0 ? (vBlkReq * 100.0) / vReq : 0.0;
+						double slotRatio = slotCnt > 0 ? (blkSlotCnt * 100.0) / slotCnt : 0.0;
 						String utilStr = allowed > 0 ? String.format(Locale.GERMANY, "%.1f%% (%s max)", pUtil, numFmt.format(allowed)) : "–";
+						String slotInfo = numFmt.format(blkSlotCnt) + " / " + numFmt.format(slotCnt) + " (" + String.format(Locale.GERMANY, "%.2f%%", slotRatio) + ")";
 
 						sb.append("| `").append(vName).append("` | ")
 								.append(slotLen).append("s | ")
 								.append(numFmt.format(vReq)).append(" | ")
-								.append(numFmt.format(vBlk)).append(" | ")
+								.append(numFmt.format(vBlkReq)).append(" | ")
 								.append(String.format(Locale.GERMANY, "%.2f%%", vQuote)).append(" | ")
+								.append(slotInfo).append(" | ")
 								.append("**`").append(String.format(Locale.GERMANY, "%.1f", pReqRate)).append(" req/s`** | ")
 								.append(numFmt.format(pRawReq)).append(" in ").append(pReqDur).append("s | ")
 								.append(utilStr).append(" |\n");
