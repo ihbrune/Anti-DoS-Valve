@@ -1623,6 +1623,214 @@ html[data-theme="light"] .theme-icon-moon {
 
 
 /* ==========================================================================
+   Investigation History Drawer & Navigator
+   ========================================================================== */
+
+.nav-util-btn.history-toggle-btn {
+    position: relative;
+}
+
+.history-badge-count {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 15px;
+    height: 15px;
+    padding: 0 4px;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 15px;
+    text-align: center;
+    border-radius: 8px;
+    background: var(--color-primary);
+    color: #ffffff;
+    pointer-events: none;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.history-drawer-body {
+    display: flex;
+    flex-direction: column;
+    padding: 16px 20px;
+    gap: 14px;
+}
+
+.history-search-bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.history-input {
+    flex: 1;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    padding: 7px 12px;
+    font-size: 13px;
+    font-family: inherit;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.history-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px var(--color-primary-transparent, rgba(59, 130, 246, 0.25));
+}
+
+.history-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.history-chip {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.history-chip:hover {
+    color: var(--text-primary);
+    border-color: var(--border-accent);
+}
+
+.history-chip.active {
+    background: var(--color-primary-transparent, rgba(59, 130, 246, 0.15));
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    font-weight: 600;
+}
+
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.history-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.history-card:hover {
+    border-color: var(--border-accent);
+}
+
+.history-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.history-value {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.history-extra {
+    font-size: 11px;
+    color: var(--text-muted);
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.history-time {
+    font-size: 10.5px;
+    color: var(--text-muted);
+}
+
+.history-item-del {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: var(--radius-sm);
+    transition: color 0.15s ease, background 0.15s ease;
+}
+
+.history-item-del:hover {
+    color: var(--color-danger);
+    background: rgba(239, 68, 68, 0.12);
+}
+
+.history-card-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+    border-top: 1px dashed var(--border-color);
+    padding-top: 7px;
+}
+
+.history-action-link {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.history-action-link:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background: var(--bg-card);
+}
+
+.history-empty-state {
+    text-align: center;
+    padding: 48px 16px;
+    color: var(--text-muted);
+}
+
+[data-theme="light"] .history-input {
+    background: #f8fafc;
+}
+
+[data-theme="light"] .history-chip {
+    background: #f1f5f9;
+}
+
+[data-theme="light"] .history-card {
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] .history-action-link {
+    background: #f8fafc;
+}
+
+
+/* ==========================================================================
    Network Notes & Forensic Annotations Styles
    ========================================================================== */
 

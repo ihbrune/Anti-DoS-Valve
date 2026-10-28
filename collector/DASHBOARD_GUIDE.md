@@ -11,6 +11,7 @@ The Collector interface is built around high-throughput, real-time observability
 
 ### Key Global Controls:
 * **Pulse Auto-Refresh Indicator:** The pulsing green dot indicates active background telemetry updates (every 10 seconds via HTMX).
+* **Investigation History & Navigator (`🕒`):** Slide-over drawer recording recently investigated IP addresses, CIDR subnets, and ASNs client-side in browser `localStorage` (zero database overhead). Serves as a centralized cross-tool navigation hub to jump directly into Incidents, Top Offenders, Subnet Profiles, Analytics, and Notes without cluttered back-and-forth links. Includes real-time search, quick filter chips (`All`, `IPs`, `Subnets`, `ASNs`), manual target entry, and single-item or full history clearance.
 * **Theme Switcher (`☀️ / 🌙`):** Instant switch between tailored Dark and Light modes with anti-FOUC persistence across sessions.
 * **Contextual Help Drawers (`[?] Guide`):** Every screen features an in-page slide-over drawer that explains the active view's filters, data models, and forensic interpretations without losing current search queries.
 * **Top Navigation Bar:**
@@ -25,6 +26,46 @@ The Collector interface is built around high-throughput, real-time observability
   * **Crawlers & Bots (`/crawlers`):** Official search engine and AI scraper IP ranges with synchronization metrics.
   * **System & Config (`/system`):** Retention policies, database internals, polling cascades, and manual maintenance triggers.
   * **Help & Guide (`/help`):** Full offline documentation repository.
+
+---
+
+## 🕒 Investigation History & Cross-View Navigator
+
+The Investigation History is an operator-centric workflow accelerator accessible via the clock emoji (`🕒`) in the top navigation bar.
+
+### Core Architecture & Privacy:
+* **Client-Side Persistence:** History entries are stored exclusively in the browser's `localStorage` under `antidos_investigation_history`. Zero database tables, zero network overhead, and completely private to the operator's browser session.
+* **Universal Auto-Capture:** As you navigate the Collector, IP addresses, CIDR subnets, and Autonomous System Numbers (ASNs) are automatically recorded:
+  * **Search & Filters:** Entering or submitting an IP or Subnet in `clientQuery`, an ASN in `asn`, or a query in `q`.
+  * **Interactive Table Clicks:** Clicking on IP links, monospace badges, subnet groups, ASN tags, or note triggers (`+📝`) anywhere in the application.
+  * **Direct Query Parameters:** Loading bookmarked or shared URLs containing investigation parameters.
+  * **Manual Quick Add:** Pasting or typing any IP, CIDR subnet (e.g. `198.51.100.0/24`), or ASN (e.g. `AS15169`) directly into the drawer's search bar.
+* **Capacity & Deduplication:** Maintains up to the 50 most recent targets in reverse chronological order. Accessing an existing target moves it to the top with refreshed relative timestamps and merged contextual metadata (such as AS organization, country, and crawler labels).
+
+### Rapid Cross-View Navigation Actions:
+Each entry in the history drawer provides direct one-click links tailored to its entity type:
+* **IP Addresses:**
+  * `📋 Incidents`: Jumps to Incident Explorer (`/events?clientQuery=...`) with raw request timestamps and block reasons.
+  * `⚠️ Offenders`: Filters Top Offenders (`/offenders?clientQuery=...`) for activity patterns and surge metrics.
+  * `⚡ Subnet`: (If subnet group is detected) Jumps directly to Subnet Profile & Surge radar (`/profiles?clientQuery=...`).
+  * `📝 Note`: Opens the in-place note modal to view or annotate the client's network.
+* **CIDR Subnets:**
+  * `⚡ Profiles`: Jumps to 30-Day moving baselines, surge multipliers, and bot-mix charts (`/profiles?clientQuery=...`).
+  * `⚠️ Rollup`: Filters Top Offenders in Subnet Rollup mode (`/offenders?groupBy=SUBNET&clientQuery=...`).
+  * `📋 Incidents`: Filters all events occurring within that subnet partition.
+  * `📝 Note`: Opens the modal dialog to create or edit a persistent operator annotation.
+* **ASNs:**
+  * `⚡ Profiles`: Discovers all tracked subnets originating from this Autonomous System (`/profiles?asn=...`).
+  * `⚠️ Offenders`: Displays top offending clients belonging to this ASN.
+  * `📋 Incidents`: Displays all raw incidents originating from this ASN.
+  * `📊 Analytics`: Switches to Visual Telemetry to observe fleet-wide bot composition.
+  * `📝 Note`: Annotates the ASN with a verdict (`CLEAN`, `SUSPICIOUS`, `MALICIOUS`, `IGNORE`).
+
+### History Management:
+* **Filter Chips:** Quickly narrow down the list by clicking `All`, `🌐 IPs`, `⚡ Subnets`, or `🏢 ASNs`.
+* **Instant Filter Input:** Typing in the search field filters matching values and enriched metadata in real-time.
+* **Individual Removal:** Click the `&times;` icon on any card to delete it from history.
+* **Clear Entire History:** Click `🗑️ Clear` in the drawer header to purge all entries after confirmation.
 
 ---
 

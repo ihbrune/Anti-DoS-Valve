@@ -408,6 +408,23 @@ class DashboardControllerTest {
 	}
 
 	@Test
+	void testInvestigationHistoryNavigationRendered() throws Exception {
+		mockMvc.perform(get("/"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("collector-history.js")))
+				.andExpect(content().string(containsString("history-toggle-btn")))
+				.andExpect(content().string(containsString("id=\"history-drawer\"")))
+				.andExpect(content().string(containsString("id=\"history-search-input\"")))
+				.andExpect(content().string(containsString("id=\"history-drawer-list\"")));
+
+		mockMvc.perform(get("/events"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("collector-history.js")))
+				.andExpect(content().string(containsString("history-toggle-btn")))
+				.andExpect(content().string(containsString("id=\"history-drawer\"")));
+	}
+
+	@Test
 	void testInactiveValveDisplayAndDelete() throws Exception {
 		java.time.Instant now = java.time.Instant.now();
 		monitoredValveRepository.upsert(new org.henbru.antidos.collector.model.MonitoredValve(

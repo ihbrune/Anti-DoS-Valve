@@ -74,6 +74,9 @@
         if (e.key === 'Escape') {
             window.closeHelpDrawer();
             window.closeNoteModal();
+            if (typeof window.closeHistoryDrawer === 'function') {
+                window.closeHistoryDrawer();
+            }
         }
     });
 })();
