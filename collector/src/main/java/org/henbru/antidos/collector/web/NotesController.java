@@ -1,15 +1,23 @@
 package org.henbru.antidos.collector.web;
 
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.henbru.antidos.collector.annotation.NetworkAnnotationService;
+import org.henbru.antidos.collector.annotation.NoteExportDocument;
+import org.henbru.antidos.collector.annotation.NoteImportConflictStrategy;
+import org.henbru.antidos.collector.annotation.NoteImportResult;
 import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.model.AnnotationTargetType;
 import org.henbru.antidos.collector.model.AnnotationVerdict;
 import org.henbru.antidos.collector.model.NetworkAnnotation;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -18,6 +26,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Web controller serving the Network Notes &amp; Investigative Annotations dashboard (/notes)
@@ -199,6 +208,52 @@ public class NotesController {
 
 		populateNotesModel(model, null, null, null, "updated_desc");
 		return "fragments/notes-list :: notesList";
+	}
+
+	@GetMapping("/notes/export")
+	public ResponseEntity<NoteExportDocument> exportNotes() {
+		NoteExportDocument doc = annotationService.exportAnnotations();
+		String filename = "antidos-notes-" + LocalDate.now() + ".json";
+		return ResponseEntity.ok()
+				.header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+				.contentType(MediaType.APPLICATION_JSON)
+				.body(doc);
+	}
+
+	@GetMapping("/notes/modal/import")
+	public String importNotesModal(Model model) {
+		model.addAttribute("conflictStrategies", NoteImportConflictStrategy.values());
+		model.addAttribute("defaultStrategy", NoteImportConflictStrategy.APPEND);
+		return "fragments/note-modal :: noteImportModal";
+	}
+
+	@PostMapping("/notes/import")
+	public String importNotes(
+			@RequestParam("file") MultipartFile file,
+			@RequestParam(name = "strategy", required = false, defaultValue = "APPEND") NoteImportConflictStrategy strategy,
+			HttpServletResponse response,
+			Model model
+	) {
+		if (file == null || file.isEmpty()) {
+			model.addAttribute("errorMessage", "Please select a JSON file to upload.");
+			model.addAttribute("conflictStrategies", NoteImportConflictStrategy.values());
+			model.addAttribute("defaultStrategy", strategy != null ? strategy : NoteImportConflictStrategy.APPEND);
+			return "fragments/note-modal :: noteImportModal";
+		}
+
+		try {
+			NoteImportResult result = annotationService.importAnnotations(file.getInputStream(), strategy);
+			response.addHeader("HX-Trigger", "annotationChanged");
+
+			model.addAttribute("importResult", result);
+			model.addAttribute("actionMessage", result.summaryMessage());
+			return "fragments/note-modal :: noteImportSuccess";
+		} catch (IOException e) {
+			model.addAttribute("errorMessage", "Failed to read upload file: " + e.getMessage());
+			model.addAttribute("conflictStrategies", NoteImportConflictStrategy.values());
+			model.addAttribute("defaultStrategy", strategy != null ? strategy : NoteImportConflictStrategy.APPEND);
+			return "fragments/note-modal :: noteImportModal";
+		}
 	}
 
 	private void populateNotesModel(

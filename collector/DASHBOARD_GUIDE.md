@@ -536,6 +536,15 @@ Every note includes a structured categorization verdict:
   * Click any existing badge to view the note and jump directly into filtered incident logs.
   * Click `+📝` to immediately record a new note with target and ASN pre-filled.
 
+### 4. Backup & Restore: JSON Export and Import
+To preserve valuable investigative notes across test database rebuilds or environment migrations:
+* **Export (`📥 Export JSON`):** Downloads all stored ASN and subnet annotations as a clean, human-readable JSON file (`antidos-notes-YYYY-MM-DD.json`).
+* **Import (`📤 Import JSON`):** Uploads a previously exported JSON file with configurable duplicate conflict handling:
+  * **Append (smart diff, default):** Intelligently appends imported text to existing notes separated by a divider (`---`). If the text is already identical or already present in the existing note, it is skipped automatically.
+  * **Overwrite:** Completely replaces existing verdict and Markdown notes with the imported content.
+  * **Skip:** Keeps existing database notes untouched and only adds new targets.
+* **Import Report & Cache Reload:** Shows processed counts (created, updated, skipped) and any validation warnings, and updates in-memory caches instantly.
+
 ---
 
 ## Verified Crawlers & AI Bot Manager

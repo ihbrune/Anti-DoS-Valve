@@ -94,7 +94,16 @@
                     Persistent operator intelligence on ASNs and subnets &ndash; completely immune to data retention cleanups.
                 </p>
             </div>
-            <div style="display: flex; gap: 10px;">
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <a href="/notes/export" class="btn btn-secondary" title="Export all notes to JSON file">
+                    <span>&#x1F4E5;</span> Export JSON
+                </a>
+                <button type="button" class="btn btn-secondary"
+                        hx-get="/notes/modal/import"
+                        hx-target="#note-modal-container"
+                        title="Import notes from JSON file">
+                    <span>&#x1F4E4;</span> Import JSON
+                </button>
                 <button type="button" class="btn btn-primary"
                         hx-get="/notes/modal/new"
                         hx-target="#note-modal-container">

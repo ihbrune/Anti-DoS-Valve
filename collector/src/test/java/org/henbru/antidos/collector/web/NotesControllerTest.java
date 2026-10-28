@@ -145,4 +145,53 @@ class NotesControllerTest {
 				.andExpect(view().name("fragments/note-modal :: noteModalSuccess"))
 				.andExpect(header().string("HX-Trigger", "annotationChanged"));
 	}
+
+	@Test
+	void testExportNotesEndpoint() throws Exception {
+		annotationService.saveAnnotation(null, AnnotationTargetType.ASN, "AS33333", AnnotationVerdict.SUSPICIOUS, "Export test note");
+
+		mockMvc.perform(get("/notes/export"))
+				.andExpect(status().isOk())
+				.andExpect(header().string("Content-Disposition", containsString("attachment; filename=\"antidos-notes-")))
+				.andExpect(content().contentType(org.springframework.http.MediaType.APPLICATION_JSON))
+				.andExpect(jsonPath("$.version", is(1)))
+				.andExpect(jsonPath("$.count", is(1)))
+				.andExpect(jsonPath("$.notes[0].targetKey", is("AS33333")))
+				.andExpect(jsonPath("$.notes[0].noteMarkdown", is("Export test note")));
+	}
+
+	@Test
+	void testImportModalAndUpload() throws Exception {
+		mockMvc.perform(get("/notes/modal/import"))
+				.andExpect(status().isOk())
+				.andExpect(view().name("fragments/note-modal :: noteImportModal"))
+				.andExpect(content().string(containsString("Import Notes from JSON")));
+
+		String jsonPayload = """
+				{
+				  "version": 1,
+				  "notes": [
+				    {
+				      "targetType": "ASN",
+				      "targetKey": "AS44444",
+				      "verdict": "MALICIOUS",
+				      "noteMarkdown": "Uploaded malicious ASN"
+				    }
+				  ]
+				}
+				""";
+		org.springframework.mock.web.MockMultipartFile file = new org.springframework.mock.web.MockMultipartFile(
+				"file", "notes.json", "application/json", jsonPayload.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+		);
+
+		mockMvc.perform(multipart("/notes/import").file(file).param("strategy", "APPEND"))
+				.andExpect(status().isOk())
+				.andExpect(view().name("fragments/note-modal :: noteImportSuccess"))
+				.andExpect(header().string("HX-Trigger", "annotationChanged"))
+				.andExpect(content().string(containsString("Notes Import Completed")))
+				.andExpect(content().string(containsString("1 created")));
+
+		NetworkAnnotation imported = annotationService.findForAsn(44444L).orElseThrow();
+		org.junit.jupiter.api.Assertions.assertEquals("Uploaded malicious ASN", imported.noteMarkdown());
+	}
 }

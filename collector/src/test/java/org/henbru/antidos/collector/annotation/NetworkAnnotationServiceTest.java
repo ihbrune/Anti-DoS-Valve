@@ -112,4 +112,121 @@ class NetworkAnnotationServiceTest {
 		assertEquals(1, queryResult.size());
 		assertEquals("AS14061", queryResult.get(0).targetKey());
 	}
+
+	@Test
+	void testExportAndImportNotesAppendWithTextComparison() {
+		// 1. Initial annotation
+		annotationService.saveAnnotation(null, AnnotationTargetType.ASN, "AS24940", AnnotationVerdict.SUSPICIOUS, "Existing note for Hetzner");
+
+		// 2. Export
+		NoteExportDocument exported = annotationService.exportAnnotations();
+		assertNotNull(exported);
+		assertEquals(1, exported.count());
+		assertEquals("AS24940", exported.notes().get(0).targetKey());
+
+		// 3. Import identical content -> should skip because text is identical
+		String jsonIdentical = """
+				{
+				  "version": 1,
+				  "notes": [
+				    {
+				      "targetType": "ASN",
+				      "targetKey": "AS24940",
+				      "verdict": "SUSPICIOUS",
+				      "noteMarkdown": "Existing note for Hetzner"
+				    }
+				  ]
+				}
+				""";
+		NoteImportResult resultIdentical = annotationService.importAnnotations(
+				new java.io.ByteArrayInputStream(jsonIdentical.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+				NoteImportConflictStrategy.APPEND
+		);
+		assertEquals(1, resultIdentical.totalProcessed());
+		assertEquals(0, resultIdentical.createdCount());
+		assertEquals(0, resultIdentical.updatedCount());
+		assertEquals(1, resultIdentical.skippedCount());
+
+		// 4. Import distinct content with APPEND -> should append with separator
+		String jsonDifferent = """
+				{
+				  "version": 1,
+				  "notes": [
+				    {
+				      "targetType": "ASN",
+				      "targetKey": "AS24940",
+				      "verdict": "MALICIOUS",
+				      "noteMarkdown": "Second finding: brute-force campaign"
+				    },
+				    {
+				      "targetType": "SUBNET",
+				      "targetKey": "198.51.100.0/24",
+				      "verdict": "LEGITIMATE",
+				      "noteMarkdown": "New subnet note"
+				    }
+				  ]
+				}
+				""";
+		NoteImportResult resultAppend = annotationService.importAnnotations(
+				new java.io.ByteArrayInputStream(jsonDifferent.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+				NoteImportConflictStrategy.APPEND
+		);
+		assertEquals(2, resultAppend.totalProcessed());
+		assertEquals(1, resultAppend.createdCount());
+		assertEquals(1, resultAppend.updatedCount());
+		assertEquals(0, resultAppend.skippedCount());
+
+		Optional<NetworkAnnotation> updatedAsn = annotationService.findForAsn(24940L);
+		assertTrue(updatedAsn.isPresent());
+		assertTrue(updatedAsn.get().noteMarkdown().contains("Existing note for Hetzner"));
+		assertTrue(updatedAsn.get().noteMarkdown().contains("Second finding: brute-force campaign"));
+		assertTrue(updatedAsn.get().noteMarkdown().contains("---"));
+
+		// 5. Test OVERWRITE strategy
+		String jsonOverwrite = """
+				{
+				  "version": 1,
+				  "notes": [
+				    {
+				      "targetType": "ASN",
+				      "targetKey": "AS24940",
+				      "verdict": "LEGITIMATE",
+				      "noteMarkdown": "Completely replaced note"
+				    }
+				  ]
+				}
+				""";
+		NoteImportResult resultOverwrite = annotationService.importAnnotations(
+				new java.io.ByteArrayInputStream(jsonOverwrite.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+				NoteImportConflictStrategy.OVERWRITE
+		);
+		assertEquals(1, resultOverwrite.updatedCount());
+		Optional<NetworkAnnotation> overwritten = annotationService.findForAsn(24940L);
+		assertTrue(overwritten.isPresent());
+		assertEquals("Completely replaced note", overwritten.get().noteMarkdown());
+		assertEquals(AnnotationVerdict.LEGITIMATE, overwritten.get().verdict());
+
+		// 6. Test SKIP strategy
+		String jsonSkip = """
+				{
+				  "version": 1,
+				  "notes": [
+				    {
+				      "targetType": "ASN",
+				      "targetKey": "AS24940",
+				      "verdict": "MALICIOUS",
+				      "noteMarkdown": "Ignored note"
+				    }
+				  ]
+				}
+				""";
+		NoteImportResult resultSkip = annotationService.importAnnotations(
+				new java.io.ByteArrayInputStream(jsonSkip.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+				NoteImportConflictStrategy.SKIP
+		);
+		assertEquals(1, resultSkip.skippedCount());
+		Optional<NetworkAnnotation> unchanged = annotationService.findForAsn(24940L);
+		assertTrue(unchanged.isPresent());
+		assertEquals("Completely replaced note", unchanged.get().noteMarkdown());
+	}
 }

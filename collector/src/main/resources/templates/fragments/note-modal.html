@@ -216,6 +216,127 @@
 <!-- Fragment: noteModalSuccess -->
 <div th:fragment="noteModalSuccess"></div>
 
+<!-- Fragment: noteImportModal -->
+<div th:fragment="noteImportModal" class="note-modal-overlay">
+    <div class="note-modal-backdrop" onclick="closeNoteModal()"></div>
+    <div class="note-modal-dialog" role="dialog" aria-modal="true" style="max-width: 520px;">
+        <div class="note-modal-header">
+            <div class="note-modal-title" style="font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+                <span>&#x1F4E4;</span> Import Notes from JSON
+            </div>
+            <button type="button" class="drawer-close-btn" onclick="closeNoteModal()" aria-label="Close" title="Close (Esc)">&times;</button>
+        </div>
+
+        <form hx-post="/notes/import"
+              hx-encoding="multipart/form-data"
+              hx-target="#note-modal-container"
+              hx-swap="innerHTML">
+            <div class="note-modal-body">
+                <div th:if="${errorMessage != null}" class="alert alert-danger" style="margin-bottom: 16px; font-size: 13px;">
+                    <span th:text="${errorMessage}">Error importing notes.</span>
+                </div>
+
+                <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.5;">
+                    Upload an Anti-DoS Collector JSON notes export file to restore or synchronize notes across environments.
+                </p>
+
+                <!-- File input -->
+                <div class="form-group" style="margin-bottom: 18px;">
+                    <label class="form-label" style="font-weight: 600; font-size: 13px; margin-bottom: 6px; display: block;">
+                        JSON File <span style="color: var(--color-danger);">*</span>
+                    </label>
+                    <input type="file" name="file" accept=".json,application/json" required class="form-input" style="padding: 8px 10px; font-size: 13px;">
+                </div>
+
+                <!-- Duplicate Conflict Strategy -->
+                <div class="form-group" style="margin-bottom: 14px;">
+                    <label class="form-label" style="font-weight: 600; font-size: 13px; margin-bottom: 6px; display: block;">
+                        Conflict Strategy for Existing Targets
+                    </label>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <label th:each="strat : ${conflictStrategies}" style="display: flex; align-items: flex-start; gap: 8px; font-size: 13px; cursor: pointer;">
+                            <input type="radio" name="strategy" th:value="${strat.name()}" th:checked="${strat == defaultStrategy}" style="margin-top: 2px;">
+                            <div>
+                                <strong th:text="${strat.displayName()}">Append note content (smart diff)</strong>
+                                <div style="font-size: 11.5px; color: var(--text-muted);"
+                                     th:if="${strat.name() == 'APPEND'}">
+                                    Appends imported notes if different from existing note. Identical content is skipped automatically.
+                                </div>
+                                <div style="font-size: 11.5px; color: var(--text-muted);"
+                                     th:if="${strat.name() == 'OVERWRITE'}">
+                                    Replaces existing note verdict and markdown with imported content.
+                                </div>
+                                <div style="font-size: 11.5px; color: var(--text-muted);"
+                                     th:if="${strat.name() == 'SKIP'}">
+                                    Keeps existing database notes untouched and only adds completely new targets.
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="note-modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeNoteModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">
+                    <span>&#x1F4E4;</span> Start Import
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Fragment: noteImportSuccess -->
+<div th:fragment="noteImportSuccess" class="note-modal-overlay">
+    <div class="note-modal-backdrop" onclick="closeNoteModal()"></div>
+    <div class="note-modal-dialog" role="dialog" aria-modal="true" style="max-width: 520px;">
+        <div class="note-modal-header">
+            <div class="note-modal-title" style="font-weight: 700; font-size: 16px; color: var(--color-success); display: flex; align-items: center; gap: 8px;">
+                <span>&#x2705;</span> Notes Import Completed
+            </div>
+            <button type="button" class="drawer-close-btn" onclick="closeNoteModal()" aria-label="Close" title="Close (Esc)">&times;</button>
+        </div>
+
+        <div class="note-modal-body">
+            <div class="alert alert-success" style="margin-bottom: 16px; font-size: 13px;">
+                <span th:text="${actionMessage}">Import completed successfully.</span>
+            </div>
+
+            <div th:if="${importResult != null}" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px;">
+                <div style="background: var(--bg-surface-elevated, rgba(255,255,255,0.05)); border-radius: var(--radius-md); padding: 12px; text-align: center; border: 1px solid var(--border-subtle);">
+                    <div style="font-size: 22px; font-weight: 800; color: var(--color-primary);" th:text="${importResult.createdCount()}">0</div>
+                    <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Created</div>
+                </div>
+                <div style="background: var(--bg-surface-elevated, rgba(255,255,255,0.05)); border-radius: var(--radius-md); padding: 12px; text-align: center; border: 1px solid var(--border-subtle);">
+                    <div style="font-size: 22px; font-weight: 800; color: var(--color-warning);" th:text="${importResult.updatedCount()}">0</div>
+                    <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Updated</div>
+                </div>
+                <div style="background: var(--bg-surface-elevated, rgba(255,255,255,0.05)); border-radius: var(--radius-md); padding: 12px; text-align: center; border: 1px solid var(--border-subtle);">
+                    <div style="font-size: 22px; font-weight: 800; color: var(--text-muted);" th:text="${importResult.skippedCount()}">0</div>
+                    <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Skipped</div>
+                </div>
+            </div>
+
+            <div th:if="${importResult != null and importResult.hasWarnings()}" style="margin-top: 12px;">
+                <div style="font-size: 12px; font-weight: 700; color: var(--color-warning); margin-bottom: 6px;">Warnings:</div>
+                <ul style="font-size: 12px; color: var(--text-muted); padding-left: 20px; margin: 0;">
+                    <li th:each="w : ${importResult.warnings()}" th:text="${w}">Warning item</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="note-modal-footer">
+            <button type="button" class="btn btn-primary"
+                    hx-get="/notes/fragment"
+                    hx-target="#notes-list-container"
+                    hx-swap="outerHTML"
+                    onclick="closeNoteModal()">
+                OK / Refresh List
+            </button>
+        </div>
+    </div>
+</div>
+
 <script>
     if (typeof window.closeNoteModal === 'undefined') {
         window.closeNoteModal = function() {
