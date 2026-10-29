@@ -159,19 +159,25 @@
                             </td>
                             <td>
                                 <div style="display: flex; flex-direction: column; gap: 4px;">
-                                    <div>
-                                        <span th:if="${p.last24hSurgeFactor() >= 10.0 and p.baselineDailyAvg() > 0.0}"
+                                    <div th:with="threshold=${minSurgeRequests != null ? minSurgeRequests : 1000}">
+                                        <span th:if="${p.last24hRequests() >= threshold and p.last24hSurgeFactor() >= 10.0 and p.baselineDailyAvg() > 0.0}"
                                             class="badge badge-danger" style="font-weight: 700; font-size: 11px;"
-                                            th:title="'Current 24h volume is ' + ${p.last24hSurgeFactor()} + 'x above baseline average (' + ${p.baselineDailyAvg()} + '/day)'">
+                                            th:title="'Current 24h volume (' + ${p.last24hRequests()} + ') is ' + ${p.last24hSurgeFactor()} + 'x above baseline average (' + ${p.baselineDailyAvg()} + '/day)'">
                                             &#x26A1; <span
                                                 th:text="${#numbers.formatDecimal(p.last24hSurgeFactor(), 1, 1)} + 'x Surge'"></span>
                                         </span>
                                         <span
-                                            th:if="${p.last24hSurgeFactor() >= 3.0 and p.last24hSurgeFactor() < 10.0 and p.baselineDailyAvg() > 0.0}"
+                                            th:if="${p.last24hRequests() >= threshold and p.last24hSurgeFactor() >= 3.0 and p.last24hSurgeFactor() < 10.0 and p.baselineDailyAvg() > 0.0}"
                                             class="badge badge-warning" style="font-weight: 600; font-size: 11px;"
-                                            th:title="'Current 24h volume is ' + ${p.last24hSurgeFactor()} + 'x above baseline average (' + ${p.baselineDailyAvg()} + '/day)'">
+                                            th:title="'Current 24h volume (' + ${p.last24hRequests()} + ') is ' + ${p.last24hSurgeFactor()} + 'x above baseline average (' + ${p.baselineDailyAvg()} + '/day)'">
                                             &#x26A1; <span
                                                 th:text="${#numbers.formatDecimal(p.last24hSurgeFactor(), 1, 1)} + 'x Surge'"></span>
+                                        </span>
+                                        <span
+                                            th:if="${p.last24hRequests() < threshold and p.last24hSurgeFactor() >= 3.0 and p.baselineDailyAvg() > 0.0}"
+                                            class="badge badge-secondary" style="font-size: 10px; opacity: 0.85;"
+                                            th:title="'Current 24h volume (' + ${p.last24hRequests()} + ') is ' + ${p.last24hSurgeFactor()} + 'x above baseline average (' + ${p.baselineDailyAvg()} + '/day), but below ' + ${#numbers.formatInteger(threshold, 1, 'POINT')} + ' req/24h threshold'">
+                                            <span th:text="${#numbers.formatDecimal(p.last24hSurgeFactor(), 1, 1)} + 'x (Low Vol)'"></span>
                                         </span>
                                         <span
                                             th:if="${p.last24hSurgeFactor() >= 1.0 and p.last24hSurgeFactor() < 3.0 and p.baselineDailyAvg() > 0.0}"
@@ -391,12 +397,18 @@
                                     <th:block
                                         th:if="${subnetProfilesMap != null and subnetProfilesMap.containsKey(rollup.subnetGroup())}"
                                         th:with="prof=${subnetProfilesMap.get(rollup.subnetGroup())}">
-                                        <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
-                                            <span th:if="${prof.isHighSurge(5.0)}" class="badge badge-danger"
+                                        <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;"
+                                             th:with="threshold=${minSurgeRequests != null ? minSurgeRequests : 1000}">
+                                            <span th:if="${prof.isHighSurge(5.0, threshold)}" class="badge badge-danger"
                                                 style="font-size: 10px; font-weight: 700;"
                                                 th:title="'Surge: ' + ${prof.last24hSurgeFactor()} + 'x over 30d baseline (' + ${prof.baselineDailyAvg()} + ' req/day)'">
                                                 &#x26A1; <span
                                                     th:text="${#numbers.formatDecimal(prof.last24hSurgeFactor(), 1, 1)} + 'x Surge'"></span>
+                                            </span>
+                                            <span th:if="${prof.isSubThresholdSurge(5.0, threshold)}" class="badge badge-secondary"
+                                                style="font-size: 10px; opacity: 0.85;"
+                                                th:title="'Surge: ' + ${prof.last24hSurgeFactor()} + 'x over 30d baseline (' + ${prof.baselineDailyAvg()} + ' req/day), but below ' + ${#numbers.formatInteger(threshold, 1, 'POINT')} + ' req/24h threshold'">
+                                                <span th:text="${#numbers.formatDecimal(prof.last24hSurgeFactor(), 1, 1)} + 'x (Low Vol)'"></span>
                                             </span>
                                             <span th:if="${prof.isDormantBreakout(14)}" class="badge badge-purple"
                                                 style="font-size: 10px;"

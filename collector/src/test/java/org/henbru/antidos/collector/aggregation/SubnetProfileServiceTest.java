@@ -150,9 +150,13 @@ class SubnetProfileServiceTest {
 		assertEquals(4, all.size());
 		assertEquals(4, profileRepository.countProfilesFiltered("ALL", null, null, null, null, null));
 
-		// Filter SURGE (>= 5.0x with baseline > 0) -> dormantProfile (200x), surgeProfile (12x), proxyPool (6x)
-		List<SubnetProfile> surgeOnly = profileRepository.findProfilesFiltered("SURGE", null, null, null, null, null, "SURGE", 10, 0);
-		assertEquals(3, surgeOnly.size());
+		// Filter SURGE with default de minimis threshold (1000 req/24h) -> 0 (all test profiles have < 1000 reqs)
+		List<SubnetProfile> surgeDefault = profileRepository.findProfilesFiltered("SURGE", null, null, null, null, null, "SURGE", 10, 0);
+		assertEquals(0, surgeDefault.size(), "De minimis threshold (1000) should filter low-volume spikes");
+
+		// Filter SURGE with explicit volume override (>= 25 req/24h) -> dormantProfile (200x), surgeProfile (12x), proxyPool (6x)
+		List<SubnetProfile> surgeWithOverride = profileRepository.findProfilesFiltered("SURGE", 25L, null, null, null, null, "SURGE", 10, 0);
+		assertEquals(3, surgeWithOverride.size());
 
 		// Filter DORMANT (>= 14d) -> dormantProfile (25d)
 		List<SubnetProfile> dormantOnly = profileRepository.findProfilesFiltered("DORMANT", null, null, null, null, null, "DORMANT", 10, 0);
@@ -211,6 +215,8 @@ class SubnetProfileServiceTest {
 		assertEquals(10.0, profA.baselineDailyAvg(), 0.5);
 		assertEquals(10.0, profA.last24hSurgeFactor(), 0.5);
 		assertTrue(profA.isHighSurge(5.0));
+		assertFalse(profA.isHighSurge(5.0, 1000L), "100 reqs should not qualify as high surge with 1000 req threshold");
+		assertTrue(profA.isSubThresholdSurge(5.0, 1000L), "100 reqs with 10x surge should qualify as sub-threshold low volume");
 		assertFalse(profA.isInitializing());
 		assertTrue(profA.daysDormantBeforeLastSeen() >= 14, "Should detect 14+ days dormancy before recent burst");
 

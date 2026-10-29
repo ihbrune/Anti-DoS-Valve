@@ -42,6 +42,14 @@ collector:
   # Latency threshold in ms before marking a poll cycle as WARNING (default: 1000 ms)
   slow-poll-threshold-ms: 1000
 
+  # De minimis 24-hour volume threshold for Subnet & ASN traffic surge detection (default: 1000 req/24h).
+  # Subnets with traffic spikes above the baseline multiplier but below this volume threshold are classified
+  # as low-volume (Low Vol) and do not trigger false High Surge alarms or inflate the High Surge KPI.
+  surge-min-requests: 1000
+
+  # Multiplier threshold relative to 30-day baseline to qualify as High Surge (default: 5.0x)
+  surge-multiplier-alert: 5.0
+
   # Concurrently poll fleet endpoints in parallel using Java 21 Virtual Threads (default: true)
   # When enabled, slow or unreachable servers do not delay polling for other servers in the fleet.
   # Requests to valves on the same server always remain sequential to avoid load spikes on that host.

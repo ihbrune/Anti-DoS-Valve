@@ -112,7 +112,9 @@ public class SubnetProfileService {
 	}
 
 	public org.henbru.antidos.collector.model.SubnetProfileStats getProfileStats() {
-		return profileRepository.getProfileStats();
+		long minSurge = (properties != null) ? properties.getSurgeMinRequests() : 1000L;
+		double surgeMultiplier = (properties != null) ? properties.getSurgeMultiplierAlert() : 5.0;
+		return profileRepository.getProfileStats(minSurge, surgeMultiplier);
 	}
 
 	public org.henbru.antidos.collector.model.SubnetProfileFreshness getProfileFreshness() {

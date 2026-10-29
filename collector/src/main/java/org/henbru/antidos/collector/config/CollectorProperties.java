@@ -26,6 +26,8 @@ public class CollectorProperties {
 	private boolean rollupEnabled = true;
 	private boolean reportEnabled = true;
 	private String reportCron = "0 0 1 * * *"; // Daily at 01:00 AM (2 hours prior to 03:00 AM retention cleanup)
+	private long surgeMinRequests = 1000L; // De minimis volume threshold: min. 24h requests required to qualify as High Surge
+	private double surgeMultiplierAlert = 5.0; // Multiplier threshold above 30d baseline to qualify as High Surge
 	private List<EndpointConfig> endpoints = new ArrayList<>();
 	private EnrichmentConfig enrichment = new EnrichmentConfig();
 
@@ -183,5 +185,21 @@ public class CollectorProperties {
 
 	public void setReportCron(String reportCron) {
 		this.reportCron = reportCron;
+	}
+
+	public long getSurgeMinRequests() {
+		return surgeMinRequests;
+	}
+
+	public void setSurgeMinRequests(long surgeMinRequests) {
+		this.surgeMinRequests = Math.max(1L, surgeMinRequests);
+	}
+
+	public double getSurgeMultiplierAlert() {
+		return surgeMultiplierAlert;
+	}
+
+	public void setSurgeMultiplierAlert(double surgeMultiplierAlert) {
+		this.surgeMultiplierAlert = Math.max(1.0, surgeMultiplierAlert);
 	}
 }

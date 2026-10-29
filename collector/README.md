@@ -191,7 +191,7 @@ The Collector acts as the long-term memory, brain, and investigative workbench f
 | **Subnet Profiling & Surge Detection** | Computes 30-day moving daily baselines and hourly curves per subnet | Detects stealthy scraping surges (e.g. 5x normal volume) and dormancy breakouts from previously silent subnets. |
 | **Forensic 2D Cluster Analysis** | Scatters subnets by Total Requests vs. Distinct IPs | Exposes residential proxy botnets (hundreds of IPs per subnet each sending only 1–3 requests to evade edge limits). |
 | **Persistent Operator Knowledge (`/notes`)** | Stores manual analyst notes and forensic verdict badges | Completely immune to data retention cleanups; preserves institutional knowledge permanently across the fleet. |
-| **Permanent Operational Reports (`/reports`)** | Compiles daily executive summaries & normalized peak performance metrics | Runs automatically at 01:00 AM before nightly retention cleanups; preserves fleet & server statistics in Markdown forever. |
+| **Permanent Operational Reports (`/reports`)** | Compiles daily executive summaries, normalized peak rates & operator day notes | Runs automatically at 01:00 AM before nightly retention cleanups; preserves fleet statistics, dual incident metrics, and human notes in Markdown forever. |
 
 ---
 
@@ -248,10 +248,11 @@ collector:
   parallel-fleet-polling: true
   slow-poll-threshold-ms: 1500
 
-  # 2. Data Retention Hygiene
+  # 2. Data Retention & Anomaly Hygiene
   retention-days: 30            # Retain high-resolution slot events for 30 days
   entity-retention-days: 60     # Keep network entity mappings for 60 days
   poll-log-retention-days: 2    # Background collector audit trail
+  surge-min-requests: 1000      # De minimis 24h volume threshold for High Surge alarms
 
   # 3. Telemetry Ingestion Rules
   default-valve-rules:

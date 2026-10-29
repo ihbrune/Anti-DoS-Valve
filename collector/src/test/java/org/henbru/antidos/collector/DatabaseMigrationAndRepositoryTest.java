@@ -68,6 +68,9 @@ class DatabaseMigrationAndRepositoryTest {
 	@Autowired
 	private org.henbru.antidos.collector.storage.DailyReportRepository dailyReportRepository;
 
+	@Autowired
+	private org.henbru.antidos.collector.storage.DailyReportNoteRepository dailyReportNoteRepository;
+
 	@Test
 	void testHeartbeatRepositoryUpsertAndFind() {
 		Instant now = Instant.now();
@@ -130,6 +133,7 @@ class DatabaseMigrationAndRepositoryTest {
 
 	@Test
 	void testClientEventRepositoryBatchUpsertAndAnalytics() {
+		jdbcTemplate.update("DELETE FROM client_events WHERE client_key IN ('198.51.100.42', '203.0.113.99') OR server_id IN ('NODE-A', 'NODE-B')");
 		Instant now = Instant.now();
 		ClientEvent e1 = new ClientEvent(
 				null, "NODE-A", "VALVE-1", 100L, now, "198.51.100.42", 50, 10, true, true, now);
@@ -221,6 +225,7 @@ class DatabaseMigrationAndRepositoryTest {
 
 	@Test
 	void testClientEventRepositoryClassificationAndAsnFilteringAndAsnRollup() {
+		jdbcTemplate.update("DELETE FROM client_events WHERE server_id LIKE 'SERVER-ASN-%' OR asn IN (3320, 8075)");
 		Instant now = Instant.now();
 		ClientEvent e1 = new ClientEvent(
 				null, "SERVER-ASN-1", "VALVE-API", 300L, now.minus(30, ChronoUnit.MINUTES), "198.51.100.1",
@@ -1116,6 +1121,33 @@ class DatabaseMigrationAndRepositoryTest {
 		assertEquals(195.0, reloaded.get().peakRequestsPerSec(), 0.01);
 
 		assertTrue(dailyReportRepository.findAllReportDates().contains(testDate));
+	}
+
+	@Test
+	void testDailyReportNoteRepositoryUpsertAndQuery() {
+		String testDate = "2026-10-18";
+		dailyReportNoteRepository.deleteByReportDate(testDate);
+
+		dailyReportNoteRepository.upsert(testDate, "Initial note: Routine deployment between 02:00 and 03:00.");
+
+		Optional<org.henbru.antidos.collector.model.DailyReportNote> loaded = dailyReportNoteRepository.findByReportDate(testDate);
+		assertTrue(loaded.isPresent());
+		assertEquals(testDate, loaded.get().reportDate());
+		assertTrue(loaded.get().hasContent());
+		assertTrue(loaded.get().noteMarkdown().contains("Routine deployment"));
+
+		// Upsert update
+		dailyReportNoteRepository.upsert(testDate, "Updated note: Deployment completed, scrapers detected from AS13335.");
+
+		Optional<org.henbru.antidos.collector.model.DailyReportNote> updated = dailyReportNoteRepository.findByReportDate(testDate);
+		assertTrue(updated.isPresent());
+		assertTrue(updated.get().noteMarkdown().contains("AS13335"));
+
+		List<String> datesWithNotes = dailyReportNoteRepository.findDatesWithNotes();
+		assertTrue(datesWithNotes.contains(testDate));
+
+		dailyReportNoteRepository.deleteByReportDate(testDate);
+		assertTrue(dailyReportNoteRepository.findByReportDate(testDate).isEmpty());
 	}
 }
 

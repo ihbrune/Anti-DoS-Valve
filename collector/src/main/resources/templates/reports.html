@@ -187,29 +187,71 @@
 
                     <!-- Report List Items -->
                     <div style="max-height: 640px; overflow-y: auto; padding-right: 4px;">
-                        <a th:each="r : ${reports}" th:href="@{'/reports?date=' + ${r.reportDate()}}"
-                            th:hx-get="@{'/reports/' + ${r.reportDate()} + '/content'}"
-                            hx-target="#report-display-container" hx-swap="outerHTML"
-                            th:hx-push-url="@{'/reports?date=' + ${r.reportDate()}}"
-                            onclick="highlightActiveReport(this)"
-                            th:class="'report-archive-item ' + (${selectedDate != null and selectedDate.equals(r.reportDate())} ? 'active' : '')">
-                            <div
-                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                                <strong style="font-size: 14px; color: var(--text-primary);"
-                                    th:text="${r.reportDate()}">2026-10-26</strong>
-                                <span th:class="'badge ' + ${r.statusBadgeClass()}"
-                                    style="font-size: 10px; padding: 2px 6px;"
-                                    th:text="${r.statusLabel()}">OPERATIONAL</span>
+                            <!-- Today (Live / In Progress) item: Always accessible for viewing or adding notes -->
+                            <a th:href="@{'/reports?date=' + ${todayDate}}"
+                                th:hx-get="@{'/reports/' + ${todayDate} + '/content'}"
+                                hx-target="#report-display-container" hx-swap="outerHTML"
+                                th:hx-push-url="@{'/reports?date=' + ${todayDate}}"
+                                onclick="highlightActiveReport(this)"
+                                th:class="'report-archive-item ' + (${selectedDate != null and selectedDate.equals(todayDate)} ? 'active' : '')"
+                                style="border-left: 3px solid var(--color-primary); margin-bottom: 8px;">
+                                <div
+                                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <strong
+                                        style="font-size: 13.5px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                                        <span>&#x1F4C5;</span>
+                                        <span>Today (<span th:text="${todayDate}">2026-10-29</span>)</span>
+                                        <span th:if="${datesWithNotes != null and datesWithNotes.contains(todayDate)}"
+                                            title="Operator note attached" style="font-size: 12px;">&#x1F4DD;</span>
+                                    </strong>
+                                    <span class="badge badge-info" style="font-size: 9.5px; padding: 2px 6px;">IN
+                                        PROGRESS</span>
+                                </div>
+                                <div
+                                    style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted);">
+                                    <span>Live Telemetry</span>
+                                    <span th:if="${datesWithNotes != null and datesWithNotes.contains(todayDate)}"
+                                        style="color: var(--color-primary); font-weight: 600;">Note added</span>
+                                    <span
+                                        th:unless="${datesWithNotes != null and datesWithNotes.contains(todayDate)}">Add
+                                        note</span>
+                                </div>
+                            </a>
+
+                            <div th:if="${!#lists.isEmpty(reports)}"
+                                style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin: 10px 0 6px 4px; letter-spacing: 0.5px;">
+                                Archived Reports
                             </div>
-                            <div
-                                style="display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-muted);">
-                                <span><span
-                                        th:text="${#numbers.formatDecimal(r.totalRequests(), 0, 'POINT', 0, 'COMMA')}">1.482.910</span>
-                                    req</span>
-                                <span>Peak: <strong th:text="${r.formattedPeakRequestsPerSec()}">142.0</strong>
-                                    req/s</span>
-                            </div>
-                        </a>
+
+                            <a th:each="r : ${reports}" th:if="${!r.reportDate().equals(todayDate)}"
+                                th:href="@{'/reports?date=' + ${r.reportDate()}}"
+                                th:hx-get="@{'/reports/' + ${r.reportDate()} + '/content'}"
+                                hx-target="#report-display-container" hx-swap="outerHTML"
+                                th:hx-push-url="@{'/reports?date=' + ${r.reportDate()}}"
+                                onclick="highlightActiveReport(this)"
+                                th:class="'report-archive-item ' + (${selectedDate != null and selectedDate.equals(r.reportDate())} ? 'active' : '')">
+                                <div
+                                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <strong
+                                        style="font-size: 14px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                                        <span th:text="${r.reportDate()}">2026-10-26</span>
+                                        <span
+                                            th:if="${datesWithNotes != null and datesWithNotes.contains(r.reportDate())}"
+                                            title="Operator note attached" style="font-size: 12px;">&#x1F4DD;</span>
+                                    </strong>
+                                    <span th:class="'badge ' + ${r.statusBadgeClass()}"
+                                        style="font-size: 10px; padding: 2px 6px;"
+                                        th:text="${r.statusLabel()}">OPERATIONAL</span>
+                                </div>
+                                <div
+                                    style="display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-muted);">
+                                    <span><span
+                                            th:text="${#numbers.formatDecimal(r.totalRequests(), 0, 'POINT', 0, 'COMMA')}">1.482.910</span>
+                                        req</span>
+                                    <span>Peak: <strong th:text="${r.formattedPeakRequestsPerSec()}">142.0</strong>
+                                        req/s</span>
+                                </div>
+                            </a>
                     </div>
                 </div>
 
@@ -233,6 +275,9 @@
 
         <!-- Contextual Slide-Over Help Drawer -->
         <div th:replace="~{fragments/help-drawer :: helpDrawer}"></div>
+
+        <!-- Container for Operator Note Modal -->
+        <div id="report-note-modal-container"></div>
     </div>
 
     <script>
@@ -260,6 +305,19 @@
                 elt.classList.add('active');
             }
         }
+
+        function closeReportNoteModal() {
+            const modal = document.getElementById('report-note-modal-wrapper');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                closeReportNoteModal();
+            }
+        });
     </script>
 
 </body>

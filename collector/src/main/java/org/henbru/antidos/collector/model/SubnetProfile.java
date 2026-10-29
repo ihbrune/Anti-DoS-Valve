@@ -157,6 +157,22 @@ public record SubnetProfile(
 	}
 
 	/**
+	 * Checks if current 24-hour traffic exhibits a significant surge over an established historical baseline
+	 * and satisfies the absolute de minimis volume threshold (e.g. >= 1,000 req/24h).
+	 */
+	public boolean isHighSurge(double thresholdMultiplier, long minRequests) {
+		return baselineDailyAvg > 0.0 && last24hSurgeFactor >= thresholdMultiplier && last24hRequests >= minRequests;
+	}
+
+	/**
+	 * Checks if current 24-hour traffic exhibits a high surge multiplier relative to baseline,
+	 * but is below the absolute de minimis volume threshold (sub-threshold / low volume).
+	 */
+	public boolean isSubThresholdSurge(double thresholdMultiplier, long minRequests) {
+		return baselineDailyAvg > 0.0 && last24hSurgeFactor >= thresholdMultiplier && last24hRequests < minRequests;
+	}
+
+	/**
 	 * Returns true if this subnet profile has no established baseline yet (Phase 1 / brand new).
 	 */
 	public boolean isInitializing() {

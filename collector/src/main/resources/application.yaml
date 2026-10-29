@@ -47,6 +47,8 @@ collector:
   rollup-enabled: ${COLLECTOR_ROLLUP_ENABLED:true}
   rollup-window-minutes: ${COLLECTOR_ROLLUP_WINDOW_MINUTES:60}
   rollup-retention-days: ${COLLECTOR_ROLLUP_RETENTION_DAYS:180}
+  surge-min-requests: ${COLLECTOR_SURGE_MIN_REQUESTS:1000}
+  surge-multiplier-alert: ${COLLECTOR_SURGE_MULTIPLIER_ALERT:5.0}
   slow-poll-threshold-ms: 1000
   demo-mode: ${COLLECTOR_DEMO_MODE:false}
   demo-instance-count: ${COLLECTOR_DEMO_INSTANCE_COUNT:1}

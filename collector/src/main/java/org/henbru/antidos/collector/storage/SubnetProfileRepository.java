@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.model.ClientType;
 import org.henbru.antidos.collector.model.SubnetProfile;
 import org.springframework.dao.DataAccessException;
@@ -30,9 +31,16 @@ import org.springframework.stereotype.Repository;
 public class SubnetProfileRepository {
 
 	private final JdbcTemplate jdbcTemplate;
+	private final CollectorProperties properties;
+
+	@org.springframework.beans.factory.annotation.Autowired
+	public SubnetProfileRepository(JdbcTemplate jdbcTemplate, @org.springframework.lang.Nullable CollectorProperties properties) {
+		this.jdbcTemplate = jdbcTemplate;
+		this.properties = properties != null ? properties : new CollectorProperties();
+	}
 
 	public SubnetProfileRepository(JdbcTemplate jdbcTemplate) {
-		this.jdbcTemplate = jdbcTemplate;
+		this(jdbcTemplate, new CollectorProperties());
 	}
 
 	@NonNull
@@ -212,6 +220,7 @@ public class SubnetProfileRepository {
 
 		appendFilterConditions(sql, params, activityPattern, minRequests24h, subnetQuery, asn, asOrg, clientTypes);
 
+		long minSurge = (properties != null) ? properties.getSurgeMinRequests() : 1000L;
 		String orderClause = switch (sortBy != null ? sortBy.toUpperCase() : "SURGE") {
 			case "BLOCKED" -> "last_24h_blocked_requests DESC, last_24h_requests DESC";
 			case "REQUESTS" -> "last_24h_requests DESC, last_24h_surge_factor DESC";
@@ -219,7 +228,7 @@ public class SubnetProfileRepository {
 			case "FIRST_SEEN" -> "first_seen_at DESC";
 			case "LAST_SEEN" -> "last_seen_at DESC";
 			case "DISTINCT_IPS" -> "last_24h_distinct_clients DESC, last_24h_requests DESC";
-			default -> "last_24h_surge_factor DESC, last_24h_requests DESC";
+			default -> "CASE WHEN last_24h_requests >= " + minSurge + " THEN 0 ELSE 1 END, last_24h_surge_factor DESC, last_24h_requests DESC";
 		};
 
 		sql.append(" ORDER BY ").append(orderClause).append(" LIMIT ? OFFSET ?");
@@ -247,12 +256,18 @@ public class SubnetProfileRepository {
 	}
 
 	public org.henbru.antidos.collector.model.SubnetProfileStats getProfileStats() {
+		long minSurge = (properties != null) ? properties.getSurgeMinRequests() : 1000L;
+		double surgeMultiplier = (properties != null) ? properties.getSurgeMultiplierAlert() : 5.0;
+		return getProfileStats(minSurge, surgeMultiplier);
+	}
+
+	public org.henbru.antidos.collector.model.SubnetProfileStats getProfileStats(long minSurgeRequests, double surgeMultiplierAlert) {
 		Instant sevenDaysAgo = Instant.now().minus(7, ChronoUnit.DAYS);
 		String sql = """
 				SELECT
 				    COUNT(*) AS total_count,
 				    COUNT(CASE WHEN last_24h_requests > 0 THEN 1 END) AS active_24h,
-				    COUNT(CASE WHEN last_24h_requests > 0 AND baseline_daily_avg > 0.0 AND last_24h_surge_factor >= 5.0 THEN 1 END) AS high_surge,
+				    COUNT(CASE WHEN last_24h_requests >= ? AND baseline_daily_avg > 0.0 AND last_24h_surge_factor >= ? THEN 1 END) AS high_surge,
 				    COUNT(CASE WHEN last_24h_requests > 0 AND (days_dormant_before_last_seen >= 900 OR first_seen_at >= ?) THEN 1 END) AS new_subnets,
 				    COUNT(CASE WHEN last_24h_requests > 0 AND days_dormant_before_last_seen >= 14 AND days_dormant_before_last_seen < 900 THEN 1 END) AS dormant_breaks,
 				    COUNT(CASE WHEN last_24h_requests > 0 AND last_24h_distinct_clients >= 5 AND (last_24h_requests * 1.0 / CASE WHEN last_24h_distinct_clients = 0 THEN 1 ELSE last_24h_distinct_clients END) <= 20.0 THEN 1 END) AS proxy_pools
@@ -266,7 +281,7 @@ public class SubnetProfileRepository {
 					rs.getLong("new_subnets"),
 					rs.getLong("dormant_breaks"),
 					rs.getLong("proxy_pools")
-			), Timestamp.from(sevenDaysAgo));
+			), minSurgeRequests, surgeMultiplierAlert, Timestamp.from(sevenDaysAgo));
 		} catch (DataAccessException e) {
 			return org.henbru.antidos.collector.model.SubnetProfileStats.empty();
 		}
@@ -410,13 +425,21 @@ public class SubnetProfileRepository {
 					params.add(Timestamp.from(Instant.now().minus(7, ChronoUnit.DAYS)));
 				}
 				case "DORMANT" -> sql.append(" AND last_24h_requests > 0 AND days_dormant_before_last_seen >= 14 AND days_dormant_before_last_seen < 900");
-				case "SURGE" -> sql.append(" AND last_24h_requests > 0 AND baseline_daily_avg > 0.0 AND last_24h_surge_factor >= 5.0");
+				case "SURGE" -> {
+					long minSurge = (minRequests24h != null && minRequests24h > 0)
+							? minRequests24h
+							: ((properties != null) ? properties.getSurgeMinRequests() : 1000L);
+					double surgeMultiplier = (properties != null) ? properties.getSurgeMultiplierAlert() : 5.0;
+					sql.append(" AND last_24h_requests >= ? AND baseline_daily_avg > 0.0 AND last_24h_surge_factor >= ?");
+					params.add(minSurge);
+					params.add(surgeMultiplier);
+				}
 				case "PROXY_POOL" -> sql.append(" AND last_24h_requests > 0 AND last_24h_distinct_clients >= 5 AND (last_24h_requests * 1.0 / CASE WHEN last_24h_distinct_clients = 0 THEN 1 ELSE last_24h_distinct_clients END) <= 20.0");
 				default -> {}
 			}
 		}
 
-		if (minRequests24h != null && minRequests24h > 0) {
+		if (minRequests24h != null && minRequests24h > 0 && (activityPattern == null || !"SURGE".equalsIgnoreCase(activityPattern.trim()))) {
 			sql.append(" AND last_24h_requests >= ?");
 			params.add(minRequests24h);
 		}

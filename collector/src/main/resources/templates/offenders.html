@@ -324,7 +324,7 @@
                         <label class="pill-label">
                             <input type="radio" name="activityPattern" value="SURGE"
                                 th:checked="${activityPattern == 'SURGE'}" onchange="onActivityPatternChange(this);">
-                            <span>&#x26A1; High Surge (&ge;5x)</span>
+                            <span>&#x26A1; High Surge (&ge;5x &amp; &ge;<span th:text="${#numbers.formatInteger(minSurgeRequests != null ? minSurgeRequests : 1000, 1, 'POINT')}">1,000</span> req)</span>
                         </label>
                         <label class="pill-label">
                             <input type="radio" name="activityPattern" value="NEW"

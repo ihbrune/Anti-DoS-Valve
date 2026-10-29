@@ -21,10 +21,12 @@ import java.util.Optional;
 import org.henbru.antidos.collector.annotation.AnnotationMarkdownService;
 import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.model.DailyReport;
+import org.henbru.antidos.collector.model.DailyReportNote;
 import org.henbru.antidos.collector.model.MonitoredValve;
 import org.henbru.antidos.collector.model.SlotSnapshot;
 import org.henbru.antidos.collector.model.TopOffenderSummary;
 import org.henbru.antidos.collector.storage.ClientEventRepository;
+import org.henbru.antidos.collector.storage.DailyReportNoteRepository;
 import org.henbru.antidos.collector.storage.DailyReportRepository;
 import org.henbru.antidos.collector.storage.MonitoredValveRepository;
 import org.slf4j.Logger;
@@ -46,6 +48,7 @@ public class DailyReportService {
 
 	private final JdbcTemplate jdbcTemplate;
 	private final DailyReportRepository reportRepository;
+	private final DailyReportNoteRepository noteRepository;
 	private final MonitoredValveRepository valveRepository;
 	private final ClientEventRepository clientEventRepository;
 	private final AnnotationMarkdownService markdownService;
@@ -53,6 +56,7 @@ public class DailyReportService {
 	public DailyReportService(
 			JdbcTemplate jdbcTemplate,
 			DailyReportRepository reportRepository,
+			DailyReportNoteRepository noteRepository,
 			MonitoredValveRepository valveRepository,
 			ClientEventRepository clientEventRepository,
 			AnnotationMarkdownService markdownService,
@@ -60,6 +64,7 @@ public class DailyReportService {
 	) {
 		this.jdbcTemplate = jdbcTemplate;
 		this.reportRepository = reportRepository;
+		this.noteRepository = noteRepository;
 		this.valveRepository = valveRepository;
 		this.clientEventRepository = clientEventRepository;
 		this.markdownService = markdownService;
@@ -481,13 +486,16 @@ public class DailyReportService {
 		}
 
 		// 7. Render Markdown Content
+		Optional<DailyReportNote> dayNote = noteRepository.findByReportDate(dateStr);
+		String noteMarkdown = dayNote.map(DailyReportNote::noteMarkdown).orElse(null);
+
 		String markdown = buildMarkdownReport(
 				reportDate, status, totalRequests, totalBlocked, blockRateFleet,
 				fleetBlockedSlots, fleetTotalSlots,
 				serverCount, distinctBlockedClients, totalIncidents,
 				fleetPeakReqRate, fleetPeakReqRaw, fleetPeakReqDuration, peakReqServer, peakReqValve, fleetPeakReqTime,
 				fleetPeakBlockRate, fleetPeakBlockRaw, fleetPeakBlockDuration, peakBlockServer, peakBlockValve, fleetPeakBlockTime,
-				valveAggregates, pollSummary, serverPollStats, outages, topClients, topAsns, numFmt
+				valveAggregates, pollSummary, serverPollStats, outages, topClients, topAsns, noteMarkdown, numFmt
 		);
 
 		DailyReport report = new DailyReport(
@@ -544,6 +552,7 @@ public class DailyReportService {
 			List<?> rawOutages,
 			List<TopOffenderSummary> topClients,
 			List<TopOffenderSummary> topAsns,
+			String noteMarkdown,
 			NumberFormat numFmt
 	) {
 		StringBuilder sb = new StringBuilder();
@@ -602,6 +611,9 @@ public class DailyReportService {
 		sb.append(" |\n\n");
 
 		sb.append("---\n\n");
+
+		// Optional Operator Day Note (anchored with HTML comments for atomic re-embedding)
+		sb.append(buildNoteSectionMarkdown(noteMarkdown));
 
 		// Server- & Valve-Breakdown
 		sb.append("## ⚡ 2. Server- & Valve-Statistiken (mit normalisierten Spitzenwerten)\n\n");
@@ -785,5 +797,94 @@ public class DailyReportService {
 		sb.append("*Dieser Bericht wurde automatisiert vom Anti-DoS Collector generiert und verbleibt permanent im System archiviert.*  \n");
 
 		return sb.toString();
+	}
+
+	public Optional<DailyReportNote> getNote(String reportDate) {
+		if (reportDate == null || reportDate.isBlank()) {
+			return Optional.empty();
+		}
+		return noteRepository.findByReportDate(reportDate.trim());
+	}
+
+	public DailyReportNote saveNote(String reportDate, String noteMarkdown) {
+		if (reportDate == null || reportDate.isBlank()) {
+			throw new IllegalArgumentException("reportDate must not be blank");
+		}
+		String cleanDate = reportDate.trim();
+		String cleanNote = noteMarkdown != null ? noteMarkdown.trim() : "";
+		noteRepository.upsert(cleanDate, cleanNote);
+		syncNoteIntoReportMarkdown(cleanDate, cleanNote);
+		return noteRepository.findByReportDate(cleanDate).orElseThrow();
+	}
+
+	public void deleteNote(String reportDate) {
+		if (reportDate == null || reportDate.isBlank()) {
+			return;
+		}
+		String cleanDate = reportDate.trim();
+		noteRepository.deleteByReportDate(cleanDate);
+		syncNoteIntoReportMarkdown(cleanDate, null);
+	}
+
+	public List<String> getDatesWithNotes() {
+		return noteRepository.findDatesWithNotes();
+	}
+
+	public String buildNoteSectionMarkdown(String noteMarkdown) {
+		StringBuilder sb = new StringBuilder();
+		sb.append("<!-- DAILY_NOTE_START -->\n");
+		if (noteMarkdown != null && !noteMarkdown.isBlank()) {
+			sb.append("### 📝 Anmerkungen & Besonderheiten des Betriebsteams\n\n");
+			sb.append(noteMarkdown.trim()).append("\n\n");
+			sb.append("---\n\n");
+		}
+		sb.append("<!-- DAILY_NOTE_END -->\n\n");
+		return sb.toString();
+	}
+
+	private void syncNoteIntoReportMarkdown(String reportDate, String noteMarkdown) {
+		Optional<DailyReport> opt = reportRepository.findByReportDate(reportDate);
+		if (opt.isEmpty()) {
+			return;
+		}
+		DailyReport report = opt.get();
+		String currentMd = report.reportMarkdown();
+		String noteSection = buildNoteSectionMarkdown(noteMarkdown);
+
+		String updatedMd;
+		if (currentMd.contains("<!-- DAILY_NOTE_START -->") && currentMd.contains("<!-- DAILY_NOTE_END -->")) {
+			int start = currentMd.indexOf("<!-- DAILY_NOTE_START -->");
+			int end = currentMd.indexOf("<!-- DAILY_NOTE_END -->") + "<!-- DAILY_NOTE_END -->".length();
+			while (end < currentMd.length() && currentMd.charAt(end) == '\n') {
+				end++;
+			}
+			updatedMd = currentMd.substring(0, start) + noteSection + currentMd.substring(end);
+		} else {
+			// Older report without markers: insert before Section 2
+			int sec2Idx = currentMd.indexOf("## ⚡ 2.");
+			if (sec2Idx != -1) {
+				updatedMd = currentMd.substring(0, sec2Idx) + noteSection + currentMd.substring(sec2Idx);
+			} else {
+				updatedMd = currentMd + "\n\n" + noteSection;
+			}
+		}
+
+		DailyReport updated = new DailyReport(
+				report.id(),
+				report.reportDate(),
+				report.status(),
+				report.totalRequests(),
+				report.totalBlocked(),
+				report.peakRequestsPerSec(),
+				report.peakBlockedPerSec(),
+				report.peakValveName(),
+				report.peakServerId(),
+				report.serverCount(),
+				report.incidentCount(),
+				updatedMd,
+				report.createdAt(),
+				Instant.now()
+		);
+		reportRepository.upsert(updated);
 	}
 }

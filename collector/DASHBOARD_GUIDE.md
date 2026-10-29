@@ -375,7 +375,7 @@ It continuously evaluates 30-day moving daily frequencies against real-time 24-h
 At the top of the screen, six real-time metric cards provide an immediate high-level overview of network anomalies:
 * **Total Subnets Tracked:** Aggregate inventory of all distinct `/24` and `/64` subnets recorded in the 30-day profile window.
 * **Active in Last 24h:** Subnets that transmitted at least one request during the past 24 hours. Click to isolate active subnets.
-* **⚡ High Surge (≥5×):** Subnets whose 24-hour volume is at least 5 times higher than their 30-day moving daily baseline.
+* **⚡ High Surge (≥5× & ≥1k req):** Subnets whose 24-hour volume is at least 5 times higher than their 30-day moving daily baseline and satisfies the absolute de minimis volume threshold (default: 1,000 req/24h). Subnets below this threshold are exempted to eliminate low-traffic false alarms.
 * **✨ New Subnets (<7d):** Subnets observed for the very first time within the last 7 days. Critical for catching fresh VPS/hosting pools spun up specifically for scraping or DDoS.
 * **💤 Dormancy Breaks (≥14d):** Subnets that were completely inactive or silent for at least 14 days and abruptly resumed traffic today.
 * **🔄 Proxy Pools:** Subnets exhibiting distributed client IP rotations (≥5 distinct IPs with $\le 20.0$ requests per IP).
@@ -405,7 +405,8 @@ Every record in the table presents its metrics with full mathematical transparen
 * **Last 24h Activity (Cutoff: HH:mm):** Total requests and rate-limiting blocks during the current 24-hour window (calculated up to the latest completed rollup hour), supplemented by the sample-size-weighted 24h returning visitor cookie badge (`🍪 X%`) and authenticated badge (`🔐 Y%`) when visitor tracking is active.
 * **24h Unique IPs & Spread:** Distinct client IP count and the average requests per IP ($\frac{\text{Requests}_{24\text{h}}}{\text{IPs}_{24\text{h}}}$).
 * **Surge Multiplier & Threat Forensics:**
-  * **Surge Badge:** $\text{Surge} = \frac{\text{Requests}_{24\text{h}}}{\text{Baseline}}$. Formatted with clear danger/warning colors (e.g., `⚡ 25.0x Surge` for extreme spikes, `⚡ 6.2x Surge` for moderate surges). Tooltips explicitly show the formula calculation: `24h volume (500) is 25.0x above 30-day baseline average (20.0/day)`.
+  * **Surge Badge:** $\text{Surge} = \frac{\text{Requests}_{24\text{h}}}{\text{Baseline}}$. Formatted with clear danger/warning colors (e.g., `⚡ 25.0x Surge` for extreme spikes $\ge 10\times$, `⚡ 6.2x Surge` for moderate surges $\ge 3\times$). Tooltips explicitly show the formula calculation: `24h volume (5000) is 25.0x above 30-day baseline average (200.0/day)`.
+  * **De Minimis Threshold (Low Volume Surge):** When a subnet's relative traffic spikes $\ge 3\times$ but total 24-hour requests remain below the de minimis threshold (default: 1,000 req/24h, configurable via `collector.surge-min-requests`), a subdued grey badge (`8.5x (Low Vol)`) is displayed instead of a critical red alarm. This prevents low-traffic background noise (e.g., 5 requests today vs. 0.05 daily average = 100x surge) from overwhelming security dashboards.
   * **Initialization & Early Phase Indicators:**
     * `⏳ Initializing`: Displayed when a subnet is newly active in the last 24h with zero prior history ($N_{\text{days}} < 1.0$ or $\text{Requests}_{\text{prior}} = 0$). Surge multiplier defaults to `0.0x` (never triggering false alarms).
     * `⏳ Early Phase`: Displayed alongside the surge multiplier during the first 7 days of calibration to remind analysts that the baseline is still maturing.
@@ -544,6 +545,24 @@ To preserve valuable investigative notes across test database rebuilds or enviro
   * **Overwrite:** Completely replaces existing verdict and Markdown notes with the imported content.
   * **Skip:** Keeps existing database notes untouched and only adds new targets.
 * **Import Report & Cache Reload:** Shows processed counts (created, updated, skipped) and any validation warnings, and updates in-memory caches instantly.
+
+---
+
+## Operational Day Reports & Operator Notes (/reports)
+
+Accessible via `/reports`. Generates permanent daily executive summaries, normalized multi-valve peak performance metrics, and persistent operator annotations.
+
+### 1. Purpose & Retention Immunity
+* **Automated Daily Aggregation:** Runs automatically every night at **01:00 AM** before raw telemetry (`slot_snapshots`, `client_events`) is pruned by nightly retention jobs.
+* **Permanence:** Daily reports and operator notes are stored in dedicated tables (`daily_reports`, `daily_report_notes`) and are **completely immune** to data retention cleanups.
+* **Normalized Peak Performance:** Compares Valves with varying slot configurations (e.g. 5s API protection vs. 60s page throttle) by normalizing peak rates to requests/sec and blocks/sec.
+* **Dual Incident Metrics:** Evaluates both total blocked requests (and percentage of traffic) and the exact ratio of affected time slots (e.g. `48 of 8,640 (0.56%)`).
+
+### 2. Operator Day Notes & Human Knowledge Preservation
+* **Independent Lifecycle:** Operators can record notes for **Today (In Progress)**, past dates, or upcoming maintenance *before* the automated report is compiled.
+* **Zero Risk of Overwrite:** Maschinelle Re-Aggregationen never overwrite human observations. Notes are safely stored in `daily_report_notes` and re-embedded into the Markdown report.
+* **Live In-Progress Support:** Selecting Today allows reviewing ongoing telemetry and logging operational remarks immediately.
+* **Archive Sidebar Indicators:** Dates with operator notes are tagged with a `📝` icon in the archive navigation.
 
 ---
 

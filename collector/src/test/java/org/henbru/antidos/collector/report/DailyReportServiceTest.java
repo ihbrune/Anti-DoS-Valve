@@ -8,6 +8,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
 import org.henbru.antidos.collector.model.DailyReport;
+import org.henbru.antidos.collector.model.DailyReportNote;
 import org.henbru.antidos.collector.model.MonitoredValve;
 import org.henbru.antidos.collector.model.PollEventLog;
 import org.henbru.antidos.collector.model.SlotSnapshot;
@@ -16,6 +17,7 @@ import org.henbru.antidos.collector.storage.MonitoredValveRepository;
 import org.henbru.antidos.collector.storage.PollEventLogRepository;
 import org.henbru.antidos.collector.storage.SlotSnapshotRepository;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.BeforeEach;
@@ -204,5 +206,44 @@ class DailyReportServiceTest {
 		assertTrue(md.contains("Betroffene Slots (Anteil)"), "Table header should have Betroffene Slots (Anteil)");
 		assertTrue(md.contains("1 / 4 (25,00%)"), "Table row should show 1 / 4 (25,00%)");
 		assertTrue(md.contains("21,25%"), "Block quote for 85 / 400 should be 21,25%");
+	}
+
+	@Test
+	void testDailyReportNotesLifecycleAndPreservation() {
+		LocalDate noteDate = LocalDate.of(2026, 10, 22);
+		dailyReportRepository.deleteByReportDate(noteDate.toString());
+		dailyReportService.deleteNote(noteDate.toString());
+
+		// 1. Save note before report exists (e.g. today or in advance)
+		dailyReportService.saveNote(noteDate.toString(), "Special note: Planned database migration between 01:00 and 02:00.");
+
+		Optional<DailyReportNote> noteBeforeReport = dailyReportService.getNote(noteDate.toString());
+		assertTrue(noteBeforeReport.isPresent());
+		assertTrue(noteBeforeReport.get().noteMarkdown().contains("Planned database migration"));
+		assertTrue(dailyReportService.getDatesWithNotes().contains(noteDate.toString()));
+
+		// 2. Generate report for that date
+		DailyReport report = dailyReportService.generateDailyReport(noteDate);
+		assertNotNull(report);
+		assertTrue(report.reportMarkdown().contains("Anmerkungen & Besonderheiten des Betriebsteams"));
+		assertTrue(report.reportMarkdown().contains("Planned database migration"));
+
+		// 3. Update note after report exists - should immediately sync into existing report
+		dailyReportService.saveNote(noteDate.toString(), "Updated note: Migration succeeded without downtime. Minor spike at 01:30.");
+		Optional<DailyReport> reloadedReport = dailyReportRepository.findByReportDate(noteDate.toString());
+		assertTrue(reloadedReport.isPresent());
+		assertTrue(reloadedReport.get().reportMarkdown().contains("Migration succeeded without downtime"));
+		assertFalse(reloadedReport.get().reportMarkdown().contains("Planned database migration"));
+
+		// 4. Re-aggregate report - note must NOT be lost!
+		DailyReport reaggregated = dailyReportService.generateDailyReport(noteDate);
+		assertTrue(reaggregated.reportMarkdown().contains("Migration succeeded without downtime"));
+
+		// 5. Delete note - should remove from notes repository and sync report markdown
+		dailyReportService.deleteNote(noteDate.toString());
+		assertTrue(dailyReportService.getNote(noteDate.toString()).isEmpty());
+		Optional<DailyReport> reportAfterDelete = dailyReportRepository.findByReportDate(noteDate.toString());
+		assertTrue(reportAfterDelete.isPresent());
+		assertFalse(reportAfterDelete.get().reportMarkdown().contains("Migration succeeded without downtime"));
 	}
 }

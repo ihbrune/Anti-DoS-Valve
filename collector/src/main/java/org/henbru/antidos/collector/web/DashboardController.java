@@ -692,6 +692,7 @@ public class DashboardController {
 		model.addAttribute("selectedTypes", clientTypes != null ? clientTypes : List.of());
 		model.addAttribute("selectedAsn", asnStr != null ? asnStr : "");
 		model.addAttribute("selectedStatus", status != null ? status : "ALL");
+		model.addAttribute("minSurgeRequests", properties != null ? properties.getSurgeMinRequests() : 1000L);
 	}
 
 	private void populateOffendersModel(
@@ -773,7 +774,7 @@ public class DashboardController {
 
 			if (hasPatternFilter && subnetProfileService != null) {
 				List<org.henbru.antidos.collector.model.SubnetProfile> matched = subnetProfileService.findProfilesFiltered(
-						activityPattern, null, null, parsedAsn, asOrgQuery, clientTypes, "SURGE", 1000, 0);
+						activityPattern, minRequests, null, parsedAsn, asOrgQuery, clientTypes, "SURGE", 1000, 0);
 				Set<String> matchedSubnets = matched.stream().map(org.henbru.antidos.collector.model.SubnetProfile::subnetGroup).collect(Collectors.toSet());
 				subnetRollups = subnetRollups.stream().filter(r -> matchedSubnets.contains(r.subnetGroup())).toList();
 				totalRollups = subnetRollups.size();
@@ -801,7 +802,7 @@ public class DashboardController {
 
 			if (hasPatternFilter && "SUBNET".equals(effectiveGroupBy) && subnetProfileService != null) {
 				List<org.henbru.antidos.collector.model.SubnetProfile> matched = subnetProfileService.findProfilesFiltered(
-						activityPattern, null, null, parsedAsn, asOrgQuery, clientTypes, "SURGE", 1000, 0);
+						activityPattern, minRequests, null, parsedAsn, asOrgQuery, clientTypes, "SURGE", 1000, 0);
 				Set<String> matchedSubnets = matched.stream().map(org.henbru.antidos.collector.model.SubnetProfile::subnetGroup).collect(Collectors.toSet());
 				topOffenders = topOffenders.stream().filter(o -> matchedSubnets.contains(o.clientKey())).toList();
 			}
@@ -840,6 +841,7 @@ public class DashboardController {
 		model.addAttribute("selectedTypes", clientTypes != null ? clientTypes : List.of());
 		model.addAttribute("selectedAsn", asnStr != null ? asnStr : "");
 		model.addAttribute("selectedStatus", status != null ? status : "ALL");
+		model.addAttribute("minSurgeRequests", properties != null ? properties.getSurgeMinRequests() : 1000L);
 	}
 
 	private void populateProfilesModel(
@@ -895,6 +897,7 @@ public class DashboardController {
 		model.addAttribute("offset", offset);
 		model.addAttribute("hasMore", hasMore);
 		model.addAttribute("nextOffset", nextOffset);
+		model.addAttribute("minSurgeRequests", properties != null ? properties.getSurgeMinRequests() : 1000L);
 	}
 
 	private String toJson(Object obj) {

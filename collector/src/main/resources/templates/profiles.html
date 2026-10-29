@@ -179,10 +179,12 @@
             <div class="stat-value primary" th:text="${profileStats != null ? #numbers.formatInteger(profileStats.active24h(), 1, 'POINT') : 0}">340</div>
             <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Transmitting traffic today</div>
         </div>
-        <div class="stat-card" onclick="setPatternFilter('SURGE')" style="cursor: pointer;" title="Filter subnets with volume >= 5x baseline">
+        <div class="stat-card" onclick="setPatternFilter('SURGE')" style="cursor: pointer;"
+             th:title="'Filter subnets with volume >= 5x baseline and >= ' + ${#numbers.formatInteger(minSurgeRequests != null ? minSurgeRequests : 1000, 1, 'POINT')} + ' req/24h'">
             <div class="stat-label">&#x26A1; High Surge (&ge;5x)</div>
             <div class="stat-value danger" th:text="${profileStats != null ? #numbers.formatInteger(profileStats.highSurge(), 1, 'POINT') : 0}">12</div>
-            <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Abnormal traffic volume spikes</div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;"
+                 th:text="'&ge; 5x vs. 30d (&ge; ' + ${#numbers.formatInteger(minSurgeRequests != null ? minSurgeRequests : 1000, 1, 'POINT')} + ' req)'">&ge; 5x vs. 30d (&ge; 1,000 req)</div>
         </div>
         <div class="stat-card" onclick="setPatternFilter('NEW')" style="cursor: pointer;" title="Filter subnets first seen within the last 7 days">
             <div class="stat-label">&#x2728; New Subnets (&lt;7d)</div>
@@ -226,7 +228,7 @@
                         <input type="radio" name="activityPattern" value="SURGE"
                                th:checked="${activityPattern == 'SURGE'}"
                                onchange="htmx.trigger('#profiles-filter-form', 'submit');">
-                        <span>&#x26A1; High Surge (&ge;5x)</span>
+                        <span>&#x26A1; High Surge (&ge;5x &amp; &ge;<span th:text="${#numbers.formatInteger(minSurgeRequests != null ? minSurgeRequests : 1000, 1, 'POINT')}">1,000</span> req)</span>
                     </label>
                     <label class="pill-label">
                         <input type="radio" name="activityPattern" value="NEW"
@@ -297,7 +299,7 @@
                                id="minReqInput"
                                name="minRequests"
                                class="input-control"
-                               placeholder="Min. 24h reqs (e.g. 5)"
+                               th:placeholder="'Min. 24h reqs (default ' + ${#numbers.formatInteger(minSurgeRequests != null ? minSurgeRequests : 1000, 1, 'POINT')} + ' for Surge)'"
                                th:value="${minRequests != null and minRequests > 0 ? minRequests : ''}">
                         <select name="limit" class="input-control" style="width: 120px;" onchange="htmx.trigger('#profiles-filter-form', 'submit');">
                             <option value="25" th:selected="${limit == 25}">25 rows</option>

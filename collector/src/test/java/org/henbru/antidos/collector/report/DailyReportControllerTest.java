@@ -11,6 +11,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -83,5 +84,42 @@ class DailyReportControllerTest {
 				.andExpect(status().is3xxRedirection())
 				.andExpect(redirectedUrl("/reports?date=" + targetDate))
 				.andExpect(flash().attributeExists("successMessage"));
+	}
+
+	@Test
+	void testReportNoteModal() throws Exception {
+		mockMvc.perform(get("/reports/" + testDate + "/note/modal"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Day Note for")))
+				.andExpect(content().string(containsString(testDate.toString())))
+				.andExpect(content().string(containsString("Save Note")));
+	}
+
+	@Test
+	void testSaveAndDeleteReportNote() throws Exception {
+		String sampleNote = "Maintenance incident on proxy nodes";
+
+		// Save note
+		mockMvc.perform(post("/reports/" + testDate + "/note")
+						.param("noteMarkdown", sampleNote))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Operator note saved successfully.")))
+				.andExpect(content().string(containsString(sampleNote)));
+
+		// Delete note
+		mockMvc.perform(delete("/reports/" + testDate + "/note"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Operator note removed.")));
+	}
+
+	@Test
+	void testTodayInProgressView() throws Exception {
+		LocalDate today = LocalDate.now();
+		dailyReportRepository.deleteByReportDate(today.toString());
+
+		mockMvc.perform(get("/reports?date=" + today))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Today (In Progress)")))
+				.andExpect(content().string(containsString("LIVE TELEMETRY ACTIVE")));
 	}
 }

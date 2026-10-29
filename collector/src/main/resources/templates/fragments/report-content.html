@@ -1,82 +1,229 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
+
 <body>
 
-<div th:fragment="reportContent" id="report-display-container">
-    <div th:if="${selectedReport != null}">
-        <!-- Report Action Header -->
-        <div class="card" style="padding: 16px 20px; margin-bottom: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
-                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-                    <div style="font-size: 20px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
-                        <span>&#x1F4C5;</span>
-                        <span th:text="'Report for ' + ${selectedReport.reportDate()}">Report for 2026-10-26</span>
+    <div th:fragment="reportContent" id="report-display-container">
+        <!-- Success / Action message banner -->
+        <div th:if="${noteActionMessage != null}" class="alert alert-success"
+            style="margin-bottom: 16px; padding: 10px 14px; font-size: 13px; display: flex; align-items: center; gap: 8px;">
+            <span>&#x2705;</span>
+            <span th:text="${noteActionMessage}">Operator note updated.</span>
+        </div>
+
+        <!-- Case A: Existing Daily Report -->
+        <div th:if="${selectedReport != null}">
+            <!-- Report Action Header -->
+            <div class="card" style="padding: 16px 20px; margin-bottom: 20px;">
+                <div
+                    style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+                    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                        <div
+                            style="font-size: 20px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                            <span>&#x1F4C5;</span>
+                            <span th:text="'Report for ' + ${selectedReport.reportDate()}">Report for 2026-10-26</span>
+                        </div>
+                        <span th:class="'badge ' + ${selectedReport.statusBadgeClass()}"
+                            style="font-size: 12px; padding: 4px 10px;"
+                            th:text="${selectedReport.statusIcon() + ' ' + selectedReport.statusLabel()}">
+                            OPERATIONAL
+                        </span>
+                        <div
+                            style="display: flex; gap: 8px; font-size: 12.5px; color: var(--text-muted); align-items: center; margin-left: 6px;">
+                            <span><strong>Total:</strong> <span
+                                    th:text="${#numbers.formatDecimal(selectedReport.totalRequests(), 0, 'POINT', 0, 'COMMA')}">1.482.910</span>
+                                req</span>
+                            <span>&bull;</span>
+                            <span><strong>Blocks:</strong> <span
+                                    th:text="${#numbers.formatDecimal(selectedReport.totalBlocked(), 0, 'POINT', 0, 'COMMA')}">2.140</span>
+                                (<span th:text="${selectedReport.formattedBlockRate()}">0.14%</span>)</span>
+                            <span>&bull;</span>
+                            <span><strong>Peak Rate:</strong> <span
+                                    th:text="${selectedReport.formattedPeakRequestsPerSec()}">142.0</span> req/s</span>
+                        </div>
                     </div>
-                    <span th:class="'badge ' + ${selectedReport.statusBadgeClass()}"
-                          style="font-size: 12px; padding: 4px 10px;"
-                          th:text="${selectedReport.statusIcon() + ' ' + selectedReport.statusLabel()}">
-                        OPERATIONAL
-                    </span>
-                    <div style="display: flex; gap: 8px; font-size: 12.5px; color: var(--text-muted); align-items: center; margin-left: 6px;">
-                        <span><strong>Total:</strong> <span th:text="${#numbers.formatDecimal(selectedReport.totalRequests(), 0, 'POINT', 0, 'COMMA')}">1.482.910</span> req</span>
-                        <span>&bull;</span>
-                        <span><strong>Blocks:</strong> <span th:text="${#numbers.formatDecimal(selectedReport.totalBlocked(), 0, 'POINT', 0, 'COMMA')}">2.140</span> (<span th:text="${selectedReport.formattedBlockRate()}">0.14%</span>)</span>
-                        <span>&bull;</span>
-                        <span><strong>Peak Rate:</strong> <span th:text="${selectedReport.formattedPeakRequestsPerSec()}">142.0</span> req/s</span>
+
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <!-- Note Button -->
+                        <button type="button" class="btn"
+                            th:hx-get="@{'/reports/' + ${selectedReport.reportDate()} + '/note/modal'}"
+                            hx-target="#report-note-modal-container"
+                            title="Add or edit personal operator note for this day">
+                            <span>&#x1F4DD;</span>
+                            <span
+                                th:text="${currentNote != null and currentNote.hasContent() ? 'Edit Note' : 'Add Note'}">Add
+                                Note</span>
+                        </button>
+                        <button type="button" class="btn" id="btnCopyMarkdown" onclick="copyReportMarkdown()"
+                            title="Copy Markdown source to clipboard">
+                            <span>&#x1F4CB;</span> <span id="copyBtnText">Copy Markdown</span>
+                        </button>
+                        <a th:href="@{'/reports/' + ${selectedReport.reportDate()} + '/download'}" class="btn"
+                            title="Download raw Markdown report as a file">
+                            <span>&#x1F4BE;</span> Download .md
+                        </a>
+                        <form th:action="@{/reports/generate}" method="post" style="display: inline-block;">
+                            <input type="hidden" name="date" th:value="${selectedReport.reportDate()}">
+                            <button type="submit" class="btn btn-secondary"
+                                title="Re-aggregate and overwrite report for this date">
+                                <span>&#x1F504;</span> Re-aggregate
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Operator Note Box (if note is present) -->
+            <div th:if="${currentNote != null and currentNote.hasContent()}" class="card"
+                style="padding: 18px 22px; margin-bottom: 20px; border-left: 4px solid var(--color-primary); background: rgba(59, 130, 246, 0.03);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <div
+                        style="font-size: 13.5px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                        <span>&#x1F4DD;</span>
+                        <span>Operator Notes &amp; Observations</span>
+                    </div>
+                    <button type="button" class="btn" style="font-size: 12px; padding: 3px 10px;"
+                        th:hx-get="@{'/reports/' + ${selectedReport.reportDate()} + '/note/modal'}"
+                        hx-target="#report-note-modal-container">
+                        <span>&#x270F;&#xFE0F;</span> Edit
+                    </button>
+                </div>
+                <div class="doc-content" style="font-size: 13.5px; line-height: 1.6;" th:utext="${renderedNoteHtml}">
+                </div>
+            </div>
+
+            <!-- Rendered Markdown Body -->
+            <div class="card doc-content" style="padding: 32px 36px; line-height: 1.65; box-shadow: var(--shadow-sm);">
+                <div th:utext="${renderedHtml}">
+                    <!-- Rendered Markdown HTML -->
+                </div>
+            </div>
+
+            <!-- Hidden raw markdown for clipboard copy -->
+            <textarea id="raw-markdown-content" style="display: none;"
+                th:text="${selectedReport.reportMarkdown()}"></textarea>
+        </div>
+
+            <!-- Case B: Today In-Progress (No Report Compiled Yet) -->
+            <div th:if="${selectedReport == null and selectedDate != null and selectedDate.equals(todayDate)}">
+                <!-- Live In-Progress Header Card -->
+                <div class="card" style="padding: 24px 28px; margin-bottom: 20px;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 12px;">
+                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                            <div
+                                style="font-size: 22px; font-weight: 800; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                                <span>&#x1F4C5;</span>
+                                <span>Today (In Progress) &mdash; <span th:text="${todayDate}">2026-10-29</span></span>
+                            </div>
+                            <span class="badge badge-info" style="font-size: 12px; padding: 4px 10px;">
+                                <span>&#x26A1;</span> LIVE TELEMETRY ACTIVE
+                            </span>
+                        </div>
+
+                        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-primary"
+                                th:hx-get="@{'/reports/' + ${todayDate} + '/note/modal'}"
+                                hx-target="#report-note-modal-container">
+                                <span>&#x1F4DD;</span>
+                                <span
+                                    th:text="${currentNote != null and currentNote.hasContent() ? 'Edit Note for Today' : 'Add Note for Today'}">Add
+                                    Note for Today</span>
+                            </button>
+                            <form th:action="@{/reports/generate}" method="post" style="display: inline-block;">
+                                <input type="hidden" name="date" th:value="${todayDate}">
+                                <button type="submit" class="btn"
+                                    title="Compile an on-demand snapshot of today's metrics so far">
+                                    <span>&#x1F504;</span> Compile Snapshot Now
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    <p style="color: var(--text-muted); font-size: 13.5px; margin: 0; line-height: 1.5;">
+                        Telemetry slots and client events are actively being polled and aggregated in real-time. The
+                        final permanent
+                        operational report for today will be automatically compiled tonight at <strong>01:00
+                            AM</strong>.
+                    </p>
+                </div>
+
+                <!-- Today's Operator Notes Section -->
+                <div th:if="${currentNote != null and currentNote.hasContent()}" class="card"
+                    style="padding: 24px 28px; margin-bottom: 20px; border-left: 4px solid var(--color-primary); background: rgba(59, 130, 246, 0.03);">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div
+                            style="font-size: 15px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                            <span>&#x1F4DD;</span>
+                            <span>Operator Notes for Today</span>
+                        </div>
+                        <button type="button" class="btn" style="font-size: 12.5px; padding: 4px 12px;"
+                            th:hx-get="@{'/reports/' + ${todayDate} + '/note/modal'}"
+                            hx-target="#report-note-modal-container">
+                            <span>&#x270F;&#xFE0F;</span> Edit Note
+                        </button>
+                    </div>
+                    <div class="doc-content" style="font-size: 14px; line-height: 1.65;" th:utext="${renderedNoteHtml}">
+                    </div>
+                    <div style="margin-top: 14px; font-size: 12px; color: var(--text-muted);">
+                        <span>&#x2139;&#xFE0F;</span> These notes are saved permanently and will be automatically
+                        integrated into tonight's report.
                     </div>
                 </div>
 
-                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                    <button type="button" class="btn" id="btnCopyMarkdown" onclick="copyReportMarkdown()" title="Copy Markdown source to clipboard">
-                        <span>&#x1F4CB;</span> <span id="copyBtnText">Copy Markdown</span>
+                <!-- Today Empty Note Prompt -->
+                <div th:unless="${currentNote != null and currentNote.hasContent()}" class="card"
+                    style="padding: 32px 28px; text-align: center; border: 1.5px dashed var(--border-color); background: transparent; margin-bottom: 20px;">
+                    <div style="font-size: 32px; margin-bottom: 10px;">&#x1F4DD;</div>
+                    <h3 style="font-size: 16px; margin: 0 0 6px 0; color: var(--text-primary);">No operator notes
+                        recorded for today yet</h3>
+                    <p
+                        style="font-size: 13px; color: var(--text-muted); max-width: 520px; margin: 0 auto 16px auto; line-height: 1.5;">
+                        Record notes about today's events (e.g. deployments, marketing campaigns, or suspicious
+                        traffic).
+                        They will be safely retained and included when the final report is compiled.
+                    </p>
+                    <button type="button" class="btn btn-primary"
+                        th:hx-get="@{'/reports/' + ${todayDate} + '/note/modal'}"
+                        hx-target="#report-note-modal-container">
+                        <span>&#x2795;</span> Add Note for Today
                     </button>
-                    <a th:href="@{'/reports/' + ${selectedReport.reportDate()} + '/download'}" class="btn" title="Download raw Markdown report as a file">
-                        <span>&#x1F4BE;</span> Download .md
-                    </a>
+                </div>
+            </div>
+
+            <!-- Case C: Regular Empty State (Past Date without Report) -->
+            <div th:if="${selectedReport == null and (selectedDate == null or !selectedDate.equals(todayDate))}"
+                class="card empty-state" style="padding: 64px 32px; text-align: center;">
+                <div style="font-size: 48px; margin-bottom: 16px; opacity: 0.85;">&#x1F4C4;</div>
+                <h3 style="font-size: 20px; margin-bottom: 10px; color: var(--text-primary);">No report compiled for
+                    this date</h3>
+                <p style="color: var(--text-muted); max-width: 520px; margin: 0 auto 24px auto; line-height: 1.5;">
+                    Select a past date from the archive on the left, or generate an operational summary using the
+                    actions below.
+                </p>
+                <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                    <button th:if="${selectedDate != null and !selectedDate.isBlank()}" type="button" class="btn"
+                        th:hx-get="@{'/reports/' + ${selectedDate} + '/note/modal'}"
+                        hx-target="#report-note-modal-container">
+                        <span>&#x1F4DD;</span> Add Note for <span th:text="${selectedDate}"></span>
+                    </button>
                     <form th:action="@{/reports/generate}" method="post" style="display: inline-block;">
-                        <input type="hidden" name="date" th:value="${selectedReport.reportDate()}">
-                        <button type="submit" class="btn btn-secondary" title="Re-aggregate and overwrite report for this date">
-                            <span>&#x1F504;</span> Re-aggregate
+                        <input type="hidden" name="date" th:value="${yesterdayDate}">
+                        <button type="submit" class="btn btn-primary">
+                            <span>&#x26A1;</span> Generate Report for Yesterday (<span
+                                th:text="${yesterdayDate}"></span>)
+                        </button>
+                    </form>
+                    <form th:action="@{/reports/generate}" method="post" style="display: inline-block;">
+                        <input type="hidden" name="date" th:value="${todayDate}">
+                        <button type="submit" class="btn">
+                            <span>&#x1F50D;</span> Live Preview for Today (<span th:text="${todayDate}"></span>)
                         </button>
                     </form>
                 </div>
             </div>
         </div>
 
-        <!-- Rendered Markdown Body -->
-        <div class="card doc-content" style="padding: 32px 36px; line-height: 1.65; box-shadow: var(--shadow-sm);">
-            <div th:utext="${renderedHtml}">
-                <!-- Rendered Markdown HTML -->
-            </div>
-        </div>
-
-        <!-- Hidden raw markdown for clipboard copy -->
-        <textarea id="raw-markdown-content" style="display: none;" th:text="${selectedReport.reportMarkdown()}"></textarea>
-    </div>
-
-    <!-- Empty State -->
-    <div th:unless="${selectedReport != null}" class="card empty-state" style="padding: 64px 32px; text-align: center;">
-        <div style="font-size: 48px; margin-bottom: 16px; opacity: 0.85;">&#x1F4C4;</div>
-        <h3 style="font-size: 20px; margin-bottom: 10px; color: var(--text-primary);">No report selected or available</h3>
-        <p style="color: var(--text-muted); max-width: 520px; margin: 0 auto 24px auto; line-height: 1.5;">
-            Select a past date from the archive on the left, or generate a fresh operational summary using the quick-actions bar above.
-        </p>
-        <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-            <form th:action="@{/reports/generate}" method="post" style="display: inline-block;">
-                <input type="hidden" name="date" th:value="${yesterdayDate}">
-                <button type="submit" class="btn btn-primary">
-                    <span>&#x26A1;</span> Generate Report for Yesterday (<span th:text="${yesterdayDate}"></span>)
-                </button>
-            </form>
-            <form th:action="@{/reports/generate}" method="post" style="display: inline-block;">
-                <input type="hidden" name="date" th:value="${todayDate}">
-                <button type="submit" class="btn">
-                    <span>&#x1F50D;</span> Live Preview for Today (<span th:text="${todayDate}"></span>)
-                </button>
-            </form>
-        </div>
-    </div>
-</div>
-
 </body>
+
 </html>

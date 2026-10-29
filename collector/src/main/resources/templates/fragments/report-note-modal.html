@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- Fragment: reportNoteModal -->
+<div th:fragment="reportNoteModal" id="report-note-modal-wrapper" class="note-modal-overlay">
+    <div class="note-modal-backdrop" onclick="closeReportNoteModal()"></div>
+
+    <div class="note-modal-dialog" role="dialog" aria-modal="true" style="max-width: 620px;">
+        <div class="note-modal-header">
+            <div class="note-modal-title" style="display: flex; align-items: center; gap: 8px;">
+                <span>&#x1F4DD;</span>
+                <span>Day Note for <strong th:text="${reportDate}">2026-10-29</strong></span>
+            </div>
+            <button type="button" class="drawer-close-btn" onclick="closeReportNoteModal()" aria-label="Close" title="Close (Esc)">&times;</button>
+        </div>
+
+        <form th:action="@{'/reports/' + ${reportDate} + '/note'}"
+              method="post"
+              th:hx-post="@{'/reports/' + ${reportDate} + '/note'}"
+              hx-target="#report-display-container"
+              hx-swap="outerHTML"
+              onsubmit="closeReportNoteModal()">
+
+            <div class="note-modal-body" style="padding: 20px 24px;">
+                <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 0; margin-bottom: 14px; line-height: 1.5;">
+                    Add personal observations, incident details, or maintenance notes. Notes are saved permanently and are 
+                    never lost during report re-aggregations or nightly retention purges.
+                </p>
+
+                <div style="margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
+                        <label class="form-label" for="reportNoteTextarea" style="margin-bottom: 0;">Note (Markdown supported)</label>
+                        <span style="font-size: 11px; color: var(--text-muted);">Lists, links, bold, code blocks</span>
+                    </div>
+                    <textarea id="reportNoteTextarea" name="noteMarkdown" class="form-textarea"
+                              rows="8" style="width: 100%; box-sizing: border-box; font-family: monospace; font-size: 13px;"
+                              placeholder="e.g. Planned maintenance window from 02:00 to 03:00. High block rate at 14:15 caused by scraper attack on /login..."
+                              th:text="${note != null ? note.noteMarkdown() : ''}"></textarea>
+                </div>
+            </div>
+
+            <div class="note-modal-footer" style="padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); border-top: 1px solid var(--border-color);">
+                <div>
+                    <button th:if="${note != null and note.hasContent()}"
+                            type="button" class="btn btn-danger" style="font-size: 12.5px;"
+                            th:hx-delete="@{'/reports/' + ${reportDate} + '/note'}"
+                            hx-confirm="Are you sure you want to delete this day note?"
+                            hx-target="#report-display-container"
+                            hx-swap="outerHTML"
+                            onclick="closeReportNoteModal()"
+                            title="Delete this note">
+                        <span>&#x1F5D1;</span> Delete
+                    </button>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeReportNoteModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <span>&#x1F4BE;</span> Save Note
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+</body>
+</html>
+
