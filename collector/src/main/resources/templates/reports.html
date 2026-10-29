@@ -311,7 +311,18 @@
             if (modal) {
                 modal.remove();
             }
+            const container = document.getElementById('report-note-modal-container');
+            if (container) {
+                container.innerHTML = '';
+            }
         }
+
+        // Automatically close modal after an HTMX request within the modal completes (Save or Delete)
+        document.body.addEventListener('htmx:afterRequest', function (e) {
+            if (e.target && (e.target.id === 'reportNoteForm' || (e.target.closest && e.target.closest('#report-note-modal-wrapper')))) {
+                closeReportNoteModal();
+            }
+        });
 
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {

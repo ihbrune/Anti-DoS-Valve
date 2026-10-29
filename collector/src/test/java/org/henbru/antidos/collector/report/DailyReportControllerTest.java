@@ -96,20 +96,40 @@ class DailyReportControllerTest {
 	}
 
 	@Test
-	void testSaveAndDeleteReportNote() throws Exception {
+	void testSaveAndDeleteReportNoteHtmx() throws Exception {
 		String sampleNote = "Maintenance incident on proxy nodes";
 
-		// Save note
+		// Save note via HTMX
 		mockMvc.perform(post("/reports/" + testDate + "/note")
+						.header("HX-Request", "true")
 						.param("noteMarkdown", sampleNote))
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("Operator note saved successfully.")))
 				.andExpect(content().string(containsString(sampleNote)));
 
-		// Delete note
-		mockMvc.perform(delete("/reports/" + testDate + "/note"))
+		// Delete note via HTMX
+		mockMvc.perform(delete("/reports/" + testDate + "/note")
+						.header("HX-Request", "true"))
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("Operator note removed.")));
+	}
+
+	@Test
+	void testSaveAndDeleteReportNoteStandardFormFallback() throws Exception {
+		String sampleNote = "Fallback maintenance note";
+
+		// Save note via standard browser POST
+		mockMvc.perform(post("/reports/" + testDate + "/note")
+						.param("noteMarkdown", sampleNote))
+				.andExpect(status().is3xxRedirection())
+				.andExpect(redirectedUrl("/reports?date=" + testDate))
+				.andExpect(flash().attributeExists("successMessage"));
+
+		// Delete note via standard form DELETE
+		mockMvc.perform(delete("/reports/" + testDate + "/note"))
+				.andExpect(status().is3xxRedirection())
+				.andExpect(redirectedUrl("/reports?date=" + testDate))
+				.andExpect(flash().attributeExists("successMessage"));
 	}
 
 	@Test

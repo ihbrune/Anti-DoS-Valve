@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+
 import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.model.DailyReport;
 import org.henbru.antidos.collector.model.DailyReportNote;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
@@ -87,19 +89,34 @@ public class DailyReportController {
 	public String saveReportNote(
 			@PathVariable String date,
 			@RequestParam(required = false, defaultValue = "") String noteMarkdown,
-			Model model
+			@RequestHeader(value = "HX-Request", required = false) String hxRequest,
+			Model model,
+			RedirectAttributes redirectAttributes
 	) {
 		String cleanDate = date.trim();
 		dailyReportService.saveNote(cleanDate, noteMarkdown);
+		if (!"true".equalsIgnoreCase(hxRequest)) {
+			redirectAttributes.addFlashAttribute("successMessage", "Operator note saved successfully.");
+			return "redirect:/reports?date=" + cleanDate;
+		}
 		populateReportModel(model, cleanDate);
 		model.addAttribute("noteActionMessage", "Operator note saved successfully.");
 		return "fragments/report-content :: reportContent";
 	}
 
 	@DeleteMapping("/reports/{date}/note")
-	public String deleteReportNote(@PathVariable String date, Model model) {
+	public String deleteReportNote(
+			@PathVariable String date,
+			@RequestHeader(value = "HX-Request", required = false) String hxRequest,
+			Model model,
+			RedirectAttributes redirectAttributes
+	) {
 		String cleanDate = date.trim();
 		dailyReportService.deleteNote(cleanDate);
+		if (!"true".equalsIgnoreCase(hxRequest)) {
+			redirectAttributes.addFlashAttribute("successMessage", "Operator note removed.");
+			return "redirect:/reports?date=" + cleanDate;
+		}
 		populateReportModel(model, cleanDate);
 		model.addAttribute("noteActionMessage", "Operator note removed.");
 		return "fragments/report-content :: reportContent";
