@@ -92,6 +92,9 @@ class DailyReportControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("Day Note for")))
 				.andExpect(content().string(containsString(testDate.toString())))
+				.andExpect(content().string(containsString("<form id=\"reportNoteForm\"")))
+				.andExpect(content().string(containsString("action=\"/reports/" + testDate + "/note\"")))
+				.andExpect(content().string(containsString("name=\"noteMarkdown\"")))
 				.andExpect(content().string(containsString("Save Note")));
 	}
 
