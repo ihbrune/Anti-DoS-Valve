@@ -1,128 +1,171 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
+
 <body>
 
-<!-- Fragment: eventsTable -->
-<div th:fragment="eventsTable" class="table-responsive" id="events-container"
-     hx-trigger="annotationChanged from:body"
-     hx-get="/fragments/recent-events?status=BLOCKED"
-     hx-swap="outerHTML">
-    <div th:if="${#lists.isEmpty(recentEvents)}" class="empty-state">
-        <p>No recent blocking incidents logged.</p>
+    <!-- Fragment: eventsTable -->
+    <div th:fragment="eventsTable" class="table-responsive" id="events-container"
+        hx-trigger="annotationChanged from:body" hx-get="/fragments/recent-events?status=BLOCKED" hx-swap="outerHTML">
+        <div th:if="${#lists.isEmpty(recentEvents)}" class="empty-state">
+            <p>No recent blocking incidents logged.</p>
+        </div>
+
+        <table th:unless="${#lists.isEmpty(recentEvents)}">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Server</th>
+                    <th>Valve</th>
+                    <th>Client IP / Forensics</th>
+                    <th>Requests</th>
+                    <th>Retained</th>
+                    <th style="min-width: 140px;">Total</th>
+                    <th style="text-align: right;">Forensics</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr th:each="event : ${recentEvents}">
+                    <td th:text="${#temporals.format(event.slotTime, 'HH:mm:ss')}">10:45:00</td>
+                    <td>
+                        <a th:href="@{'/server/' + ${event.serverId}}" style="text-decoration: none; color: inherit;"
+                            title="View server details">
+                            <strong th:text="${event.serverId}">Web-Node-1</strong>
+                        </a>
+                    </td>
+                    <td><span class="badge" th:classappend="${event.isHoneypot() ? 'badge-warning' : 'badge-info'}"
+                            th:text="${(event.isHoneypot() ? '&#x1F36F; ' : '') + event.valveName}">API LIMITER</span>
+                    </td>
+                    <td>
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <a th:href="@{/events(clientQuery=${event.clientKey})}" class="ip-mono"
+                                    style="text-decoration: underline; color: inherit; font-weight: 600;"
+                                    title="View all incidents for this client"
+                                    th:text="${event.clientKey}">203.0.113.42</a>
+                                <!-- Subnet Note (matches canonical subnet prefix) -->
+                                <th:block th:if="${event.subnetGroup != null and !event.subnetGroup.isBlank()}">
+                                    <th:block
+                                        th:if="${subnetAnnotations != null and subnetAnnotations.containsKey(event.subnetGroup)}">
+                                        <span th:with="a=${subnetAnnotations.get(event.subnetGroup)}" class="badge-note"
+                                            th:classappend="${a.verdict().badgeClass()}"
+                                            th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${event.subnetGroup}, context='table')}"
+                                            hx-target="#note-modal-container"
+                                            th:title="'Subnet Note: ' + ${a.verdict().displayName()}"
+                                            th:text="${a.verdict().icon()}">🟢</span>
+                                    </th:block>
+                                    <th:block
+                                        th:if="${subnetAnnotations == null or !subnetAnnotations.containsKey(event.subnetGroup)}">
+                                        <span class="btn-add-note"
+                                            th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${event.subnetGroup}, context='table', initialVerdict=${event.hasSample() ? 'MALICIOUS' : 'INFO'}, initialMarkdown=${event.hasSample() ? ('### Blocked Incident Sample&#10;- **Offending Request:** `' + event.formattedSample() + '`&#10;- **User-Agent:** `' + (event.sampleUserAgent != null ? event.sampleUserAgent : 'none') + '`&#10;- **Server / Valve:** `' + event.serverId + '` (`' + event.valveName + '`)&#10;- **Client IP:** `' + event.clientKey + '`') : ''})}"
+                                            hx-target="#note-modal-container"
+                                        th:title="${event.hasSample() ? 'Add note with captured sample for this subnet'
+                                        : 'Add note for this subnet'}">+📝</span>
+                                    </th:block>
+                                </th:block>
+                                <span th:if="${event.countryCode != null}" class="badge badge-secondary"
+                                    style="padding: 1px 5px; font-size: 10px;" th:text="${event.countryCode}">DE</span>
+                            </div>
+                            <div style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center;">
+                                <span th:if="${event.hasSample()}" class="badge ip-mono"
+                                    style="padding: 1px 6px; font-size: 9px; font-weight: 600; cursor: default; background: rgba(244, 63, 94, 0.15); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.4);"
+                                    th:title="${event.sampleUserAgent != null ? 'Sampled Offending Request: ' + event.formattedSample() + ' | UA: ' + event.sampleUserAgent : 'Sampled Offending Request: ' + event.formattedSample()}">
+                                    <span style="opacity: 0.8; margin-right: 2px;">&#x1F50D;</span><span
+                                        th:text="${event.formattedSample()}">POST /wp-login.php</span>
+                                </span>
+                                <span th:if="${event.isHoneypot()}" class="badge badge-warning"
+                                    style="padding: 1px 6px; font-size: 9px; background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);"
+                                    title="Client accessed a Honeypot trap URL">&#x1F36F; Honeypot Triggered</span>
+                                <span th:if="${event.clientType != null and event.clientType.name() == 'DATACENTER'}"
+                                    class="badge badge-warning" style="padding: 1px 6px; font-size: 9px;"
+                                    title="Hosting / Datacenter / Cloud">&#x1F3E2; Datacenter</span>
+                                <span th:if="${event.clientType != null and event.clientType.name() == 'SEARCH_ENGINE'}"
+                                    class="badge badge-success" style="padding: 1px 6px; font-size: 9px;"
+                                    title="Verified Search Engine Crawler">&#x1F50D; Search Engine</span>
+                                <span th:if="${event.clientType != null and event.clientType.name() == 'AI_CRAWLER'}"
+                                    class="badge badge-purple" style="padding: 1px 6px; font-size: 9px;"
+                                    title="Verified AI Bot / LLM Crawler">&#x1F916; AI Bot</span>
+                                <span th:if="${event.clientType != null and event.clientType.name() == 'RESIDENTIAL'}"
+                                    class="badge badge-secondary" style="padding: 1px 6px; font-size: 9px;"
+                                    title="Consumer / Residential ISP">&#x1F3E0; Residential</span>
+                                <span th:if="${event.clientType != null and event.clientType.name() == 'MOBILE'}"
+                                    class="badge badge-info" style="padding: 1px 6px; font-size: 9px;"
+                                    title="Mobile Carrier / CGNAT">&#x1F4F1; Mobile</span>
+                                <span
+                                    th:if="${event.clientType != null and event.clientType.name() == 'PRIVATE_NETWORK'}"
+                                    class="badge badge-info" style="padding: 1px 6px; font-size: 9px;"
+                                    title="Private Intranet / RFC 1918 / Local Network">&#x1F512; Private Net</span>
+                                <span th:if="${event.clientType != null and event.clientType.name() == 'UNKNOWN'}"
+                                    class="badge badge-secondary"
+                                    style="padding: 1px 6px; font-size: 9px; opacity: 0.75;"
+                                    title="Unclassified / No ASN match">Unclassified</span>
+                                <span th:if="${event.asn != null}"
+                                    style="display: inline-flex; align-items: center; gap: 3px;">
+                                    <a th:href="@{/events(asn=${event.asn})}" class="badge badge-info"
+                                        style="padding: 1px 6px; font-size: 9px; text-decoration: none;"
+                                        th:title="${event.asOrg + ' - Click to filter incidents'}"
+                                        th:text="'AS' + ${event.asn}">AS24940</a>
+                                    <th:block
+                                        th:if="${asnAnnotations != null and asnAnnotations.containsKey(event.asn)}">
+                                        <span th:with="a=${asnAnnotations.get(event.asn)}" class="badge-note"
+                                            th:classappend="${a.verdict().badgeClass()}"
+                                            th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${event.asn}, context='table')}"
+                                            hx-target="#note-modal-container"
+                                            th:title="'ASN Note: ' + ${a.verdict().displayName()}"
+                                            th:text="${a.verdict().icon()}">🟢</span>
+                                    </th:block>
+                                    <th:block
+                                        th:if="${asnAnnotations == null or !asnAnnotations.containsKey(event.asn)}">
+                                        <span class="btn-add-note"
+                                            th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${event.asn}, context='table')}"
+                                            hx-target="#note-modal-container" title="Add note for this ASN">+📝</span>
+                                    </th:block>
+                                </span>
+                                <span th:if="${event.asn == null and event.asOrg != null}"
+                                    style="font-size: 10px; color: var(--text-muted);" th:text="${event.asOrg}">Private
+                                    Network</span>
+                            </div>
+                        </div>
+                    </td>
+                    <td th:text="${event.requestCount}">120</td>
+                    <td th:text="${event.retainedCount}">25</td>
+                    <td>
+                        <div class="event-total-cell">
+                            <strong class="event-total-count"
+                                th:classappend="${event.status == 'ACTIVE' ? 'count-active' : 'count-blocked'}"
+                                th:text="${#numbers.formatInteger(event.totalEffectiveCount, 1, 'POINT')}">145</strong>
+                            <span th:if="${event.status == 'ACTIVE'}" class="badge badge-info badge-status"
+                                title="Monitored active client within rate limits">
+                                <span class="status-dot status-dot-active"></span>Active
+                            </span>
+                            <span th:if="${event.status != 'ACTIVE' and event.completed}"
+                                class="badge badge-danger badge-status"
+                                title="Rate-limit exceeded - Locked in completed slot">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" class="status-icon">
+                                    <path
+                                        d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" />
+                                </svg>Locked
+                            </span>
+                            <span th:if="${event.status != 'ACTIVE' and !event.completed}"
+                                class="badge badge-warning badge-status"
+                                title="Rate-limit exceeded - Currently blocked (429)">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" class="status-icon">
+                                    <path
+                                        d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 6h2v6h-2V7zm0 8h2v2h-2v-2z" />
+                                </svg>Blocked
+                            </span>
+                        </div>
+                    </td>
+                    <td style="text-align: right;">
+                        <a th:href="@{/events(clientQuery=${event.clientKey})}" class="btn"
+                            style="padding: 2px 8px; font-size: 11px;" title="View all incidents for this client">
+                            View Incidents &rarr;
+                        </a>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
     </div>
 
-    <table th:unless="${#lists.isEmpty(recentEvents)}">
-        <thead>
-            <tr>
-                <th>Timestamp</th>
-                <th>Server</th>
-                <th>Valve</th>
-                <th>Client IP / Forensics</th>
-                <th>Requests</th>
-                <th>Retained</th>
-                <th style="min-width: 140px;">Total</th>
-                <th style="text-align: right;">Forensics</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr th:each="event : ${recentEvents}">
-                <td th:text="${#temporals.format(event.slotTime, 'HH:mm:ss')}">10:45:00</td>
-                <td>
-                    <a th:href="@{'/server/' + ${event.serverId}}"
-                       style="text-decoration: none; color: inherit;"
-                       title="View server details">
-                        <strong th:text="${event.serverId}">Web-Node-1</strong>
-                    </a>
-                </td>
-                <td><span class="badge" th:classappend="${event.isHoneypot() ? 'badge-warning' : 'badge-info'}" th:text="${(event.isHoneypot() ? '&#x1F36F; ' : '') + event.valveName}">API LIMITER</span></td>
-                <td>
-                    <div style="display: flex; flex-direction: column; gap: 4px;">
-                        <div style="display: flex; align-items: center; gap: 6px;">
-                            <a th:href="@{/events(clientQuery=${event.clientKey})}"
-                               class="ip-mono"
-                               style="text-decoration: underline; color: inherit; font-weight: 600;"
-                               title="View all incidents for this client"
-                               th:text="${event.clientKey}">203.0.113.42</a>
-                            <!-- Subnet Note (matches canonical subnet prefix) -->
-                            <th:block th:if="${event.subnetGroup != null and !event.subnetGroup.isBlank()}">
-                                <th:block th:if="${subnetAnnotations != null and subnetAnnotations.containsKey(event.subnetGroup)}">
-                                    <span th:with="a=${subnetAnnotations.get(event.subnetGroup)}"
-                                          class="badge-note"
-                                          th:classappend="${a.verdict().badgeClass()}"
-                                          th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${event.subnetGroup}, context='table')}"
-                                          hx-target="#note-modal-container"
-                                          th:title="'Subnet Note: ' + ${a.verdict().displayName()}"
-                                          th:text="${a.verdict().icon()}">🟢</span>
-                                </th:block>
-                                <th:block th:if="${subnetAnnotations == null or !subnetAnnotations.containsKey(event.subnetGroup)}">
-                                    <span class="btn-add-note"
-                                          th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${event.subnetGroup}, context='table')}"
-                                          hx-target="#note-modal-container"
-                                          title="Add note for this subnet">+📝</span>
-                                </th:block>
-                            </th:block>
-                            <span th:if="${event.countryCode != null}" class="badge badge-secondary" style="padding: 1px 5px; font-size: 10px;" th:text="${event.countryCode}">DE</span>
-                        </div>
-                        <div style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center;">
-                            <span th:if="${event.isHoneypot()}" class="badge badge-warning" style="padding: 1px 6px; font-size: 9px; background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);" title="Client accessed a Honeypot trap URL">&#x1F36F; Honeypot Triggered</span>
-                            <span th:if="${event.clientType != null and event.clientType.name() == 'DATACENTER'}" class="badge badge-warning" style="padding: 1px 6px; font-size: 9px;" title="Hosting / Datacenter / Cloud">&#x1F3E2; Datacenter</span>
-                            <span th:if="${event.clientType != null and event.clientType.name() == 'SEARCH_ENGINE'}" class="badge badge-success" style="padding: 1px 6px; font-size: 9px;" title="Verified Search Engine Crawler">&#x1F50D; Search Engine</span>
-                            <span th:if="${event.clientType != null and event.clientType.name() == 'AI_CRAWLER'}" class="badge badge-purple" style="padding: 1px 6px; font-size: 9px;" title="Verified AI Bot / LLM Crawler">&#x1F916; AI Bot</span>
-                            <span th:if="${event.clientType != null and event.clientType.name() == 'RESIDENTIAL'}" class="badge badge-secondary" style="padding: 1px 6px; font-size: 9px;" title="Consumer / Residential ISP">&#x1F3E0; Residential</span>
-                            <span th:if="${event.clientType != null and event.clientType.name() == 'MOBILE'}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px;" title="Mobile Carrier / CGNAT">&#x1F4F1; Mobile</span>
-                            <span th:if="${event.clientType != null and event.clientType.name() == 'PRIVATE_NETWORK'}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px;" title="Private Intranet / RFC 1918 / Local Network">&#x1F512; Private Net</span>
-                            <span th:if="${event.clientType != null and event.clientType.name() == 'UNKNOWN'}" class="badge badge-secondary" style="padding: 1px 6px; font-size: 9px; opacity: 0.75;" title="Unclassified / No ASN match">Unclassified</span>
-                            <span th:if="${event.asn != null}" style="display: inline-flex; align-items: center; gap: 3px;">
-                                <a th:href="@{/events(asn=${event.asn})}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px; text-decoration: none;" th:title="${event.asOrg + ' - Click to filter incidents'}" th:text="'AS' + ${event.asn}">AS24940</a>
-                                <th:block th:if="${asnAnnotations != null and asnAnnotations.containsKey(event.asn)}">
-                                    <span th:with="a=${asnAnnotations.get(event.asn)}"
-                                          class="badge-note"
-                                          th:classappend="${a.verdict().badgeClass()}"
-                                          th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${event.asn}, context='table')}"
-                                          hx-target="#note-modal-container"
-                                          th:title="'ASN Note: ' + ${a.verdict().displayName()}"
-                                          th:text="${a.verdict().icon()}">🟢</span>
-                                </th:block>
-                                <th:block th:if="${asnAnnotations == null or !asnAnnotations.containsKey(event.asn)}">
-                                    <span class="btn-add-note"
-                                          th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${event.asn}, context='table')}"
-                                          hx-target="#note-modal-container"
-                                          title="Add note for this ASN">+📝</span>
-                                </th:block>
-                            </span>
-                            <span th:if="${event.asn == null and event.asOrg != null}" style="font-size: 10px; color: var(--text-muted);" th:text="${event.asOrg}">Private Network</span>
-                        </div>
-                    </div>
-                </td>
-                <td th:text="${event.requestCount}">120</td>
-                <td th:text="${event.retainedCount}">25</td>
-                <td>
-                    <div class="event-total-cell">
-                        <strong class="event-total-count" th:classappend="${event.status == 'ACTIVE' ? 'count-active' : 'count-blocked'}"
-                                th:text="${#numbers.formatInteger(event.totalEffectiveCount, 1, 'POINT')}">145</strong>
-                        <span th:if="${event.status == 'ACTIVE'}" class="badge badge-info badge-status" title="Monitored active client within rate limits">
-                            <span class="status-dot status-dot-active"></span>Active
-                        </span>
-                        <span th:if="${event.status != 'ACTIVE' and event.completed}" class="badge badge-danger badge-status" title="Rate-limit exceeded - Locked in completed slot">
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" class="status-icon"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>Locked
-                        </span>
-                        <span th:if="${event.status != 'ACTIVE' and !event.completed}" class="badge badge-warning badge-status" title="Rate-limit exceeded - Currently blocked (429)">
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" class="status-icon"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 6h2v6h-2V7zm0 8h2v2h-2v-2z"/></svg>Blocked
-                        </span>
-                    </div>
-                </td>
-                <td style="text-align: right;">
-                    <a th:href="@{/events(clientQuery=${event.clientKey})}"
-                       class="btn"
-                       style="padding: 2px 8px; font-size: 11px;"
-                       title="View all incidents for this client">
-                        View Incidents &rarr;
-                    </a>
-                </td>
-            </tr>
-        </tbody>
-    </table>
-</div>
-
 </body>
+
 </html>

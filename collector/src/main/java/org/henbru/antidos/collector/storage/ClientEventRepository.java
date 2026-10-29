@@ -94,6 +94,16 @@ public class ClientEventRepository {
 		} catch (SQLException ignored) {
 		}
 
+		String sampleMethod = null;
+		String sampleUri = null;
+		String sampleUserAgent = null;
+		try {
+			sampleMethod = rs.getString("sample_method");
+			sampleUri = rs.getString("sample_uri");
+			sampleUserAgent = rs.getString("sample_user_agent");
+		} catch (SQLException ignored) {
+		}
+
 		return new ClientEvent(
 				rs.getLong("id"),
 				rs.getString("server_id"),
@@ -122,7 +132,10 @@ public class ClientEventRepository {
 				entityId,
 				getDistinctClientsFromResultSet(rs),
 				returningCount,
-				authenticatedCount
+				authenticatedCount,
+				sampleMethod,
+				sampleUri,
+				sampleUserAgent
 		);
 	};
 
@@ -215,9 +228,10 @@ public class ClientEventRepository {
 				    ip_version, cidr_prefix, ip_v4_start, ip_v4_end, ip_v6_start, ip_v6_end, subnet_group,
 				    request_count, retained_count, is_locked, status, is_completed, last_updated_at,
 				    asn, as_org, country_code, client_type, enrichment_status, entity_id, distinct_clients,
-				    returning_count, authenticated_count
+				    returning_count, authenticated_count,
+				    sample_method, sample_uri, sample_user_agent
 				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (server_id, valve_name, slot_key, client_key) DO UPDATE SET
 				    slot_time = EXCLUDED.slot_time,
 				    ip_version = EXCLUDED.ip_version,
@@ -236,6 +250,9 @@ public class ClientEventRepository {
 				    distinct_clients = EXCLUDED.distinct_clients,
 				    returning_count = EXCLUDED.returning_count,
 				    authenticated_count = EXCLUDED.authenticated_count,
+				    sample_method = COALESCE(EXCLUDED.sample_method, client_events.sample_method),
+				    sample_uri = COALESCE(EXCLUDED.sample_uri, client_events.sample_uri),
+				    sample_user_agent = COALESCE(EXCLUDED.sample_user_agent, client_events.sample_user_agent),
 				    entity_id = COALESCE(EXCLUDED.entity_id, client_events.entity_id)
 				""";
 
@@ -299,6 +316,9 @@ public class ClientEventRepository {
 						} else {
 							ps.setNull(27, Types.INTEGER);
 						}
+						ps.setString(28, e.sampleMethod());
+						ps.setString(29, e.sampleUri());
+						ps.setString(30, e.sampleUserAgent());
 					}
 
 					@Override

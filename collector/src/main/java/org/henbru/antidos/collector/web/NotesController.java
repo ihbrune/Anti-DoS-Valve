@@ -1,12 +1,12 @@
 package org.henbru.antidos.collector.web;
 
-import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+
 import org.henbru.antidos.collector.annotation.NetworkAnnotationService;
 import org.henbru.antidos.collector.annotation.NoteExportDocument;
 import org.henbru.antidos.collector.annotation.NoteImportConflictStrategy;
@@ -27,6 +27,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
+
+import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Web controller serving the Network Notes &amp; Investigative Annotations dashboard (/notes)
@@ -78,6 +80,7 @@ public class NotesController {
 			@RequestParam(required = false) AnnotationTargetType targetType,
 			@RequestParam(required = false) String targetKey,
 			@RequestParam(required = false) AnnotationVerdict verdict,
+			@RequestParam(required = false) String initialMarkdown,
 			@RequestParam(required = false, defaultValue = "list") String context,
 			Model model
 	) {
@@ -85,7 +88,7 @@ public class NotesController {
 		model.addAttribute("targetType", targetType != null ? targetType : AnnotationTargetType.SUBNET);
 		model.addAttribute("targetKey", targetKey != null ? targetKey.trim() : "");
 		model.addAttribute("verdict", verdict != null ? verdict : AnnotationVerdict.INFO);
-		model.addAttribute("noteMarkdown", "");
+		model.addAttribute("noteMarkdown", initialMarkdown != null ? initialMarkdown : "");
 		model.addAttribute("id", null);
 		model.addAttribute("context", context);
 		model.addAttribute("targetTypes", AnnotationTargetType.values());
@@ -139,6 +142,8 @@ public class NotesController {
 			@RequestParam AnnotationTargetType targetType,
 			@RequestParam String targetKey,
 			@RequestParam(required = false, defaultValue = "table") String context,
+			@RequestParam(required = false) String initialMarkdown,
+			@RequestParam(required = false) AnnotationVerdict initialVerdict,
 			Model model
 	) {
 		Optional<NetworkAnnotation> opt = annotationService.getAnnotationByTarget(targetType, targetKey);
@@ -155,8 +160,8 @@ public class NotesController {
 		model.addAttribute("mode", "CREATE");
 		model.addAttribute("targetType", targetType);
 		model.addAttribute("targetKey", targetKey);
-		model.addAttribute("verdict", AnnotationVerdict.INFO);
-		model.addAttribute("noteMarkdown", "");
+		model.addAttribute("verdict", initialVerdict != null ? initialVerdict : AnnotationVerdict.INFO);
+		model.addAttribute("noteMarkdown", initialMarkdown != null ? initialMarkdown : "");
 		model.addAttribute("id", null);
 		model.addAttribute("context", context);
 		model.addAttribute("targetTypes", AnnotationTargetType.values());

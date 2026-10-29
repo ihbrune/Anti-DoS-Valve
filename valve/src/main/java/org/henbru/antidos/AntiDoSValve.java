@@ -1399,6 +1399,9 @@ public class AntiDoSValve extends ValveBase {
 		}
 
 		boolean allowed = isRequestAllowed(ip, path, isReturningVisitor);
+		if (!allowed) {
+			recordBlockedSampleIfAbsent(ip, request, path);
+		}
 		if (allowed || simulationMode) {
 			if (visitorCookieEnabled && visitorTokenService != null && issueNewCookie && clientSubnetBytes != null) {
 				String newCookieVal = visitorTokenService.createToken(clientSubnetBytes, visitorCounter,
@@ -1425,6 +1428,20 @@ public class AntiDoSValve extends ValveBase {
 			if (getNext() != null) {
 				getNext().invoke(request, response);
 			}
+		}
+	}
+
+	void recordBlockedSampleIfAbsent(String ip, Request request, String path) {
+		AntiDoSMonitor monitor = provideMonitor();
+		if (monitor == null || request == null) {
+			return;
+		}
+		String counterName = resolveCounterName(ip);
+		AntiDoSCounter counter = monitor.provideCurrentCounter(counterName);
+		if (counter != null && counter.getSample() == null) {
+			String method = request.getMethod();
+			String ua = request.getHeader("User-Agent");
+			counter.recordSampleIfAbsent(method, path, ua);
 		}
 	}
 

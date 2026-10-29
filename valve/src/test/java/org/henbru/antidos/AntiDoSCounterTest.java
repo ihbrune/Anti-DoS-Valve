@@ -86,4 +86,44 @@ class AntiDoSCounterTest {
 		assertEquals(10, rec.getReturningCount());
 		assertTrue(rec.toString().contains("Returning:10"));
 	}
+
+	@Test
+	void testRecordSampleIfAbsent() {
+		AntiDoSCounter counter = new AntiDoSCounter();
+		assertFalse(counter.isLocked());
+		assertEquals(null, counter.getSample());
+
+		boolean recorded = counter.recordSampleIfAbsent("POST", "/wp-login.php?user=admin&pwd=secret", "curl/7.88.1");
+		assertTrue(recorded);
+
+		AntiDoSCounter.SampleRequest sample = counter.getSample();
+		assertEquals("POST", sample.method());
+		assertEquals("/wp-login.php", sample.uri()); // query string stripped!
+		assertEquals("curl/7.88.1", sample.userAgent());
+
+		// Second call must NOT overwrite the first sample
+		boolean second = counter.recordSampleIfAbsent("GET", "/other", "other-ua");
+		assertFalse(second);
+		assertEquals("POST", counter.getSample().method());
+		assertEquals("/wp-login.php", counter.getSample().uri());
+	}
+
+	@Test
+	void testSampleSanitizationAndLimits() {
+		AntiDoSCounter counter = new AntiDoSCounter();
+
+		// Excessively long URI and UA, newlines/control chars
+		String longUri = "/api/" + "a".repeat(500);
+		String maliciousUa = "BadBot\r\nInjectedHeader: value\u0000" + "x".repeat(200);
+
+		assertTrue(counter.recordSampleIfAbsent("post", longUri, maliciousUa));
+
+		AntiDoSCounter.SampleRequest sample = counter.getSample();
+		assertEquals("POST", sample.method());
+		assertTrue(sample.uri().length() <= 256);
+		assertTrue(sample.userAgent().length() <= 128);
+		assertFalse(sample.userAgent().contains("\r"));
+		assertFalse(sample.userAgent().contains("\n"));
+		assertFalse(sample.userAgent().contains("\u0000"));
+	}
 }

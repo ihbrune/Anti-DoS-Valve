@@ -93,6 +93,18 @@ class DocumentationServiceTest {
 		assertNotNull(profileSectionHtml);
 		assertTrue(profileSectionHtml.contains("Subnet Profiles &amp; Baseline Radar") || profileSectionHtml.contains("Subnet Profiles & Baseline Radar"));
 		assertTrue(profileSectionHtml.contains("Real-Time KPI Summary Cards"));
+
+		// Extract section for Operational Day Reports (both variants must resolve to specific section, not entire handbook)
+		String reportSectionHtml = service.getSectionHtml(DocumentationService.DOC_UI, "operational-daily-reports");
+		assertNotNull(reportSectionHtml);
+		assertTrue(reportSectionHtml.contains("Operational Day Reports &amp; Operator Notes") || reportSectionHtml.contains("Operational Day Reports & Operator Notes"));
+		assertTrue(reportSectionHtml.contains("Purpose &amp; Retention Immunity") || reportSectionHtml.contains("Purpose & Retention Immunity"));
+		assertTrue(reportSectionHtml.length() < 10000, "Should only extract the specific section, not full handbook");
+
+		String reportDaySectionHtml = service.getSectionHtml(DocumentationService.DOC_UI, "operational-day-reports");
+		assertNotNull(reportDaySectionHtml);
+		assertTrue(reportDaySectionHtml.contains("Operational Day Reports &amp; Operator Notes") || reportDaySectionHtml.contains("Operational Day Reports & Operator Notes"));
+		assertTrue(reportDaySectionHtml.length() < 10000, "Should only extract the specific section, not full handbook");
 	}
 
 

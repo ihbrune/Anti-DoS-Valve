@@ -97,6 +97,18 @@ class NotesControllerTest {
 				.andExpect(view().name("fragments/note-modal :: noteModal"))
 				.andExpect(model().attribute("mode", "CREATE"))
 				.andExpect(model().attribute("targetKey", "203.0.113.0/24"));
+
+		// Non-existing note with pre-filled sample markdown & verdict
+		mockMvc.perform(get("/notes/modal/view-target")
+						.param("targetType", "SUBNET")
+						.param("targetKey", "198.51.100.0/24")
+						.param("initialVerdict", "MALICIOUS")
+						.param("initialMarkdown", "### Blocked Incident Sample\n- **Request:** POST /wp-login.php"))
+				.andExpect(status().isOk())
+				.andExpect(view().name("fragments/note-modal :: noteModal"))
+				.andExpect(model().attribute("mode", "CREATE"))
+				.andExpect(model().attribute("verdict", AnnotationVerdict.MALICIOUS))
+				.andExpect(model().attribute("noteMarkdown", "### Blocked Incident Sample\n- **Request:** POST /wp-login.php"));
 	}
 
 	@Test

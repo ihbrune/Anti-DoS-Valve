@@ -1843,6 +1843,80 @@ class AntiDoSValveTest {
 		downstreamValve.stop();
 	}
 
+	@Test
+	void testBlockedRequestSampleCapture() throws Exception {
+		AntiDoSValve testValve = new AntiDoSValve();
+		testValve.setContainer(new org.apache.catalina.core.StandardEngine());
+		testValve.setMonitorName("SAMPLE_CAPTURE_VALVE");
+		testValve.setAllowedRequestsPerSlot(2);
+		testValve.setNumberOfSlots(5);
+		testValve.setSlotLength(60);
+		testValve.setMaxIPCacheSize(100);
+		testValve.setRelevantPaths(".*");
+		testValve.start();
+
+		String attackerIp = "198.51.100.77";
+
+		// Request 1: Allowed
+		TestRequest req1 = new TestRequest("/api/test", attackerIp);
+		req1.setMethod("GET");
+		TestResponse resp1 = new TestResponse();
+		testValve.invoke(req1, resp1);
+		assertEquals(-1, resp1.getErrorCode());
+
+		// Request 2: Allowed
+		TestRequest req2 = new TestRequest("/api/test", attackerIp);
+		req2.setMethod("GET");
+		TestResponse resp2 = new TestResponse();
+		testValve.invoke(req2, resp2);
+		assertEquals(-1, resp2.getErrorCode());
+
+		// Counter should not have a sample yet
+		AntiDoSMonitor monitor = testValve.provideMonitor();
+		AntiDoSCounter counter = monitor.provideCurrentCounter(attackerIp);
+		assertNotNull(counter);
+		assertNull(counter.getSample());
+
+		// Request 3: Blocked (HTTP 429) -> First blocked request captures the sample!
+		TestRequest req3 = new TestRequest("/wp-login.php?action=login", attackerIp);
+		req3.setMethod("POST");
+		req3.setHeader("User-Agent", "vulnerability-scanner/2.1");
+		TestResponse resp3 = new TestResponse();
+		testValve.invoke(req3, resp3);
+		assertEquals(429, resp3.getErrorCode());
+
+		// Verify sample was captured on counter
+		assertNotNull(counter.getSample());
+		assertEquals("POST", counter.getSample().method());
+		assertEquals("/wp-login.php", counter.getSample().uri()); // query string stripped
+		assertEquals("vulnerability-scanner/2.1", counter.getSample().userAgent());
+
+		// Request 4: Subsequent blocked request must NOT overwrite the initial sample
+		TestRequest req4 = new TestRequest("/something-else", attackerIp);
+		req4.setMethod("GET");
+		req4.setHeader("User-Agent", "different-agent");
+		TestResponse resp4 = new TestResponse();
+		testValve.invoke(req4, resp4);
+		assertEquals(429, resp4.getErrorCode());
+
+		assertEquals("POST", counter.getSample().method());
+		assertEquals("/wp-login.php", counter.getSample().uri());
+		assertEquals("vulnerability-scanner/2.1", counter.getSample().userAgent());
+
+		// Verify status JSON output includes the sample fields
+		String jsonDetails = testValve.getStatusRenderer().buildStatusJsonDetails("SAMPLE_CAPTURE_VALVE", "current", 10);
+		assertTrue(jsonDetails.contains("\"sampleMethod\": \"POST\""), "JSON must include sampleMethod");
+		assertTrue(jsonDetails.contains("\"sampleUri\": \"/wp-login.php\""), "JSON must include sampleUri");
+		assertTrue(jsonDetails.contains("\"sampleUserAgent\": \"vulnerability-scanner/2.1\""), "JSON must include sampleUserAgent");
+
+		// Verify HTML status details includes the sample column and content
+		String htmlDetails = testValve.getStatusRenderer().buildStatusHtmlDetails("SAMPLE_CAPTURE_VALVE", "tok", "current", 10, 10);
+		assertTrue(htmlDetails.contains("<th>Sample</th>"), "HTML must include Sample column header");
+		assertTrue(htmlDetails.contains("POST /wp-login.php"), "HTML must include sample method and path");
+
+		testValve.stop();
+	}
+
 	private static class TestRequest extends Request {
 		private final String testUri;
 		private final String testRemoteAddr;
@@ -1850,11 +1924,21 @@ class AntiDoSValveTest {
 		private final Map<String, String> headers = new HashMap<>();
 		private final Map<String, Object> attributes = new HashMap<>();
 		private Cookie[] cookies = null;
+		private String method = "GET";
 
 		TestRequest(String uri, String remoteAddr) {
 			super(new Connector());
 			this.testUri = uri;
 			this.testRemoteAddr = remoteAddr;
+		}
+
+		@Override
+		public String getMethod() {
+			return method;
+		}
+
+		void setMethod(String method) {
+			this.method = method;
 		}
 
 		@Override

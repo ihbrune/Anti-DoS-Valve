@@ -1149,6 +1149,46 @@ class DatabaseMigrationAndRepositoryTest {
 		dailyReportNoteRepository.deleteByReportDate(testDate);
 		assertTrue(dailyReportNoteRepository.findByReportDate(testDate).isEmpty());
 	}
+
+	@Test
+	void testSampleRequestMetadataPersistence() {
+		Instant now = Instant.now().truncatedTo(ChronoUnit.MINUTES);
+		String ip = "198.51.100.99";
+
+		// 1. Insert blocked incident with sample metadata
+		ClientEvent eventWithSample = new ClientEvent(
+				null, "SAMPLE-NODE", "API-LIMITER", 200L, now, ip,
+				150, 0, true, ClientEvent.STATUS_BLOCKED, true, now,
+				1, null, null, "POST", "/wp-login.php", "curl/7.88.1"
+		);
+		clientEventRepository.batchUpsert(List.of(eventWithSample));
+
+		List<ClientEvent> loadedEvents = clientEventRepository.findRecentEvents("SAMPLE-NODE", ip, 5);
+		assertFalse(loadedEvents.isEmpty());
+		ClientEvent loaded = loadedEvents.getFirst();
+		assertTrue(loaded.hasSample());
+		assertEquals("POST", loaded.sampleMethod());
+		assertEquals("/wp-login.php", loaded.sampleUri());
+		assertEquals("curl/7.88.1", loaded.sampleUserAgent());
+		assertEquals("POST /wp-login.php", loaded.formattedSample());
+
+		// 2. Simulate subsequent poll update in the same slot without sample data -> COALESCE must preserve existing sample
+		ClientEvent updateWithoutSample = new ClientEvent(
+				null, "SAMPLE-NODE", "API-LIMITER", 200L, now, ip,
+				200, 0, true, ClientEvent.STATUS_BLOCKED, true, now,
+				1, null, null, null, null, null
+		);
+		clientEventRepository.batchUpsert(List.of(updateWithoutSample));
+
+		List<ClientEvent> reloadedEvents = clientEventRepository.findRecentEvents("SAMPLE-NODE", ip, 5);
+		assertFalse(reloadedEvents.isEmpty());
+		ClientEvent reloaded = reloadedEvents.getFirst();
+		assertEquals(200, reloaded.requestCount());
+		assertTrue(reloaded.hasSample(), "COALESCE in upsert must preserve previously recorded sample");
+		assertEquals("POST", reloaded.sampleMethod());
+		assertEquals("/wp-login.php", reloaded.sampleUri());
+		assertEquals("curl/7.88.1", reloaded.sampleUserAgent());
+	}
 }
 
 

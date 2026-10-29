@@ -441,7 +441,10 @@ public class CollectorPollerService {
 							pollTime,
 							distinct,
 							returning,
-							authenticated
+							authenticated,
+							c.sampleMethod(),
+							c.sampleUri(),
+							c.sampleUserAgent()
 					).withEntityId(entityId));
 				}
 			}

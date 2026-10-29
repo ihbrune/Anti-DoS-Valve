@@ -512,6 +512,20 @@ Events are streamed with configurable limits (`25`, `50`, `100`, `250`) and offs
   * **Untracked Valve (`—`):** Explicit dash displayed when the originating Valve has cookie tracking disabled (`visitorCookieEnabled="false"`). Prevents misinterpreting unmonitored endpoints as 0% returning traffic.
   * **Custom Cookie Names:** Telemetry collection and returning visitor ratios operate identically whether using the default `_adv` cookie name or a custom `visitorCookieName`; the Collector automatically identifies and binds the configured cookie name from overview telemetry.
 
+### 5. First-Block Request Sample Snapshot (`🔍 METHOD /path`) & 1-Click Note Triage
+When an abusive client IP address or subnet transitions into rate-limit blocking (`HTTP 429 Too Many Requests`), the Valve automatically captures an immutable, privacy-safe snapshot of that offending HTTP request:
+* **Captured Fields:** HTTP Method (e.g. `POST`), Request URI Path (with query strings stripped for GDPR/privacy compliance, capped at 256 characters), and the `User-Agent` header (capped at 128 characters).
+* **Incident Explorer & Recent Events Badge:** Displayed directly underneath the client IP/CIDR in `/events` and `/server/{serverId}` with a distinct rose badge (e.g. `🔍 POST /wp-login.php`). Hovering over the badge displays a tooltip with the complete URI path and User-Agent.
+* **1-Click Forensic Note Triage:** Clicking the `+📝` button next to an incident possessing a captured sample automatically pre-fills the Operator Note modal with formatted Markdown:
+  ```markdown
+  ### Blocked Incident Sample
+  - **Offending Request:** `POST /wp-login.php`
+  - **User-Agent:** `vulnerability-scanner/2.1`
+  - **Server / Valve:** `tomcat-prod-01` (`Primary-Valve`)
+  - **Client IP:** `198.51.100.42`
+  ```
+  The note verdict is automatically initialized to 🔴 `MALICIOUS`, allowing operators to document verified attacks or vulnerability probes in the persistent, retention-immune Knowledge Store (`/notes`) with a single click.
+
 ---
 
 ## Network Notes & Forensics Memory (/notes)

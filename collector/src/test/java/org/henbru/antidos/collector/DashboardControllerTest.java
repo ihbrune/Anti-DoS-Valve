@@ -522,6 +522,14 @@ class DashboardControllerTest {
 	}
 
 	@Test
+	void testHelpFragmentWithReportsSectionReturnsDrawerSection() throws Exception {
+		mockMvc.perform(get("/fragments/help").param("doc", "ui").param("section", "operational-day-reports"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Operational Day Reports &amp; Operator Notes")))
+				.andExpect(content().string(containsString("Purpose &amp; Retention Immunity")));
+	}
+
+	@Test
 	void testOffendersPageWithRollupModeLoads() throws Exception {
 		mockMvc.perform(get("/offenders").param("groupBy", "ROLLUP"))
 				.andExpect(status().isOk())

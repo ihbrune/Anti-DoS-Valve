@@ -36,6 +36,13 @@ public class AntiDoSCounter {
 	private static final VarHandle ACCESS_ORDER;
 	private static final VarHandle CARDINALITY_TRACKER;
 	private static final VarHandle RETURNING_COUNT;
+	private static final VarHandle SAMPLE_REQUEST;
+
+	/**
+	 * Compact, immutable snapshot of an offending client request captured upon rate-limit blocking.
+	 * All string fields are strictly bounded and sanitized.
+	 */
+	public record SampleRequest(String method, String uri, String userAgent) {}
 
 	static {
 		try {
@@ -45,6 +52,7 @@ public class AntiDoSCounter {
 			ACCESS_ORDER = l.findVarHandle(AntiDoSCounter.class, "accessOrder", long.class);
 			CARDINALITY_TRACKER = l.findVarHandle(AntiDoSCounter.class, "cardinalityTracker", AntiDoSCardinalityBitSet.class);
 			RETURNING_COUNT = l.findVarHandle(AntiDoSCounter.class, "returningCount", int.class);
+			SAMPLE_REQUEST = l.findVarHandle(AntiDoSCounter.class, "sampleRequest", SampleRequest.class);
 		} catch (ReflectiveOperationException e) {
 			throw new ExceptionInInitializerError(e);
 		}
@@ -56,6 +64,7 @@ public class AntiDoSCounter {
 	private volatile boolean locked = false;
 	private volatile AntiDoSCardinalityBitSet cardinalityTracker = null;
 	private volatile int returningCount = 0;
+	private volatile SampleRequest sampleRequest = null;
 
 	/**
 	 * Updates the access order timestamp to current System.nanoTime() for LRU recency tracking.
@@ -246,10 +255,91 @@ public class AntiDoSCounter {
 		return this.cardinalityTracker != null;
 	}
 
+	/**
+	 * @return The captured request sample snapshot, or <code>null</code> if none recorded.
+	 */
+	public SampleRequest getSample() {
+		return this.sampleRequest;
+	}
+
+	/**
+	 * Atomically captures an offending request sample if no sample has been recorded yet.
+	 * All fields are strictly sanitized and length-bounded to prevent memory bloat or injection.
+	 * Query parameters are explicitly stripped for privacy/GDPR compliance.
+	 *
+	 * @param method    HTTP method (e.g. "POST")
+	 * @param uri       Request URI path (query string stripped, max 256 chars)
+	 * @param userAgent User-Agent header (max 128 chars)
+	 * @return true if the sample was successfully captured, false if a sample already exists
+	 */
+	public boolean recordSampleIfAbsent(String method, String uri, String userAgent) {
+		if (this.sampleRequest != null) {
+			return false;
+		}
+		String cleanMethod = sanitizeMethod(method);
+		String cleanUri = sanitizeUri(uri);
+		String cleanUserAgent = sanitizeUserAgent(userAgent);
+		if (cleanMethod == null && cleanUri == null) {
+			return false;
+		}
+		SampleRequest sample = new SampleRequest(cleanMethod, cleanUri, cleanUserAgent);
+		return SAMPLE_REQUEST.compareAndSet(this, null, sample);
+	}
+
+	static String sanitizeMethod(String method) {
+		if (method == null || method.isBlank()) {
+			return null;
+		}
+		String trimmed = method.trim().toUpperCase(java.util.Locale.ROOT);
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < trimmed.length() && sb.length() < 10; i++) {
+			char c = trimmed.charAt(i);
+			if (c >= 'A' && c <= 'Z') {
+				sb.append(c);
+			}
+		}
+		return sb.length() > 0 ? sb.toString() : null;
+	}
+
+	static String sanitizeUri(String uri) {
+		if (uri == null || uri.isBlank()) {
+			return null;
+		}
+		String clean = uri.trim();
+		int qIdx = clean.indexOf('?');
+		if (qIdx >= 0) {
+			clean = clean.substring(0, qIdx);
+		}
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < clean.length() && sb.length() < 256; i++) {
+			char c = clean.charAt(i);
+			if (c >= 32 && c <= 126) {
+				sb.append(c);
+			}
+		}
+		return sb.length() > 0 ? sb.toString() : null;
+	}
+
+	static String sanitizeUserAgent(String ua) {
+		if (ua == null || ua.isBlank()) {
+			return null;
+		}
+		String clean = ua.trim();
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < clean.length() && sb.length() < 128; i++) {
+			char c = clean.charAt(i);
+			if (c >= 32 && c <= 126) {
+				sb.append(c);
+			}
+		}
+		return sb.length() > 0 ? sb.toString() : null;
+	}
+
 	@Override
 	public String toString() {
 		return "Count:" + getCount() + " Retained:" + getRetainedCounts() + " Locked:" + (locked ? "yes" : "no")
 				+ (cardinalityTracker != null ? " DistinctClients:" + getDistinctClients() : "")
-				+ (returningCount > 0 ? " Returning:" + returningCount : "");
+				+ (returningCount > 0 ? " Returning:" + returningCount : "")
+				+ (sampleRequest != null ? " Sample:" + sampleRequest.method() + " " + sampleRequest.uri() : "");
 	}
 }

@@ -34,11 +34,56 @@ public record ClientEvent(
 		Long entityId,
 		int distinctClients,
 		Integer returningCount,
-		Integer authenticatedCount
+		Integer authenticatedCount,
+		String sampleMethod,
+		String sampleUri,
+		String sampleUserAgent
 ) {
 
 	public static final String STATUS_BLOCKED = "BLOCKED";
 	public static final String STATUS_ACTIVE = "ACTIVE";
+
+	/**
+	 * Backward-compatible constructor defaulting sample fields to null.
+	 */
+	public ClientEvent(
+			Long id,
+			String serverId,
+			String valveName,
+			long slotKey,
+			Instant slotTime,
+			String clientKey,
+			int ipVersion,
+			int cidrPrefix,
+			Long ipV4Start,
+			Long ipV4End,
+			String ipV6Start,
+			String ipV6End,
+			String subnetGroup,
+			int requestCount,
+			int retainedCount,
+			boolean locked,
+			String status,
+			boolean completed,
+			Instant lastUpdatedAt,
+			Long asn,
+			String asOrg,
+			String countryCode,
+			ClientType clientType,
+			EnrichmentStatus enrichmentStatus,
+			Long entityId,
+			int distinctClients,
+			Integer returningCount,
+			Integer authenticatedCount
+	) {
+		this(
+				id, serverId, valveName, slotKey, slotTime, clientKey, ipVersion, cidrPrefix,
+				ipV4Start, ipV4End, ipV6Start, ipV6End, subnetGroup, requestCount, retainedCount,
+				locked, status, completed, lastUpdatedAt, asn, asOrg, countryCode, clientType,
+				enrichmentStatus, entityId, distinctClients, returningCount, authenticatedCount,
+				null, null, null
+		);
+	}
 
 	/**
 	 * Backward-compatible constructor defaulting returningCount and authenticatedCount to null.
@@ -371,6 +416,52 @@ public record ClientEvent(
 				slotKey,
 				slotTime,
 				clientKey,
+				requestCount,
+				retainedCount,
+				locked,
+				status,
+				completed,
+				lastUpdatedAt,
+				distinctClients,
+				returningCount,
+				authenticatedCount,
+				null,
+				null,
+				null
+		);
+	}
+
+	/**
+	 * Convenience constructor with automatic network parsing, explicit status, distinct client count,
+	 * returning visitor count, authenticated request count, and request sample.
+	 */
+	public ClientEvent(
+			Long id,
+			String serverId,
+			String valveName,
+			long slotKey,
+			Instant slotTime,
+			String clientKey,
+			int requestCount,
+			int retainedCount,
+			boolean locked,
+			String status,
+			boolean completed,
+			Instant lastUpdatedAt,
+			int distinctClients,
+			Integer returningCount,
+			Integer authenticatedCount,
+			String sampleMethod,
+			String sampleUri,
+			String sampleUserAgent
+	) {
+		this(
+				id,
+				serverId,
+				valveName,
+				slotKey,
+				slotTime,
+				clientKey,
 				IpNetworkUtil.parse(clientKey),
 				requestCount,
 				retainedCount,
@@ -386,7 +477,10 @@ public record ClientEvent(
 				null,
 				Math.max(1, distinctClients),
 				returningCount,
-				authenticatedCount
+				authenticatedCount,
+				sampleMethod,
+				sampleUri,
+				sampleUserAgent
 		);
 	}
 
@@ -529,6 +623,62 @@ public record ClientEvent(
 				slotKey,
 				slotTime,
 				clientKey,
+				net,
+				requestCount,
+				retainedCount,
+				locked,
+				status,
+				completed,
+				lastUpdatedAt,
+				asn,
+				asOrg,
+				countryCode,
+				clientType,
+				enrichmentStatus,
+				entityId,
+				distinctClients,
+				returningCount,
+				authenticatedCount,
+				null,
+				null,
+				null
+		);
+	}
+
+	public ClientEvent(
+			Long id,
+			String serverId,
+			String valveName,
+			long slotKey,
+			Instant slotTime,
+			String clientKey,
+			IpNetworkInfo net,
+			int requestCount,
+			int retainedCount,
+			boolean locked,
+			String status,
+			boolean completed,
+			Instant lastUpdatedAt,
+			Long asn,
+			String asOrg,
+			String countryCode,
+			ClientType clientType,
+			EnrichmentStatus enrichmentStatus,
+			Long entityId,
+			int distinctClients,
+			Integer returningCount,
+			Integer authenticatedCount,
+			String sampleMethod,
+			String sampleUri,
+			String sampleUserAgent
+	) {
+		this(
+				id,
+				serverId,
+				valveName,
+				slotKey,
+				slotTime,
+				clientKey,
 				net.version(),
 				net.prefix(),
 				net.v4Start(),
@@ -550,7 +700,10 @@ public record ClientEvent(
 				entityId,
 				Math.max(1, distinctClients),
 				returningCount,
-				authenticatedCount
+				authenticatedCount,
+				sampleMethod,
+				sampleUri,
+				sampleUserAgent
 		);
 	}
 
@@ -691,7 +844,10 @@ public record ClientEvent(
 				newEntityId,
 				distinctClients,
 				returningCount,
-				authenticatedCount
+				authenticatedCount,
+				sampleMethod,
+				sampleUri,
+				sampleUserAgent
 		);
 	}
 
@@ -724,8 +880,22 @@ public record ClientEvent(
 				entityId,
 				distinctClients,
 				returningCount,
-				authenticatedCount
+				authenticatedCount,
+				sampleMethod,
+				sampleUri,
+				sampleUserAgent
 		);
+	}
+
+	public boolean hasSample() {
+		return sampleUri != null && !sampleUri.isBlank();
+	}
+
+	public String formattedSample() {
+		if (!hasSample()) {
+			return null;
+		}
+		return (sampleMethod != null && !sampleMethod.isBlank() ? sampleMethod.trim() + " " : "") + sampleUri.trim();
 	}
 
 	public Double returningRatio() {

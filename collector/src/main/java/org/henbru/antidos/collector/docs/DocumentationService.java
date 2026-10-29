@@ -119,13 +119,17 @@ public class DocumentationService {
 			String anchorId = idGen.generateId(title);
 			String simplifiedAnchor = anchorId.replace("-", "");
 			String simplifiedTarget = cleanTarget.replace("-", "");
+			String variantAnchor = simplifiedAnchor.replace("daily", "day");
+			String variantTarget = simplifiedTarget.replace("daily", "day");
 
 			if (anchorId.equalsIgnoreCase(cleanTarget)
 					|| simplifiedAnchor.equalsIgnoreCase(simplifiedTarget)
 					|| anchorId.startsWith(cleanTarget)
 					|| cleanTarget.startsWith(anchorId)
 					|| simplifiedAnchor.contains(simplifiedTarget)
-					|| simplifiedTarget.contains(simplifiedAnchor)) {
+					|| simplifiedTarget.contains(simplifiedAnchor)
+					|| variantAnchor.contains(variantTarget)
+					|| variantTarget.contains(variantAnchor)) {
 				targetHeading = h;
 				break;
 			}

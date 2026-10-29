@@ -45,14 +45,18 @@ public class AntiDoSStatusRenderer {
 		this.valve = valve;
 	}
 
-	static record CounterEntry(String key, int count, int retained, int effective, boolean locked, int distinctClients, int returningCount)
+	static record CounterEntry(String key, int count, int retained, int effective, boolean locked, int distinctClients, int returningCount, AntiDoSCounter.SampleRequest sample)
 			implements Comparable<CounterEntry> {
+		public CounterEntry(String key, int count, int retained, int effective, boolean locked, int distinctClients, int returningCount) {
+			this(key, count, retained, effective, locked, distinctClients, returningCount, null);
+		}
+
 		public CounterEntry(String key, int count, int retained, int effective, boolean locked, int distinctClients) {
-			this(key, count, retained, effective, locked, distinctClients, 0);
+			this(key, count, retained, effective, locked, distinctClients, 0, null);
 		}
 
 		public CounterEntry(String key, int count, int retained, int effective, boolean locked) {
-			this(key, count, retained, effective, locked, 1, 0);
+			this(key, count, retained, effective, locked, 1, 0, null);
 		}
 
 		@Override
@@ -203,7 +207,7 @@ public class AntiDoSStatusRenderer {
 				int rawRetained = c.getRetainedCounts();
 				int retained = rawRetained > 0 ? rawRetained : 0;
 				int distinct = c.hasCardinalityTracker() ? c.getDistinctClients() : -1;
-				list.add(new CounterEntry(entry.getKey(), count, retained, count + retained, locked, distinct, c.getReturningCount()));
+				list.add(new CounterEntry(entry.getKey(), count, retained, count + retained, locked, distinct, c.getReturningCount(), c.getSample()));
 			}
 			Collections.sort(list);
 			return new FilteredEntries(list, maxOrder);
@@ -228,13 +232,13 @@ public class AntiDoSStatusRenderer {
 				if (effective < worst.effective()) {
 					continue;
 				}
-				CounterEntry candidate = new CounterEntry(entry.getKey(), count, retained, effective, locked, distinct, c.getReturningCount());
+				CounterEntry candidate = new CounterEntry(entry.getKey(), count, retained, effective, locked, distinct, c.getReturningCount(), c.getSample());
 				if (candidate.compareTo(worst) < 0) {
 					minHeap.poll();
 					minHeap.offer(candidate);
 				}
 			} else {
-				minHeap.offer(new CounterEntry(entry.getKey(), count, retained, effective, locked, distinct, c.getReturningCount()));
+				minHeap.offer(new CounterEntry(entry.getKey(), count, retained, effective, locked, distinct, c.getReturningCount(), c.getSample()));
 			}
 		}
 
@@ -270,7 +274,7 @@ public class AntiDoSStatusRenderer {
 				int effective = count + retained;
 				if (effective >= min) {
 					int distinct = c.hasCardinalityTracker() ? c.getDistinctClients() : -1;
-					list.add(new CounterEntry(entry.getKey(), count, retained, effective, locked, distinct, c.getReturningCount()));
+					list.add(new CounterEntry(entry.getKey(), count, retained, effective, locked, distinct, c.getReturningCount(), c.getSample()));
 				}
 			}
 		}
@@ -1092,7 +1096,7 @@ public class AntiDoSStatusRenderer {
 			}
 			sb.append("<th>Slot Requests</th><th>Retained</th><th>Effective</th>")
 					.append(showReturning ? "<th title=\"Requests carrying valid visitor cookie\">Returning</th>" : "")
-					.append("<th>Limit</th><th>Status</th></tr></thead>\n")
+					.append("<th>Limit</th><th>Sample</th><th>Status</th></tr></thead>\n")
 					.append("    <tbody>\n");
 			for (int i = 0; i < blockedDisplay; i++) {
 				CounterEntry e = blockedList.get(i);
@@ -1111,8 +1115,17 @@ public class AntiDoSStatusRenderer {
 				if (showReturning) {
 					sb.append("<td>").append(e.returningCount()).append("</td>");
 				}
-				sb.append("<td>").append(allowedReqs).append("</td>")
-						.append("<td><span class=\"badge badge-blocking\">BLOCKED</span></td></tr>\n");
+				sb.append("<td>").append(allowedReqs).append("</td>");
+				if (e.sample() != null && e.sample().uri() != null) {
+					String sampleTitle = e.sample().userAgent() != null ? "User-Agent: " + escapeHtml(e.sample().userAgent()) : "";
+					sb.append("<td><code title=\"").append(sampleTitle).append("\">")
+							.append(e.sample().method() != null ? escapeHtml(e.sample().method()) + " " : "")
+							.append(escapeHtml(e.sample().uri()))
+							.append("</code></td>");
+				} else {
+					sb.append("<td style=\"color:var(--muted);\">-</td>");
+				}
+				sb.append("<td><span class=\"badge badge-blocking\">BLOCKED</span></td></tr>\n");
 			}
 			sb.append("    </tbody>\n  </table>\n");
 		}
@@ -1444,8 +1457,17 @@ public class AntiDoSStatusRenderer {
 					.append("      \"effective\": ").append(e.effective()).append(",\n")
 					.append("      \"limit\": ").append(target.getAllowedRequestsPerSlot()).append(",\n")
 					.append("      \"distinctClients\": ").append(e.distinctClients() > 0 ? e.distinctClients() : 1).append(",\n")
-					.append("      \"returningCount\": ").append(target.isVisitorTrackingActive() ? e.returningCount() : "null").append(",\n")
-					.append("      \"status\": \"BLOCKED\"\n")
+					.append("      \"returningCount\": ").append(target.isVisitorTrackingActive() ? e.returningCount() : "null").append(",\n");
+			if (e.sample() != null) {
+				sb.append("      \"sampleMethod\": ").append(e.sample().method() != null ? "\"" + escapeJson(e.sample().method()) + "\"" : "null").append(",\n")
+						.append("      \"sampleUri\": ").append(e.sample().uri() != null ? "\"" + escapeJson(e.sample().uri()) + "\"" : "null").append(",\n")
+						.append("      \"sampleUserAgent\": ").append(e.sample().userAgent() != null ? "\"" + escapeJson(e.sample().userAgent()) + "\"" : "null").append(",\n");
+			} else {
+				sb.append("      \"sampleMethod\": null,\n")
+						.append("      \"sampleUri\": null,\n")
+						.append("      \"sampleUserAgent\": null,\n");
+			}
+			sb.append("      \"status\": \"BLOCKED\"\n")
 					.append("    }");
 		}
 		sb.append("\n  ],\n");
