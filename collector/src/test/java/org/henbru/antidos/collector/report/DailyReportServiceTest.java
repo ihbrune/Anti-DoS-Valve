@@ -119,9 +119,9 @@ class DailyReportServiceTest {
 		assertNotNull(md);
 		assertTrue(md.contains("FAST-VALVE"));
 		assertTrue(md.contains("SLOW-VALVE"));
-		assertTrue(md.contains("100,0 req/s") || md.contains("100.0 req/s"));
-		assertTrue(md.contains("5s-Slot auf `SRV-FAST`"));
-		assertTrue(md.contains("1.700") || md.contains("1,700"));
+		assertTrue(md.contains("100.0 req/s"));
+		assertTrue(md.contains("5s slot on `SRV-FAST`"));
+		assertTrue(md.contains("1,700"));
 
 		// Verify report was persisted to DB
 		Optional<DailyReport> fromDb = dailyReportRepository.findByReportDate(testDate.toString());
@@ -197,15 +197,15 @@ class DailyReportServiceTest {
 		assertNotNull(md);
 
 		// Check Executive Summary contains slot ratio and blocked requests
-		assertTrue(md.contains("Betroffene Slots mit Sperren"), "Markdown should have Betroffene Slots mit Sperren");
-		assertTrue(md.contains("1 von 4 (25,00%)"), "Should show 1 von 4 (25,00%)");
+		assertTrue(md.contains("Affected Incident Slots"), "Markdown should have Affected Incident Slots");
+		assertTrue(md.contains("1 of 4 (25.00%)"), "Should show 1 of 4 (25.00%)");
 		assertTrue(md.contains("85"), "Should show 85 blocked requests");
 
 		// Check Section 2 Table contains new columns
-		assertTrue(md.contains("Geblockte Requests"), "Table header should have Geblockte Requests");
-		assertTrue(md.contains("Betroffene Slots (Anteil)"), "Table header should have Betroffene Slots (Anteil)");
-		assertTrue(md.contains("1 / 4 (25,00%)"), "Table row should show 1 / 4 (25,00%)");
-		assertTrue(md.contains("21,25%"), "Block quote for 85 / 400 should be 21,25%");
+		assertTrue(md.contains("Blocked Requests"), "Table header should have Blocked Requests");
+		assertTrue(md.contains("Affected Slots (Ratio)"), "Table header should have Affected Slots (Ratio)");
+		assertTrue(md.contains("1 / 4 (25.00%)"), "Table row should show 1 / 4 (25.00%)");
+		assertTrue(md.contains("21.25%"), "Block quote for 85 / 400 should be 21.25%");
 	}
 
 	@Test
@@ -225,7 +225,7 @@ class DailyReportServiceTest {
 		// 2. Generate report for that date
 		DailyReport report = dailyReportService.generateDailyReport(noteDate);
 		assertNotNull(report);
-		assertTrue(report.reportMarkdown().contains("Anmerkungen & Besonderheiten des Betriebsteams"));
+		assertTrue(report.reportMarkdown().contains("Operator Notes & Highlights"));
 		assertTrue(report.reportMarkdown().contains("Planned database migration"));
 
 		// 3. Update note after report exists - should immediately sync into existing report

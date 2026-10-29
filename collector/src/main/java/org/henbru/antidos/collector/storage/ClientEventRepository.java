@@ -314,9 +314,17 @@ public class ClientEventRepository {
 		return findTopOffendersFiltered(null, null, since, null, null, null, null, null, null, "CLIENT", "BLOCKED", limit);
 	}
 
-	public List<ClientEvent> findRecentEvents(String serverId, String filterIp, int limit) {
+	public List<ClientEvent> findRecentEvents(String serverId, String filterIp, String status, int limit) {
 		List<String> servers = (serverId != null && !serverId.trim().isEmpty()) ? List.of(serverId) : null;
-		return findRecentEventsFiltered(servers, null, null, null, filterIp, null, null, null, limit, 0);
+		return findRecentEventsFiltered(servers, null, null, null, filterIp, null, null, null, status, limit, 0);
+	}
+
+	public List<ClientEvent> findRecentEvents(String serverId, String filterIp, int limit) {
+		return findRecentEvents(serverId, filterIp, null, limit);
+	}
+
+	public List<ClientEvent> findRecentBlockingEvents(String serverId, String filterIp, int limit) {
+		return findRecentEvents(serverId, filterIp, "BLOCKED", limit);
 	}
 
 	/**

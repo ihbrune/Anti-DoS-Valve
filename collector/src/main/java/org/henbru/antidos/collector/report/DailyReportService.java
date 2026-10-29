@@ -113,7 +113,7 @@ public class DailyReportService {
 
 		log.info("Starting daily report aggregation for date {} (range: {} to {})", dateStr, startInstant, endInstant);
 
-		NumberFormat numFmt = NumberFormat.getInstance(Locale.GERMANY);
+		NumberFormat numFmt = NumberFormat.getInstance(Locale.US);
 
 		// 1. Load active valves configuration for slotLength & threshold context
 		Map<String, MonitoredValve> valveConfigMap = new HashMap<>();
@@ -558,55 +558,55 @@ public class DailyReportService {
 		StringBuilder sb = new StringBuilder();
 
 		String statusBadge = switch (status) {
-			case "ATTACK_MITIGATED" -> "🔴 **ATTACK DETECTED & MITIGATED** (Abgewehrte DoS-Welle)";
-			case "DEGRADED" -> "🟡 **DEGRADED PERFORMANCE** (Erhöhte Latenzen oder Serverausfälle)";
-			case "WARNING" -> "🟡 **WARNING** (Sporadische Warnungen oder Timeout-Spitzen)";
-			default -> "🟢 **ALL SYSTEMS OPERATIONAL** (Normaler Regelbetrieb)";
+			case "ATTACK_MITIGATED" -> "🔴 **ATTACK DETECTED & MITIGATED** (Active DoS wave mitigated)";
+			case "DEGRADED" -> "🟡 **DEGRADED PERFORMANCE** (Elevated latencies or node outages)";
+			case "WARNING" -> "🟡 **WARNING** (Sporadic warnings or timeout spikes)";
+			default -> "🟢 **ALL SYSTEMS OPERATIONAL** (Nominal fleet operations)";
 		};
 
 		sb.append("# 🛡️ Anti-DoS Fleet Operational Report — ").append(date).append("\n\n");
-		sb.append("> **Tages-Status:** ").append(statusBadge).append("  \n");
-		sb.append("> **Analyse-Zeitraum:** `").append(date).append(" 00:00:00` bis `").append(date).append(" 23:59:59` (Systemzeit)  \n");
-		sb.append("> **Bericht generiert:** `").append(LocalDateTime.now(ZoneId.systemDefault()).format(DATETIME_FORMATTER)).append("`\n\n");
+		sb.append("> **Fleet Status:** ").append(statusBadge).append("  \n");
+		sb.append("> **Analysis Period:** `").append(date).append(" 00:00:00` to `").append(date).append(" 23:59:59` (System Time)  \n");
+		sb.append("> **Report Compiled:** `").append(LocalDateTime.now(ZoneId.systemDefault()).format(DATETIME_FORMATTER)).append("`\n\n");
 
 		sb.append("---\n\n");
 
 		// Executive Summary
 		double fleetSlotRatio = fleetTotalSlots > 0 ? (fleetBlockedSlots * 100.0) / fleetTotalSlots : 0.0;
 
-		sb.append("## 📊 1. Executive Summary (Flotten-Überblick)\n\n");
-		sb.append("| Metrik | Tageswert | Erläuterung & Kontext |\n");
+		sb.append("## 📊 1. Executive Summary (Fleet Overview)\n\n");
+		sb.append("| Metric | Daily Value | Context & Observations |\n");
 		sb.append("| :--- | :--- | :--- |\n");
-		sb.append("| **Gesamtanzahl Requests** | **").append(numFmt.format(totalRequests)).append("** | Über alle überwachten Valves und Nodes gezählte Anfragen |\n");
-		sb.append("| **Blockierte Requests** | **").append(numFmt.format(totalBlocked)).append("** | Verweigerte Anfragen (HTTP 429) |\n");
-		sb.append("| **Flottenweite Block-Quote** | **").append(String.format(Locale.GERMANY, "%.2f%%", blockRateFleet)).append("** | Anteil abgewiesener Anfragen an der Gesamtlast |\n");
-		sb.append("| **Betroffene Slots mit Sperren** | **").append(numFmt.format(fleetBlockedSlots)).append(" von ").append(numFmt.format(fleetTotalSlots))
-				.append(" (").append(String.format(Locale.GERMANY, "%.2f%%", fleetSlotRatio)).append(")** | Zeitabschnitte (Slots) mit Quotenüberschreitungen |\n");
-		sb.append("| **Aktive Nodes / Valves** | **").append(serverCount).append(" Server / ").append(rawValveAggregates.size()).append(" Valves** | An der Erfassung beteiligte Instanzen |\n");
-		sb.append("| **Geblockte Clients** | **").append(numFmt.format(distinctBlockedClients)).append(" eindeutige IPs** | In Einzelsperren oder Subnetzsperren involviert |\n");
-		sb.append("| **Block-Vorfälle (Client-Events)** | **").append(numFmt.format(totalIncidents)).append("** | Protokollierte Vorfälle in der Event-Historie |\n");
+		sb.append("| **Total Requests** | **").append(numFmt.format(totalRequests)).append("** | Aggregate requests recorded across all monitored Valves and nodes |\n");
+		sb.append("| **Blocked Requests** | **").append(numFmt.format(totalBlocked)).append("** | Denied abusive requests (HTTP 429) |\n");
+		sb.append("| **Fleet Block Rate** | **").append(String.format(Locale.US, "%.2f%%", blockRateFleet)).append("** | Ratio of denied requests to total fleet traffic |\n");
+		sb.append("| **Affected Incident Slots** | **").append(numFmt.format(fleetBlockedSlots)).append(" of ").append(numFmt.format(fleetTotalSlots))
+				.append(" (").append(String.format(Locale.US, "%.2f%%", fleetSlotRatio)).append(")** | Time slots with active rate-limit mitigation |\n");
+		sb.append("| **Active Nodes / Valves** | **").append(serverCount).append(" servers / ").append(rawValveAggregates.size()).append(" valves** | Fleet instances participating in telemetry collection |\n");
+		sb.append("| **Blocked Clients** | **").append(numFmt.format(distinctBlockedClients)).append(" unique IPs** | Involved in individual or subnet rate-limit blocks |\n");
+		sb.append("| **Incident Events (Client Log)** | **").append(numFmt.format(totalIncidents)).append("** | Forensic incident events logged in database |\n");
 
 		// Peak Request Rate
-		sb.append("| **Peak Request-Rate (normalisiert)** | **`")
-				.append(String.format(Locale.GERMANY, "%.1f", fleetPeakReqRate)).append(" req/s`** | ");
+		sb.append("| **Peak Request Rate (Normalized)** | **`")
+				.append(String.format(Locale.US, "%.1f", fleetPeakReqRate)).append(" req/s`** | ");
 		if (peakReqServer != null && peakReqValve != null) {
 			String timeStr = fleetPeakReqTime != null ? fleetPeakReqTime.atZone(ZoneId.systemDefault()).format(TIME_FORMATTER) : "N/A";
-			sb.append(numFmt.format(fleetPeakReqRaw)).append(" Requests in ").append(fleetPeakReqDuration).append("s-Slot auf `")
-					.append(peakReqServer).append("` / Valve `").append(peakReqValve).append("` (um ").append(timeStr).append(" Uhr)");
+			sb.append(numFmt.format(fleetPeakReqRaw)).append(" requests in ").append(fleetPeakReqDuration).append("s slot on `")
+					.append(peakReqServer).append("` / Valve `").append(peakReqValve).append("` (at ").append(timeStr).append(")");
 		} else {
-			sb.append("Keine Last gemessen");
+			sb.append("No traffic recorded");
 		}
 		sb.append(" |\n");
 
 		// Peak Block Rate
-		sb.append("| **Peak Block-Rate (normalisiert)** | **`")
-				.append(String.format(Locale.GERMANY, "%.1f", fleetPeakBlockRate)).append(" blocks/s`** | ");
+		sb.append("| **Peak Block Rate (Normalized)** | **`")
+				.append(String.format(Locale.US, "%.1f", fleetPeakBlockRate)).append(" blocks/s`** | ");
 		if (peakBlockServer != null && peakBlockValve != null && fleetPeakBlockRaw > 0) {
 			String timeStr = fleetPeakBlockTime != null ? fleetPeakBlockTime.atZone(ZoneId.systemDefault()).format(TIME_FORMATTER) : "N/A";
-			sb.append(numFmt.format(fleetPeakBlockRaw)).append(" Blockaden in ").append(fleetPeakBlockDuration).append("s-Slot auf `")
-					.append(peakBlockServer).append("` / Valve `").append(peakBlockValve).append("` (um ").append(timeStr).append(" Uhr)");
+			sb.append(numFmt.format(fleetPeakBlockRaw)).append(" blocks in ").append(fleetPeakBlockDuration).append("s slot on `")
+					.append(peakBlockServer).append("` / Valve `").append(peakBlockValve).append("` (at ").append(timeStr).append(")");
 		} else {
-			sb.append("Keine aktiven Blockaden aufgetreten");
+			sb.append("No active rate-limit blocks occurred");
 		}
 		sb.append(" |\n\n");
 
@@ -616,9 +616,9 @@ public class DailyReportService {
 		sb.append(buildNoteSectionMarkdown(noteMarkdown));
 
 		// Server- & Valve-Breakdown
-		sb.append("## ⚡ 2. Server- & Valve-Statistiken (mit normalisierten Spitzenwerten)\n\n");
-		sb.append("> ℹ️ **Hinweis zur Normalisierung:** Um Valves mit unterschiedlichen Slotlängen (z. B. 5s vs. 60s) objektiv vergleichen zu können, ");
-		sb.append("werden die Peak-Werte auf Sekundenraten (`req/s` und `blocks/s`) umgerechnet.\n\n");
+		sb.append("## ⚡ 2. Server & Valve Telemetry (Normalized Peaks)\n\n");
+		sb.append("> ℹ️ **Normalization Note:** To objectively compare Valves configured with different slot durations (e.g. 5s vs. 60s), ");
+		sb.append("peak values are normalized to per-second rates (`req/s` and `blocks/s`).\n\n");
 
 		// Group valve aggregates by serverId
 		Map<String, List<Object>> serverMap = new LinkedHashMap<>();
@@ -631,14 +631,14 @@ public class DailyReportService {
 		}
 
 		if (serverMap.isEmpty()) {
-			sb.append("*Keine Valve-Telemetriedaten für diesen Tag erfasst.*\n\n");
+			sb.append("*No Valve telemetry recorded for this date.*\n\n");
 		} else {
 			for (Map.Entry<String, List<Object>> entry : serverMap.entrySet()) {
 				String sId = entry.getKey();
 				List<Object> valves = entry.getValue();
 
 				sb.append("### Server `").append(sId).append("` (").append(valves.size()).append(" Valves)\n\n");
-				sb.append("| Valve | Slotlänge | Gesamt-Requests | Geblockte Requests | Block-Quote | Betroffene Slots (Anteil) | Peak-Rate (norm.) | Peak-Slot (raw) | Peak-Auslastung |\n");
+				sb.append("| Valve | Slot Length | Total Requests | Blocked Requests | Block Rate | Affected Slots (Ratio) | Peak Rate (norm.) | Peak Slot (raw) | Peak Utilization |\n");
 				sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
 
 				for (Object vObj : valves) {
@@ -657,16 +657,16 @@ public class DailyReportService {
 
 						double vQuote = vReq > 0 ? (vBlkReq * 100.0) / vReq : 0.0;
 						double slotRatio = slotCnt > 0 ? (blkSlotCnt * 100.0) / slotCnt : 0.0;
-						String utilStr = allowed > 0 ? String.format(Locale.GERMANY, "%.1f%% (%s max)", pUtil, numFmt.format(allowed)) : "–";
-						String slotInfo = numFmt.format(blkSlotCnt) + " / " + numFmt.format(slotCnt) + " (" + String.format(Locale.GERMANY, "%.2f%%", slotRatio) + ")";
+						String utilStr = allowed > 0 ? String.format(Locale.US, "%.1f%% (%s max)", pUtil, numFmt.format(allowed)) : "–";
+						String slotInfo = numFmt.format(blkSlotCnt) + " / " + numFmt.format(slotCnt) + " (" + String.format(Locale.US, "%.2f%%", slotRatio) + ")";
 
 						sb.append("| `").append(vName).append("` | ")
 								.append(slotLen).append("s | ")
 								.append(numFmt.format(vReq)).append(" | ")
 								.append(numFmt.format(vBlkReq)).append(" | ")
-								.append(String.format(Locale.GERMANY, "%.2f%%", vQuote)).append(" | ")
+								.append(String.format(Locale.US, "%.2f%%", vQuote)).append(" | ")
 								.append(slotInfo).append(" | ")
-								.append("**`").append(String.format(Locale.GERMANY, "%.1f", pReqRate)).append(" req/s`** | ")
+								.append("**`").append(String.format(Locale.US, "%.1f", pReqRate)).append(" req/s`** | ")
 								.append(numFmt.format(pRawReq)).append(" in ").append(pReqDur).append("s | ")
 								.append(utilStr).append(" |\n");
 					} catch (Exception ignored) {}
@@ -678,7 +678,7 @@ public class DailyReportService {
 		sb.append("---\n\n");
 
 		// Polling Connectivity & Latency Distribution
-		sb.append("## 🌐 3. Flotten-Konnektivität & Datenabrufzeiten (Polling-Audit)\n\n");
+		sb.append("## 🌐 3. Fleet Connectivity & Polling Latency Audit\n\n");
 
 		try {
 			long totPolls = (Long) rawPollSummary.getClass().getMethod("totalPolls").invoke(rawPollSummary);
@@ -696,13 +696,13 @@ public class DailyReportService {
 
 			double avail = totPolls > 0 ? (succPolls * 100.0) / totPolls : 100.0;
 
-			sb.append("* **Gesamtzahl Abrufe:** ").append(numFmt.format(totPolls)).append("\n");
-			sb.append("* **Erfolgsquote (Verfügbarkeit):** **").append(String.format(Locale.GERMANY, "%.2f%%", avail)).append("** (").append(numFmt.format(succPolls)).append(" erfolgreich)\n");
-			sb.append("* **Warnungen / Fehler:** ").append(warnPolls).append(" Warnungen • ").append(errPolls).append(" Fehler\n");
-			sb.append("* **Antwortzeiten:** Min: `").append(minMs).append("ms` • Avg: `").append(String.format(Locale.GERMANY, "%.1f", avgMs)).append("ms` • Max: `").append(maxMs).append("ms`\n\n");
+			sb.append("* **Total Invocations:** ").append(numFmt.format(totPolls)).append("\n");
+			sb.append("* **Success Rate (Availability):** **").append(String.format(Locale.US, "%.2f%%", avail)).append("** (").append(numFmt.format(succPolls)).append(" successful)\n");
+			sb.append("* **Warnings / Errors:** ").append(warnPolls).append(" warnings • ").append(errPolls).append(" errors\n");
+			sb.append("* **Response Times:** Min: `").append(minMs).append("ms` • Avg: `").append(String.format(Locale.US, "%.1f", avgMs)).append("ms` • Max: `").append(maxMs).append("ms`\n\n");
 
-			sb.append("### Häufigkeitsverteilung der Abrufzeiten (Latenz-Histogramm)\n\n");
-			sb.append("| Latenz-Intervall | Beschreibung | Anzahl Abrufe | Anteil an Gesamt-Polls |\n");
+			sb.append("### Polling Latency Distribution Histogram\n\n");
+			sb.append("| Latency Interval | Description | Invocations | Share of Total Polls |\n");
 			sb.append("| :--- | :--- | :--- | :--- |\n");
 
 			double pLt50 = totPolls > 0 ? (bLt50 * 100.0) / totPolls : 0.0;
@@ -711,22 +711,22 @@ public class DailyReportService {
 			double pGte500 = totPolls > 0 ? (bGte500 * 100.0) / totPolls : 0.0;
 			double pErr = totPolls > 0 ? (errPolls * 100.0) / totPolls : 0.0;
 
-			sb.append("| **`< 50 ms`** | ⚡ Sehr schnell (Optimal) | ").append(numFmt.format(bLt50)).append(" | ").append(String.format(Locale.GERMANY, "%.1f%%", pLt50)).append(" |\n");
-			sb.append("| **`50 – 200 ms`** | 🟢 Normaler Regelbereich | ").append(numFmt.format(b50to200)).append(" | ").append(String.format(Locale.GERMANY, "%.1f%%", p50to200)).append(" |\n");
-			sb.append("| **`200 – 500 ms`** | 🟡 Erhöhte Last / Netzwerklatenz | ").append(numFmt.format(b200to500)).append(" | ").append(String.format(Locale.GERMANY, "%.1f%%", p200to500)).append(" |\n");
-			sb.append("| **`> 500 ms`** | 🟠 Verlangsamte Antwort (Slow Poll) | ").append(numFmt.format(bGte500)).append(" | ").append(String.format(Locale.GERMANY, "%.1f%%", pGte500)).append(" |\n");
-			sb.append("| **Fehler / Timeout** | 🔴 Fehlgeschlagene Abrufe | ").append(numFmt.format(errPolls)).append(" | ").append(String.format(Locale.GERMANY, "%.1f%%", pErr)).append(" |\n\n");
+			sb.append("| **`< 50 ms`** | ⚡ Very Fast (Optimal) | ").append(numFmt.format(bLt50)).append(" | ").append(String.format(Locale.US, "%.1f%%", pLt50)).append(" |\n");
+			sb.append("| **`50 – 200 ms`** | 🟢 Nominal Operating Range | ").append(numFmt.format(b50to200)).append(" | ").append(String.format(Locale.US, "%.1f%%", p50to200)).append(" |\n");
+			sb.append("| **`200 – 500 ms`** | 🟡 Elevated Load / Network Latency | ").append(numFmt.format(b200to500)).append(" | ").append(String.format(Locale.US, "%.1f%%", p200to500)).append(" |\n");
+			sb.append("| **`> 500 ms`** | 🟠 Slow Response (High Lag) | ").append(numFmt.format(bGte500)).append(" | ").append(String.format(Locale.US, "%.1f%%", pGte500)).append(" |\n");
+			sb.append("| **Errors / Timeouts** | 🔴 Failed Poll Invocations | ").append(numFmt.format(errPolls)).append(" | ").append(String.format(Locale.US, "%.1f%%", pErr)).append(" |\n\n");
 
 		} catch (Exception e) {
-			sb.append("*Keine Polling-Statistiken verfügbar.*\n\n");
+			sb.append("*No polling telemetry available for this date.*\n\n");
 		}
 
 		// Server Outages Table
-		sb.append("### ⚠️ Aufgetretene Verbindungsausfälle & Fehler\n\n");
+		sb.append("### ⚠️ Connection Failures & Node Outages\n\n");
 		if (rawOutages == null || rawOutages.isEmpty()) {
-			sb.append("✅ *Keine Verbindungsabbrüche oder Nichterreichbarkeiten am heutigen Tag aufgezeichnet.*\n\n");
+			sb.append("✅ *No connection dropouts or node unreachable errors recorded for this date.*\n\n");
 		} else {
-			sb.append("| Server | Uhrzeit | HTTP-Code | Latenz | Fehlermeldung |\n");
+			sb.append("| Server | Timestamp | HTTP Code | Latency | Error Message |\n");
 			sb.append("| :--- | :--- | :--- | :--- | :--- |\n");
 			for (Object outObj : rawOutages) {
 				try {
@@ -753,17 +753,17 @@ public class DailyReportService {
 		sb.append("---\n\n");
 
 		// Threat Highlights
-		sb.append("## 🚨 4. Sicherheits- & Angriffs-Highlights\n\n");
+		sb.append("## 🚨 4. Threat Intelligence & Security Highlights\n\n");
 
 		if (topClients.isEmpty()) {
-			sb.append("✅ *Keine blockierten Clients für diesen Tag erfasst. Das System lief vollständig unbeeinträchtigt.*\n\n");
+			sb.append("✅ *No blocked clients recorded for this date. The fleet operated unhindered.*\n\n");
 		} else {
-			sb.append("### Top 10 Auffälligste geblockte Adressen / Subnetze\n\n");
-			sb.append("| IP / Subnetz | Gesamt-Anfragen | Block-Anfragen | ASN / Betreiber | Land | Client-Typ |\n");
+			sb.append("### Top 10 Offending Client Addresses & Subnets\n\n");
+			sb.append("| IP / Subnet | Total Requests | Blocked Requests | ASN / Operator | Country | Client Type |\n");
 			sb.append("| :--- | :--- | :--- | :--- | :--- | :--- |\n");
 
 			for (TopOffenderSummary top : topClients) {
-				String asnStr = top.asn() != null ? "AS" + top.asn() + (top.asOrg() != null ? " (" + top.asOrg() + ")" : "") : "Unbekannt";
+				String asnStr = top.asn() != null ? "AS" + top.asn() + (top.asOrg() != null ? " (" + top.asOrg() + ")" : "") : "Unknown";
 				String country = top.countryCode() != null && !top.countryCode().isBlank() ? top.countryCode() : "–";
 				String clientType = top.clientType() != null ? top.clientType().name() : "UNKNOWN";
 
@@ -778,8 +778,8 @@ public class DailyReportService {
 		}
 
 		if (!topAsns.isEmpty()) {
-			sb.append("### Hauptverursachende Autonome Systeme (ASNs)\n\n");
-			sb.append("| ASN | Betreiber / Organisation | Gesamt-Anfragen | Block-Anfragen |\n");
+			sb.append("### Top Abusive Autonomous Systems (ASNs)\n\n");
+			sb.append("| ASN | Operator / Organization | Total Requests | Blocked Requests |\n");
 			sb.append("| :--- | :--- | :--- | :--- |\n");
 
 			for (TopOffenderSummary asnTop : topAsns) {
@@ -794,7 +794,7 @@ public class DailyReportService {
 		}
 
 		sb.append("---\n\n");
-		sb.append("*Dieser Bericht wurde automatisiert vom Anti-DoS Collector generiert und verbleibt permanent im System archiviert.*  \n");
+		sb.append("*This operational report was automatically compiled by Anti-DoS Collector and remains permanently archived.*  \n");
 
 		return sb.toString();
 	}
@@ -834,7 +834,7 @@ public class DailyReportService {
 		StringBuilder sb = new StringBuilder();
 		sb.append("<!-- DAILY_NOTE_START -->\n");
 		if (noteMarkdown != null && !noteMarkdown.isBlank()) {
-			sb.append("### 📝 Anmerkungen & Besonderheiten des Betriebsteams\n\n");
+			sb.append("### 📝 Operator Notes & Highlights\n\n");
 			sb.append(noteMarkdown.trim()).append("\n\n");
 			sb.append("---\n\n");
 		}

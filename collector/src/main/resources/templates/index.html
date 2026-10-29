@@ -149,10 +149,10 @@
                 <span>&#x1F4CB;</span> Recent Blocking Incidents
             </div>
             <div style="display:flex; align-items:center; gap:8px;">
-                <button class="btn" hx-get="/fragments/recent-events" hx-target="#events-container" hx-swap="outerHTML">
+                <button class="btn" hx-get="/fragments/recent-events?status=BLOCKED" hx-target="#events-container" hx-swap="outerHTML">
                     Refresh Log
                 </button>
-                <a href="/events" class="btn" style="border-color: var(--border-accent); color: var(--color-primary);" title="Open full multi-server Incident Explorer">
+                <a href="/events?status=BLOCKED" class="btn" style="border-color: var(--border-accent); color: var(--color-primary);" title="Open full multi-server Incident Explorer filtered for blocked incidents">
                     Incident Explorer &rarr;
                 </a>
             </div>

@@ -5,10 +5,10 @@
 <!-- Fragment: eventsTable -->
 <div th:fragment="eventsTable" class="table-responsive" id="events-container"
      hx-trigger="annotationChanged from:body"
-     hx-get="/fragments/recent-events"
+     hx-get="/fragments/recent-events?status=BLOCKED"
      hx-swap="outerHTML">
     <div th:if="${#lists.isEmpty(recentEvents)}" class="empty-state">
-        <p>No recent client events logged.</p>
+        <p>No recent blocking incidents logged.</p>
     </div>
 
     <table th:unless="${#lists.isEmpty(recentEvents)}">

@@ -974,12 +974,21 @@ public class AntiDoSStatusRenderer {
 		sb.append("    <tr><th>System Settings</th><td>Log Throttling: <code>").append(logThrottling)
 				.append("</code> &bull; Async Eviction: <code>").append(asyncEvict).append("</code></td></tr>\n");
 
-		String visitorCookieStatus = target.isVisitorCookieEnabled()
-				? "Enabled (name: <code>" + escapeHtml(target.getVisitorCookieName()) + "</code>, TTL: <strong>"
-						+ target.getVisitorCookieTtlSeconds() + "s</strong>, masks: /" + target.getVisitorCookieSubnetMaskV4()
-						+ " v4, /" + target.getVisitorCookieSubnetMaskV6() + " v6"
-						+ (target.getVisitorCookieDomain() != null ? ", domain: <code>" + escapeHtml(target.getVisitorCookieDomain()) + "</code>" : "") + ")"
-				: "Disabled";
+		String visitorCookieStatus;
+		if (target.isVisitorCookieEnabled()) {
+			visitorCookieStatus = "Enabled (name: <code>" + escapeHtml(target.getVisitorCookieName()) + "</code>, TTL: <strong>"
+					+ target.getVisitorCookieTtlSeconds() + "s</strong>, masks: /" + target.getVisitorCookieSubnetMaskV4()
+					+ " v4, /" + target.getVisitorCookieSubnetMaskV6() + " v6"
+					+ (target.getVisitorCookieDomain() != null ? ", domain: <code>" + escapeHtml(target.getVisitorCookieDomain()) + "</code>" : "") + ")";
+		} else if (target.isVisitorTrackingActive()) {
+			AntiDoSValve upstream = target.getInheritedVisitorCookieValve();
+			String upstreamName = upstream != null ? escapeHtml(upstream.getMonitorName()) : "upstream";
+			visitorCookieStatus = "Inherited from <strong>" + upstreamName + "</strong> (name: <code>"
+					+ escapeHtml(target.getEffectiveVisitorCookieName()) + "</code>"
+					+ (target.getEffectiveVisitorCookieDomain() != null ? ", domain: <code>" + escapeHtml(target.getEffectiveVisitorCookieDomain()) + "</code>" : "") + ")";
+		} else {
+			visitorCookieStatus = "Disabled";
+		}
 		sb.append("    <tr><th>Visitor Cookie</th><td>").append(visitorCookieStatus).append("</td></tr>\n");
 
 		sb.append("  </table>\n</div>\n");
@@ -1075,7 +1084,7 @@ public class AntiDoSStatusRenderer {
 			sb.append("  <div style=\"color:var(--muted);padding:4px 0;\">No blocked clients in ").append(escapeHtml(slotLabel.toLowerCase())).append(".</div>\n");
 		} else {
 			boolean showSubnetDistinct = target.isSubnetAggregationActive();
-			boolean showReturning = target.isVisitorCookieEnabled();
+			boolean showReturning = target.isVisitorTrackingActive();
 			sb.append("  <table class=\"data-table\">\n")
 					.append("    <thead><tr><th>IP / Subnet Key</th>");
 			if (showSubnetDistinct) {
@@ -1124,7 +1133,7 @@ public class AntiDoSStatusRenderer {
 			sb.append("  <div style=\"color:var(--muted);padding:4px 0;\">No active clients in ").append(escapeHtml(slotLabel.toLowerCase())).append(".</div>\n");
 		} else {
 			boolean showSubnetDistinct = target.isSubnetAggregationActive();
-			boolean showReturning = target.isVisitorCookieEnabled();
+			boolean showReturning = target.isVisitorTrackingActive();
 			sb.append("  <table class=\"data-table\">\n")
 					.append("    <thead><tr><th>IP / Subnet Key</th>");
 			if (showSubnetDistinct) {
@@ -1222,9 +1231,10 @@ public class AntiDoSStatusRenderer {
 					.append("      \"collectorIntegration\": \"").append(escapeJson(v.getCollectorIntegration())).append("\",\n")
 					.append("      \"collectorActive\": ").append(v.isExtendedMetricsActive()).append(",\n")
 					.append("      \"lastCollectorAccess\": ").append(v.getLastCollectorScrapeTime() > 0 ? "\"" + sdf.format(new Date(v.getLastCollectorScrapeTime())) + "\"" : "null").append(",\n")
-					.append("      \"visitorCookieEnabled\": ").append(v.isVisitorCookieEnabled()).append(",\n")
-					.append("      \"visitorCookieName\": \"").append(escapeJson(v.getVisitorCookieName())).append("\",\n")
-					.append("      \"visitorCookieDomain\": ").append(v.getVisitorCookieDomain() != null ? "\"" + escapeJson(v.getVisitorCookieDomain()) + "\"" : "null").append(",\n")
+					.append("      \"visitorCookieEnabled\": ").append(v.isVisitorTrackingActive()).append(",\n")
+					.append("      \"visitorCookieInherited\": ").append(!v.isVisitorCookieEnabled() && v.isVisitorTrackingActive()).append(",\n")
+					.append("      \"visitorCookieName\": \"").append(escapeJson(v.getEffectiveVisitorCookieName())).append("\",\n")
+					.append("      \"visitorCookieDomain\": ").append(v.getEffectiveVisitorCookieDomain() != null ? "\"" + escapeJson(v.getEffectiveVisitorCookieDomain()) + "\"" : "null").append(",\n")
 					.append("      \"maxIPCacheSize\": ").append(maxActive).append(",\n")
 					.append("      \"maxBlockedIPCacheSize\": ").append(maxBlocked).append(",\n")
 					.append("      \"currentActiveCounters\": ").append(activeCounters).append(",\n")
@@ -1323,9 +1333,10 @@ public class AntiDoSStatusRenderer {
 				.append("    \"collectorIntegration\": \"").append(escapeJson(target.getCollectorIntegration())).append("\",\n")
 				.append("    \"collectorActive\": ").append(target.isExtendedMetricsActive()).append(",\n")
 				.append("    \"lastCollectorAccess\": ").append(target.getLastCollectorScrapeTime() > 0 ? "\"" + sdf.format(new Date(target.getLastCollectorScrapeTime())) + "\"" : "null").append(",\n")
-				.append("    \"visitorCookieEnabled\": ").append(target.isVisitorCookieEnabled()).append(",\n")
-				.append("    \"visitorCookieName\": \"").append(escapeJson(target.getVisitorCookieName())).append("\",\n")
-				.append("    \"visitorCookieDomain\": ").append(target.getVisitorCookieDomain() != null ? "\"" + escapeJson(target.getVisitorCookieDomain()) + "\"" : "null").append(",\n")
+				.append("    \"visitorCookieEnabled\": ").append(target.isVisitorTrackingActive()).append(",\n")
+				.append("    \"visitorCookieInherited\": ").append(!target.isVisitorCookieEnabled() && target.isVisitorTrackingActive()).append(",\n")
+				.append("    \"visitorCookieName\": \"").append(escapeJson(target.getEffectiveVisitorCookieName())).append("\",\n")
+				.append("    \"visitorCookieDomain\": ").append(target.getEffectiveVisitorCookieDomain() != null ? "\"" + escapeJson(target.getEffectiveVisitorCookieDomain()) + "\"" : "null").append(",\n")
 				.append("    \"maxIPCacheSize\": ").append(maxActive).append(",\n")
 				.append("    \"maxBlockedIPCacheSize\": ").append(maxBlocked).append(",\n")
 				.append("    \"currentActiveCounters\": ").append(activeCounters).append(",\n")
@@ -1433,7 +1444,7 @@ public class AntiDoSStatusRenderer {
 					.append("      \"effective\": ").append(e.effective()).append(",\n")
 					.append("      \"limit\": ").append(target.getAllowedRequestsPerSlot()).append(",\n")
 					.append("      \"distinctClients\": ").append(e.distinctClients() > 0 ? e.distinctClients() : 1).append(",\n")
-					.append("      \"returningCount\": ").append(target.isVisitorCookieEnabled() ? e.returningCount() : "null").append(",\n")
+					.append("      \"returningCount\": ").append(target.isVisitorTrackingActive() ? e.returningCount() : "null").append(",\n")
 					.append("      \"status\": \"BLOCKED\"\n")
 					.append("    }");
 		}
@@ -1477,7 +1488,7 @@ public class AntiDoSStatusRenderer {
 					.append("      \"limit\": ").append(target.getAllowedRequestsPerSlot()).append(",\n")
 					.append("      \"quotaPercent\": ").append(pct).append(",\n")
 					.append("      \"distinctClients\": ").append(e.distinctClients() > 0 ? e.distinctClients() : 1).append(",\n")
-					.append("      \"returningCount\": ").append(target.isVisitorCookieEnabled() ? e.returningCount() : "null").append("\n")
+					.append("      \"returningCount\": ").append(target.isVisitorTrackingActive() ? e.returningCount() : "null").append("\n")
 					.append("    }");
 		}
 		sb.append("\n  ]\n}\n");

@@ -1827,6 +1827,18 @@ class AntiDoSValveTest {
 		assertEquals(2, downCounter2.getCount());
 		assertEquals(1, downCounter2.getReturningCount(), "Downstream valve must record returning visit via shared context");
 
+		// Verify downstream status rendering reflects active/inherited visitor tracking
+		assertTrue(downstreamValve.isVisitorTrackingActive(), "Downstream valve must report visitor tracking active when upstream has cookie enabled");
+		assertEquals("_adv", downstreamValve.getEffectiveVisitorCookieName());
+		String downstreamJson = downstreamValve.getStatusRenderer().buildStatusJsonDetails("DOWNSTREAM_CONTEXT_VALVE", null, null, null, null, null, null);
+		assertTrue(downstreamJson.contains("\"visitorCookieEnabled\": true"), "Downstream JSON must report visitorCookieEnabled = true");
+		assertTrue(downstreamJson.contains("\"visitorCookieInherited\": true"), "Downstream JSON must report visitorCookieInherited = true");
+		assertTrue(downstreamJson.contains("\"returningCount\": 1"), "Downstream JSON must report actual returningCount instead of null");
+
+		String downstreamHtml = downstreamValve.getStatusRenderer().buildStatusHtmlDetails("DOWNSTREAM_CONTEXT_VALVE");
+		assertTrue(downstreamHtml.contains("Inherited from <strong>UPSTREAM_HOST_VALVE</strong>"), "Downstream HTML must display inherited visitor status");
+		assertTrue(downstreamHtml.contains("<th title=\"Requests carrying valid visitor cookie\">Returning</th>"), "Downstream HTML must include Returning column");
+
 		upstreamValve.stop();
 		downstreamValve.stop();
 	}

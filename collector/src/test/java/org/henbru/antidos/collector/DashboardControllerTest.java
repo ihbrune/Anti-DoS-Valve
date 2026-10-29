@@ -86,10 +86,25 @@ class DashboardControllerTest {
 
 	@Test
 	void testRecentEventsFragment() throws Exception {
+		clientEventRepository.batchUpsert(List.of(
+				new org.henbru.antidos.collector.model.ClientEvent(
+						null, "TestServer", "RateLimiter", 1001L,
+						Instant.now(), "198.51.100.99",
+						150, 0, true, "BLOCKED", true, Instant.now()
+				),
+				new org.henbru.antidos.collector.model.ClientEvent(
+						null, "TestServer", "RateLimiter", 1002L,
+						Instant.now(), "203.0.113.88",
+						50, 0, false, "ACTIVE", true, Instant.now()
+				)
+		));
+
 		mockMvc.perform(get("/fragments/recent-events"))
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("events-container")))
-				.andExpect(content().string(containsString("annotationChanged from:body")));
+				.andExpect(content().string(containsString("annotationChanged from:body")))
+				.andExpect(content().string(containsString("198.51.100.99")))
+				.andExpect(content().string(not(containsString("203.0.113.88"))));
 	}
 
 	@Test

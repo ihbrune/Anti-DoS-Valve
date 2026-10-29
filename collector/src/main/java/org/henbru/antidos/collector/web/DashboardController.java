@@ -250,12 +250,14 @@ public class DashboardController {
 	public String recentEventsFragment(
 			@RequestParam(name = "serverId", required = false) String serverId,
 			@RequestParam(name = "filterIp", required = false) String filterIp,
+			@RequestParam(name = "status", required = false, defaultValue = "BLOCKED") String status,
 			@RequestParam(name = "limit", defaultValue = "50") int limit,
 			Model model) {
-		List<ClientEvent> events = clientEventRepository.findRecentEvents(serverId, filterIp, limit);
+		List<ClientEvent> events = clientEventRepository.findRecentEvents(serverId, filterIp, status, limit);
 		model.addAttribute("recentEvents", events);
 		model.addAttribute("selectedServer", serverId);
 		model.addAttribute("filterIp", filterIp);
+		model.addAttribute("selectedStatus", status);
 		return "fragments/recent-events :: eventsTable";
 	}
 
@@ -621,7 +623,7 @@ public class DashboardController {
 		Instant since24h = Instant.now().minus(24, ChronoUnit.HOURS);
 
 		List<TopOffenderSummary> topOffenders = clientEventRepository.findTopOffenders(since24h, 25);
-		List<ClientEvent> recentEvents = clientEventRepository.findRecentEvents(null, null, 50);
+		List<ClientEvent> recentEvents = clientEventRepository.findRecentBlockingEvents(null, null, 50);
 		List<SlotSnapshot> recentSlots = slotSnapshotRepository.findRecentFleet(20);
 
 		model.addAttribute("heartbeats", heartbeats);

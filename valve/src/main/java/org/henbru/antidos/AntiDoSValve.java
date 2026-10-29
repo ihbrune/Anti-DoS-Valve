@@ -818,6 +818,70 @@ public class AntiDoSValve extends ValveBase {
 		return visitorCookieEnabled;
 	}
 
+	/**
+	 * Returns true if this valve actively validates visitor cookies itself, OR if another active valve
+	 * in the Tomcat JVM has visitor cookie tracking enabled (allowing this valve to inherit validated visitor state).
+	 *
+	 * @return true if visitor tracking is active or inherited from an upstream valve
+	 */
+	public boolean isVisitorTrackingActive() {
+		if (this.visitorCookieEnabled) {
+			return true;
+		}
+		for (AntiDoSValve v : activeValves) {
+			if (v != this && v.isVisitorCookieEnabled()) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Returns the upstream valve from which visitor cookie tracking is inherited, or null if this valve
+	 * manages its own cookies or no active valve has cookies enabled.
+	 *
+	 * @return upstream AntiDoSValve or null
+	 */
+	public AntiDoSValve getInheritedVisitorCookieValve() {
+		if (this.visitorCookieEnabled) {
+			return null;
+		}
+		for (AntiDoSValve v : activeValves) {
+			if (v != this && v.isVisitorCookieEnabled()) {
+				return v;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Returns the effective cookie name used for visitor tracking (either this valve's configured name
+	 * or the inherited name from an active upstream valve).
+	 *
+	 * @return effective visitor cookie name
+	 */
+	public String getEffectiveVisitorCookieName() {
+		if (this.visitorCookieEnabled) {
+			return this.visitorCookieName;
+		}
+		AntiDoSValve upstream = getInheritedVisitorCookieValve();
+		return upstream != null ? upstream.getVisitorCookieName() : this.visitorCookieName;
+	}
+
+	/**
+	 * Returns the effective cookie domain used for visitor tracking (either this valve's configured domain
+	 * or the inherited domain from an active upstream valve).
+	 *
+	 * @return effective visitor cookie domain or null
+	 */
+	public String getEffectiveVisitorCookieDomain() {
+		if (this.visitorCookieEnabled) {
+			return this.visitorCookieDomain;
+		}
+		AntiDoSValve upstream = getInheritedVisitorCookieValve();
+		return upstream != null ? upstream.getVisitorCookieDomain() : this.visitorCookieDomain;
+	}
+
 	public void setVisitorCookieEnabled(boolean visitorCookieEnabled) {
 		this.visitorCookieEnabled = visitorCookieEnabled;
 	}
