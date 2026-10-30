@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,145 +11,153 @@
     <script th:src="@{/js/htmx.min.js}" defer></script>
     <script th:src="@{/js/htmx-lite.js}" defer></script>
 </head>
+
 <body>
 
-<div class="app-container">
-    <!-- Navbar -->
-    <header class="navbar">
-        <a href="/" class="brand">
-            <div class="brand-icon">&#x1F6E1;</div>
-            <div>
-                <div class="brand-title">Anti-DoS Fleet Manager</div>
-                <div class="brand-subtitle">Network Notes &amp; Forensics Memory</div>
-            </div>
-        </a>
-        <div class="nav-actions">
-            <div class="nav-links">
-                <a href="/" class="btn" title="Return to Fleet Overview Dashboard">
-                    <span>&#x2190;</span> Dashboard
-                </a>
-                <a href="/analytics" class="btn" title="Visual trend curves, bot-mix, and residential proxy cluster scatterplot">
-                    <span>&#x1F4CA;</span> Analytics
-                </a>
-                <a href="/offenders" class="btn" title="View aggregated Top Offender and Subnet Analytics">
-                    <span>&#x26A0;</span> Top Offenders
-                </a>
-                <a href="/profiles" class="btn" title="Subnet Traffic Profiles, 30-Day Baselines &amp; Surge Radar">
-                    <span>&#x26A1;</span> Profiles
-                </a>
-                <a href="/events" class="btn" title="Multi-Server Incident Explorer with advanced filtering">
-                    <span>&#x1F4CB;</span> Incidents
-                </a>
-                <a href="/notes" class="btn active" title="Investigative Annotations &amp; Network Notes">
-                    <span>&#x1F4DD;</span> Notes
-                </a>
-                <a href="/reports" class="btn" title="Permanent Operational Daily Summary Reports">
-                    <span>&#x1F4D1;</span> Reports
-                </a>
-                <a href="/poll-log" class="btn" title="View polling event audit log">
-                    <span>&#x1F4DC;</span> Event Log
-                </a>
-                <a href="/crawlers" class="btn" title="Verified Search Engine &amp; AI Crawler IP Range Feeds">
-                    <span>&#x1F916;</span> Crawlers
-                </a>
-            </div>
-            <div class="nav-divider"></div>
-            <div class="nav-utilities">
-                <a href="/system" class="nav-util-btn" title="System status, telemetry rules &amp; configuration" aria-label="System &amp; Configuration">
-                    <span>&#x2699;</span>
-                </a>
-                <button type="button" class="nav-util-btn history-toggle-btn"
-                        onclick="openHistoryDrawer()"
+    <div class="app-container">
+        <!-- Navbar -->
+        <header class="navbar">
+            <a href="/" class="brand">
+                <div class="brand-icon">&#x1F6E1;</div>
+                <div>
+                    <div class="brand-title">Anti-DoS Fleet Manager</div>
+                    <div class="brand-subtitle">Network Notes &amp; Forensics Memory</div>
+                </div>
+            </a>
+            <div class="nav-actions">
+                <div class="nav-links">
+                    <a href="/" class="btn" title="Return to Fleet Overview Dashboard">
+                        <span>&#x2190;</span> Dashboard
+                    </a>
+                    <a href="/analytics" class="btn"
+                        title="Visual trend curves, bot-mix, and residential proxy cluster scatterplot">
+                        <span>&#x1F4CA;</span> Analytics
+                    </a>
+                    <a href="/offenders" class="btn" title="View aggregated Top Offender and Subnet Analytics">
+                        <span>&#x26A0;</span> Top Offenders
+                    </a>
+                    <a href="/profiles" class="btn" title="Subnet Traffic Profiles, 30-Day Baselines &amp; Surge Radar">
+                        <span>&#x26A1;</span> Profiles
+                    </a>
+                    <a href="/events" class="btn" title="Multi-Server Incident Explorer with advanced filtering">
+                        <span>&#x1F4CB;</span> Incidents
+                    </a>
+                    <a href="/notes" class="btn active" title="Investigative Annotations &amp; Network Notes">
+                        <span>&#x1F4DD;</span> Notes
+                    </a>
+                    <a href="/reports" class="btn" title="Permanent Operational Daily Summary Reports">
+                        <span>&#x1F4D1;</span> Reports
+                    </a>
+                    <a href="/poll-log" class="btn" title="View polling event audit log">
+                        <span>&#x1F4DC;</span> Event Log
+                    </a>
+                    <a href="/crawlers" class="btn" title="Verified Search Engine &amp; AI Crawler IP Range Feeds">
+                        <span>&#x1F916;</span> Crawlers
+                    </a>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-utilities">
+                    <a href="/system" class="nav-util-btn" title="System status, telemetry rules &amp; configuration"
+                        aria-label="System &amp; Configuration">
+                        <span>&#x2699;</span>
+                    </a>
+                    <button type="button" class="nav-util-btn history-toggle-btn" onclick="openHistoryDrawer()"
                         title="Recent Investigation History (IPs, Subnets &amp; ASNs)"
                         aria-label="Investigation History">
-                    <span>&#x1F552;</span>
-                    <span class="history-badge-count" style="display:none;"></span>
-                </button>
-                <button type="button" class="nav-util-btn"
+                        <span>&#x1F552;</span>
+                        <span class="history-badge-count" style="display:none;"></span>
+                    </button>
+                    <button type="button" class="nav-util-btn"
                         hx-get="/fragments/help?doc=ui&section=incident-explorer-forensic-log-search"
-                        hx-target="#help-drawer-content"
-                        onclick="openHelpDrawer()"
-                        title="Open Help Guide"
+                        hx-target="#help-drawer-content" onclick="openHelpDrawer()" title="Open Help Guide"
                         aria-label="Help Guide">
-                    <span>&#x2753;</span>
-                </button>
-                <a href="/help" class="nav-util-btn" title="Full offline documentation repository" aria-label="Documentation">
-                    <span>&#x1F4D6;</span>
-                </a>
-                <button type="button" class="nav-util-btn btn-theme-toggle" onclick="toggleTheme()" title="Switch Light / Dark Theme" aria-label="Toggle theme">
-                    <span class="theme-icon-sun">&#x2600;&#xFE0F;</span>
-                    <span class="theme-icon-moon">&#x1F319;</span>
-                </button>
+                        <span>&#x2753;</span>
+                    </button>
+                    <a href="/help" class="nav-util-btn" title="Full offline documentation repository"
+                        aria-label="Documentation">
+                        <span>&#x1F4D6;</span>
+                    </a>
+                    <button type="button" class="nav-util-btn btn-theme-toggle" onclick="toggleTheme()"
+                        title="Switch Light / Dark Theme" aria-label="Toggle theme">
+                        <span class="theme-icon-sun">&#x2600;&#xFE0F;</span>
+                        <span class="theme-icon-moon">&#x1F319;</span>
+                    </button>
+                </div>
             </div>
-        </div>
-    </header>
+        </header>
 
-    <!-- Header & Title -->
-    <div class="page-header" style="margin-bottom: 24px;">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap;">
-            <div>
-                <h1 style="font-size: 26px; font-weight: 800; margin-bottom: 6px; display: flex; align-items: center; gap: 10px;">
-                    <span>&#x1F4DD;</span> Network Notes &amp; Forensic Memory
-                </h1>
-                <p style="color: var(--text-muted); font-size: 14px; margin: 0;">
-                    Persistent operator intelligence on ASNs and subnets &ndash; completely immune to data retention cleanups.
-                </p>
-            </div>
-            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                <a href="/notes/export" class="btn btn-secondary" title="Export all notes to JSON file">
-                    <span>&#x1F4E5;</span> Export JSON
-                </a>
-                <button type="button" class="btn btn-secondary"
-                        hx-get="/notes/modal/import"
-                        hx-target="#note-modal-container"
-                        title="Import notes from JSON file">
-                    <span>&#x1F4E4;</span> Import JSON
-                </button>
-                <button type="button" class="btn btn-primary"
-                        hx-get="/notes/modal/new"
+        <!-- Header & Title -->
+        <div class="page-header" style="margin-bottom: 24px;">
+            <div
+                style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap;">
+                <div>
+                    <h1
+                        style="font-size: 26px; font-weight: 800; margin-bottom: 6px; display: flex; align-items: center; gap: 10px;">
+                        <span>&#x1F4DD;</span> Network Notes &amp; Forensic Memory
+                    </h1>
+                    <p style="color: var(--text-muted); font-size: 14px; margin: 0;">
+                        Persistent operator intelligence on ASNs and subnets &ndash; completely immune to data retention
+                        cleanups.
+                    </p>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <a href="/notes/export" class="btn btn-secondary" title="Export all notes to JSON file">
+                        <span>&#x1F4E5;</span> Export JSON
+                    </a>
+                    <button type="button" class="btn btn-secondary" hx-get="/notes/modal/import"
+                        hx-target="#note-modal-container" title="Import notes from JSON file">
+                        <span>&#x1F4E4;</span> Import JSON
+                    </button>
+                    <button type="button" class="btn btn-primary" hx-get="/notes/modal/new"
                         hx-target="#note-modal-container">
-                    <span>&#x2795;</span> New Note
-                </button>
+                        <span>&#x2795;</span> New Note
+                    </button>
+                </div>
             </div>
         </div>
+
+        <!-- Main Content: Notes List Fragment -->
+        <div th:replace="~{fragments/notes-list :: notesList}"></div>
+
+        <!-- Modal Target Container -->
+        <div id="note-modal-container"></div>
+
+        <!-- Contextual Slide-Over Help Drawer -->
+        <div th:replace="~{fragments/help-drawer :: helpDrawer}"></div>
     </div>
 
-    <!-- Main Content: Notes List Fragment -->
-    <div th:replace="~{fragments/notes-list :: notesList}"></div>
-
-    <!-- Modal Target Container -->
-    <div id="note-modal-container"></div>
-
-    <!-- Contextual Slide-Over Help Drawer -->
-    <div th:replace="~{fragments/help-drawer :: helpDrawer}"></div>
-</div>
-
-<script>
-    function closeNoteModal() {
-        const c = document.getElementById('note-modal-container');
-        if (c) c.innerHTML = '';
-    }
-
-    function updateTargetPlaceholder(targetType) {
-        const input = document.getElementById('targetKeyInput');
-        const help = document.getElementById('targetHelpText');
-        if (!input || !help) return;
-
-        if (targetType === 'ASN') {
-            input.placeholder = 'e.g. AS24940 or 24940';
-            help.innerHTML = 'ASN format: e.g. <code>AS24940</code> (Hetzner), <code>AS16276</code> (OVH)';
-        } else {
-            input.placeholder = 'e.g. 198.51.100.0/24 or 2001:db8::/64';
-            help.innerHTML = 'Subnet CIDR e.g. <code>198.51.100.0/24</code> or IPv6 <code>2001:db8::/64</code>';
+    <script>
+        function closeNoteModal(e) {
+            if (e) {
+                if (typeof e.stopPropagation === 'function') e.stopPropagation();
+                if (typeof e.preventDefault === 'function') e.preventDefault();
+            }
+            const c = document.getElementById('note-modal-container');
+            if (c) c.innerHTML = '';
+            document.querySelectorAll('.note-modal-overlay, #note-modal-wrapper').forEach(el => el.remove());
         }
-    }
 
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            closeNoteModal();
+        function updateTargetPlaceholder(targetType) {
+            const input = document.getElementById('targetKeyInput');
+            const help = document.getElementById('targetHelpText');
+            if (!input || !help) return;
+
+            if (targetType === 'ASN') {
+                input.placeholder = 'e.g. AS24940 or 24940';
+                help.innerHTML = 'ASN format: e.g. <code>AS24940</code> (Hetzner), <code>AS16276</code> (OVH)';
+            } else {
+                input.placeholder = 'e.g. 198.51.100.0/24 or 2001:db8::/64';
+                help.innerHTML = 'Subnet CIDR e.g. <code>198.51.100.0/24</code> or IPv6 <code>2001:db8::/64</code>';
+            }
         }
-    });
-</script>
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                closeNoteModal();
+            }
+        });
+    </script>
 
 </body>
+
 </html>

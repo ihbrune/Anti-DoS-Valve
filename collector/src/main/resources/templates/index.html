@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,174 +13,191 @@
     <script th:src="@{/js/htmx.min.js}" defer></script>
     <script th:src="@{/js/htmx-lite.js}" defer></script>
 </head>
+
 <body>
 
-<div class="app-container">
-    <!-- Navbar -->
-    <header class="navbar">
-        <a href="/" class="brand">
-            <div class="brand-icon">&#x1F6E1;</div>
-            <div>
-                <div class="brand-title">Anti-DoS Fleet Manager</div>
-                <div class="brand-subtitle">Distributed Monitoring &amp; Telemetry</div>
-            </div>
-        </a>
-        <div class="nav-actions">
-            <div class="pulse-indicator">
-                <span class="pulse-dot"></span>
-                <span>Auto-Refresh Active</span>
-            </div>
-            <div class="nav-links">
-                <a href="/analytics" class="btn" title="Visual trend curves, bot-mix, and residential proxy cluster scatterplot">
-                    <span>&#x1F4CA;</span> Analytics
-                </a>
-                <a href="/offenders" class="btn" title="Detailed Top Offender &amp; Subnet Rollup Analytics">
-                    <span>&#x26A0;</span> Top Offenders
-                </a>
-                <a href="/profiles" class="btn" title="Subnet Traffic Profiles, 30-Day Baselines &amp; Surge Radar">
-                    <span>&#x26A1;</span> Profiles
-                </a>
-                <a href="/events" class="btn" title="Multi-Server Incident Explorer with advanced filtering">
-                    <span>&#x1F4CB;</span> Incidents
-                </a>
-                <a href="/notes" class="btn" title="Investigative Annotations &amp; Network Notes">
-                    <span>&#x1F4DD;</span> Notes
-                </a>
-                <a href="/reports" class="btn" title="Permanent Operational Daily Summary Reports">
-                    <span>&#x1F4D1;</span> Reports
-                </a>
-                <a href="/poll-log" class="btn" title="View data collection event log and diagnostics">
-                    <span>&#x1F4DC;</span> Event Log
-                </a>
-                <a href="/crawlers" class="btn" title="Verified Search Engine &amp; AI Crawler IP Range Feeds">
-                    <span>&#x1F916;</span> Crawlers
-                </a>
-                <a href="/api/v1/fleet" target="_blank" class="btn" title="Raw fleet JSON API">
-                    JSON API
-                </a>
-            </div>
-            <div class="nav-divider"></div>
-            <div class="nav-utilities">
-                <a href="/system" class="nav-util-btn" title="System status, telemetry rules &amp; configuration" aria-label="System &amp; Configuration">
-                    <span>&#x2699;</span>
-                </a>
-                <button type="button" class="nav-util-btn history-toggle-btn"
-                        onclick="openHistoryDrawer()"
+    <div class="app-container">
+        <!-- Navbar -->
+        <header class="navbar">
+            <a href="/" class="brand">
+                <div class="brand-icon">&#x1F6E1;</div>
+                <div>
+                    <div class="brand-title">Anti-DoS Fleet Manager</div>
+                    <div class="brand-subtitle">Distributed Monitoring &amp; Telemetry</div>
+                </div>
+            </a>
+            <div class="nav-actions">
+                <div class="pulse-indicator">
+                    <span class="pulse-dot"></span>
+                    <span>Auto-Refresh Active</span>
+                </div>
+                <div class="nav-links">
+                    <a href="/analytics" class="btn"
+                        title="Visual trend curves, bot-mix, and residential proxy cluster scatterplot">
+                        <span>&#x1F4CA;</span> Analytics
+                    </a>
+                    <a href="/offenders" class="btn" title="Detailed Top Offender &amp; Subnet Rollup Analytics">
+                        <span>&#x26A0;</span> Top Offenders
+                    </a>
+                    <a href="/profiles" class="btn" title="Subnet Traffic Profiles, 30-Day Baselines &amp; Surge Radar">
+                        <span>&#x26A1;</span> Profiles
+                    </a>
+                    <a href="/events" class="btn" title="Multi-Server Incident Explorer with advanced filtering">
+                        <span>&#x1F4CB;</span> Incidents
+                    </a>
+                    <a href="/notes" class="btn" title="Investigative Annotations &amp; Network Notes">
+                        <span>&#x1F4DD;</span> Notes
+                    </a>
+                    <a href="/reports" class="btn" title="Permanent Operational Daily Summary Reports">
+                        <span>&#x1F4D1;</span> Reports
+                    </a>
+                    <a href="/poll-log" class="btn" title="View data collection event log and diagnostics">
+                        <span>&#x1F4DC;</span> Event Log
+                    </a>
+                    <a href="/crawlers" class="btn" title="Verified Search Engine &amp; AI Crawler IP Range Feeds">
+                        <span>&#x1F916;</span> Crawlers
+                    </a>
+                    <a href="/api/v1/fleet" target="_blank" class="btn" title="Raw fleet JSON API">
+                        JSON API
+                    </a>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-utilities">
+                    <a href="/system" class="nav-util-btn" title="System status, telemetry rules &amp; configuration"
+                        aria-label="System &amp; Configuration">
+                        <span>&#x2699;</span>
+                    </a>
+                    <button type="button" class="nav-util-btn history-toggle-btn" onclick="openHistoryDrawer()"
                         title="Recent Investigation History (IPs, Subnets &amp; ASNs)"
                         aria-label="Investigation History">
-                    <span>&#x1F552;</span>
-                    <span class="history-badge-count" style="display:none;"></span>
-                </button>
-                <button type="button" class="nav-util-btn"
+                        <span>&#x1F552;</span>
+                        <span class="history-badge-count" style="display:none;"></span>
+                    </button>
+                    <button type="button" class="nav-util-btn"
                         hx-get="/fragments/help?doc=ui&section=fleet-overview-dashboard"
-                        hx-target="#help-drawer-content"
-                        onclick="openHelpDrawer()"
-                        title="Open Fleet Overview Help Guide"
-                        aria-label="Help Guide">
-                    <span>&#x2753;</span>
-                </button>
-                <a href="/help" class="nav-util-btn" title="Full offline documentation repository" aria-label="Documentation">
-                    <span>&#x1F4D6;</span>
-                </a>
-                <button type="button" class="nav-util-btn btn-theme-toggle" onclick="toggleTheme()" title="Switch Light / Dark Theme" aria-label="Toggle theme">
-                    <span class="theme-icon-sun">&#x2600;&#xFE0F;</span>
-                    <span class="theme-icon-moon">&#x1F319;</span>
-                </button>
+                        hx-target="#help-drawer-content" onclick="openHelpDrawer()"
+                        title="Open Fleet Overview Help Guide" aria-label="Help Guide">
+                        <span>&#x2753;</span>
+                    </button>
+                    <a href="/help" class="nav-util-btn" title="Full offline documentation repository"
+                        aria-label="Documentation">
+                        <span>&#x1F4D6;</span>
+                    </a>
+                    <button type="button" class="nav-util-btn btn-theme-toggle" onclick="toggleTheme()"
+                        title="Switch Light / Dark Theme" aria-label="Toggle theme">
+                        <span class="theme-icon-sun">&#x2600;&#xFE0F;</span>
+                        <span class="theme-icon-moon">&#x1F319;</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Demo Mode Notice Banner -->
+        <div th:if="${demoMode}" class="demo-banner">
+            <div class="demo-badge">DEMO MODE ACTIVE</div>
+            <div class="demo-text">
+                Operating with simulated Anti-DoS Valve endpoints (Edge EU, API Gateway US, Staging Node)
+                and an isolated database (<code>antidos-collector-demo.db</code>). Existing production databases remain
+                completely untouched.
             </div>
         </div>
-    </header>
 
-    <!-- Demo Mode Notice Banner -->
-    <div th:if="${demoMode}" class="demo-banner">
-        <div class="demo-badge">DEMO MODE ACTIVE</div>
-        <div class="demo-text">
-            Operating with simulated Anti-DoS Valve endpoints (Edge EU, API Gateway US, Staging Node)
-            and an isolated database (<code>antidos-collector-demo.db</code>). Existing production databases remain completely untouched.
+        <!-- Top Stats Overview (Auto-refreshes every 10s) -->
+        <div hx-get="/fragments/stats-overview" hx-trigger="every 10s" hx-target="#stats-overview" hx-swap="outerHTML">
+            <div th:replace="~{fragments/stats-overview :: statsOverview}"></div>
         </div>
+
+        <!-- Visual Telemetry & Attack Forensics (Timeline, Bot-Mix & Residential Scatterplot) -->
+        <div th:replace="~{fragments/analytics-overview :: analyticsCard}"></div>
+
+        <!-- Fleet Status Section -->
+        <section>
+            <div class="section-header">
+                <div class="section-title">
+                    <span>&#x1F5A5;</span> Monitored Server Nodes
+                </div>
+                <span style="font-size: 12px; color: var(--text-muted);">Auto-refreshes every 10s</span>
+            </div>
+
+            <!-- HTMX Polling for Fleet Nodes -->
+            <div hx-get="/fragments/fleet" hx-trigger="every 10s" hx-target="#fleet-container" hx-swap="outerHTML">
+                <div th:replace="~{fragments/fleet :: fleetList}"></div>
+            </div>
+        </section>
+
+        <!-- Top Offending IPs Across Fleet -->
+        <section>
+            <div class="section-header">
+                <div class="section-title">
+                    <span>&#x26A0;</span> Top Offending Clients (Fleet-wide)
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <button class="btn" hx-get="/fragments/top-offenders?hours=1" hx-target="#offender-container"
+                        hx-swap="outerHTML">1h</button>
+                    <button class="btn" hx-get="/fragments/top-offenders?hours=24" hx-target="#offender-container"
+                        hx-swap="outerHTML">24h</button>
+                    <button class="btn" hx-get="/fragments/top-offenders?hours=168" hx-target="#offender-container"
+                        hx-swap="outerHTML">7d</button>
+                    <a href="/offenders" class="btn"
+                        style="border-color: var(--border-accent); color: var(--color-primary);"
+                        title="Open deep-dive forensics with Subnet Rollup">
+                        Subnet Rollup &amp; Analytics &rarr;
+                    </a>
+                </div>
+            </div>
+
+            <div class="table-card">
+                <div th:replace="~{fragments/top-offenders :: offenderTable}"></div>
+            </div>
+        </section>
+
+        <!-- Recent Incident Events -->
+        <section>
+            <div class="section-header">
+                <div class="section-title">
+                    <span>&#x1F4CB;</span> Recent Blocking Incidents
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <button class="btn" hx-get="/fragments/recent-events?status=BLOCKED" hx-target="#events-container"
+                        hx-swap="outerHTML">
+                        Refresh Log
+                    </button>
+                    <a href="/events?status=BLOCKED" class="btn"
+                        style="border-color: var(--border-accent); color: var(--color-primary);"
+                        title="Open full multi-server Incident Explorer filtered for blocked incidents">
+                        Incident Explorer &rarr;
+                    </a>
+                </div>
+            </div>
+
+            <div class="table-card">
+                <div th:replace="~{fragments/recent-events :: eventsTable}"></div>
+            </div>
+        </section>
+
+        <!-- Contextual Help Drawer -->
+        <div th:replace="~{fragments/help-drawer :: helpDrawer}"></div>
+
+        <!-- Note Editor & Viewer Modal (loaded dynamically via HTMX) -->
+        <div id="note-modal-container"></div>
     </div>
 
-    <!-- Top Stats Overview (Auto-refreshes every 10s) -->
-    <div hx-get="/fragments/stats-overview" hx-trigger="every 10s" hx-target="#stats-overview" hx-swap="outerHTML">
-        <div th:replace="~{fragments/stats-overview :: statsOverview}"></div>
-    </div>
+    <script>
+        function closeNoteModal(e) {
+            if (e) {
+                if (typeof e.stopPropagation === 'function') e.stopPropagation();
+                if (typeof e.preventDefault === 'function') e.preventDefault();
+            }
+            const c = document.getElementById('note-modal-container');
+            if (c) c.innerHTML = '';
+            document.querySelectorAll('.note-modal-overlay, #note-modal-wrapper').forEach(el => el.remove());
+        }
 
-    <!-- Visual Telemetry & Attack Forensics (Timeline, Bot-Mix & Residential Scatterplot) -->
-    <div th:replace="~{fragments/analytics-overview :: analyticsCard}"></div>
-
-    <!-- Fleet Status Section -->
-    <section>
-        <div class="section-header">
-            <div class="section-title">
-                <span>&#x1F5A5;</span> Monitored Server Nodes
-            </div>
-            <span style="font-size: 12px; color: var(--text-muted);">Auto-refreshes every 10s</span>
-        </div>
-
-        <!-- HTMX Polling for Fleet Nodes -->
-        <div hx-get="/fragments/fleet" hx-trigger="every 10s" hx-target="#fleet-container" hx-swap="outerHTML">
-            <div th:replace="~{fragments/fleet :: fleetList}"></div>
-        </div>
-    </section>
-
-    <!-- Top Offending IPs Across Fleet -->
-    <section>
-        <div class="section-header">
-            <div class="section-title">
-                <span>&#x26A0;</span> Top Offending Clients (Fleet-wide)
-            </div>
-            <div style="display:flex; align-items:center; gap:8px;">
-                <button class="btn" hx-get="/fragments/top-offenders?hours=1" hx-target="#offender-container" hx-swap="outerHTML">1h</button>
-                <button class="btn" hx-get="/fragments/top-offenders?hours=24" hx-target="#offender-container" hx-swap="outerHTML">24h</button>
-                <button class="btn" hx-get="/fragments/top-offenders?hours=168" hx-target="#offender-container" hx-swap="outerHTML">7d</button>
-                <a href="/offenders" class="btn" style="border-color: var(--border-accent); color: var(--color-primary);" title="Open deep-dive forensics with Subnet Rollup">
-                    Subnet Rollup &amp; Analytics &rarr;
-                </a>
-            </div>
-        </div>
-
-        <div class="table-card">
-            <div th:replace="~{fragments/top-offenders :: offenderTable}"></div>
-        </div>
-    </section>
-
-    <!-- Recent Incident Events -->
-    <section>
-        <div class="section-header">
-            <div class="section-title">
-                <span>&#x1F4CB;</span> Recent Blocking Incidents
-            </div>
-            <div style="display:flex; align-items:center; gap:8px;">
-                <button class="btn" hx-get="/fragments/recent-events?status=BLOCKED" hx-target="#events-container" hx-swap="outerHTML">
-                    Refresh Log
-                </button>
-                <a href="/events?status=BLOCKED" class="btn" style="border-color: var(--border-accent); color: var(--color-primary);" title="Open full multi-server Incident Explorer filtered for blocked incidents">
-                    Incident Explorer &rarr;
-                </a>
-            </div>
-        </div>
-
-        <div class="table-card">
-            <div th:replace="~{fragments/recent-events :: eventsTable}"></div>
-        </div>
-    </section>
-
-    <!-- Contextual Help Drawer -->
-    <div th:replace="~{fragments/help-drawer :: helpDrawer}"></div>
-
-    <!-- Note Editor & Viewer Modal (loaded dynamically via HTMX) -->
-    <div id="note-modal-container"></div>
-</div>
-
-<script>
-    function closeNoteModal() {
-        const c = document.getElementById('note-modal-container');
-        if (c) c.innerHTML = '';
-    }
-
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') closeNoteModal();
-    });
-</script>
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') closeNoteModal(e);
+        });
+    </script>
 
 </body>
+
 </html>

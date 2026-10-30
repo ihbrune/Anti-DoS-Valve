@@ -324,7 +324,9 @@
                         <label class="pill-label">
                             <input type="radio" name="activityPattern" value="SURGE"
                                 th:checked="${activityPattern == 'SURGE'}" onchange="onActivityPatternChange(this);">
-                            <span>&#x26A1; High Surge (&ge;5x &amp; &ge;<span th:text="${#numbers.formatInteger(minSurgeRequests != null ? minSurgeRequests : 1000, 1, 'POINT')}">1,000</span> req)</span>
+                            <span>&#x26A1; High Surge (&ge;5x &amp; &ge;<span
+                                    th:text="${#numbers.formatInteger(minSurgeRequests != null ? minSurgeRequests : 1000, 1, 'POINT')}">1,000</span>
+                                req)</span>
                         </label>
                         <label class="pill-label">
                             <input type="radio" name="activityPattern" value="NEW"
@@ -398,13 +400,18 @@
     </div>
 
     <script>
-        function closeNoteModal() {
+        function closeNoteModal(e) {
+            if (e) {
+                if (typeof e.stopPropagation === 'function') e.stopPropagation();
+                if (typeof e.preventDefault === 'function') e.preventDefault();
+            }
             const c = document.getElementById('note-modal-container');
             if (c) c.innerHTML = '';
+            document.querySelectorAll('.note-modal-overlay, #note-modal-wrapper').forEach(el => el.remove());
         }
 
         document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') closeNoteModal();
+            if (e.key === 'Escape') closeNoteModal(e);
         });
         function toggleCheckboxes(className, check) {
             document.querySelectorAll('.' + className).forEach(cb => cb.checked = check);

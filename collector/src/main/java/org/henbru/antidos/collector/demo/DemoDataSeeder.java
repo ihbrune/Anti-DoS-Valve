@@ -646,6 +646,18 @@ public class DemoDataSeeder {
 		seedDemoAnnotationsIfEmpty();
 	}
 
+	private static final MockValveSimulator.SimulatedProbe[] DEMO_HISTORICAL_PROBES = {
+			new MockValveSimulator.SimulatedProbe("POST", "/wp-login.php", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0"),
+			new MockValveSimulator.SimulatedProbe("GET", "/.env", "curl/8.4.0"),
+			new MockValveSimulator.SimulatedProbe("POST", "/api/v1/auth/login", "hydra/9.5 (login-bruteforce)"),
+			new MockValveSimulator.SimulatedProbe("POST", "/xmlrpc.php", "botnet-probe/4.2 (+http://scanner.net)"),
+			new MockValveSimulator.SimulatedProbe("GET", "/actuator/env", "python-requests/2.31.0"),
+			new MockValveSimulator.SimulatedProbe("GET", "/admin/phpmyadmin/index.php", "ZmEu/2.0"),
+			new MockValveSimulator.SimulatedProbe("POST", "/api/v1/tokens", "fasthttp/1.48.0"),
+			new MockValveSimulator.SimulatedProbe("GET", "/.git/config", "Go-http-client/1.1"),
+			new MockValveSimulator.SimulatedProbe("GET", "/aws/credentials", "CloudRecon/3.1")
+	};
+
 	private ClientEvent createEnrichedEvent(
 			String serverId,
 			String valveName,
@@ -663,6 +675,21 @@ public class DemoDataSeeder {
 			Instant lastUpdatedAt,
 			int distinctClients
 	) {
+		String sampleMethod = null;
+		String sampleUri = null;
+		String sampleUserAgent = null;
+
+		boolean isHoneypot = valveName != null && valveName.toUpperCase().contains("HONEYPOT");
+		if (locked || isHoneypot) {
+			int hash = Math.abs((int) ((slotKey * 31L) ^ ip.hashCode() ^ (valveName != null ? valveName.hashCode() : 0)));
+			if (isHoneypot || (hash % 10 < 7)) {
+				MockValveSimulator.SimulatedProbe probe = DEMO_HISTORICAL_PROBES[hash % DEMO_HISTORICAL_PROBES.length];
+				sampleMethod = probe.method();
+				sampleUri = probe.uri();
+				sampleUserAgent = probe.userAgent();
+			}
+		}
+
 		org.henbru.antidos.collector.model.IpNetworkInfo net = org.henbru.antidos.collector.util.IpNetworkUtil.parse(ip);
 		return new ClientEvent(
 				null, serverId, valveName, slotKey, slotTime,
@@ -673,7 +700,9 @@ public class DemoDataSeeder {
 				completed, lastUpdatedAt,
 				asn, asOrg, country, type, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED,
 				null,
-				Math.max(1, distinctClients)
+				Math.max(1, distinctClients),
+				null, null,
+				sampleMethod, sampleUri, sampleUserAgent
 		);
 	}
 

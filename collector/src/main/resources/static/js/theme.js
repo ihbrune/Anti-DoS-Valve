@@ -3,14 +3,14 @@
  * Provides seamless Dark / Light mode switching with localStorage & Cookie persistence
  * and prevents Flash of Unstyled Content (FOUC).
  */
-(function() {
+(function () {
     function getStoredTheme() {
         try {
             var stored = localStorage.getItem('theme');
             if (stored) return stored;
             var match = document.cookie.match(/(?:^|; )theme=([^;]*)/);
             if (match) return decodeURIComponent(match[1]);
-        } catch (e) {}
+        } catch (e) { }
         return null;
     }
 
@@ -26,7 +26,7 @@
     // Apply immediately to prevent FOUC
     applyInitialTheme();
 
-    window.toggleTheme = function() {
+    window.toggleTheme = function () {
         try {
             var current = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
             document.documentElement.setAttribute('data-theme', current);
@@ -37,26 +37,33 @@
         }
     };
 
-    window.openHelpDrawer = function() {
+    window.openHelpDrawer = function () {
         var drawer = document.getElementById('help-drawer');
         var backdrop = document.getElementById('help-drawer-backdrop');
         if (drawer) drawer.classList.add('open');
         if (backdrop) backdrop.classList.add('open');
     };
 
-    window.closeHelpDrawer = function() {
+    window.closeHelpDrawer = function () {
         var drawer = document.getElementById('help-drawer');
         var backdrop = document.getElementById('help-drawer-backdrop');
         if (drawer) drawer.classList.remove('open');
         if (backdrop) backdrop.classList.remove('open');
     };
 
-    window.closeNoteModal = function() {
+    window.closeNoteModal = function (e) {
+        if (e) {
+            if (typeof e.stopPropagation === 'function') e.stopPropagation();
+            if (typeof e.preventDefault === 'function') e.preventDefault();
+        }
         var c = document.getElementById('note-modal-container');
         if (c) c.innerHTML = '';
+        document.querySelectorAll('.note-modal-overlay, #note-modal-wrapper').forEach(function (el) {
+            el.remove();
+        });
     };
 
-    window.updateTargetPlaceholder = function(targetType) {
+    window.updateTargetPlaceholder = function (targetType) {
         var input = document.getElementById('targetKeyInput');
         var help = document.getElementById('targetHelpText');
         if (!input || !help) return;
@@ -70,7 +77,7 @@
         }
     };
 
-    document.addEventListener('keydown', function(e) {
+    document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
             window.closeHelpDrawer();
             window.closeNoteModal();

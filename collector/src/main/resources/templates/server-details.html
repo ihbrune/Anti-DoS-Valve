@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,639 +11,885 @@
     <script th:src="@{/js/htmx.min.js}" defer></script>
     <script th:src="@{/js/htmx-lite.js}" defer></script>
 </head>
+
 <body>
 
-<div class="app-container">
-    <header class="navbar">
-        <a href="/" class="brand">
-            <div class="brand-icon">&#x1F6E1;</div>
-            <div>
-                <div class="brand-title" th:text="${serverId}">Web-Node-1</div>
-                <div class="brand-subtitle">Server Details &amp; Telemetry</div>
-            </div>
-        </a>
-        <div class="nav-actions">
-            <div class="nav-links">
-                <a href="/" class="btn" title="Return to Fleet Overview Dashboard">
-                    <span>&#x2190;</span> Dashboard
-                </a>
-                <a th:href="@{'/events?servers=' + ${serverId}}" class="btn" title="View Incident Explorer filtered for this node">
-                    <span>&#x1F4CB;</span> Node Incidents
-                </a>
-                <a th:href="@{'/analytics?servers=' + ${serverId}}" class="btn" title="Visual Telemetry &amp; Scatterplot filtered for this node">
-                    <span>&#x1F4CA;</span> Node Analytics
-                </a>
-                <a th:href="@{'/poll-log?serverId=' + ${serverId}}" class="btn" title="View polling event logs for this node">
-                    <span>&#x1F4DC;</span> Node Poll Log
-                </a>
-                <a href="/notes" class="btn" title="Investigative Annotations &amp; Network Notes">
-                    <span>&#x1F4DD;</span> Notes
-                </a>
-                <a href="/reports" class="btn" title="Permanent Operational Daily Summary Reports">
-                    <span>&#x1F4D1;</span> Reports
-                </a>
-            </div>
-            <div class="nav-divider"></div>
-            <div class="nav-utilities">
-                <a href="/system" class="nav-util-btn" title="System status, telemetry rules &amp; configuration" aria-label="System &amp; Configuration">
-                    <span>&#x2699;</span>
-                </a>
-                <button type="button" class="nav-util-btn history-toggle-btn"
-                        onclick="openHistoryDrawer()"
+    <div class="app-container">
+        <header class="navbar">
+            <a href="/" class="brand">
+                <div class="brand-icon">&#x1F6E1;</div>
+                <div>
+                    <div class="brand-title" th:text="${serverId}">Web-Node-1</div>
+                    <div class="brand-subtitle">Server Details &amp; Telemetry</div>
+                </div>
+            </a>
+            <div class="nav-actions">
+                <div class="nav-links">
+                    <a href="/" class="btn" title="Return to Fleet Overview Dashboard">
+                        <span>&#x2190;</span> Dashboard
+                    </a>
+                    <a th:href="@{'/events?servers=' + ${serverId}}" class="btn"
+                        title="View Incident Explorer filtered for this node">
+                        <span>&#x1F4CB;</span> Node Incidents
+                    </a>
+                    <a th:href="@{'/analytics?servers=' + ${serverId}}" class="btn"
+                        title="Visual Telemetry &amp; Scatterplot filtered for this node">
+                        <span>&#x1F4CA;</span> Node Analytics
+                    </a>
+                    <a th:href="@{'/poll-log?serverId=' + ${serverId}}" class="btn"
+                        title="View polling event logs for this node">
+                        <span>&#x1F4DC;</span> Node Poll Log
+                    </a>
+                    <a href="/notes" class="btn" title="Investigative Annotations &amp; Network Notes">
+                        <span>&#x1F4DD;</span> Notes
+                    </a>
+                    <a href="/reports" class="btn" title="Permanent Operational Daily Summary Reports">
+                        <span>&#x1F4D1;</span> Reports
+                    </a>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-utilities">
+                    <a href="/system" class="nav-util-btn" title="System status, telemetry rules &amp; configuration"
+                        aria-label="System &amp; Configuration">
+                        <span>&#x2699;</span>
+                    </a>
+                    <button type="button" class="nav-util-btn history-toggle-btn" onclick="openHistoryDrawer()"
                         title="Recent Investigation History (IPs, Subnets &amp; ASNs)"
                         aria-label="Investigation History">
-                    <span>&#x1F552;</span>
-                    <span class="history-badge-count" style="display:none;"></span>
-                </button>
-                <button type="button" class="nav-util-btn"
-                        hx-get="/fragments/help?doc=ui&section=server-node-detail-view"
-                        hx-target="#help-drawer-content"
-                        onclick="openHelpDrawer()"
-                        title="Open Server Node Details Help Guide"
-                        aria-label="Help Guide">
-                    <span>&#x2753;</span>
-                </button>
-                <a href="/help" class="nav-util-btn" title="Full offline documentation repository" aria-label="Documentation">
-                    <span>&#x1F4D6;</span>
+                        <span>&#x1F552;</span>
+                        <span class="history-badge-count" style="display:none;"></span>
+                    </button>
+                    <button type="button" class="nav-util-btn"
+                        hx-get="/fragments/help?doc=ui&section=server-node-detail-view" hx-target="#help-drawer-content"
+                        onclick="openHelpDrawer()" title="Open Server Node Details Help Guide" aria-label="Help Guide">
+                        <span>&#x2753;</span>
+                    </button>
+                    <a href="/help" class="nav-util-btn" title="Full offline documentation repository"
+                        aria-label="Documentation">
+                        <span>&#x1F4D6;</span>
+                    </a>
+                    <button type="button" class="nav-util-btn btn-theme-toggle" onclick="toggleTheme()"
+                        title="Switch Light / Dark Theme" aria-label="Toggle theme">
+                        <span class="theme-icon-sun">&#x2600;&#xFE0F;</span>
+                        <span class="theme-icon-moon">&#x1F319;</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Flash / Status Alert Message -->
+        <div th:if="${message != null}" class="alert alert-success"
+            style="margin-bottom: 24px; padding: 12px 18px; border-radius: var(--radius-sm); font-size: 13px;"
+            th:text="${message}">
+            Operation successful.
+        </div>
+
+        <!-- Server Header Card -->
+
+        <div th:if="${server != null}" class="endpoint-card" style="margin-bottom: 28px;">
+            <div class="endpoint-header">
+                <div>
+                    <h2 style="font-size:20px; font-weight:700;" th:text="${server.serverId}">Server Node</h2>
+                    <div class="endpoint-url" th:text="${server.url}">http://localhost:8080/antidos-status</div>
+                </div>
+                <span th:if="${server.online}" class="badge badge-success">ONLINE</span>
+                <span th:unless="${server.online}" class="badge badge-danger">OFFLINE</span>
+            </div>
+            <div class="endpoint-stats-row">
+                <div>
+                    <div class="endpoint-stat-label">Response Time</div>
+                    <div class="endpoint-stat-val" th:text="${server.responseTimeMs} + ' ms'">15 ms</div>
+                </div>
+                <div>
+                    <div class="endpoint-stat-label">Last Successful Sync</div>
+                    <div class="endpoint-stat-val"
+                        th:text="${server.lastSuccessAt != null ? #temporals.format(server.lastSuccessAt, 'dd.MM HH:mm:ss') : 'Never'}">
+                        Never</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Monitored Valves & Active Tracking Configuration -->
+        <section style="margin-bottom: 28px;">
+            <div class="section-header">
+                <div class="section-title">&#x1F6E1; Monitored Valves &amp; Active Tracking Configuration</div>
+                <a th:if="${selectedValve != null}"
+                    th:href="@{'/server/' + ${serverId}(status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})}"
+                    class="btn" style="padding: 2px 8px; font-size: 11px;">
+                    &times; Clear Valve Filter (<span th:text="${selectedValve}"></span>)
                 </a>
-                <button type="button" class="nav-util-btn btn-theme-toggle" onclick="toggleTheme()" title="Switch Light / Dark Theme" aria-label="Toggle theme">
-                    <span class="theme-icon-sun">&#x2600;&#xFE0F;</span>
-                    <span class="theme-icon-moon">&#x1F319;</span>
-                </button>
             </div>
-        </div>
-    </header>
-
-    <!-- Flash / Status Alert Message -->
-    <div th:if="${message != null}" class="alert alert-success" style="margin-bottom: 24px; padding: 12px 18px; border-radius: var(--radius-sm); font-size: 13px;" th:text="${message}">
-        Operation successful.
-    </div>
-
-    <!-- Server Header Card -->
-
-    <div th:if="${server != null}" class="endpoint-card" style="margin-bottom: 28px;">
-        <div class="endpoint-header">
-            <div>
-                <h2 style="font-size:20px; font-weight:700;" th:text="${server.serverId}">Server Node</h2>
-                <div class="endpoint-url" th:text="${server.url}">http://localhost:8080/antidos-status</div>
-            </div>
-            <span th:if="${server.online}" class="badge badge-success">ONLINE</span>
-            <span th:unless="${server.online}" class="badge badge-danger">OFFLINE</span>
-        </div>
-        <div class="endpoint-stats-row">
-            <div>
-                <div class="endpoint-stat-label">Response Time</div>
-                <div class="endpoint-stat-val" th:text="${server.responseTimeMs} + ' ms'">15 ms</div>
-            </div>
-            <div>
-                <div class="endpoint-stat-label">Last Successful Sync</div>
-                <div class="endpoint-stat-val" th:text="${server.lastSuccessAt != null ? #temporals.format(server.lastSuccessAt, 'dd.MM HH:mm:ss') : 'Never'}">Never</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Monitored Valves & Active Tracking Configuration -->
-    <section style="margin-bottom: 28px;">
-        <div class="section-header">
-            <div class="section-title">&#x1F6E1; Monitored Valves &amp; Active Tracking Configuration</div>
-            <a th:if="${selectedValve != null}" th:href="@{'/server/' + ${serverId}(status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})}" class="btn" style="padding: 2px 8px; font-size: 11px;">
-                &times; Clear Valve Filter (<span th:text="${selectedValve}"></span>)
-            </a>
-        </div>
-        <div class="table-card">
-            <div class="table-responsive">
-                <div th:if="${#lists.isEmpty(configuredValves)}" class="empty-state">
-                    <p>No valves discovered or configured for this node yet.</p>
-                </div>
-                <table th:unless="${#lists.isEmpty(configuredValves)}">
-                    <thead>
-                        <tr>
-                            <th>Valve Name</th>
-                            <th>Polling Scope</th>
-                            <th>Active Tracking</th>
-                            <th>Min-Count Threshold</th>
-                            <th>Safety Limit</th>
-                            <th>Configuration Source</th>
-                            <th style="text-align: right;">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr th:each="v : ${configuredValves}">
-                            <td>
-                                <strong style="font-size: 13px;" th:text="${v.valveName}">Primary-Rate-Limiter</strong>
-                                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px;" th:if="${runtimeValvesMap != null and runtimeValvesMap[v.valveName] != null}">
-                                    <span th:if="${runtimeValvesMap[v.valveName].isActive()}" class="badge badge-success" style="font-size: 9.5px; padding: 1px 5px; background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);" title="Active on server - reported in latest telemetry">&#x25CF; ACTIVE</span>
-                                    <span th:unless="${runtimeValvesMap[v.valveName].isActive()}" class="badge badge-secondary" style="font-size: 9.5px; padding: 1px 5px; background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);" title="Inactive on server - no longer reported in telemetry">&#x23F8; INACTIVE</span>
-                                    <span th:if="${runtimeValvesMap[v.valveName].isHoneypot()}" class="badge badge-warning" style="font-size: 9.5px; padding: 1px 5px; background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);" title="Zero-Tolerance Honeypot Valve">&#x1F36F; HONEYPOT</span>
-                                    <span th:if="${runtimeValvesMap[v.valveName].isBlocking()}" class="badge badge-danger" style="font-size: 9.5px; padding: 1px 5px;" th:text="'BLOCKING (' + ${runtimeValvesMap[v.valveName].httpStatusCode} + ')'">BLOCKING (429)</span>
-                                    <span th:unless="${runtimeValvesMap[v.valveName].isBlocking()}" class="badge badge-purple" style="font-size: 9.5px; padding: 1px 5px;">MARKING</span>
-                                    <span th:if="${runtimeValvesMap[v.valveName].simulationMode}" class="badge badge-warning" style="font-size: 9.5px; padding: 1px 5px;">SIMULATION</span>
-                                    <span class="badge" th:classappend="${runtimeValvesMap[v.valveName].collectorIntegrationBadgeClass()}" style="font-size: 9.5px; padding: 1px 5px;" th:title="'Collector integration mode: ' + ${runtimeValvesMap[v.valveName].collectorIntegration()}" th:text="'COLLECTOR: ' + ${runtimeValvesMap[v.valveName].collectorIntegrationLabel()}">COLLECTOR: AUTO</span>
-                                    <span class="badge" th:classappend="${runtimeValvesMap[v.valveName].visitorCookieBadgeClass()}" style="font-size: 9.5px; padding: 1px 5px;" th:title="'Visitor cookie tracking: ' + ${runtimeValvesMap[v.valveName].visitorCookieLabel()}" th:text="'COOKIE: ' + ${runtimeValvesMap[v.valveName].visitorCookieLabel()}">COOKIE: OFF</span>
-                                    <span style="font-size: 11px; color: var(--text-muted);" th:text="${runtimeValvesMap[v.valveName].allowedRequestsPerSlot == 0 ? '0 req (Zero Tolerance) / ' + runtimeValvesMap[v.valveName].slotLength + 's' : runtimeValvesMap[v.valveName].allowedRequestsPerSlot + ' req / ' + runtimeValvesMap[v.valveName].slotLength + 's'}">50 req / 60s</span>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px;" th:if="${runtimeValvesMap == null or runtimeValvesMap[v.valveName] == null}">
-                                    <span class="badge badge-secondary" style="font-size: 9.5px; padding: 1px 5px; opacity: 0.8;" title="Historical slots recorded, but no active runtime telemetry discovered">&#x1F4DC; HISTORICAL (NO LIVE CONFIG)</span>
-                                </div>
-                            </td>
-                            <td>
-                                <span th:if="${v.isIncluded}" class="badge badge-success">&#x2714; INCLUDED</span>
-                                <span th:unless="${v.isIncluded}" class="badge badge-secondary" title="Excluded by endpoint valve filter">&#x2716; EXCLUDED</span>
-                            </td>
-                            <td>
-                                <span th:if="${v.collectActive}" class="badge badge-success" title="Active clients telemetry collected for this valve">&#x2714; ENABLED</span>
-                                <span th:unless="${v.collectActive}" class="badge badge-secondary" style="opacity: 0.8;" title="No active clients retrieved (activeLimit=0)">&#x2716; DISABLED (activeLimit=0)</span>
-                            </td>
-                            <td>
-                                <code th:if="${v.collectActive}" style="font-weight: 600; color: var(--color-primary);" th:text="'count &ge; ' + ${v.activeMinCount}">count &ge; 10</code>
-                                <span th:unless="${v.collectActive}" style="color: var(--text-muted);">&mdash;</span>
-                            </td>
-                            <td>
-                                <span th:if="${v.collectActive}" th:text="${v.activeLimit}">1000</span>
-                                <span th:unless="${v.collectActive}" style="color: var(--text-muted);">&mdash;</span>
-                            </td>
-                            <td>
-                                <span th:if="${v.source.name() == 'ENDPOINT_OVERRIDE'}" class="badge badge-info" title="Overridden specifically for this server in endpoints[].valves" th:text="${v.source.label}">Endpoint Override</span>
-                                <span th:if="${v.source.name() == 'VALVE_RULE'}" class="badge badge-purple" title="Governed by global rule for this valve name in collector.valve-rules" th:text="${v.source.label}">Global Valve Rule</span>
-                                <span th:if="${v.source.name() == 'GLOBAL_DEFAULT'}" class="badge badge-secondary" title="Inherited from fleet-wide default in collector.default-valve-rules" th:text="${v.source.label}">Global Default</span>
-                                <span th:if="${v.source.name() == 'SYSTEM_DEFAULT'}" class="badge badge-secondary" title="System default fallback" th:text="${v.source.label}">System Default</span>
-                            </td>
-                            <td style="text-align: right;">
-                                <a th:href="@{'/server/' + ${serverId}(valve=${v.valveName}, status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})}"
-                                   class="btn"
-                                   style="padding: 2px 8px; font-size: 11px;"
-                                   title="Filter slots timeline for this valve">
-                                    Filter Slots &rarr;
-                                </a>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </section>
-
-    <!-- Valve Runtime Configurations (Discovered Telemetry) -->
-    <section style="margin-bottom: 28px;">
-        <div class="section-header">
-            <div class="section-title">
-                &#x2699;&#xFE0F; Discovered Valve Runtime Configurations
-                <span th:if="${selectedValve != null}" style="font-size: 13px; font-weight: normal; color: var(--text-muted);" th:text="'(Filtered: ' + ${selectedValve} + ')'"></span>
-                <span th:if="${inactiveValvesCount != null and inactiveValvesCount > 0}" class="badge badge-secondary" style="font-size: 10px; margin-left: 8px; vertical-align: middle; background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);" th:text="${inactiveValvesCount} + ' inactive'">1 inactive</span>
-            </div>
-            <div style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 8px;" th:if="${!#lists.isEmpty(runtimeValves)}">
-                <span>Synchronized from Valve JSON API &bull; </span>
-                <a th:href="@{'/api/v1/valves?serverId=' + ${serverId}}" target="_blank" class="btn" style="padding: 2px 8px; font-size: 11px;">{ } JSON</a>
-            </div>
-        </div>
-
-        <div th:if="${#lists.isEmpty(runtimeValves)}" class="table-card">
-            <div class="empty-state">
-                <p th:if="${selectedValve != null}">No live runtime configuration discovered yet for valve '<span th:text="${selectedValve}"></span>'.</p>
-                <p th:unless="${selectedValve != null}">No live runtime configuration discovered yet for this node. Valve configurations are automatically synchronized on successful telemetry polls.</p>
-            </div>
-        </div>
-
-        <div th:unless="${#lists.isEmpty(runtimeValves)}" style="display: flex; flex-direction: column; gap: 16px;">
-            <div th:each="rv : ${runtimeValves}" class="table-card"
-                 th:style="${rv.isActive() ? 'padding: 18px 22px;' : 'padding: 18px 22px; opacity: 0.92; border: 1px solid rgba(239, 68, 68, 0.35); background: rgba(30, 41, 59, 0.3);'}">
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 14px;">
-                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                        <span style="font-size: 16px; font-weight: 700; color: var(--text-primary);" th:text="${rv.valveName}">Primary-Rate-Limiter</span>
-                        <span th:if="${rv.isActive()}" class="badge badge-success" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">&#x25CF; ACTIVE</span>
-                        <span th:unless="${rv.isActive()}" class="badge badge-secondary" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);">&#x23F8; INACTIVE</span>
-                        <span th:if="${rv.isHoneypot()}" class="badge badge-warning" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);" title="Zero-Tolerance Honeypot Valve">&#x1F36F; HONEYPOT</span>
-                        <span class="badge badge-info" th:text="'#' + ${rv.pipelineOrder} + ' IN PIPELINE'">#1 IN PIPELINE</span>
-                        <span th:if="${rv.isBlocking()}" class="badge badge-danger" th:text="'MODE: BLOCKING (' + ${rv.httpStatusCode} + ')'">MODE: BLOCKING (429)</span>
-                        <span th:unless="${rv.isBlocking()}" class="badge badge-purple">MODE: MARKING</span>
-                        <span th:if="${rv.simulationMode}" class="badge badge-warning">SIMULATION MODE</span>
-                        <span th:if="${rv.serverWideBlocking}" class="badge badge-warning">SERVER-WIDE BLOCKING</span>
-                        <span class="badge" th:classappend="${rv.collectorIntegrationBadgeClass()}" th:title="'Collector integration mode: ' + ${rv.collectorIntegration()} + ' (Extended metrics &amp; subnet cardinality tracking)'" th:text="'COLLECTOR: ' + ${rv.collectorIntegrationLabel()}">COLLECTOR: AUTO</span>
-                        <span class="badge" th:classappend="${rv.visitorCookieBadgeClass()}" th:title="'Visitor cookie tracking: ' + ${rv.visitorCookieLabel()} + ' (Reputation &amp; first-contact detection)'" th:text="'COOKIE: ' + ${rv.visitorCookieLabel()}">COOKIE: OFF</span>
+            <div class="table-card">
+                <div class="table-responsive">
+                    <div th:if="${#lists.isEmpty(configuredValves)}" class="empty-state">
+                        <p>No valves discovered or configured for this node yet.</p>
                     </div>
-                    <div style="font-size: 11px; color: var(--text-muted);">
-                        Last Synced: <span style="font-weight: 600; color: var(--text-secondary);" th:text="${rv.lastUpdatedAt != null ? #temporals.format(rv.lastUpdatedAt, 'dd.MM.yyyy HH:mm:ss') : 'Unknown'}">24.10 22:30:00</span>
-                    </div>
-                </div>
-
-                <!-- Inactive Banner with Delete Actions -->
-                <div th:unless="${rv.isActive()}" style="font-size: 12px; color: #f59e0b; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-                    <div>
-                        <strong style="color: #f59e0b;">&#x26A0;&#xFE0F; Inactive Valve Configuration:</strong>
-                        <span style="color: var(--text-secondary);">This valve was not reported in the latest server poll (may have been renamed or removed).</span>
-                    </div>
-                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                        <form th:action="@{'/server/' + ${serverId} + '/valves/' + ${rv.valveName} + '/delete'}" method="post" style="display: inline;" onsubmit="return confirm('Do you want to remove this inactive valve configuration? (Historical telemetry slot data will be preserved)');">
-                            <button type="submit" class="btn" style="padding: 3px 10px; font-size: 11px; color: var(--text-primary); border-color: var(--border-color);" title="Removes only the configuration (metrics and logs are preserved)">
-                                Remove Configuration
-                            </button>
-                        </form>
-                        <form th:action="@{'/server/' + ${serverId} + '/valves/' + ${rv.valveName} + '/delete'}" method="post" style="display: inline;" onsubmit="return confirm('WARNING: Are you sure you want to permanently delete this valve and ALL historical snapshots and telemetry metrics from the database?');">
-                            <input type="hidden" name="deleteHistory" value="true" />
-                            <button type="submit" class="btn" style="padding: 3px 10px; font-size: 11px; color: #ef4444; border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.08);" title="Permanently deletes valve and all historical telemetry">
-                                &#x1F5D1; Delete Completely (incl. History)
-                            </button>
-                        </form>
-                    </div>
-                </div>
-
-
-                <div th:if="${rv.description != null and !rv.description.isBlank()}"
-                     style="font-size: 12px; color: var(--text-secondary); background: rgba(56, 189, 248, 0.06); border-left: 3px solid var(--color-primary); padding: 8px 12px; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; margin-bottom: 14px; line-height: 1.4;"
-                     th:text="${rv.description}">
-                    Primary Rate Limiter description.
-                </div>
-
-                <!-- Parameters Grid -->
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 14px;">
-                    <div style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
-                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Rate Limit Threshold</div>
-                        <div style="font-size: 14px; font-weight: 700; color: var(--color-primary);" th:text="${rv.allowedRequestsPerSlot == 0 ? '0 req (Zero Tolerance / Honeypot) / ' + rv.slotLength + 's' : rv.allowedRequestsPerSlot + ' req / ' + rv.slotLength + 's'}">50 req / 60s</div>
-                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;" th:text="'Window: ' + ${rv.formattedWindow()} + ' &bull; Decay: ' + ${rv.formattedDecay()}">Window: 300s &bull; Decay: 80%</div>
-                    </div>
-
-                    <div style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
-                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Subnet Masking Partition</div>
-                        <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);" th:utext="${rv.formattedSubnetMasks()}">/32 (IPv4) &bull; /64 (IPv6)</div>
-                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;">Traffic grouped by subnet prefix</div>
-                    </div>
-
-                    <div style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
-                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Cache Bounds (LRU Capacity)</div>
-                        <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);">
-                            <span th:text="${#numbers.formatInteger(rv.maxIPCacheSize, 1, 'POINT')}">10.000</span> <span style="font-size: 11px; font-weight: 400; color: var(--text-muted);">active</span> &bull;
-                            <span th:text="${#numbers.formatInteger(rv.maxBlockedIPCacheSize, 1, 'POINT')}">10.000</span> <span style="font-size: 11px; font-weight: 400; color: var(--text-muted);">blocked</span>
-                        </div>
-                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;">Max concurrent tracked IPs</div>
-                    </div>
-
-                    <div style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
-                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Collector Integration</div>
-                        <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);" th:text="${rv.collectorIntegrationLabel()}">AUTO</div>
-                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;" th:if="${rv.collectorIntegration().toLowerCase() == 'auto'}">Dynamic lease &bull; Extended metrics</div>
-                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;" th:if="${rv.collectorIntegration().toLowerCase() == 'true'}">Permanent &bull; Always active</div>
-                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;" th:if="${rv.collectorIntegration().toLowerCase() == 'false'}">Disabled &bull; Zero overhead</div>
-                    </div>
-
-                    <div style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
-                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Visitor Tracking &amp; Cookies</div>
-                        <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);" th:text="${rv.visitorCookieEnabled ? 'ACTIVE' : 'DISABLED'}">DISABLED</div>
-                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;" th:if="${rv.visitorCookieEnabled}">
-                            Cookie: <code style="font-weight: 600; color: var(--color-primary);" th:text="${rv.visitorCookieName()}">_adv</code> &bull; First-contact detection
-                        </div>
-                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 3px;" th:unless="${rv.visitorCookieEnabled}">
-                            Disabled &bull; No visitor cookies issued
-                        </div>
-                    </div>
-
-                    <div th:if="${rv.statusUri != null and !rv.statusUri.isBlank()}"
-                         style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
-                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Status Dashboard URI</div>
-                        <div style="font-size: 13px; font-weight: 600; font-family: ui-monospace, monospace; color: var(--text-primary);" th:text="${rv.statusUri}">/antidos-status</div>
-                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;" th:text="${rv.statusAllowedIPs != null and !rv.statusAllowedIPs.isBlank() ? 'Allowed: ' + rv.statusAllowedIPs : 'IP restrictions: none'}">Allowed: 127.0.0.1</div>
-                    </div>
-                </div>
-
-                <!-- Path & IP Filters (Collapsible Details) -->
-                <details th:if="${rv.hasPathFilters() or rv.hasIpLists()}" style="margin-top: 8px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 14px; background: rgba(0,0,0,0.1);">
-                    <summary style="font-size: 12px; font-weight: 600; color: var(--color-primary); cursor: pointer;">
-                        &#x1F50D; View Configured Path Filters &amp; IP Lists
-                    </summary>
-                    <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
-                        <div th:if="${rv.relevantPaths != null and !rv.relevantPaths.isBlank()}" style="display: flex; gap: 8px; align-items: baseline;">
-                            <span style="min-width: 150px; font-weight: 600; color: var(--text-muted);">Relevant Paths:</span>
-                            <code style="word-break: break-all;" th:text="${rv.relevantPaths}">/api/*</code>
-                        </div>
-                        <div th:if="${rv.nonRelevantPaths != null and !rv.nonRelevantPaths.isBlank()}" style="display: flex; gap: 8px; align-items: baseline;">
-                            <span style="min-width: 150px; font-weight: 600; color: var(--text-muted);">Non-Relevant Paths:</span>
-                            <code style="word-break: break-all;" th:text="${rv.nonRelevantPaths}">*.css, *.js, *.png</code>
-                        </div>
-                        <div th:if="${rv.alwaysAllowedIPs != null and !rv.alwaysAllowedIPs.isBlank()}" style="display: flex; gap: 8px; align-items: baseline;">
-                            <span style="min-width: 150px; font-weight: 600; color: var(--text-muted);">Always Allowed IPs:</span>
-                            <code style="word-break: break-all; color: var(--color-success);" th:text="${rv.alwaysAllowedIPs}">127.0.0.1, 10.0.0.0/8</code>
-                        </div>
-                        <div th:if="${rv.alwaysForbiddenIPs != null and !rv.alwaysForbiddenIPs.isBlank()}" style="display: flex; gap: 8px; align-items: baseline;">
-                            <span style="min-width: 150px; font-weight: 600; color: var(--text-muted);">Always Forbidden IPs:</span>
-                            <code style="word-break: break-all; color: var(--color-danger);" th:text="${rv.alwaysForbiddenIPs}">198.51.100.0/24</code>
-                        </div>
-                    </div>
-                </details>
-            </div>
-        </div>
-    </section>
-
-    <!-- Recent Slots Timeline -->
-    <section id="server-slots-section"
-             hx-trigger="annotationChanged from:body"
-             th:hx-get="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})} : @{'/server/' + ${serverId}(status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})}"
-             hx-select="#server-slots-section"
-             hx-target="#server-slots-section"
-             hx-swap="outerHTML">
-        <div class="section-header">
-            <div class="section-title">&#x23F1; Slot History &amp; Timeline</div>
-        </div>
-        <div class="table-card">
-            <div class="table-responsive">
-                <div th:if="${#lists.isEmpty(recentSlots)}" class="empty-state">
-                    <p>No slot history collected yet for this server.</p>
-                </div>
-                <table th:unless="${#lists.isEmpty(recentSlots)}">
-                    <thead>
-                        <tr>
-                            <th>Slot Key</th>
-                            <th>Valve Name</th>
-                            <th>Time Window</th>
-                            <th>Total Requests</th>
-                            <th>Active Clients</th>
-                            <th>Blocked Clients &amp; Forensics</th>
-                            <th>State</th>
-                            <th style="text-align: right;">Forensics</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr th:each="slot : ${recentSlots}">
-                            <td><strong th:text="${slot.slotKey}">174620</strong></td>
-                            <td><span class="badge" th:classappend="${slot.valveName != null and slot.valveName.toUpperCase().contains('HONEYPOT') ? 'badge-warning' : 'badge-info'}" th:text="${(slot.valveName != null and slot.valveName.toUpperCase().contains('HONEYPOT') ? '&#x1F36F; ' : '') + slot.valveName}">STATUS VALVE</span></td>
-                            <td th:text="${#temporals.format(slot.startTime, 'HH:mm:ss')} + ' - ' + ${#temporals.format(slot.endTime, 'HH:mm:ss')}">10:00:00 - 10:01:00</td>
-                            <td th:text="${#numbers.formatInteger(slot.totalRequests, 1, 'POINT')}">1,250</td>
-                            <td th:text="${slot.activeCounters}">45</td>
-                            <td>
-                                <div th:if="${slot.blockedCounters > 0}" style="display: flex; flex-direction: column; gap: 4px;">
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                        <span class="badge badge-danger" th:text="${slot.blockedCounters} + ' Blocked'">2 Blocked</span>
+                    <table th:unless="${#lists.isEmpty(configuredValves)}">
+                        <thead>
+                            <tr>
+                                <th>Valve Name</th>
+                                <th>Polling Scope</th>
+                                <th>Active Tracking</th>
+                                <th>Min-Count Threshold</th>
+                                <th>Safety Limit</th>
+                                <th>Configuration Source</th>
+                                <th style="text-align: right;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="v : ${configuredValves}">
+                                <td>
+                                    <strong style="font-size: 13px;"
+                                        th:text="${v.valveName}">Primary-Rate-Limiter</strong>
+                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px;"
+                                        th:if="${runtimeValvesMap != null and runtimeValvesMap[v.valveName] != null}">
+                                        <span th:if="${runtimeValvesMap[v.valveName].isActive()}"
+                                            class="badge badge-success"
+                                            style="font-size: 9.5px; padding: 1px 5px; background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);"
+                                            title="Active on server - reported in latest telemetry">&#x25CF;
+                                            ACTIVE</span>
+                                        <span th:unless="${runtimeValvesMap[v.valveName].isActive()}"
+                                            class="badge badge-secondary"
+                                            style="font-size: 9.5px; padding: 1px 5px; background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);"
+                                            title="Inactive on server - no longer reported in telemetry">&#x23F8;
+                                            INACTIVE</span>
+                                        <span th:if="${runtimeValvesMap[v.valveName].isHoneypot()}"
+                                            class="badge badge-warning"
+                                            style="font-size: 9.5px; padding: 1px 5px; background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);"
+                                            title="Zero-Tolerance Honeypot Valve">&#x1F36F; HONEYPOT</span>
+                                        <span th:if="${runtimeValvesMap[v.valveName].isBlocking()}"
+                                            class="badge badge-danger" style="font-size: 9.5px; padding: 1px 5px;"
+                                            th:text="'BLOCKING (' + ${runtimeValvesMap[v.valveName].httpStatusCode} + ')'">BLOCKING
+                                            (429)</span>
+                                        <span th:unless="${runtimeValvesMap[v.valveName].isBlocking()}"
+                                            class="badge badge-purple"
+                                            style="font-size: 9.5px; padding: 1px 5px;">MARKING</span>
+                                        <span th:if="${runtimeValvesMap[v.valveName].simulationMode}"
+                                            class="badge badge-warning"
+                                            style="font-size: 9.5px; padding: 1px 5px;">SIMULATION</span>
+                                        <span class="badge"
+                                            th:classappend="${runtimeValvesMap[v.valveName].collectorIntegrationBadgeClass()}"
+                                            style="font-size: 9.5px; padding: 1px 5px;"
+                                            th:title="'Collector integration mode: ' + ${runtimeValvesMap[v.valveName].collectorIntegration()}"
+                                            th:text="'COLLECTOR: ' + ${runtimeValvesMap[v.valveName].collectorIntegrationLabel()}">COLLECTOR:
+                                            AUTO</span>
+                                        <span class="badge"
+                                            th:classappend="${runtimeValvesMap[v.valveName].visitorCookieBadgeClass()}"
+                                            style="font-size: 9.5px; padding: 1px 5px;"
+                                            th:title="'Visitor cookie tracking: ' + ${runtimeValvesMap[v.valveName].visitorCookieLabel()}"
+                                            th:text="'COOKIE: ' + ${runtimeValvesMap[v.valveName].visitorCookieLabel()}">COOKIE:
+                                            OFF</span>
+                                        <span style="font-size: 11px; color: var(--text-muted);"
+                                            th:text="${runtimeValvesMap[v.valveName].allowedRequestsPerSlot == 0 ? '0 req (Zero Tolerance) / ' + runtimeValvesMap[v.valveName].slotLength + 's' : runtimeValvesMap[v.valveName].allowedRequestsPerSlot + ' req / ' + runtimeValvesMap[v.valveName].slotLength + 's'}">50
+                                            req / 60s</span>
                                     </div>
-                                    <div th:if="${slotEventsMap != null and slotEventsMap[slot.valveName + '_' + slot.slotKey] != null}"
-                                         style="display: flex; flex-direction: column; gap: 4px; margin-top: 2px;">
-                                        <div th:each="ev, stat : ${slotEventsMap[slot.valveName + '_' + slot.slotKey]}"
-                                             th:if="${stat.index < 3}"
-                                             style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
-                                            <a th:href="@{/events(clientQuery=${ev.clientKey})}"
-                                               class="ip-mono"
-                                               style="font-size: 11px; text-decoration: underline; color: inherit; font-weight: 600;"
-                                               title="Filter incidents for this client"
-                                               th:text="${ev.clientKey}">198.51.100.42</a>
-                                            <!-- Subnet Note -->
-                                            <th:block th:if="${ev.subnetGroup != null and !ev.subnetGroup.isBlank()}">
-                                                <th:block th:if="${subnetAnnotations != null and subnetAnnotations.containsKey(ev.subnetGroup)}">
-                                                    <span th:with="a=${subnetAnnotations.get(ev.subnetGroup)}"
-                                                          class="badge-note"
-                                                          th:classappend="${a.verdict().badgeClass()}"
-                                                          th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${ev.subnetGroup}, context='table')}"
-                                                          hx-target="#note-modal-container"
-                                                          th:title="'Subnet Note: ' + ${a.verdict().displayName()}"
-                                                          th:text="${a.verdict().icon()}">🟢</span>
+                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px;"
+                                        th:if="${runtimeValvesMap == null or runtimeValvesMap[v.valveName] == null}">
+                                        <span class="badge badge-secondary"
+                                            style="font-size: 9.5px; padding: 1px 5px; opacity: 0.8;"
+                                            title="Historical slots recorded, but no active runtime telemetry discovered">&#x1F4DC;
+                                            HISTORICAL (NO LIVE CONFIG)</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span th:if="${v.isIncluded}" class="badge badge-success">&#x2714; INCLUDED</span>
+                                    <span th:unless="${v.isIncluded}" class="badge badge-secondary"
+                                        title="Excluded by endpoint valve filter">&#x2716; EXCLUDED</span>
+                                </td>
+                                <td>
+                                    <span th:if="${v.collectActive}" class="badge badge-success"
+                                        title="Active clients telemetry collected for this valve">&#x2714;
+                                        ENABLED</span>
+                                    <span th:unless="${v.collectActive}" class="badge badge-secondary"
+                                        style="opacity: 0.8;"
+                                        title="No active clients retrieved (activeLimit=0)">&#x2716; DISABLED
+                                        (activeLimit=0)</span>
+                                </td>
+                                <td>
+                                    <code th:if="${v.collectActive}"
+                                        style="font-weight: 600; color: var(--color-primary);"
+                                        th:text="'count &ge; ' + ${v.activeMinCount}">count &ge; 10</code>
+                                    <span th:unless="${v.collectActive}"
+                                        style="color: var(--text-muted);">&mdash;</span>
+                                </td>
+                                <td>
+                                    <span th:if="${v.collectActive}" th:text="${v.activeLimit}">1000</span>
+                                    <span th:unless="${v.collectActive}"
+                                        style="color: var(--text-muted);">&mdash;</span>
+                                </td>
+                                <td>
+                                    <span th:if="${v.source.name() == 'ENDPOINT_OVERRIDE'}" class="badge badge-info"
+                                        title="Overridden specifically for this server in endpoints[].valves"
+                                        th:text="${v.source.label}">Endpoint Override</span>
+                                    <span th:if="${v.source.name() == 'VALVE_RULE'}" class="badge badge-purple"
+                                        title="Governed by global rule for this valve name in collector.valve-rules"
+                                        th:text="${v.source.label}">Global Valve Rule</span>
+                                    <span th:if="${v.source.name() == 'GLOBAL_DEFAULT'}" class="badge badge-secondary"
+                                        title="Inherited from fleet-wide default in collector.default-valve-rules"
+                                        th:text="${v.source.label}">Global Default</span>
+                                    <span th:if="${v.source.name() == 'SYSTEM_DEFAULT'}" class="badge badge-secondary"
+                                        title="System default fallback" th:text="${v.source.label}">System
+                                        Default</span>
+                                </td>
+                                <td style="text-align: right;">
+                                    <a th:href="@{'/server/' + ${serverId}(valve=${v.valveName}, status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})}"
+                                        class="btn" style="padding: 2px 8px; font-size: 11px;"
+                                        title="Filter slots timeline for this valve">
+                                        Filter Slots &rarr;
+                                    </a>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Valve Runtime Configurations (Discovered Telemetry) -->
+        <section style="margin-bottom: 28px;">
+            <div class="section-header">
+                <div class="section-title">
+                    &#x2699;&#xFE0F; Discovered Valve Runtime Configurations
+                    <span th:if="${selectedValve != null}"
+                        style="font-size: 13px; font-weight: normal; color: var(--text-muted);"
+                        th:text="'(Filtered: ' + ${selectedValve} + ')'"></span>
+                    <span th:if="${inactiveValvesCount != null and inactiveValvesCount > 0}"
+                        class="badge badge-secondary"
+                        style="font-size: 10px; margin-left: 8px; vertical-align: middle; background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);"
+                        th:text="${inactiveValvesCount} + ' inactive'">1 inactive</span>
+                </div>
+                <div style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 8px;"
+                    th:if="${!#lists.isEmpty(runtimeValves)}">
+                    <span>Synchronized from Valve JSON API &bull; </span>
+                    <a th:href="@{'/api/v1/valves?serverId=' + ${serverId}}" target="_blank" class="btn"
+                        style="padding: 2px 8px; font-size: 11px;">{ } JSON</a>
+                </div>
+            </div>
+
+            <div th:if="${#lists.isEmpty(runtimeValves)}" class="table-card">
+                <div class="empty-state">
+                    <p th:if="${selectedValve != null}">No live runtime configuration discovered yet for valve '<span
+                            th:text="${selectedValve}"></span>'.</p>
+                    <p th:unless="${selectedValve != null}">No live runtime configuration discovered yet for this node.
+                        Valve configurations are automatically synchronized on successful telemetry polls.</p>
+                </div>
+            </div>
+
+            <div th:unless="${#lists.isEmpty(runtimeValves)}" style="display: flex; flex-direction: column; gap: 16px;">
+                <div th:each="rv : ${runtimeValves}" class="table-card"
+                    th:style="${rv.isActive() ? 'padding: 18px 22px;' : 'padding: 18px 22px; opacity: 0.92; border: 1px solid rgba(239, 68, 68, 0.35); background: rgba(30, 41, 59, 0.3);'}">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 14px;">
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <span style="font-size: 16px; font-weight: 700; color: var(--text-primary);"
+                                th:text="${rv.valveName}">Primary-Rate-Limiter</span>
+                            <span th:if="${rv.isActive()}" class="badge badge-success"
+                                style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">&#x25CF;
+                                ACTIVE</span>
+                            <span th:unless="${rv.isActive()}" class="badge badge-secondary"
+                                style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);">&#x23F8;
+                                INACTIVE</span>
+                            <span th:if="${rv.isHoneypot()}" class="badge badge-warning"
+                                style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);"
+                                title="Zero-Tolerance Honeypot Valve">&#x1F36F; HONEYPOT</span>
+                            <span class="badge badge-info" th:text="'#' + ${rv.pipelineOrder} + ' IN PIPELINE'">#1 IN
+                                PIPELINE</span>
+                            <span th:if="${rv.isBlocking()}" class="badge badge-danger"
+                                th:text="'MODE: BLOCKING (' + ${rv.httpStatusCode} + ')'">MODE: BLOCKING (429)</span>
+                            <span th:unless="${rv.isBlocking()}" class="badge badge-purple">MODE: MARKING</span>
+                            <span th:if="${rv.simulationMode}" class="badge badge-warning">SIMULATION MODE</span>
+                            <span th:if="${rv.serverWideBlocking}" class="badge badge-warning">SERVER-WIDE
+                                BLOCKING</span>
+                            <span class="badge" th:classappend="${rv.collectorIntegrationBadgeClass()}"
+                                th:title="'Collector integration mode: ' + ${rv.collectorIntegration()} + ' (Extended metrics &amp; subnet cardinality tracking)'"
+                                th:text="'COLLECTOR: ' + ${rv.collectorIntegrationLabel()}">COLLECTOR: AUTO</span>
+                            <span class="badge" th:classappend="${rv.visitorCookieBadgeClass()}"
+                                th:title="'Visitor cookie tracking: ' + ${rv.visitorCookieLabel()} + ' (Reputation &amp; first-contact detection)'"
+                                th:text="'COOKIE: ' + ${rv.visitorCookieLabel()}">COOKIE: OFF</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted);">
+                            Last Synced: <span style="font-weight: 600; color: var(--text-secondary);"
+                                th:text="${rv.lastUpdatedAt != null ? #temporals.format(rv.lastUpdatedAt, 'dd.MM.yyyy HH:mm:ss') : 'Unknown'}">24.10
+                                22:30:00</span>
+                        </div>
+                    </div>
+
+                    <!-- Inactive Banner with Delete Actions -->
+                    <div th:unless="${rv.isActive()}"
+                        style="font-size: 12px; color: #f59e0b; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                        <div>
+                            <strong style="color: #f59e0b;">&#x26A0;&#xFE0F; Inactive Valve Configuration:</strong>
+                            <span style="color: var(--text-secondary);">This valve was not reported in the latest server
+                                poll (may have been renamed or removed).</span>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                            <form th:action="@{'/server/' + ${serverId} + '/valves/' + ${rv.valveName} + '/delete'}"
+                                method="post" style="display: inline;"
+                                onsubmit="return confirm('Do you want to remove this inactive valve configuration? (Historical telemetry slot data will be preserved)');">
+                                <button type="submit" class="btn"
+                                    style="padding: 3px 10px; font-size: 11px; color: var(--text-primary); border-color: var(--border-color);"
+                                    title="Removes only the configuration (metrics and logs are preserved)">
+                                    Remove Configuration
+                                </button>
+                            </form>
+                            <form th:action="@{'/server/' + ${serverId} + '/valves/' + ${rv.valveName} + '/delete'}"
+                                method="post" style="display: inline;"
+                                onsubmit="return confirm('WARNING: Are you sure you want to permanently delete this valve and ALL historical snapshots and telemetry metrics from the database?');">
+                                <input type="hidden" name="deleteHistory" value="true" />
+                                <button type="submit" class="btn"
+                                    style="padding: 3px 10px; font-size: 11px; color: #ef4444; border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.08);"
+                                    title="Permanently deletes valve and all historical telemetry">
+                                    &#x1F5D1; Delete Completely (incl. History)
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+
+                    <div th:if="${rv.description != null and !rv.description.isBlank()}"
+                        style="font-size: 12px; color: var(--text-secondary); background: rgba(56, 189, 248, 0.06); border-left: 3px solid var(--color-primary); padding: 8px 12px; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; margin-bottom: 14px; line-height: 1.4;"
+                        th:text="${rv.description}">
+                        Primary Rate Limiter description.
+                    </div>
+
+                    <!-- Parameters Grid -->
+                    <div
+                        style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 14px;">
+                        <div
+                            style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
+                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Rate Limit
+                                Threshold</div>
+                            <div style="font-size: 14px; font-weight: 700; color: var(--color-primary);"
+                                th:text="${rv.allowedRequestsPerSlot == 0 ? '0 req (Zero Tolerance / Honeypot) / ' + rv.slotLength + 's' : rv.allowedRequestsPerSlot + ' req / ' + rv.slotLength + 's'}">
+                                50 req / 60s</div>
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;"
+                                th:text="'Window: ' + ${rv.formattedWindow()} + ' &bull; Decay: ' + ${rv.formattedDecay()}">
+                                Window: 300s &bull; Decay: 80%</div>
+                        </div>
+
+                        <div
+                            style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
+                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Subnet Masking
+                                Partition</div>
+                            <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);"
+                                th:utext="${rv.formattedSubnetMasks()}">/32 (IPv4) &bull; /64 (IPv6)</div>
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;">Traffic grouped
+                                by subnet prefix</div>
+                        </div>
+
+                        <div
+                            style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
+                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Cache Bounds
+                                (LRU Capacity)</div>
+                            <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);">
+                                <span th:text="${#numbers.formatInteger(rv.maxIPCacheSize, 1, 'POINT')}">10.000</span>
+                                <span style="font-size: 11px; font-weight: 400; color: var(--text-muted);">active</span>
+                                &bull;
+                                <span
+                                    th:text="${#numbers.formatInteger(rv.maxBlockedIPCacheSize, 1, 'POINT')}">10.000</span>
+                                <span
+                                    style="font-size: 11px; font-weight: 400; color: var(--text-muted);">blocked</span>
+                            </div>
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;">Max concurrent
+                                tracked IPs</div>
+                        </div>
+
+                        <div
+                            style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
+                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Collector
+                                Integration</div>
+                            <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);"
+                                th:text="${rv.collectorIntegrationLabel()}">AUTO</div>
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;"
+                                th:if="${rv.collectorIntegration().toLowerCase() == 'auto'}">Dynamic lease &bull;
+                                Extended metrics</div>
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;"
+                                th:if="${rv.collectorIntegration().toLowerCase() == 'true'}">Permanent &bull; Always
+                                active</div>
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;"
+                                th:if="${rv.collectorIntegration().toLowerCase() == 'false'}">Disabled &bull; Zero
+                                overhead</div>
+                        </div>
+
+                        <div
+                            style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
+                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Visitor Tracking
+                                &amp; Cookies</div>
+                            <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);"
+                                th:text="${rv.visitorCookieEnabled ? 'ACTIVE' : 'DISABLED'}">DISABLED</div>
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;"
+                                th:if="${rv.visitorCookieEnabled}">
+                                Cookie: <code style="font-weight: 600; color: var(--color-primary);"
+                                    th:text="${rv.visitorCookieName()}">_adv</code> &bull; First-contact detection
+                            </div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-top: 3px;"
+                                th:unless="${rv.visitorCookieEnabled}">
+                                Disabled &bull; No visitor cookies issued
+                            </div>
+                        </div>
+
+                        <div th:if="${rv.statusUri != null and !rv.statusUri.isBlank()}"
+                            style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
+                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Status Dashboard
+                                URI</div>
+                            <div style="font-size: 13px; font-weight: 600; font-family: ui-monospace, monospace; color: var(--text-primary);"
+                                th:text="${rv.statusUri}">/antidos-status</div>
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;"
+                                th:text="${rv.statusAllowedIPs != null and !rv.statusAllowedIPs.isBlank() ? 'Allowed: ' + rv.statusAllowedIPs : 'IP restrictions: none'}">
+                                Allowed: 127.0.0.1</div>
+                        </div>
+                    </div>
+
+                    <!-- Path & IP Filters (Collapsible Details) -->
+                    <details th:if="${rv.hasPathFilters() or rv.hasIpLists()}"
+                        style="margin-top: 8px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 14px; background: rgba(0,0,0,0.1);">
+                        <summary
+                            style="font-size: 12px; font-weight: 600; color: var(--color-primary); cursor: pointer;">
+                            &#x1F50D; View Configured Path Filters &amp; IP Lists
+                        </summary>
+                        <div
+                            style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
+                            <div th:if="${rv.relevantPaths != null and !rv.relevantPaths.isBlank()}"
+                                style="display: flex; gap: 8px; align-items: baseline;">
+                                <span style="min-width: 150px; font-weight: 600; color: var(--text-muted);">Relevant
+                                    Paths:</span>
+                                <code style="word-break: break-all;" th:text="${rv.relevantPaths}">/api/*</code>
+                            </div>
+                            <div th:if="${rv.nonRelevantPaths != null and !rv.nonRelevantPaths.isBlank()}"
+                                style="display: flex; gap: 8px; align-items: baseline;">
+                                <span style="min-width: 150px; font-weight: 600; color: var(--text-muted);">Non-Relevant
+                                    Paths:</span>
+                                <code style="word-break: break-all;"
+                                    th:text="${rv.nonRelevantPaths}">*.css, *.js, *.png</code>
+                            </div>
+                            <div th:if="${rv.alwaysAllowedIPs != null and !rv.alwaysAllowedIPs.isBlank()}"
+                                style="display: flex; gap: 8px; align-items: baseline;">
+                                <span style="min-width: 150px; font-weight: 600; color: var(--text-muted);">Always
+                                    Allowed IPs:</span>
+                                <code style="word-break: break-all; color: var(--color-success);"
+                                    th:text="${rv.alwaysAllowedIPs}">127.0.0.1, 10.0.0.0/8</code>
+                            </div>
+                            <div th:if="${rv.alwaysForbiddenIPs != null and !rv.alwaysForbiddenIPs.isBlank()}"
+                                style="display: flex; gap: 8px; align-items: baseline;">
+                                <span style="min-width: 150px; font-weight: 600; color: var(--text-muted);">Always
+                                    Forbidden IPs:</span>
+                                <code style="word-break: break-all; color: var(--color-danger);"
+                                    th:text="${rv.alwaysForbiddenIPs}">198.51.100.0/24</code>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+            </div>
+        </section>
+
+        <!-- Recent Slots Timeline -->
+        <section id="server-slots-section" hx-trigger="annotationChanged from:body"
+            th:hx-get="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})} : @{'/server/' + ${serverId}(status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})}"
+            hx-select="#server-slots-section" hx-target="#server-slots-section" hx-swap="outerHTML">
+            <div class="section-header">
+                <div class="section-title">&#x23F1; Slot History &amp; Timeline</div>
+            </div>
+            <div class="table-card">
+                <div class="table-responsive">
+                    <div th:if="${#lists.isEmpty(recentSlots)}" class="empty-state">
+                        <p>No slot history collected yet for this server.</p>
+                    </div>
+                    <table th:unless="${#lists.isEmpty(recentSlots)}">
+                        <thead>
+                            <tr>
+                                <th>Slot Key</th>
+                                <th>Valve Name</th>
+                                <th>Time Window</th>
+                                <th>Total Requests</th>
+                                <th>Active Clients</th>
+                                <th>Blocked Clients &amp; Forensics</th>
+                                <th>State</th>
+                                <th style="text-align: right;">Forensics</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="slot : ${recentSlots}">
+                                <td><strong th:text="${slot.slotKey}">174620</strong></td>
+                                <td><span class="badge"
+                                        th:classappend="${slot.valveName != null and slot.valveName.toUpperCase().contains('HONEYPOT') ? 'badge-warning' : 'badge-info'}"
+                                        th:text="${(slot.valveName != null and slot.valveName.toUpperCase().contains('HONEYPOT') ? '&#x1F36F; ' : '') + slot.valveName}">STATUS
+                                        VALVE</span></td>
+                                <td
+                                    th:text="${#temporals.format(slot.startTime, 'HH:mm:ss')} + ' - ' + ${#temporals.format(slot.endTime, 'HH:mm:ss')}">
+                                    10:00:00 - 10:01:00</td>
+                                <td th:text="${#numbers.formatInteger(slot.totalRequests, 1, 'POINT')}">1,250</td>
+                                <td th:text="${slot.activeCounters}">45</td>
+                                <td>
+                                    <div th:if="${slot.blockedCounters > 0}"
+                                        style="display: flex; flex-direction: column; gap: 4px;">
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <span class="badge badge-danger"
+                                                th:text="${slot.blockedCounters} + ' Blocked'">2 Blocked</span>
+                                        </div>
+                                        <div th:if="${slotEventsMap != null and slotEventsMap[slot.valveName + '_' + slot.slotKey] != null}"
+                                            style="display: flex; flex-direction: column; gap: 4px; margin-top: 2px;">
+                                            <div th:each="ev, stat : ${slotEventsMap[slot.valveName + '_' + slot.slotKey]}"
+                                                th:if="${stat.index < 3}"
+                                                style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+                                                <a th:href="@{/events(clientQuery=${ev.clientKey})}" class="ip-mono"
+                                                    style="font-size: 11px; text-decoration: underline; color: inherit; font-weight: 600;"
+                                                    title="Filter incidents for this client"
+                                                    th:text="${ev.clientKey}">198.51.100.42</a>
+                                                <!-- Subnet Note -->
+                                                <th:block
+                                                    th:if="${ev.subnetGroup != null and !ev.subnetGroup.isBlank()}">
+                                                    <th:block
+                                                        th:if="${subnetAnnotations != null and subnetAnnotations.containsKey(ev.subnetGroup)}">
+                                                        <span th:with="a=${subnetAnnotations.get(ev.subnetGroup)}"
+                                                            class="badge-note"
+                                                            th:classappend="${a.verdict().badgeClass()}"
+                                                            th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${ev.subnetGroup}, context='table')}"
+                                                            hx-target="#note-modal-container"
+                                                            th:title="'Subnet Note: ' + ${a.verdict().displayName()}"
+                                                            th:text="${a.verdict().icon()}">🟢</span>
+                                                    </th:block>
+                                                    <th:block
+                                                        th:if="${subnetAnnotations == null or !subnetAnnotations.containsKey(ev.subnetGroup)}">
+                                                        <span class="btn-add-note"
+                                                            th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${ev.subnetGroup}, context='table')}"
+                                                            hx-target="#note-modal-container"
+                                                            title="Add note for this subnet">+📝</span>
+                                                    </th:block>
                                                 </th:block>
-                                                <th:block th:if="${subnetAnnotations == null or !subnetAnnotations.containsKey(ev.subnetGroup)}">
+                                                <span th:if="${ev.isHoneypot()}" class="badge badge-warning"
+                                                    style="padding: 1px 5px; font-size: 9px; background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);"
+                                                    title="Client accessed a Honeypot trap URL">&#x1F36F; Honeypot
+                                                    Triggered</span>
+                                                <span th:if="${ev.countryCode != null}" class="badge badge-secondary"
+                                                    style="padding: 1px 4px; font-size: 9px;"
+                                                    th:text="${ev.countryCode}">DE</span>
+                                                <span
+                                                    th:if="${ev.clientType != null and ev.clientType.name() == 'DATACENTER'}"
+                                                    class="badge badge-warning"
+                                                    style="padding: 1px 5px; font-size: 9px;"
+                                                    title="Hosting / Datacenter / Cloud">&#x1F3E2; Datacenter</span>
+                                                <span
+                                                    th:if="${ev.clientType != null and ev.clientType.name() == 'SEARCH_ENGINE'}"
+                                                    class="badge badge-success"
+                                                    style="padding: 1px 5px; font-size: 9px;"
+                                                    title="Verified Search Engine Crawler">&#x1F50D; Search
+                                                    Engine</span>
+                                                <span
+                                                    th:if="${ev.clientType != null and ev.clientType.name() == 'AI_CRAWLER'}"
+                                                    class="badge badge-purple" style="padding: 1px 5px; font-size: 9px;"
+                                                    title="Verified AI Bot / LLM Crawler">&#x1F916; AI Bot</span>
+                                                <span
+                                                    th:if="${ev.clientType != null and ev.clientType.name() == 'RESIDENTIAL'}"
+                                                    class="badge badge-secondary"
+                                                    style="padding: 1px 5px; font-size: 9px;"
+                                                    title="Consumer / Residential ISP">&#x1F3E0; Residential</span>
+                                                <span
+                                                    th:if="${ev.clientType != null and ev.clientType.name() == 'MOBILE'}"
+                                                    class="badge badge-info" style="padding: 1px 5px; font-size: 9px;"
+                                                    title="Mobile Carrier / CGNAT">&#x1F4F1; Mobile</span>
+                                                <span
+                                                    th:if="${ev.clientType != null and ev.clientType.name() == 'PRIVATE_NETWORK'}"
+                                                    class="badge badge-info" style="padding: 1px 5px; font-size: 9px;"
+                                                    title="Private Intranet / RFC 1918 / Local Network">&#x1F512;
+                                                    Private Net</span>
+                                                <span
+                                                    th:if="${ev.clientType != null and ev.clientType.name() == 'UNKNOWN'}"
+                                                    class="badge badge-secondary"
+                                                    style="padding: 1px 5px; font-size: 9px; opacity: 0.75;"
+                                                    title="Unclassified">Unclassified</span>
+                                                <span th:if="${ev.asn != null}"
+                                                    style="display: inline-flex; align-items: center; gap: 3px;">
+                                                    <a th:href="@{/events(asn=${ev.asn})}" class="badge badge-info"
+                                                        style="padding: 1px 5px; font-size: 9px; text-decoration: none;"
+                                                        th:title="${ev.asOrg + ' - Click to filter incidents'}"
+                                                        th:text="'AS' + ${ev.asn}">AS24940</a>
+                                                    <th:block
+                                                        th:if="${asnAnnotations != null and asnAnnotations.containsKey(ev.asn)}">
+                                                        <span th:with="a=${asnAnnotations.get(ev.asn)}"
+                                                            class="badge-note"
+                                                            th:classappend="${a.verdict().badgeClass()}"
+                                                            th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${ev.asn}, context='table')}"
+                                                            hx-target="#note-modal-container"
+                                                            th:title="'ASN Note: ' + ${a.verdict().displayName()}"
+                                                            th:text="${a.verdict().icon()}">🟢</span>
+                                                    </th:block>
+                                                    <th:block
+                                                        th:if="${asnAnnotations == null or !asnAnnotations.containsKey(ev.asn)}">
+                                                        <span class="btn-add-note"
+                                                            th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${ev.asn}, context='table')}"
+                                                            hx-target="#note-modal-container"
+                                                            title="Add note for this ASN">+📝</span>
+                                                    </th:block>
+                                                </span>
+                                            </div>
+                                            <span
+                                                th:if="${slotEventsMap[slot.valveName + '_' + slot.slotKey].size() > 3}"
+                                                style="font-size: 10px; color: var(--text-muted);"
+                                                th:text="'+ ' + (${slotEventsMap[slot.valveName + '_' + slot.slotKey].size()} - 3) + ' more clients'">+
+                                                2 more clients</span>
+                                        </div>
+                                    </div>
+                                    <span th:if="${slot.blockedCounters == 0}" style="color:var(--text-muted);">0</span>
+                                </td>
+                                <td>
+                                    <span th:if="${slot.completed}" class="badge badge-success">FINALIZED</span>
+                                    <span th:unless="${slot.completed}" class="badge badge-warning">IN PROGRESS</span>
+                                </td>
+                                <td style="text-align: right;">
+                                    <a th:if="${slot.blockedCounters > 0}"
+                                        th:href="@{/events(servers=${serverId}, valves=${slot.valveName})}" class="btn"
+                                        style="padding: 2px 8px; font-size: 11px;"
+                                        title="View incidents for this valve on this server">
+                                        View Incidents &rarr;
+                                    </a>
+                                    <span th:if="${slot.blockedCounters == 0}"
+                                        style="color:var(--text-muted); font-size:12px;">-</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Client Traffic & Incidents on this Server -->
+        <section id="server-events-section" hx-trigger="annotationChanged from:body"
+            th:hx-get="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})} : @{'/server/' + ${serverId}(status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})}"
+            hx-select="#server-events-section" hx-target="#server-events-section" hx-swap="outerHTML">
+            <div class="section-header"
+                style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                    <div class="section-title" style="margin-bottom: 0;">
+                        <span th:if="${selectedStatus == 'BLOCKED'}">&#x1F6A8; Blocked Client Incidents on this
+                            Server</span>
+                        <span th:if="${selectedStatus == 'ACTIVE'}">&#x1F539; Active Monitored Clients on this
+                            Server</span>
+                        <span th:if="${selectedStatus != 'BLOCKED' and selectedStatus != 'ACTIVE'}">&#x26A1; Client
+                            Traffic &amp; Incidents on this Server</span>
+                    </div>
+                    <div class="filter-btn-group">
+                        <a th:href="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status='ALL')} : @{'/server/' + ${serverId}(status='ALL')}"
+                            th:hx-get="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status='ALL')} : @{'/server/' + ${serverId}(status='ALL')}"
+                            hx-select="#server-events-section" hx-target="#server-events-section" hx-swap="outerHTML"
+                            hx-push-url="true" class="filter-btn"
+                            th:classappend="${selectedStatus == 'ALL' or selectedStatus == '' or selectedStatus == null ? 'active' : ''}"
+                            title="Show all recorded client events (Blocked &amp; Active)">
+                            All Traffic
+                        </a>
+                        <a th:href="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status='BLOCKED')} : @{'/server/' + ${serverId}(status='BLOCKED')}"
+                            th:hx-get="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status='BLOCKED')} : @{'/server/' + ${serverId}(status='BLOCKED')}"
+                            hx-select="#server-events-section" hx-target="#server-events-section" hx-swap="outerHTML"
+                            hx-push-url="true" class="filter-btn"
+                            th:classappend="${selectedStatus == 'BLOCKED' ? 'active' : ''}"
+                            title="Show only rate-limited or blocked client incidents">
+                            &#x1F6A8; Blocked Only
+                        </a>
+                        <a th:href="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status='ACTIVE')} : @{'/server/' + ${serverId}(status='ACTIVE')}"
+                            th:hx-get="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status='ACTIVE')} : @{'/server/' + ${serverId}(status='ACTIVE')}"
+                            hx-select="#server-events-section" hx-target="#server-events-section" hx-swap="outerHTML"
+                            hx-push-url="true" class="filter-btn"
+                            th:classappend="${selectedStatus == 'ACTIVE' ? 'active' : ''}"
+                            title="Show only active monitored clients within rate limits">
+                            &#x1F539; Active Monitored
+                        </a>
+                    </div>
+                </div>
+                <a th:href="@{/events(servers=${serverId}, status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})}"
+                    class="btn" style="border-color: var(--border-accent); color: var(--color-primary);"
+                    title="Explore incidents for this server node in Incident Explorer">
+                    Explore Node Incidents &rarr;
+                </a>
+            </div>
+            <div class="table-card">
+                <div class="table-responsive">
+                    <div th:if="${#lists.isEmpty(recentEvents)}" class="empty-state">
+                        <p th:if="${selectedStatus == 'BLOCKED'}">No blocked clients recorded on this node.</p>
+                        <p th:if="${selectedStatus == 'ACTIVE'}">No active monitored clients recorded on this node.</p>
+                        <p th:if="${selectedStatus != 'BLOCKED' and selectedStatus != 'ACTIVE'}">No client traffic
+                            events recorded on this node.</p>
+                    </div>
+                    <table th:unless="${#lists.isEmpty(recentEvents)}">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Valve</th>
+                                <th>Client IP / Forensics</th>
+                                <th>Requests</th>
+                                <th>Retained</th>
+                                <th style="min-width: 140px;">Total</th>
+                                <th style="text-align: right;">Forensics</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="event : ${recentEvents}">
+                                <td th:text="${#temporals.format(event.slotTime, 'HH:mm:ss')}">10:45:00</td>
+                                <td><span class="badge"
+                                        th:classappend="${event.isHoneypot() ? 'badge-warning' : 'badge-info'}"
+                                        th:text="${(event.isHoneypot() ? '&#x1F36F; ' : '') + event.valveName}">API
+                                        LIMITER</span></td>
+                                <td>
+                                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <a th:href="@{/events(clientQuery=${event.clientKey})}" class="ip-mono"
+                                                style="text-decoration: underline; color: inherit; font-weight: 600;"
+                                                title="View all incidents for this client"
+                                                th:text="${event.clientKey}">192.168.1.100</a>
+                                            <!-- Subnet Note -->
+                                            <th:block
+                                                th:if="${event.subnetGroup != null and !event.subnetGroup.isBlank()}">
+                                                <th:block
+                                                    th:if="${subnetAnnotations != null and subnetAnnotations.containsKey(event.subnetGroup)}">
+                                                    <span th:with="a=${subnetAnnotations.get(event.subnetGroup)}"
+                                                        class="badge-note" th:classappend="${a.verdict().badgeClass()}"
+                                                        th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${event.subnetGroup}, context='table')}"
+                                                        hx-target="#note-modal-container"
+                                                        th:title="'Subnet Note: ' + ${a.verdict().displayName()}"
+                                                        th:text="${a.verdict().icon()}">🟢</span>
+                                                </th:block>
+                                                <th:block
+                                                    th:if="${subnetAnnotations == null or !subnetAnnotations.containsKey(event.subnetGroup)}">
                                                     <span class="btn-add-note"
-                                                          th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${ev.subnetGroup}, context='table')}"
-                                                          hx-target="#note-modal-container"
-                                                          title="Add note for this subnet">+📝</span>
+                                                        th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${event.subnetGroup}, context='table')}"
+                                                        hx-target="#note-modal-container"
+                                                        title="Add note for this subnet">+📝</span>
                                                 </th:block>
                                             </th:block>
-                                            <span th:if="${ev.isHoneypot()}" class="badge badge-warning" style="padding: 1px 5px; font-size: 9px; background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);" title="Client accessed a Honeypot trap URL">&#x1F36F; Honeypot Triggered</span>
-                                            <span th:if="${ev.countryCode != null}" class="badge badge-secondary" style="padding: 1px 4px; font-size: 9px;" th:text="${ev.countryCode}">DE</span>
-                                            <span th:if="${ev.clientType != null and ev.clientType.name() == 'DATACENTER'}" class="badge badge-warning" style="padding: 1px 5px; font-size: 9px;" title="Hosting / Datacenter / Cloud">&#x1F3E2; Datacenter</span>
-                                            <span th:if="${ev.clientType != null and ev.clientType.name() == 'SEARCH_ENGINE'}" class="badge badge-success" style="padding: 1px 5px; font-size: 9px;" title="Verified Search Engine Crawler">&#x1F50D; Search Engine</span>
-                                            <span th:if="${ev.clientType != null and ev.clientType.name() == 'AI_CRAWLER'}" class="badge badge-purple" style="padding: 1px 5px; font-size: 9px;" title="Verified AI Bot / LLM Crawler">&#x1F916; AI Bot</span>
-                                            <span th:if="${ev.clientType != null and ev.clientType.name() == 'RESIDENTIAL'}" class="badge badge-secondary" style="padding: 1px 5px; font-size: 9px;" title="Consumer / Residential ISP">&#x1F3E0; Residential</span>
-                                            <span th:if="${ev.clientType != null and ev.clientType.name() == 'MOBILE'}" class="badge badge-info" style="padding: 1px 5px; font-size: 9px;" title="Mobile Carrier / CGNAT">&#x1F4F1; Mobile</span>
-                                            <span th:if="${ev.clientType != null and ev.clientType.name() == 'PRIVATE_NETWORK'}" class="badge badge-info" style="padding: 1px 5px; font-size: 9px;" title="Private Intranet / RFC 1918 / Local Network">&#x1F512; Private Net</span>
-                                            <span th:if="${ev.clientType != null and ev.clientType.name() == 'UNKNOWN'}" class="badge badge-secondary" style="padding: 1px 5px; font-size: 9px; opacity: 0.75;" title="Unclassified">Unclassified</span>
-                                            <span th:if="${ev.asn != null}" style="display: inline-flex; align-items: center; gap: 3px;">
-                                                <a th:href="@{/events(asn=${ev.asn})}" class="badge badge-info" style="padding: 1px 5px; font-size: 9px; text-decoration: none;" th:title="${ev.asOrg + ' - Click to filter incidents'}" th:text="'AS' + ${ev.asn}">AS24940</a>
-                                                <th:block th:if="${asnAnnotations != null and asnAnnotations.containsKey(ev.asn)}">
-                                                    <span th:with="a=${asnAnnotations.get(ev.asn)}"
-                                                          class="badge-note"
-                                                          th:classappend="${a.verdict().badgeClass()}"
-                                                          th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${ev.asn}, context='table')}"
-                                                          hx-target="#note-modal-container"
-                                                          th:title="'ASN Note: ' + ${a.verdict().displayName()}"
-                                                          th:text="${a.verdict().icon()}">🟢</span>
+                                            <span th:if="${event.countryCode != null}" class="badge badge-secondary"
+                                                style="padding: 1px 5px; font-size: 10px;"
+                                                th:text="${event.countryCode}">DE</span>
+                                        </div>
+                                        <div style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center;">
+                                            <span th:if="${event.isHoneypot()}" class="badge badge-warning"
+                                                style="padding: 1px 6px; font-size: 9px; background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);"
+                                                title="Client accessed a Honeypot trap URL">&#x1F36F; Honeypot
+                                                Triggered</span>
+                                            <span
+                                                th:if="${event.clientType != null and event.clientType.name() == 'DATACENTER'}"
+                                                class="badge badge-warning" style="padding: 1px 6px; font-size: 9px;"
+                                                title="Hosting / Datacenter / Cloud">&#x1F3E2; Datacenter</span>
+                                            <span
+                                                th:if="${event.clientType != null and event.clientType.name() == 'SEARCH_ENGINE'}"
+                                                class="badge badge-success" style="padding: 1px 6px; font-size: 9px;"
+                                                title="Verified Search Engine Crawler">&#x1F50D; Search Engine</span>
+                                            <span
+                                                th:if="${event.clientType != null and event.clientType.name() == 'AI_CRAWLER'}"
+                                                class="badge badge-purple" style="padding: 1px 6px; font-size: 9px;"
+                                                title="Verified AI Bot / LLM Crawler">&#x1F916; AI Bot</span>
+                                            <span
+                                                th:if="${event.clientType != null and event.clientType.name() == 'RESIDENTIAL'}"
+                                                class="badge badge-secondary" style="padding: 1px 6px; font-size: 9px;"
+                                                title="Consumer / Residential ISP">&#x1F3E0; Residential</span>
+                                            <span
+                                                th:if="${event.clientType != null and event.clientType.name() == 'MOBILE'}"
+                                                class="badge badge-info" style="padding: 1px 6px; font-size: 9px;"
+                                                title="Mobile Carrier / CGNAT">&#x1F4F1; Mobile</span>
+                                            <span
+                                                th:if="${event.clientType != null and event.clientType.name() == 'PRIVATE_NETWORK'}"
+                                                class="badge badge-info" style="padding: 1px 6px; font-size: 9px;"
+                                                title="Private Intranet / RFC 1918 / Local Network">&#x1F512; Private
+                                                Net</span>
+                                            <span
+                                                th:if="${event.clientType != null and event.clientType.name() == 'UNKNOWN'}"
+                                                class="badge badge-secondary"
+                                                style="padding: 1px 6px; font-size: 9px; opacity: 0.75;"
+                                                title="Unclassified">Unclassified</span>
+                                            <span th:if="${event.asn != null}"
+                                                style="display: inline-flex; align-items: center; gap: 3px;">
+                                                <a th:href="@{/events(asn=${event.asn})}" class="badge badge-info"
+                                                    style="padding: 1px 6px; font-size: 9px; text-decoration: none;"
+                                                    th:title="${event.asOrg + ' - Click to filter incidents'}"
+                                                    th:text="'AS' + ${event.asn}">AS24940</a>
+                                                <th:block
+                                                    th:if="${asnAnnotations != null and asnAnnotations.containsKey(event.asn)}">
+                                                    <span th:with="a=${asnAnnotations.get(event.asn)}"
+                                                        class="badge-note" th:classappend="${a.verdict().badgeClass()}"
+                                                        th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${event.asn}, context='table')}"
+                                                        hx-target="#note-modal-container"
+                                                        th:title="'ASN Note: ' + ${a.verdict().displayName()}"
+                                                        th:text="${a.verdict().icon()}">🟢</span>
                                                 </th:block>
-                                                <th:block th:if="${asnAnnotations == null or !asnAnnotations.containsKey(ev.asn)}">
+                                                <th:block
+                                                    th:if="${asnAnnotations == null or !asnAnnotations.containsKey(event.asn)}">
                                                     <span class="btn-add-note"
-                                                          th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${ev.asn}, context='table')}"
-                                                          hx-target="#note-modal-container"
-                                                          title="Add note for this ASN">+📝</span>
+                                                        th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${event.asn}, context='table')}"
+                                                        hx-target="#note-modal-container"
+                                                        title="Add note for this ASN">+📝</span>
                                                 </th:block>
                                             </span>
+                                            <span th:if="${event.asn == null and event.asOrg != null}"
+                                                style="font-size: 10px; color: var(--text-muted);"
+                                                th:text="${event.asOrg}">Private Network</span>
                                         </div>
-                                        <span th:if="${slotEventsMap[slot.valveName + '_' + slot.slotKey].size() > 3}"
-                                              style="font-size: 10px; color: var(--text-muted);"
-                                              th:text="'+ ' + (${slotEventsMap[slot.valveName + '_' + slot.slotKey].size()} - 3) + ' more clients'">+ 2 more clients</span>
                                     </div>
-                                </div>
-                                <span th:if="${slot.blockedCounters == 0}" style="color:var(--text-muted);">0</span>
-                            </td>
-                            <td>
-                                <span th:if="${slot.completed}" class="badge badge-success">FINALIZED</span>
-                                <span th:unless="${slot.completed}" class="badge badge-warning">IN PROGRESS</span>
-                            </td>
-                            <td style="text-align: right;">
-                                <a th:if="${slot.blockedCounters > 0}"
-                                   th:href="@{/events(servers=${serverId}, valves=${slot.valveName})}"
-                                   class="btn"
-                                   style="padding: 2px 8px; font-size: 11px;"
-                                   title="View incidents for this valve on this server">
-                                    View Incidents &rarr;
-                                </a>
-                                <span th:if="${slot.blockedCounters == 0}" style="color:var(--text-muted); font-size:12px;">-</span>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </section>
-
-    <!-- Client Traffic & Incidents on this Server -->
-    <section id="server-events-section"
-             hx-trigger="annotationChanged from:body"
-             th:hx-get="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})} : @{'/server/' + ${serverId}(status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})}"
-             hx-select="#server-events-section"
-             hx-target="#server-events-section"
-             hx-swap="outerHTML">
-        <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-            <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
-                <div class="section-title" style="margin-bottom: 0;">
-                    <span th:if="${selectedStatus == 'BLOCKED'}">&#x1F6A8; Blocked Client Incidents on this Server</span>
-                    <span th:if="${selectedStatus == 'ACTIVE'}">&#x1F539; Active Monitored Clients on this Server</span>
-                    <span th:if="${selectedStatus != 'BLOCKED' and selectedStatus != 'ACTIVE'}">&#x26A1; Client Traffic &amp; Incidents on this Server</span>
-                </div>
-                <div class="filter-btn-group">
-                    <a th:href="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status='ALL')} : @{'/server/' + ${serverId}(status='ALL')}"
-                       th:hx-get="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status='ALL')} : @{'/server/' + ${serverId}(status='ALL')}"
-                       hx-select="#server-events-section"
-                       hx-target="#server-events-section"
-                       hx-swap="outerHTML"
-                       hx-push-url="true"
-                       class="filter-btn"
-                       th:classappend="${selectedStatus == 'ALL' or selectedStatus == '' or selectedStatus == null ? 'active' : ''}"
-                       title="Show all recorded client events (Blocked &amp; Active)">
-                        All Traffic
-                    </a>
-                    <a th:href="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status='BLOCKED')} : @{'/server/' + ${serverId}(status='BLOCKED')}"
-                       th:hx-get="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status='BLOCKED')} : @{'/server/' + ${serverId}(status='BLOCKED')}"
-                       hx-select="#server-events-section"
-                       hx-target="#server-events-section"
-                       hx-swap="outerHTML"
-                       hx-push-url="true"
-                       class="filter-btn"
-                       th:classappend="${selectedStatus == 'BLOCKED' ? 'active' : ''}"
-                       title="Show only rate-limited or blocked client incidents">
-                        &#x1F6A8; Blocked Only
-                    </a>
-                    <a th:href="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status='ACTIVE')} : @{'/server/' + ${serverId}(status='ACTIVE')}"
-                       th:hx-get="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status='ACTIVE')} : @{'/server/' + ${serverId}(status='ACTIVE')}"
-                       hx-select="#server-events-section"
-                       hx-target="#server-events-section"
-                       hx-swap="outerHTML"
-                       hx-push-url="true"
-                       class="filter-btn"
-                       th:classappend="${selectedStatus == 'ACTIVE' ? 'active' : ''}"
-                       title="Show only active monitored clients within rate limits">
-                        &#x1F539; Active Monitored
-                    </a>
-                </div>
-            </div>
-            <a th:href="@{/events(servers=${serverId}, status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})}"
-               class="btn"
-               style="border-color: var(--border-accent); color: var(--color-primary);"
-               title="Explore incidents for this server node in Incident Explorer">
-                Explore Node Incidents &rarr;
-            </a>
-        </div>
-        <div class="table-card">
-            <div class="table-responsive">
-                <div th:if="${#lists.isEmpty(recentEvents)}" class="empty-state">
-                    <p th:if="${selectedStatus == 'BLOCKED'}">No blocked clients recorded on this node.</p>
-                    <p th:if="${selectedStatus == 'ACTIVE'}">No active monitored clients recorded on this node.</p>
-                    <p th:if="${selectedStatus != 'BLOCKED' and selectedStatus != 'ACTIVE'}">No client traffic events recorded on this node.</p>
-                </div>
-                <table th:unless="${#lists.isEmpty(recentEvents)}">
-                    <thead>
-                        <tr>
-                            <th>Time</th>
-                            <th>Valve</th>
-                            <th>Client IP / Forensics</th>
-                            <th>Requests</th>
-                            <th>Retained</th>
-                            <th style="min-width: 140px;">Total</th>
-                            <th style="text-align: right;">Forensics</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr th:each="event : ${recentEvents}">
-                            <td th:text="${#temporals.format(event.slotTime, 'HH:mm:ss')}">10:45:00</td>
-                            <td><span class="badge" th:classappend="${event.isHoneypot() ? 'badge-warning' : 'badge-info'}" th:text="${(event.isHoneypot() ? '&#x1F36F; ' : '') + event.valveName}">API LIMITER</span></td>
-                            <td>
-                                <div style="display: flex; flex-direction: column; gap: 4px;">
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                        <a th:href="@{/events(clientQuery=${event.clientKey})}"
-                                           class="ip-mono"
-                                           style="text-decoration: underline; color: inherit; font-weight: 600;"
-                                           title="View all incidents for this client"
-                                           th:text="${event.clientKey}">192.168.1.100</a>
-                                        <!-- Subnet Note -->
-                                        <th:block th:if="${event.subnetGroup != null and !event.subnetGroup.isBlank()}">
-                                            <th:block th:if="${subnetAnnotations != null and subnetAnnotations.containsKey(event.subnetGroup)}">
-                                                <span th:with="a=${subnetAnnotations.get(event.subnetGroup)}"
-                                                      class="badge-note"
-                                                      th:classappend="${a.verdict().badgeClass()}"
-                                                      th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${event.subnetGroup}, context='table')}"
-                                                      hx-target="#note-modal-container"
-                                                      th:title="'Subnet Note: ' + ${a.verdict().displayName()}"
-                                                      th:text="${a.verdict().icon()}">🟢</span>
-                                            </th:block>
-                                            <th:block th:if="${subnetAnnotations == null or !subnetAnnotations.containsKey(event.subnetGroup)}">
-                                                <span class="btn-add-note"
-                                                      th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${event.subnetGroup}, context='table')}"
-                                                      hx-target="#note-modal-container"
-                                                      title="Add note for this subnet">+📝</span>
-                                            </th:block>
-                                        </th:block>
-                                        <span th:if="${event.countryCode != null}" class="badge badge-secondary" style="padding: 1px 5px; font-size: 10px;" th:text="${event.countryCode}">DE</span>
-                                    </div>
-                                    <div style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center;">
-                                        <span th:if="${event.isHoneypot()}" class="badge badge-warning" style="padding: 1px 6px; font-size: 9px; background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);" title="Client accessed a Honeypot trap URL">&#x1F36F; Honeypot Triggered</span>
-                                        <span th:if="${event.clientType != null and event.clientType.name() == 'DATACENTER'}" class="badge badge-warning" style="padding: 1px 6px; font-size: 9px;" title="Hosting / Datacenter / Cloud">&#x1F3E2; Datacenter</span>
-                                        <span th:if="${event.clientType != null and event.clientType.name() == 'SEARCH_ENGINE'}" class="badge badge-success" style="padding: 1px 6px; font-size: 9px;" title="Verified Search Engine Crawler">&#x1F50D; Search Engine</span>
-                                        <span th:if="${event.clientType != null and event.clientType.name() == 'AI_CRAWLER'}" class="badge badge-purple" style="padding: 1px 6px; font-size: 9px;" title="Verified AI Bot / LLM Crawler">&#x1F916; AI Bot</span>
-                                        <span th:if="${event.clientType != null and event.clientType.name() == 'RESIDENTIAL'}" class="badge badge-secondary" style="padding: 1px 6px; font-size: 9px;" title="Consumer / Residential ISP">&#x1F3E0; Residential</span>
-                                        <span th:if="${event.clientType != null and event.clientType.name() == 'MOBILE'}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px;" title="Mobile Carrier / CGNAT">&#x1F4F1; Mobile</span>
-                                        <span th:if="${event.clientType != null and event.clientType.name() == 'PRIVATE_NETWORK'}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px;" title="Private Intranet / RFC 1918 / Local Network">&#x1F512; Private Net</span>
-                                        <span th:if="${event.clientType != null and event.clientType.name() == 'UNKNOWN'}" class="badge badge-secondary" style="padding: 1px 6px; font-size: 9px; opacity: 0.75;" title="Unclassified">Unclassified</span>
-                                        <span th:if="${event.asn != null}" style="display: inline-flex; align-items: center; gap: 3px;">
-                                            <a th:href="@{/events(asn=${event.asn})}" class="badge badge-info" style="padding: 1px 6px; font-size: 9px; text-decoration: none;" th:title="${event.asOrg + ' - Click to filter incidents'}" th:text="'AS' + ${event.asn}">AS24940</a>
-                                            <th:block th:if="${asnAnnotations != null and asnAnnotations.containsKey(event.asn)}">
-                                                <span th:with="a=${asnAnnotations.get(event.asn)}"
-                                                      class="badge-note"
-                                                      th:classappend="${a.verdict().badgeClass()}"
-                                                      th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${event.asn}, context='table')}"
-                                                      hx-target="#note-modal-container"
-                                                      th:title="'ASN Note: ' + ${a.verdict().displayName()}"
-                                                      th:text="${a.verdict().icon()}">🟢</span>
-                                            </th:block>
-                                            <th:block th:if="${asnAnnotations == null or !asnAnnotations.containsKey(event.asn)}">
-                                                <span class="btn-add-note"
-                                                      th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${event.asn}, context='table')}"
-                                                      hx-target="#note-modal-container"
-                                                      title="Add note for this ASN">+📝</span>
-                                            </th:block>
-                                        </span>
-                                        <span th:if="${event.asn == null and event.asOrg != null}" style="font-size: 10px; color: var(--text-muted);" th:text="${event.asOrg}">Private Network</span>
-                                    </div>
-                                </div>
-                            </td>
-                            <td th:text="${event.requestCount}">15</td>
-                            <td th:text="${event.retainedCount}">5</td>
-                            <td>
-                                <div class="event-total-cell">
-                                    <strong class="event-total-count" th:classappend="${event.status == 'ACTIVE' ? 'count-active' : 'count-blocked'}"
+                                </td>
+                                <td th:text="${event.requestCount}">15</td>
+                                <td th:text="${event.retainedCount}">5</td>
+                                <td>
+                                    <div class="event-total-cell">
+                                        <strong class="event-total-count"
+                                            th:classappend="${event.status == 'ACTIVE' ? 'count-active' : 'count-blocked'}"
                                             th:text="${#numbers.formatInteger(event.totalEffectiveCount, 1, 'POINT')}">20</strong>
-                                    <span th:if="${event.status == 'ACTIVE'}" class="badge badge-info badge-status" title="Monitored active client within rate limits">
-                                        <span class="status-dot status-dot-active"></span>Active
-                                    </span>
-                                    <span th:if="${event.status != 'ACTIVE' and event.completed}" class="badge badge-danger badge-status" title="Rate-limit exceeded - Locked in completed slot">
-                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" class="status-icon"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>Locked
-                                    </span>
-                                    <span th:if="${event.status != 'ACTIVE' and !event.completed}" class="badge badge-warning badge-status" title="Rate-limit exceeded - Currently blocked (429)">
-                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" class="status-icon"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 6h2v6h-2V7zm0 8h2v2h-2v-2z"/></svg>Blocked
-                                    </span>
-                                </div>
-                            </td>
-                            <td style="text-align: right;">
-                                <a th:href="@{/events(clientQuery=${event.clientKey})}"
-                                   class="btn"
-                                   style="padding: 2px 8px; font-size: 11px;"
-                                   title="View all incidents for this client">
-                                    View Incidents &rarr;
-                                </a>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                                        <span th:if="${event.status == 'ACTIVE'}" class="badge badge-info badge-status"
+                                            title="Monitored active client within rate limits">
+                                            <span class="status-dot status-dot-active"></span>Active
+                                        </span>
+                                        <span th:if="${event.status != 'ACTIVE' and event.completed}"
+                                            class="badge badge-danger badge-status"
+                                            title="Rate-limit exceeded - Locked in completed slot">
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"
+                                                class="status-icon">
+                                                <path
+                                                    d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" />
+                                            </svg>Locked
+                                        </span>
+                                        <span th:if="${event.status != 'ACTIVE' and !event.completed}"
+                                            class="badge badge-warning badge-status"
+                                            title="Rate-limit exceeded - Currently blocked (429)">
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"
+                                                class="status-icon">
+                                                <path
+                                                    d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 6h2v6h-2V7zm0 8h2v2h-2v-2z" />
+                                            </svg>Blocked
+                                        </span>
+                                    </div>
+                                </td>
+                                <td style="text-align: right;">
+                                    <a th:href="@{/events(clientQuery=${event.clientKey})}" class="btn"
+                                        style="padding: 2px 8px; font-size: 11px;"
+                                        title="View all incidents for this client">
+                                        View Incidents &rarr;
+                                    </a>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <!-- Contextual Help Drawer -->
-    <div th:replace="~{fragments/help-drawer :: helpDrawer}"></div>
+        <!-- Contextual Help Drawer -->
+        <div th:replace="~{fragments/help-drawer :: helpDrawer}"></div>
 
-    <!-- Note Editor & Viewer Modal (loaded dynamically via HTMX) -->
-    <div id="note-modal-container"></div>
-</div>
+        <!-- Note Editor & Viewer Modal (loaded dynamically via HTMX) -->
+        <div id="note-modal-container"></div>
+    </div>
 
-<script>
-    function closeNoteModal() {
-        const c = document.getElementById('note-modal-container');
-        if (c) c.innerHTML = '';
-    }
+    <script>
+        function closeNoteModal(e) {
+            if (e) {
+                if (typeof e.stopPropagation === 'function') e.stopPropagation();
+                if (typeof e.preventDefault === 'function') e.preventDefault();
+            }
+            const c = document.getElementById('note-modal-container');
+            if (c) c.innerHTML = '';
+            document.querySelectorAll('.note-modal-overlay, #note-modal-wrapper').forEach(el => el.remove());
+        }
 
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') closeNoteModal();
-    });
-</script>
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') closeNoteModal(e);
+        });
+    </script>
 
 </body>
+
 </html>

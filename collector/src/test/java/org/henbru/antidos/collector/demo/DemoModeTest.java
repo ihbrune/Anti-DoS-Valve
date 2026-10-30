@@ -129,6 +129,8 @@ class DemoModeTest {
 		assertEquals("API-DoS-Shield", details.valve().monitorName());
 		assertNotNull(details.selectedSlot());
 		assertFalse(details.blockedClients().isEmpty(), "API Gateway details should include blocked attacker IPs");
+		assertTrue(details.blockedClients().stream().anyMatch(c -> c.sampleMethod() != null && c.sampleUri() != null),
+				"Simulated API Gateway attackers should include sample request probe snapshots");
 	}
 
 	@Test
@@ -285,6 +287,7 @@ class DemoModeTest {
 		assertFalse(honeypotEvents.isEmpty(), "Should have seeded Honeypot events for HONEYPOT-PROBE-VALVE");
 		assertTrue(honeypotEvents.getFirst().isHoneypot(), "Event should be recognized as Honeypot event");
 		assertEquals(1, honeypotEvents.getFirst().requestCount(), "Honeypot events should record individual probe hits");
+		assertTrue(honeypotEvents.stream().anyMatch(e -> e.hasSample()), "Honeypot demo events should include sample probe snapshots");
 	}
 
 	@Test

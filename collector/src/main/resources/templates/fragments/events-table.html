@@ -144,8 +144,8 @@
                                     th:if="${event.subnetGroup != null and (subnetAnnotations == null or !subnetAnnotations.containsKey(event.subnetGroup))}">
                                     <span class="btn-add-note"
                                         th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${event.subnetGroup}, context='table', initialVerdict=${event.hasSample() ? 'MALICIOUS' : 'INFO'}, initialMarkdown=${event.hasSample() ? ('### Blocked Incident Sample&#10;- **Offending Request:** `' + event.formattedSample() + '`&#10;- **User-Agent:** `' + (event.sampleUserAgent != null ? event.sampleUserAgent : 'none') + '`&#10;- **Server / Valve:** `' + event.serverId + '` (`' + event.valveName + '`)&#10;- **Client IP:** `' + event.clientKey + '`') : ''})}"
-                                    th:title="${event.hasSample() ? 'Add note with captured sample for this subnet' :
-                                    'Add note for this subnet'}">+📝</span>
+                                        hx-target="#note-modal-container" th:title="${event.hasSample() ? 'Add note with captured sample for this subnet' :
+                                        'Add note for this subnet'}">+📝</span>
                                 </th:block>
                             </div>
                         </td>

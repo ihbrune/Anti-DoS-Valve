@@ -5,6 +5,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+
 import org.henbru.antidos.collector.model.ValveDetailsDto;
 import org.henbru.antidos.collector.model.ValveOverviewDto;
 import org.springframework.stereotype.Component;
@@ -19,6 +20,32 @@ public class MockValveSimulator {
 	public static final int SLOT_LENGTH_SECONDS = 10;
 	public static final int SLOT_LENGTH_MILLIS = SLOT_LENGTH_SECONDS * 1000;
 	public static final int NUMBER_OF_SLOTS = 6;
+
+	public record SimulatedProbe(String method, String uri, String userAgent) {}
+
+	public static final SimulatedProbe[] ATTACK_PROBES = {
+			new SimulatedProbe("POST", "/api/v1/auth/login", "hydra/9.5 (login-bruteforce)"),
+			new SimulatedProbe("GET", "/.env", "curl/8.4.0"),
+			new SimulatedProbe("POST", "/wp-login.php", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"),
+			new SimulatedProbe("POST", "/xmlrpc.php", "botnet-probe/4.2 (+http://scanner.net)"),
+			new SimulatedProbe("GET", "/actuator/env", "python-requests/2.31.0"),
+			new SimulatedProbe("POST", "/api/v1/tokens", "fasthttp/1.48.0"),
+			new SimulatedProbe("GET", "/.git/config", "Go-http-client/1.1"),
+			new SimulatedProbe("GET", "/admin/phpmyadmin/index.php", "ZmEu/2.0"),
+			new SimulatedProbe("GET", "/aws/credentials", "CloudRecon/3.1"),
+			new SimulatedProbe("GET", "/wp-admin/setup-config.php", "WPScan/3.8.22"),
+			new SimulatedProbe("POST", "/oauth/token", "okhttp/4.12.0"),
+			new SimulatedProbe("GET", "/api/internal/debug", "Nuclei (github.com/projectdiscovery/nuclei)")
+	};
+
+	public static final SimulatedProbe[] HONEYPOT_PROBES = {
+			new SimulatedProbe("GET", "/.env", "curl/8.4.0"),
+			new SimulatedProbe("GET", "/wp-login.php", "vuln-scanner/1.0"),
+			new SimulatedProbe("GET", "/actuator/gateway/routes", "Nuclei - Open-source project (github.com/projectdiscovery/nuclei)"),
+			new SimulatedProbe("POST", "/api/internal/debug", "Go-http-client/1.1"),
+			new SimulatedProbe("GET", "/admin/pma/index.php", "masscan/1.3.2"),
+			new SimulatedProbe("GET", "/.git/HEAD", "GitCrawler/2.0")
+	};
 
 	// IP pool for the simulated distributed attack on API Gateway (mixed IPv4 and IPv6)
 	private static final String[] ATTACKER_IPS = {
@@ -540,7 +567,12 @@ public class MockValveSimulator {
 			int retained = 5 + rnd.nextInt(25);
 			boolean locked = rnd.nextBoolean();
 			int dc = getDistinctClientsForAttacker(ip);
-			blocked.add(new ValveDetailsDto.BlockedClientDto(ip, reqCount, retained, reqCount + retained, locked, lastUpdate, dc));
+			SimulatedProbe probe = ATTACK_PROBES[Math.abs((int) ((slotKey * 7 + i) % ATTACK_PROBES.length))];
+			blocked.add(new ValveDetailsDto.BlockedClientDto(
+					ip, reqCount, retained, reqCount + retained, locked, lastUpdate, dc,
+					null, null,
+					probe.method(), probe.uri(), probe.userAgent()
+			));
 		}
 
 		return new SlotMetrics(totalRequests, activeCounters, blocked.size(), blocked);
@@ -573,9 +605,15 @@ public class MockValveSimulator {
 			String lastUpdate = DateTimeFormatter.ISO_INSTANT.format(
 					Instant.ofEpochMilli(slotKey * SLOT_LENGTH_MILLIS + 4000)
 			);
-			blocked.add(new ValveDetailsDto.BlockedClientDto("198.51.100.42", 145, 0, 145, false, lastUpdate, 24, 120, null));
+			blocked.add(new ValveDetailsDto.BlockedClientDto(
+					"198.51.100.42", 145, 0, 145, false, lastUpdate, 24, 120, null,
+					"POST", "/login", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
+			));
 			if (rnd.nextBoolean()) {
-				blocked.add(new ValveDetailsDto.BlockedClientDto("203.0.113.88", 128, 0, 128, false, lastUpdate, 28, 0, null));
+				blocked.add(new ValveDetailsDto.BlockedClientDto(
+						"203.0.113.88", 128, 0, 128, false, lastUpdate, 28, 0, null,
+						"GET", "/products/search", "Googlebot/2.1 (+http://www.google.com/bot.html)"
+				));
 			}
 		}
 
@@ -599,7 +637,8 @@ public class MockValveSimulator {
 			// Residential proxy swarm cluster: 260 reqs spread across 75-90 distinct client IPs (~3.2 reqs/IP) - 0% cookies!
 			int req2 = 260 + rnd.nextInt(70);
 			blocked.add(new ValveDetailsDto.BlockedClientDto(
-					"185.246.221.0/24", req2, 0, req2, false, lastUpdate, 82 + rnd.nextInt(8), 0, null
+					"185.246.221.0/24", req2, 0, req2, false, lastUpdate, 82 + rnd.nextInt(8), 0, null,
+					"POST", "/api/v1/auth/token", "python-urllib3/2.0.7"
 			));
 		}
 		if (slotKey % 3 == 0) {
@@ -612,7 +651,8 @@ public class MockValveSimulator {
 		if (slotKey % 5 == 0) {
 			int req3 = 290 + rnd.nextInt(80);
 			blocked.add(new ValveDetailsDto.BlockedClientDto(
-					"45.154.255.0/24", req3, 0, req3, true, lastUpdate, 34 + rnd.nextInt(8), 0, null
+					"45.154.255.0/24", req3, 0, req3, true, lastUpdate, 34 + rnd.nextInt(8), 0, null,
+					"POST", "/wp-login.php", "Mozilla/5.0 (X11; Ubuntu; Linux x86_64)"
 			));
 		}
 
@@ -628,11 +668,17 @@ public class MockValveSimulator {
 				Instant.ofEpochMilli(slotKey * SLOT_LENGTH_MILLIS + 4500)
 		);
 		// Baseline blocked IPv6 scraper
-		blocked.add(new ValveDetailsDto.BlockedClientDto("2a02:1205:502c:3b00:1c44:98ff:fe22:1011", 165 + rnd.nextInt(30), 0, true, lastUpdate));
+		blocked.add(new ValveDetailsDto.BlockedClientDto(
+				"2a02:1205:502c:3b00:1c44:98ff:fe22:1011", 165 + rnd.nextInt(30), 0, 165 + rnd.nextInt(30), true, lastUpdate, 1, null, null,
+				"GET", "/.env", "curl/8.4.0"
+		));
 		// Rotating second client from the same residential /64 prefix to demonstrate Subnet Rollup
 		blocked.add(new ValveDetailsDto.BlockedClientDto("2a02:1205:502c:3b00:2d55:77aa:1122:3344", 142 + rnd.nextInt(25), 0, true, lastUpdate));
 		if (slotKey % 2 == 0) {
-			blocked.add(new ValveDetailsDto.BlockedClientDto("2001:db8:85a3::8a2e:370:7334", 138 + rnd.nextInt(20), 0, true, lastUpdate));
+			blocked.add(new ValveDetailsDto.BlockedClientDto(
+					"2001:db8:85a3::8a2e:370:7334", 138 + rnd.nextInt(20), 0, 138 + rnd.nextInt(20), true, lastUpdate, 1, null, null,
+					"GET", "/actuator/env", "python-requests/2.31.0"
+			));
 		}
 
 		return new SlotMetrics(totalRequests, activeCounters, blocked.size(), blocked);
@@ -652,8 +698,10 @@ public class MockValveSimulator {
 		};
 		for (int i = 0; i < probeCount; i++) {
 			String ip = scannerIps[(int) ((slotKey + i) % scannerIps.length)];
+			SimulatedProbe probe = HONEYPOT_PROBES[Math.abs((int) ((slotKey + i) % HONEYPOT_PROBES.length))];
 			blocked.add(new ValveDetailsDto.BlockedClientDto(
-					ip, 1, 0, 1, true, lastUpdate, 1, 0, null
+					ip, 1, 0, 1, true, lastUpdate, 1, 0, null,
+					probe.method(), probe.uri(), probe.userAgent()
 			));
 		}
 		return new SlotMetrics(probeCount, 0, blocked.size(), blocked);

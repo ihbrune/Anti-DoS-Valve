@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,327 +11,328 @@
     <script th:src="@{/js/htmx.min.js}" defer></script>
     <script th:src="@{/js/htmx-lite.js}" defer></script>
 </head>
+
 <body>
 
-<div class="app-container">
-    <!-- Navbar -->
-    <header class="navbar">
-        <a href="/" class="brand">
-            <div class="brand-icon">&#x1F6E1;</div>
-            <div>
-                <div class="brand-title">Anti-DoS Fleet Manager</div>
-                <div class="brand-subtitle">Incident Explorer &amp; Forensics</div>
-            </div>
-        </a>
-        <div class="nav-actions">
-            <div class="nav-links">
-                <a href="/" class="btn" title="Return to Fleet Overview Dashboard">
-                    <span>&#x2190;</span> Dashboard
-                </a>
-                <a href="/analytics" class="btn" title="Visual trend curves, bot-mix, and residential proxy cluster scatterplot">
-                    <span>&#x1F4CA;</span> Analytics
-                </a>
-                <a href="/offenders" class="btn" title="View aggregated Top Offender and Subnet Analytics">
-                    <span>&#x26A0;</span> Top Offenders
-                </a>
-                <a href="/profiles" class="btn" title="Subnet Traffic Profiles, 30-Day Baselines &amp; Surge Radar">
-                    <span>&#x26A1;</span> Profiles
-                </a>
-                <a href="/events" class="btn active" title="Multi-Server Incident Explorer with advanced filtering">
-                    <span>&#x1F4CB;</span> Incidents
-                </a>
-                <a href="/notes" class="btn" title="Investigative Annotations &amp; Network Notes">
-                    <span>&#x1F4DD;</span> Notes
-                </a>
-                <a href="/reports" class="btn" title="Permanent Operational Daily Summary Reports">
-                    <span>&#x1F4D1;</span> Reports
-                </a>
-                <a href="/poll-log" class="btn" title="View polling event audit log">
-                    <span>&#x1F4DC;</span> Event Log
-                </a>
-                <a href="/crawlers" class="btn" title="Verified Search Engine &amp; AI Crawler IP Range Feeds">
-                    <span>&#x1F916;</span> Crawlers
-                </a>
-            </div>
-            <div class="nav-divider"></div>
-            <div class="nav-utilities">
-                <a href="/system" class="nav-util-btn" title="System status, telemetry rules &amp; configuration" aria-label="System &amp; Configuration">
-                    <span>&#x2699;</span>
-                </a>
-                <button type="button" class="nav-util-btn history-toggle-btn"
-                        onclick="openHistoryDrawer()"
+    <div class="app-container">
+        <!-- Navbar -->
+        <header class="navbar">
+            <a href="/" class="brand">
+                <div class="brand-icon">&#x1F6E1;</div>
+                <div>
+                    <div class="brand-title">Anti-DoS Fleet Manager</div>
+                    <div class="brand-subtitle">Incident Explorer &amp; Forensics</div>
+                </div>
+            </a>
+            <div class="nav-actions">
+                <div class="nav-links">
+                    <a href="/" class="btn" title="Return to Fleet Overview Dashboard">
+                        <span>&#x2190;</span> Dashboard
+                    </a>
+                    <a href="/analytics" class="btn"
+                        title="Visual trend curves, bot-mix, and residential proxy cluster scatterplot">
+                        <span>&#x1F4CA;</span> Analytics
+                    </a>
+                    <a href="/offenders" class="btn" title="View aggregated Top Offender and Subnet Analytics">
+                        <span>&#x26A0;</span> Top Offenders
+                    </a>
+                    <a href="/profiles" class="btn" title="Subnet Traffic Profiles, 30-Day Baselines &amp; Surge Radar">
+                        <span>&#x26A1;</span> Profiles
+                    </a>
+                    <a href="/events" class="btn active" title="Multi-Server Incident Explorer with advanced filtering">
+                        <span>&#x1F4CB;</span> Incidents
+                    </a>
+                    <a href="/notes" class="btn" title="Investigative Annotations &amp; Network Notes">
+                        <span>&#x1F4DD;</span> Notes
+                    </a>
+                    <a href="/reports" class="btn" title="Permanent Operational Daily Summary Reports">
+                        <span>&#x1F4D1;</span> Reports
+                    </a>
+                    <a href="/poll-log" class="btn" title="View polling event audit log">
+                        <span>&#x1F4DC;</span> Event Log
+                    </a>
+                    <a href="/crawlers" class="btn" title="Verified Search Engine &amp; AI Crawler IP Range Feeds">
+                        <span>&#x1F916;</span> Crawlers
+                    </a>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-utilities">
+                    <a href="/system" class="nav-util-btn" title="System status, telemetry rules &amp; configuration"
+                        aria-label="System &amp; Configuration">
+                        <span>&#x2699;</span>
+                    </a>
+                    <button type="button" class="nav-util-btn history-toggle-btn" onclick="openHistoryDrawer()"
                         title="Recent Investigation History (IPs, Subnets &amp; ASNs)"
                         aria-label="Investigation History">
-                    <span>&#x1F552;</span>
-                    <span class="history-badge-count" style="display:none;"></span>
-                </button>
-                <button type="button" class="nav-util-btn"
+                        <span>&#x1F552;</span>
+                        <span class="history-badge-count" style="display:none;"></span>
+                    </button>
+                    <button type="button" class="nav-util-btn"
                         hx-get="/fragments/help?doc=ui&section=incident-explorer-forensic-log-search"
-                        hx-target="#help-drawer-content"
-                        onclick="openHelpDrawer()"
-                        title="Open Incident Explorer Help Guide"
-                        aria-label="Help Guide">
-                    <span>&#x2753;</span>
-                </button>
-                <a href="/help" class="nav-util-btn" title="Full offline documentation repository" aria-label="Documentation">
-                    <span>&#x1F4D6;</span>
-                </a>
-                <button type="button" class="nav-util-btn btn-theme-toggle" onclick="toggleTheme()" title="Switch Light / Dark Theme" aria-label="Toggle theme">
-                    <span class="theme-icon-sun">&#x2600;&#xFE0F;</span>
-                    <span class="theme-icon-moon">&#x1F319;</span>
-                </button>
+                        hx-target="#help-drawer-content" onclick="openHelpDrawer()"
+                        title="Open Incident Explorer Help Guide" aria-label="Help Guide">
+                        <span>&#x2753;</span>
+                    </button>
+                    <a href="/help" class="nav-util-btn" title="Full offline documentation repository"
+                        aria-label="Documentation">
+                        <span>&#x1F4D6;</span>
+                    </a>
+                    <button type="button" class="nav-util-btn btn-theme-toggle" onclick="toggleTheme()"
+                        title="Switch Light / Dark Theme" aria-label="Toggle theme">
+                        <span class="theme-icon-sun">&#x2600;&#xFE0F;</span>
+                        <span class="theme-icon-moon">&#x1F319;</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Header & Title -->
+        <div class="section-header" style="margin-bottom: 20px;">
+            <div class="section-title">
+                <span>&#x1F50D;</span> Multi-Server Incident Explorer
+            </div>
+            <div style="font-size: 13px; color: var(--text-muted);">
+                Deep-dive forensic analysis across servers, valves, custom time windows, and subnets
             </div>
         </div>
-    </header>
 
-    <!-- Header & Title -->
-    <div class="section-header" style="margin-bottom: 20px;">
-        <div class="section-title">
-            <span>&#x1F50D;</span> Multi-Server Incident Explorer
+        <!-- Filter Panel -->
+        <form id="events-filter-form" hx-get="/fragments/events-table" hx-target="#events-table-container"
+            hx-swap="outerHTML" hx-push-url="true" hx-trigger="submit, annotationChanged from:body"
+            class="filter-panel">
+
+            <div class="filter-grid">
+                <!-- 1. Server Multi-Select -->
+                <div class="filter-field">
+                    <div class="filter-label" style="display: flex; justify-content: space-between;">
+                        <span>Target Servers</span>
+                        <a href="javascript:void(0);" onclick="toggleCheckboxes('server-cb', true)"
+                            style="color: var(--color-primary); text-decoration: none; font-size: 10px;">Select All</a>
+                    </div>
+                    <div class="pills-group">
+                        <label th:each="srv : ${availableServers}" class="pill-label">
+                            <input type="checkbox" name="servers" th:value="${srv}" class="server-cb"
+                                th:checked="${selectedServers != null and #lists.contains(selectedServers, srv)}">
+                            <span th:text="${srv}">Node-1</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 2. Valve Multi-Select -->
+                <div class="filter-field">
+                    <div class="filter-label" style="display: flex; justify-content: space-between;">
+                        <span>Valves</span>
+                        <a href="javascript:void(0);" onclick="toggleCheckboxes('valve-cb', true)"
+                            style="color: var(--color-primary); text-decoration: none; font-size: 10px;">Select All</a>
+                    </div>
+                    <div class="pills-group">
+                        <label th:each="v : ${availableValves}" class="pill-label">
+                            <input type="checkbox" name="valves" th:value="${v}" class="valve-cb"
+                                th:checked="${selectedValves != null and #lists.contains(selectedValves, v)}">
+                            <span th:text="${v}">API-LIMITER</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 3. Client IP / Subnet & ASN (Combined Column) -->
+                <div class="filter-field">
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <div>
+                            <label class="filter-label" for="clientQueryInput">Client IP / Subnet (CIDR)</label>
+                            <input type="text" id="clientQueryInput" name="clientQuery" class="input-control"
+                                placeholder="e.g. 198.51.100.0/24 or 198.51.100." th:value="${clientQuery}">
+                        </div>
+                        <div>
+                            <label class="filter-label" for="asnInput">Autonomous System (ASN) / Provider</label>
+                            <input type="text" id="asnInput" name="asn" class="input-control"
+                                placeholder="e.g. 3320, AS13335 or Cloudflare" th:value="${selectedAsn}">
+                        </div>
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                        Matches single IPs, CIDR ranges (/24, /16, /64), ASN numbers, or provider names (e.g. Amazon,
+                        Cloudflare).
+                    </div>
+                </div>
+
+                <!-- 4. Time Window -->
+                <div class="filter-field">
+                    <div class="filter-label">Time Window (Presets)</div>
+                    <div class="filter-btn-group" style="margin-bottom: 8px;">
+                        <button type="button" class="filter-btn" onclick="applyPreset(1)">1h</button>
+                        <button type="button" class="filter-btn" onclick="applyPreset(6)">6h</button>
+                        <button type="button" class="filter-btn" onclick="applyPreset(24)">24h</button>
+                        <button type="button" class="filter-btn" onclick="applyPreset(168)">7d</button>
+                        <button type="button" class="filter-btn" onclick="applyPreset(720)">30d</button>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <div>
+                            <span style="font-size: 10px; color: var(--text-muted);">From:</span>
+                            <input type="datetime-local" id="fromInput" name="from" class="input-control"
+                                style="font-size: 12px; padding: 6px 8px;" th:value="${fromTime}">
+                        </div>
+                        <div>
+                            <span style="font-size: 10px; color: var(--text-muted);">To:</span>
+                            <input type="datetime-local" id="toInput" name="to" class="input-control"
+                                style="font-size: 12px; padding: 6px 8px;" th:value="${toTime}">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. Classification Filter -->
+                <div class="filter-field">
+                    <div class="filter-label" style="display: flex; justify-content: space-between;">
+                        <span>Classification</span>
+                        <div>
+                            <a href="javascript:void(0);" onclick="toggleCheckboxes('type-cb', true)"
+                                style="color: var(--color-primary); text-decoration: none; font-size: 10px; margin-right: 6px;">All</a>
+                            <a href="javascript:void(0);" onclick="toggleCheckboxes('type-cb', false)"
+                                style="color: var(--text-muted); text-decoration: none; font-size: 10px;">Clear</a>
+                        </div>
+                    </div>
+                    <div class="pills-group">
+                        <label class="pill-label">
+                            <input type="checkbox" name="clientTypes" value="DATACENTER" class="type-cb"
+                                th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'DATACENTER')}">
+                            <span>&#x1F3E2; Datacenter</span>
+                        </label>
+                        <label class="pill-label">
+                            <input type="checkbox" name="clientTypes" value="RESIDENTIAL" class="type-cb"
+                                th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'RESIDENTIAL')}">
+                            <span>&#x1F3E0; Residential</span>
+                        </label>
+                        <label class="pill-label">
+                            <input type="checkbox" name="clientTypes" value="SEARCH_ENGINE" class="type-cb"
+                                th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'SEARCH_ENGINE')}">
+                            <span>&#x1F50D; Search Engine</span>
+                        </label>
+                        <label class="pill-label">
+                            <input type="checkbox" name="clientTypes" value="AI_CRAWLER" class="type-cb"
+                                th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'AI_CRAWLER')}">
+                            <span>&#x1F916; AI Bot</span>
+                        </label>
+                        <label class="pill-label">
+                            <input type="checkbox" name="clientTypes" value="MOBILE" class="type-cb"
+                                th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'MOBILE')}">
+                            <span>&#x1F4F1; Mobile</span>
+                        </label>
+                        <label class="pill-label">
+                            <input type="checkbox" name="clientTypes" value="PRIVATE_NETWORK" class="type-cb"
+                                th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'PRIVATE_NETWORK')}">
+                            <span>&#x1F512; Private Net</span>
+                        </label>
+                        <label class="pill-label">
+                            <input type="checkbox" name="clientTypes" value="TOR_EXIT_NODE" class="type-cb"
+                                th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'TOR_EXIT_NODE')}">
+                            <span>&#x1F9C5; Tor Exit Node</span>
+                        </label>
+                        <label class="pill-label">
+                            <input type="checkbox" name="clientTypes" value="UNKNOWN" class="type-cb"
+                                th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'UNKNOWN')}">
+                            <span>Unclassified</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 6. Traffic Status Filter -->
+                <div class="filter-field">
+                    <div class="filter-label">Traffic Status</div>
+                    <div class="pills-group">
+                        <label class="pill-label">
+                            <input type="radio" name="status" value="ALL"
+                                th:checked="${selectedStatus == null or selectedStatus == 'ALL'}">
+                            <span>All</span>
+                        </label>
+                        <label class="pill-label">
+                            <input type="radio" name="status" value="BLOCKED"
+                                th:checked="${selectedStatus == 'BLOCKED'}">
+                            <span>&#x1F6D1; Blocked (429)</span>
+                        </label>
+                        <label class="pill-label">
+                            <input type="radio" name="status" value="ACTIVE" th:checked="${selectedStatus == 'ACTIVE'}">
+                            <span>&#x1F535; Active (Monitored)</span>
+                        </label>
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                        Show blocked clients, top active monitored clients, or both.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filter Actions Bar -->
+            <div class="filter-actions">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <button type="submit" class="btn btn-primary">
+                        <span>&#x1F50E;</span> Apply Filters
+                    </button>
+                    <a href="/events" class="btn">
+                        Reset All
+                    </a>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <label style="font-size: 12px; color: var(--text-muted);">
+                        Limit:
+                        <select name="limit" class="btn" style="padding: 4px 8px; font-size: 12px;">
+                            <option value="50" th:selected="${limit == 50}">50</option>
+                            <option value="100" th:selected="${limit == 100}">100</option>
+                            <option value="250" th:selected="${limit == 250}">250</option>
+                        </select>
+                    </label>
+                    <a th:href="@{/api/v1/reputation/blocked-ips(format='text')}" target="_blank" class="btn"
+                        title="Export blocked reputation list as plain text">
+                        Export TXT
+                    </a>
+                </div>
+            </div>
+        </form>
+
+        <!-- Events Table Card -->
+        <div class="table-card">
+            <th:block th:replace="~{fragments/events-table :: eventsTable}"></th:block>
         </div>
-        <div style="font-size: 13px; color: var(--text-muted);">
-            Deep-dive forensic analysis across servers, valves, custom time windows, and subnets
-        </div>
+
+        <!-- Contextual Help Drawer -->
+        <div th:replace="~{fragments/help-drawer :: helpDrawer}"></div>
+
+        <!-- Modal Target Container -->
+        <div id="note-modal-container"></div>
     </div>
 
-    <!-- Filter Panel -->
-    <form id="events-filter-form"
-          hx-get="/fragments/events-table"
-          hx-target="#events-table-container"
-          hx-swap="outerHTML"
-          hx-push-url="true"
-          hx-trigger="submit, annotationChanged from:body"
-          class="filter-panel">
+    <script>
+        function closeNoteModal(e) {
+            if (e) {
+                if (typeof e.stopPropagation === 'function') e.stopPropagation();
+                if (typeof e.preventDefault === 'function') e.preventDefault();
+            }
+            const c = document.getElementById('note-modal-container');
+            if (c) c.innerHTML = '';
+            document.querySelectorAll('.note-modal-overlay, #note-modal-wrapper').forEach(el => el.remove());
+        }
 
-        <div class="filter-grid">
-            <!-- 1. Server Multi-Select -->
-            <div class="filter-field">
-                <div class="filter-label" style="display: flex; justify-content: space-between;">
-                    <span>Target Servers</span>
-                    <a href="javascript:void(0);" onclick="toggleCheckboxes('server-cb', true)" style="color: var(--color-primary); text-decoration: none; font-size: 10px;">Select All</a>
-                </div>
-                <div class="pills-group">
-                    <label th:each="srv : ${availableServers}" class="pill-label">
-                        <input type="checkbox" name="servers" th:value="${srv}"
-                               class="server-cb"
-                               th:checked="${selectedServers != null and #lists.contains(selectedServers, srv)}">
-                        <span th:text="${srv}">Node-1</span>
-                    </label>
-                </div>
-            </div>
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') closeNoteModal(e);
+        });
+        function toggleCheckboxes(className, check) {
+            document.querySelectorAll('.' + className).forEach(cb => cb.checked = check);
+        }
 
-            <!-- 2. Valve Multi-Select -->
-            <div class="filter-field">
-                <div class="filter-label" style="display: flex; justify-content: space-between;">
-                    <span>Valves</span>
-                    <a href="javascript:void(0);" onclick="toggleCheckboxes('valve-cb', true)" style="color: var(--color-primary); text-decoration: none; font-size: 10px;">Select All</a>
-                </div>
-                <div class="pills-group">
-                    <label th:each="v : ${availableValves}" class="pill-label">
-                        <input type="checkbox" name="valves" th:value="${v}"
-                               class="valve-cb"
-                               th:checked="${selectedValves != null and #lists.contains(selectedValves, v)}">
-                        <span th:text="${v}">API-LIMITER</span>
-                    </label>
-                </div>
-            </div>
+        function applyPreset(hours) {
+            const now = new Date();
+            const past = new Date(now.getTime() - (hours * 3600 * 1000));
 
-            <!-- 3. Client IP / Subnet & ASN (Combined Column) -->
-            <div class="filter-field">
-                <div style="display: flex; flex-direction: column; gap: 8px;">
-                    <div>
-                        <label class="filter-label" for="clientQueryInput">Client IP / Subnet (CIDR)</label>
-                        <input type="text"
-                               id="clientQueryInput"
-                               name="clientQuery"
-                               class="input-control"
-                               placeholder="e.g. 198.51.100.0/24 or 198.51.100."
-                               th:value="${clientQuery}">
-                    </div>
-                    <div>
-                        <label class="filter-label" for="asnInput">Autonomous System (ASN) / Provider</label>
-                        <input type="text"
-                               id="asnInput"
-                               name="asn"
-                               class="input-control"
-                               placeholder="e.g. 3320, AS13335 or Cloudflare"
-                               th:value="${selectedAsn}">
-                    </div>
-                </div>
-                <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-                    Matches single IPs, CIDR ranges (/24, /16, /64), ASN numbers, or provider names (e.g. Amazon, Cloudflare).
-                </div>
-            </div>
+            const formatLocal = (d) => {
+                const pad = (n) => String(n).padStart(2, '0');
+                return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+            };
 
-            <!-- 4. Time Window -->
-            <div class="filter-field">
-                <div class="filter-label">Time Window (Presets)</div>
-                <div class="filter-btn-group" style="margin-bottom: 8px;">
-                    <button type="button" class="filter-btn" onclick="applyPreset(1)">1h</button>
-                    <button type="button" class="filter-btn" onclick="applyPreset(6)">6h</button>
-                    <button type="button" class="filter-btn" onclick="applyPreset(24)">24h</button>
-                    <button type="button" class="filter-btn" onclick="applyPreset(168)">7d</button>
-                    <button type="button" class="filter-btn" onclick="applyPreset(720)">30d</button>
-                </div>
-                <div style="display: flex; flex-direction: column; gap: 6px;">
-                    <div>
-                        <span style="font-size: 10px; color: var(--text-muted);">From:</span>
-                        <input type="datetime-local" id="fromInput" name="from" class="input-control" style="font-size: 12px; padding: 6px 8px;" th:value="${fromTime}">
-                    </div>
-                    <div>
-                        <span style="font-size: 10px; color: var(--text-muted);">To:</span>
-                        <input type="datetime-local" id="toInput" name="to" class="input-control" style="font-size: 12px; padding: 6px 8px;" th:value="${toTime}">
-                    </div>
-                </div>
-            </div>
+            document.getElementById('toInput').value = formatLocal(now);
+            document.getElementById('fromInput').value = formatLocal(past);
 
-            <!-- 5. Classification Filter -->
-            <div class="filter-field">
-                <div class="filter-label" style="display: flex; justify-content: space-between;">
-                    <span>Classification</span>
-                    <div>
-                        <a href="javascript:void(0);" onclick="toggleCheckboxes('type-cb', true)" style="color: var(--color-primary); text-decoration: none; font-size: 10px; margin-right: 6px;">All</a>
-                        <a href="javascript:void(0);" onclick="toggleCheckboxes('type-cb', false)" style="color: var(--text-muted); text-decoration: none; font-size: 10px;">Clear</a>
-                    </div>
-                </div>
-                <div class="pills-group">
-                    <label class="pill-label">
-                        <input type="checkbox" name="clientTypes" value="DATACENTER" class="type-cb"
-                               th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'DATACENTER')}">
-                        <span>&#x1F3E2; Datacenter</span>
-                    </label>
-                    <label class="pill-label">
-                        <input type="checkbox" name="clientTypes" value="RESIDENTIAL" class="type-cb"
-                               th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'RESIDENTIAL')}">
-                        <span>&#x1F3E0; Residential</span>
-                    </label>
-                    <label class="pill-label">
-                        <input type="checkbox" name="clientTypes" value="SEARCH_ENGINE" class="type-cb"
-                               th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'SEARCH_ENGINE')}">
-                        <span>&#x1F50D; Search Engine</span>
-                    </label>
-                    <label class="pill-label">
-                        <input type="checkbox" name="clientTypes" value="AI_CRAWLER" class="type-cb"
-                               th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'AI_CRAWLER')}">
-                        <span>&#x1F916; AI Bot</span>
-                    </label>
-                    <label class="pill-label">
-                        <input type="checkbox" name="clientTypes" value="MOBILE" class="type-cb"
-                               th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'MOBILE')}">
-                        <span>&#x1F4F1; Mobile</span>
-                    </label>
-                    <label class="pill-label">
-                        <input type="checkbox" name="clientTypes" value="PRIVATE_NETWORK" class="type-cb"
-                               th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'PRIVATE_NETWORK')}">
-                        <span>&#x1F512; Private Net</span>
-                    </label>
-                    <label class="pill-label">
-                        <input type="checkbox" name="clientTypes" value="TOR_EXIT_NODE" class="type-cb"
-                               th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'TOR_EXIT_NODE')}">
-                        <span>&#x1F9C5; Tor Exit Node</span>
-                    </label>
-                    <label class="pill-label">
-                        <input type="checkbox" name="clientTypes" value="UNKNOWN" class="type-cb"
-                               th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'UNKNOWN')}">
-                        <span>Unclassified</span>
-                    </label>
-                </div>
-            </div>
-
-            <!-- 6. Traffic Status Filter -->
-            <div class="filter-field">
-                <div class="filter-label">Traffic Status</div>
-                <div class="pills-group">
-                    <label class="pill-label">
-                        <input type="radio" name="status" value="ALL"
-                               th:checked="${selectedStatus == null or selectedStatus == 'ALL'}">
-                        <span>All</span>
-                    </label>
-                    <label class="pill-label">
-                        <input type="radio" name="status" value="BLOCKED"
-                               th:checked="${selectedStatus == 'BLOCKED'}">
-                        <span>&#x1F6D1; Blocked (429)</span>
-                    </label>
-                    <label class="pill-label">
-                        <input type="radio" name="status" value="ACTIVE"
-                               th:checked="${selectedStatus == 'ACTIVE'}">
-                        <span>&#x1F535; Active (Monitored)</span>
-                    </label>
-                </div>
-                <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-                    Show blocked clients, top active monitored clients, or both.
-                </div>
-            </div>
-        </div>
-
-        <!-- Filter Actions Bar -->
-        <div class="filter-actions">
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <button type="submit" class="btn btn-primary">
-                    <span>&#x1F50E;</span> Apply Filters
-                </button>
-                <a href="/events" class="btn">
-                    Reset All
-                </a>
-            </div>
-
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <label style="font-size: 12px; color: var(--text-muted);">
-                    Limit:
-                    <select name="limit" class="btn" style="padding: 4px 8px; font-size: 12px;">
-                        <option value="50" th:selected="${limit == 50}">50</option>
-                        <option value="100" th:selected="${limit == 100}">100</option>
-                        <option value="250" th:selected="${limit == 250}">250</option>
-                    </select>
-                </label>
-                <a th:href="@{/api/v1/reputation/blocked-ips(format='text')}" target="_blank" class="btn" title="Export blocked reputation list as plain text">
-                    Export TXT
-                </a>
-            </div>
-        </div>
-    </form>
-
-    <!-- Events Table Card -->
-    <div class="table-card">
-        <th:block th:replace="~{fragments/events-table :: eventsTable}"></th:block>
-    </div>
-
-    <!-- Contextual Help Drawer -->
-    <div th:replace="~{fragments/help-drawer :: helpDrawer}"></div>
-
-    <!-- Modal Target Container -->
-    <div id="note-modal-container"></div>
-</div>
-
-<script>
-    function closeNoteModal() {
-        const c = document.getElementById('note-modal-container');
-        if (c) c.innerHTML = '';
-    }
-
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') closeNoteModal();
-    });
-    function toggleCheckboxes(className, check) {
-        document.querySelectorAll('.' + className).forEach(cb => cb.checked = check);
-    }
-
-    function applyPreset(hours) {
-        const now = new Date();
-        const past = new Date(now.getTime() - (hours * 3600 * 1000));
-        
-        const formatLocal = (d) => {
-            const pad = (n) => String(n).padStart(2, '0');
-            return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
-        };
-
-        document.getElementById('toInput').value = formatLocal(now);
-        document.getElementById('fromInput').value = formatLocal(past);
-
-        // Auto trigger submit
-        htmx.trigger('#events-filter-form', 'submit');
-    }
-</script>
+            // Auto trigger submit
+            htmx.trigger('#events-filter-form', 'submit');
+        }
+    </script>
 
 </body>
+
 </html>
