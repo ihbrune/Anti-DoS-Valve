@@ -231,6 +231,18 @@ class DashboardControllerTest {
 				org.henbru.antidos.collector.model.AnnotationVerdict.SUSPICIOUS,
 				"Hetzner Scanners");
 
+		java.time.Instant now = java.time.Instant.now();
+		clientEventRepository.batchUpsert(List.of(
+				new org.henbru.antidos.collector.model.ClientEvent(
+						null, "Asn-Rollup-Server", "ASN-VALVE", 55556L,
+						now.minusSeconds(30), "192.0.2.77",
+						4, 32, null, null, null, null, "192.0.2.0/24",
+						25, 0, false, org.henbru.antidos.collector.model.ClientEvent.STATUS_BLOCKED, true, now,
+						24940L, "Hetzner Online GmbH", "DE",
+						org.henbru.antidos.collector.model.ClientType.DATACENTER, null
+				)
+		));
+
 		mockMvc.perform(get("/fragments/offenders-table")
 						.param("groupBy", "ASN")
 						.param("limit", "25"))

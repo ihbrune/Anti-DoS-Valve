@@ -357,8 +357,7 @@
                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 14px;">
                         <div
                             style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
-                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Rate Limit
-                                Threshold</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Rate Limit Threshold</div>
                             <div style="font-size: 14px; font-weight: 700; color: var(--color-primary);"
                                 th:text="${rv.allowedRequestsPerSlot == 0 ? '0 req (Zero Tolerance / Honeypot) / ' + rv.slotLength + 's' : rv.allowedRequestsPerSlot + ' req / ' + rv.slotLength + 's'}">
                                 50 req / 60s</div>
@@ -369,18 +368,15 @@
 
                         <div
                             style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
-                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Subnet Masking
-                                Partition</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Subnet Masking Partition</div>
                             <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);"
                                 th:utext="${rv.formattedSubnetMasks()}">/32 (IPv4) &bull; /64 (IPv6)</div>
-                            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;">Traffic grouped
-                                by subnet prefix</div>
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;">Traffic grouped by subnet prefix</div>
                         </div>
 
                         <div
                             style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
-                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Cache Bounds
-                                (LRU Capacity)</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Cache Bounds (LRU Capacity)</div>
                             <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);">
                                 <span th:text="${#numbers.formatInteger(rv.maxIPCacheSize, 1, 'POINT')}">10.000</span>
                                 <span style="font-size: 11px; font-weight: 400; color: var(--text-muted);">active</span>
@@ -390,31 +386,25 @@
                                 <span
                                     style="font-size: 11px; font-weight: 400; color: var(--text-muted);">blocked</span>
                             </div>
-                            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;">Max concurrent
-                                tracked IPs</div>
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;">Max concurrent tracked IPs</div>
                         </div>
 
                         <div
                             style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
-                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Collector
-                                Integration</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Collector Integration</div>
                             <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);"
                                 th:text="${rv.collectorIntegrationLabel()}">AUTO</div>
                             <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;"
-                                th:if="${rv.collectorIntegration().toLowerCase() == 'auto'}">Dynamic lease &bull;
-                                Extended metrics</div>
+                                th:if="${rv.collectorIntegration().toLowerCase() == 'auto'}">Dynamic lease &bull; Extended metrics</div>
                             <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;"
-                                th:if="${rv.collectorIntegration().toLowerCase() == 'true'}">Permanent &bull; Always
-                                active</div>
+                                th:if="${rv.collectorIntegration().toLowerCase() == 'true'}">Permanent &bull; Always active</div>
                             <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;"
-                                th:if="${rv.collectorIntegration().toLowerCase() == 'false'}">Disabled &bull; Zero
-                                overhead</div>
+                                th:if="${rv.collectorIntegration().toLowerCase() == 'false'}">Disabled &bull; Zero overhead</div>
                         </div>
 
                         <div
                             style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
-                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Visitor Tracking
-                                &amp; Cookies</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Visitor Tracking &amp; Cookies</div>
                             <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);"
                                 th:text="${rv.visitorCookieEnabled ? 'ACTIVE' : 'DISABLED'}">DISABLED</div>
                             <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;"
@@ -430,8 +420,7 @@
 
                         <div th:if="${rv.statusUri != null and !rv.statusUri.isBlank()}"
                             style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
-                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Status Dashboard
-                                URI</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Status Dashboard URI</div>
                             <div style="font-size: 13px; font-weight: 600; font-family: ui-monospace, monospace; color: var(--text-primary);"
                                 th:text="${rv.statusUri}">/antidos-status</div>
                             <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;"
@@ -660,12 +649,9 @@
                 style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                 <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
                     <div class="section-title" style="margin-bottom: 0;">
-                        <span th:if="${selectedStatus == 'BLOCKED'}">&#x1F6A8; Blocked Client Incidents on this
-                            Server</span>
-                        <span th:if="${selectedStatus == 'ACTIVE'}">&#x1F539; Active Monitored Clients on this
-                            Server</span>
-                        <span th:if="${selectedStatus != 'BLOCKED' and selectedStatus != 'ACTIVE'}">&#x26A1; Client
-                            Traffic &amp; Incidents on this Server</span>
+                        <span th:if="${selectedStatus == 'BLOCKED'}">&#x1F6A8; Blocked Client Incidents on this Server</span>
+                        <span th:if="${selectedStatus == 'ACTIVE'}">&#x1F539; Active Monitored Clients on this Server</span>
+                        <span th:if="${selectedStatus != 'BLOCKED' and selectedStatus != 'ACTIVE'}">&#x26A1; Client Traffic &amp; Incidents on this Server</span>
                     </div>
                     <div class="filter-btn-group">
                         <a th:href="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status='ALL')} : @{'/server/' + ${serverId}(status='ALL')}"

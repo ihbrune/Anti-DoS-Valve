@@ -185,7 +185,7 @@ class DailyReportServiceTest {
 		jdbcTemplate.update("""
 				INSERT INTO client_events (
 					server_id, valve_name, slot_key, slot_time, client_key, request_count, status, client_type, enrichment_status, last_updated_at
-				) VALUES (?, ?, ?, ?, ?, ?, 'BLOCKED', 'DATACENTER', 'COMPLETED', ?)
+				) VALUES (?, ?, ?, ?, ?, ?, 'BLOCKED', 'DATACENTER', 'ENRICHED', ?)
 				""", "SRV-RATIO", "RATIO-VALVE", 5001L, java.sql.Timestamp.from(baseTime), "203.0.113.42", 85L, java.sql.Timestamp.from(baseTime));
 
 		DailyReport report = dailyReportService.generateDailyReport(ratioDate);
