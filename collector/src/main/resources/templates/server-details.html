@@ -472,7 +472,7 @@
         </section>
 
         <!-- Recent Slots Timeline -->
-        <section id="server-slots-section" hx-trigger="annotationChanged from:body"
+        <section id="server-slots-section" hx-trigger="annotationChanged from:body" hx-disinherit="hx-select hx-target hx-swap"
             th:hx-get="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})} : @{'/server/' + ${serverId}(status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})}"
             hx-select="#server-slots-section" hx-target="#server-slots-section" hx-swap="outerHTML">
             <div class="section-header">
@@ -642,7 +642,7 @@
         </section>
 
         <!-- Client Traffic & Incidents on this Server -->
-        <section id="server-events-section" hx-trigger="annotationChanged from:body"
+        <section id="server-events-section" hx-trigger="annotationChanged from:body" hx-disinherit="hx-select hx-target hx-swap"
             th:hx-get="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})} : @{'/server/' + ${serverId}(status=${selectedStatus != null and selectedStatus != 'ALL' ? selectedStatus : null})}"
             hx-select="#server-events-section" hx-target="#server-events-section" hx-swap="outerHTML">
             <div class="section-header"
