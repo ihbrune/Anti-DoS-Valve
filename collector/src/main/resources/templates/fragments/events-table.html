@@ -57,8 +57,7 @@
                                     <span th:if="${event.hasSample()}" class="badge ip-mono"
                                         style="padding: 1px 6px; font-size: 10px; font-weight: 600; cursor: default; background: rgba(244, 63, 94, 0.15); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.4);"
                                         th:title="${event.sampleUserAgent != null ? 'Sampled Offending Request: ' + event.formattedSample() + ' | UA: ' + event.sampleUserAgent : 'Sampled Offending Request: ' + event.formattedSample()}">
-                                        <span style="opacity: 0.8; margin-right: 2px;">&#x1F50D;</span><span
-                                            th:text="${event.formattedSample()}">POST /wp-login.php</span>
+                                        <span style="opacity: 0.8; margin-right: 2px;">&#x1F50D;</span><span class="sample-text" th:text="${event.formattedSample()}">POST /wp-login.php</span>
                                     </span>
                                     <span th:if="${event.isHoneypot()}" class="badge badge-warning"
                                         style="padding: 1px 6px; font-size: 9px; background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4);"

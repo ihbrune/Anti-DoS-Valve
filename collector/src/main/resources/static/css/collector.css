@@ -2163,3 +2163,19 @@ a.note-target-pill:hover {
 
 
 
+
+/* Captured offending request sample: cap width, full text remains available via tooltip */
+.badge:has(> .sample-text) {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+}
+
+.sample-text {
+    display: inline-block;
+    max-width: 30ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+}
