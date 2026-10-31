@@ -76,6 +76,7 @@ Accessible via `/`. The central command center summarizing telemetry across all 
 ### 1. Fleet KPI Summary Cards
 * **Total Requests (24h):** Aggregate HTTP requests processed by all monitored valves within the last 24 hours.
 * **Blocked Incidents (24h):** Total count of HTTP 429 rate-limit blocks enforced across the fleet.
+* **Marked Requests (24h):** Highlighted in purple when valves running in marking mode (such as email harvester protection) or simulation mode are active. Quantifies requests evaluated above rate thresholds and tagged without issuing an HTTP 429 error.
 * **Block Rate (%):** Proportion of requests blocked; sudden spikes above baseline indicate ongoing volumetric or distributed attacks.
 * **Monitored Nodes:** Online server instances vs. total configured endpoints.
 
@@ -131,6 +132,7 @@ Visualizes the temporal evolution of fleet traffic by stacking allowed requests 
 * **Y-Axis (Requests / Blocks):** Dynamic linear scale showing HTTP transaction volume per time slice.
 * **Allowed Requests (Sky Blue / Cyan):** Total HTTP requests passed cleanly through the Valve to the upstream application.
 * **Blocked Attacks (Vivid Danger Red):** HTTP 429 (`Too Many Requests`) blocks enforced by the Valve against abusive IPs or subnets.
+* **Marked / Simulation (Vivid Purple):** Requests exceeding thresholds on valves operating in marking mode (e.g. email harvester protection) or valves running in simulation mode. Monitored and soft-tagged without blocking upstream traffic.
 
 #### Forensic Interpretation & Signature Patterns:
 * **Organic Traffic Baseline:** A healthy application exhibits smooth diurnal curves (rising during business hours, dipping at night) where the red block line remains near zero or represents a tiny, stable fraction (< 0.5%).
@@ -318,9 +320,10 @@ Chronological log of all rate-limiting incidents detected specifically on this s
 Accessible via `/offenders`. The premier forensic tool for identifying volumetric scrapers, brute-force bots, and distributed proxy clusters.
 
 ### 1. Key Metrics & Request Volume Accuracy
-* **Blocked Requests (429):** The exact number of HTTP 429 (`Too Many Requests`) rate-limiting blocks enforced by the Valve against the client, subnet, or ASN during the selected time window.
-  * When blocks have occurred, the value is highlighted in a vivid danger badge (e.g. `<span class="badge badge-danger">1,250</span>`).
-  * If the client generated requests but stayed within configured rate limits (0 blocks enforced), a neutral, muted `0` badge is shown (replacing legacy slot incident counters to prevent false impressions of attacks).
+* **Blocked Requests (429) & Marked Requests:** Displays both hard HTTP 429 blocks enforced by the Valve and soft marking / simulation events.
+  * Enforced HTTP 429 blocks are highlighted in a vivid danger badge (e.g. `<span class="badge badge-danger">1,250</span>`).
+  * Soft marking / simulation mode events are highlighted in purple (e.g. `<span class="badge badge-purple">350 mrk</span>`).
+  * If the client generated requests but stayed strictly within configured rate limits (0 blocks and 0 marks), a neutral, muted `0` badge is shown.
 * **Total Requests (Raw Volume):** The accurate sum of all attempted requests (`SUM(request_count)`) during the window.
   * Decayed slot carry-overs (`retained_count`) are explicitly excluded from summation to prevent double- or triple-counting across sliding time windows.
   * When blocked requests are present alongside total traffic, an inline percentage indicator is displayed (e.g. `1,450 (85%)`) indicating the proportion of rejected malicious requests.
@@ -328,6 +331,7 @@ Accessible via `/offenders`. The premier forensic tool for identifying volumetri
 ### 2. Ranking & Sort Priority
 Operators can toggle how offending entities are prioritized and sorted:
 * **🛑 Most Blocked Requests (429) (`sortBy=BLOCKED`):** (Default) Ranks clients, subnets, or ASNs strictly by the volume of enforced 429 blocks descending. Ideal for acute incident response and immediate attack mitigation triage.
+* **🏷️ Most Marked / Simulated (`sortBy=MARKED`):** Ranks entities by volume of soft-marked requests or simulation incidents descending. Essential for auditing non-blocking valves (such as email harvester protection) or evaluating rate limits before turning on hard blocking.
 * **📊 Highest Total Volume (`sortBy=REQUESTS`):** Ranks entities by total attempted request load (active + blocked) descending. Enables operators to immediately spot high-throughput crawlers, search engines, or hosting providers (e.g., Hetzner Cloud, Amazon AWS) that issue tens of thousands of requests while remaining just under the rate-limiting threshold.
 
 ### 3. Aggregation Modes
@@ -386,10 +390,12 @@ At the top of the screen, six real-time metric cards provide an immediate high-l
 *Clicking any metric card instantly filters the table below to the corresponding anomaly pattern.*
 
 ### 2. Anomaly Pattern Presets & Live Filter Controls
-* **One-Click Pattern Presets:** Instantly toggle between `All Subnets`, `⚡ High Surge (≥5x)`, `✨ New Subnets (<7d)`, `💤 Dormancy Break (≥14d)`, and `🔄 Residential IP Rotation`.
+* **One-Click Pattern Presets:** Instantly toggle between `All Subnets`, `🛑 Blocked (24h)`, `🏷️ Marked / Simulation (24h)`, `⚡ High Surge (≥5x)`, `✨ New Subnets (<7d)`, `💤 Dormancy Break (≥14d)`, and `🔄 Residential IP Rotation`.
 * **Live Subnet / Provider Search:** Real-time search field matching CIDR masks (e.g. `198.51.100.`), ASN numbers (e.g. `AS3320`), or organization names (e.g. `Telekom`, `Cloudflare`, `LeaseWeb`).
 * **Sort Dimensions:**
   * **24h Surge Multiplier (Highest First):** Ranks most abnormal volume spikes at the top.
+  * **24h Blocked Requests (Most Blocked First):** Surfaces subnets with the highest volume of hard HTTP 429 rate-limiting blocks.
+  * **24h Marked Requests (Most Marked First):** Surfaces subnets with the highest volume of soft-marked or simulated rate-limiting events.
   * **24h Request Volume (Most Active First):** Ranks by raw traffic volume.
   * **Unique IPs in 24h (Most Distributed First):** Surfaces large distributed botnets and proxy farms.
   * **Inactivity Days before Return (Longest Dormancy):** Surfaces sleeper subnets.
@@ -405,7 +411,7 @@ Every record in the table presents its metrics with full mathematical transparen
 * **30-Day Daily Baseline:** Moving daily average calculated across the prior history up to 29 days:
   $$\text{Baseline} = \frac{\sum \text{Requests}_{\text{prior}}}{N_{\text{days}}}$$
   Where $N_{\text{days}} = \min(29.0, \max(1.0, \text{Available Prior Days}))$. On fresh installations or recently added subnets, $N_{\text{days}}$ scales dynamically with elapsed time rather than assuming a rigid 29-day lookback (see *Dynamic Baseline Calibration* below).
-* **Last 24h Activity (Cutoff: HH:mm):** Total requests and rate-limiting blocks during the current 24-hour window (calculated up to the latest completed rollup hour), supplemented by the sample-size-weighted 24h returning visitor cookie badge (`🍪 X%`) and authenticated badge (`🔐 Y%`) when visitor tracking is active.
+* **Last 24h Activity (Cutoff: HH:mm):** Total requests, hard rate-limiting blocks, and soft-marked requests during the current 24-hour window (calculated up to the latest completed rollup hour), supplemented by the sample-size-weighted 24h returning visitor cookie badge (`🍪 X%`) and authenticated badge (`🔐 Y%`) when visitor tracking is active.
 * **24h Unique IPs & Spread:** Distinct client IP count and the average requests per IP ($\frac{\text{Requests}_{24\text{h}}}{\text{IPs}_{24\text{h}}}$).
 * **Surge Multiplier & Threat Forensics:**
   * **Surge Badge:** $\text{Surge} = \frac{\text{Requests}_{24\text{h}}}{\text{Baseline}}$. Formatted with clear danger/warning colors (e.g., `⚡ 25.0x Surge` for extreme spikes $\ge 10\times$, `⚡ 6.2x Surge` for moderate surges $\ge 3\times$). Tooltips explicitly show the formula calculation: `24h volume (5000) is 25.0x above 30-day baseline average (200.0/day)`.
@@ -413,7 +419,9 @@ Every record in the table presents its metrics with full mathematical transparen
   * **Initialization & Early Phase Indicators:**
     * `⏳ Initializing`: Displayed when a subnet is newly active in the last 24h with zero prior history ($N_{\text{days}} < 1.0$ or $\text{Requests}_{\text{prior}} = 0$). Surge multiplier defaults to `0.0x` (never triggering false alarms).
     * `⏳ Early Phase`: Displayed alongside the surge multiplier during the first 7 days of calibration to remind analysts that the baseline is still maturing.
-  * **Residential IP Pool Rotation Badge:** Displayed when distributed multi-IP evasion heuristics trigger.
+  * **Residential IP Pool Rotation Badge (`⚠️ Residential IP Pool Rotation`):** Displayed when distributed multi-IP evasion heuristics trigger ($\ge 5$ distinct IPs, $\le 20.0$ req/IP) AND cookie retention is low ($<40\%$). Excludes human CGNAT gateways where users consistently return cookies.
+  * **Automated Scraper Badge (`🤖 Cookie-less Bot`):** Displayed when a subnet produces consistent traffic with $0\%$ visitor cookie retention across multiple requests, indicative of headless scrapers or automated bot scripts ignoring Set-Cookie headers.
+  * **Human NAT Gateway Badge (`👥 Human NAT ISP`):** Displayed when a residential/mobile subnet shows multi-IP spread but exhibits high visitor cookie retention ($\ge 40\%$), confirming legitimate human end-user traffic routed through a shared carrier-grade NAT gateway.
 * **Forensics Action:** Direct `Events →` link opening `/events?clientQuery=...` pre-filtered for the subnet to drill down into raw request-by-request incident telemetry.
 
 ### 4. Dynamic Baseline Calibration & The 3-Phase Model (Fresh Deployments)
@@ -497,6 +505,12 @@ Accessible via `/events`. Provides deep-dive, granular search across every recor
   * Partial substring search for quick lookup.
 * **Client Type Filter:**
   * Multi-select pills to filter by threat categorization: `Datacenter`, `Residential`, `Search Engine`, `AI Crawler`, `Tor Exit Node`, `Mobile`, `Private Network`, `Unknown`.
+* **Traffic Status Filter:**
+  * `All`: Shows all recorded client events.
+  * `⚠️ All Incidents`: Combines both hard HTTP 429 blocks and soft marking / simulation events.
+  * `🛑 Blocked (429)`: Filters strictly to clients that received an HTTP 429 Too Many Requests response.
+  * `🏷️ Marked / Simulation`: Filters to clients evaluated above thresholds on marking valves (e.g. email harvester protection) or valves running in simulation mode.
+  * `🔵 Active (Monitored)`: Shows active clients transmitting traffic within configured rate limits.
 * **ASN Filter:** Filter directly by ASN number or provider name (e.g., `AS13335` or `Cloudflare`).
 * **Interactive Network Notes:** Look for verdict badges (🟢/🔵/🟡/🔴/⚪) or click `+📝` on any ASN or Subnet to inspect previous findings or log new notes directly from the incident log.
 

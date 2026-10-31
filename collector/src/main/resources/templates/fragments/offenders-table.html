@@ -137,13 +137,16 @@
                                         th:text="${#numbers.formatInteger(p.last24hRequests(), 1, 'POINT')}">1,250</strong>
                                     <span style="font-size: 11px; color: var(--text-muted);">reqs</span>
                                 </div>
-                                <div style="font-size: 11px;">
+                                <div style="font-size: 11px; display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px;">
                                     <span th:if="${p.last24hBlockedRequests() > 0}"
                                         style="color: var(--color-danger); font-weight: 600;"
                                         th:text="${#numbers.formatInteger(p.last24hBlockedRequests(), 1, 'POINT') + ' blocked'}">500
                                         blocked</span>
-                                    <span th:if="${p.last24hBlockedRequests() == 0}" style="color: var(--text-muted);">0
+                                    <span th:if="${p.last24hBlockedRequests() == 0 and p.last24hMarkedRequests() == 0}" style="color: var(--text-muted);">0
                                         blocked</span>
+                                    <span th:if="${p.last24hMarkedRequests() > 0}" class="badge badge-purple" style="font-size: 10px; padding: 0 4px;"
+                                        th:title="${#numbers.formatInteger(p.last24hMarkedRequests(), 1, 'POINT')} + ' soft-marked / simulated requests in 24h'"
+                                        th:text="${#numbers.formatInteger(p.last24hMarkedRequests(), 1, 'POINT') + ' marked'}">120 marked</span>
                                 </div>
                             </td>
                             <td>
@@ -201,8 +204,16 @@
                                     </div>
                                     <span th:if="${p.isPotentialResidentialProxyPool()}" class="badge badge-danger"
                                         style="animation: pulse 2s infinite; font-size: 10px;"
-                                        title="High distinct IP count with low requests per IP - classic rotating residential proxy pattern!">
+                                        title="High distinct IP count with low requests per IP and low cookie retention - classic rotating residential proxy pattern!">
                                         &#x26A0;&#xFE0F; Residential IP Pool Rotation
+                                    </span>
+                                    <span th:if="${p.isLikelyAutomatedScraper24h() and !p.isPotentialResidentialProxyPool()}" class="badge badge-warning" style="font-size: 10px;"
+                                        title="Consistent traffic with 0% visitor cookies carried across multiple requests - likely automated script / bot scraper">
+                                        &#x1F916; Cookie-less Bot
+                                    </span>
+                                    <span th:if="${p.isLikelyHumanNat24h()}" class="badge badge-secondary" style="font-size: 10px;"
+                                        th:title="'Multiple IPs with high visitor cookie retention (' + ${#numbers.formatDecimal(p.returningRatio24h(), 1, 0)} + '%) - typical consumer ISP / CGNAT gateway'">
+                                        &#x1F465; Human NAT ISP
                                     </span>
                                 </div>
                             </td>
@@ -477,7 +488,9 @@
                             <th>
                                 <span th:if="${sortBy == 'BLOCKED'}"
                                     title="Currently sorted by blocked requests (highest first)">&#x1F6D1; </span>
-                                Blocked Requests (429)
+                                <span th:if="${sortBy == 'MARKED'}"
+                                    title="Currently sorted by marked / simulated requests (highest first)">&#x1F3F7;&#xFE0F; </span>
+                                Blocked / Marked
                             </th>
                             <th>
                                 <span th:if="${sortBy == 'REQUESTS'}"
@@ -617,10 +630,16 @@
                                     title="Unclassified / No ASN match - Click to view incidents">Unclassified</a>
                             </td>
                             <td>
-                                <span th:if="${offender.totalBlockedRequests > 0}" class="badge badge-danger"
-                                    th:text="${#numbers.formatInteger(offender.totalBlockedRequests, 1, 'POINT')}">12</span>
-                                <span th:unless="${offender.totalBlockedRequests > 0}" class="badge badge-secondary"
-                                    style="opacity: 0.7;" title="No blocked requests (within rate limits)">0</span>
+                                <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+                                    <span th:if="${offender.totalBlockedRequests > 0}" class="badge badge-danger"
+                                        th:title="${#numbers.formatInteger(offender.totalBlockedRequests, 1, 'POINT')} + ' hard HTTP 429 blocked requests'"
+                                        th:text="${#numbers.formatInteger(offender.totalBlockedRequests, 1, 'POINT')}">12</span>
+                                    <span th:if="${offender.totalMarkedRequests > 0}" class="badge badge-purple"
+                                        th:title="${#numbers.formatInteger(offender.totalMarkedRequests, 1, 'POINT')} + ' soft-marked / simulated requests'"
+                                        th:text="${#numbers.formatInteger(offender.totalMarkedRequests, 1, 'POINT')} + ' mrk'">5 mrk</span>
+                                    <span th:if="${offender.totalBlockedRequests == 0 and offender.totalMarkedRequests == 0}" class="badge badge-secondary"
+                                        style="opacity: 0.7;" title="No blocked or marked requests (within rate limits)">0</span>
+                                </div>
                             </td>
                             <td>
                                 <strong

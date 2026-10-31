@@ -62,6 +62,7 @@
 
         const activeData = timelineData.map(pt => pt.activeRequests);
         const blockedData = timelineData.map(pt => pt.blockedRequests);
+        const markedData = timelineData.map(pt => pt.markedRequests || 0);
 
         const chart = new Chart(canvas, {
             type: 'bar',
@@ -84,6 +85,16 @@
                         backgroundColor: 'rgba(244, 63, 94, 0.85)',
                         hoverBackgroundColor: '#f43f5e',
                         borderColor: '#e11d48',
+                        borderWidth: 1,
+                        borderRadius: 3,
+                        stack: 'traffic'
+                    },
+                    {
+                        label: 'Marked / Simulation',
+                        data: markedData,
+                        backgroundColor: 'rgba(168, 85, 247, 0.85)',
+                        hoverBackgroundColor: '#c084fc',
+                        borderColor: '#9333ea',
                         borderWidth: 1,
                         borderRadius: 3,
                         stack: 'traffic'
@@ -120,12 +131,20 @@
                             footer: function(tooltipItems) {
                                 let total = 0;
                                 let blocked = 0;
+                                let marked = 0;
                                 tooltipItems.forEach(item => {
                                     total += item.raw;
                                     if (item.datasetIndex === 1) blocked = item.raw;
+                                    if (item.datasetIndex === 2) marked = item.raw;
                                 });
-                                const pct = total > 0 ? ((blocked / total) * 100).toFixed(1) : '0.0';
-                                return `Total: ${total.toLocaleString()} reqs (${pct}% blocked)`;
+                                const blkPct = total > 0 ? ((blocked / total) * 100).toFixed(1) : '0.0';
+                                const mrkPct = total > 0 ? ((marked / total) * 100).toFixed(1) : '0.0';
+                                let text = `Total: ${total.toLocaleString()} reqs (${blkPct}% blocked`;
+                                if (marked > 0) {
+                                    text += `, ${mrkPct}% marked`;
+                                }
+                                text += ')';
+                                return text;
                             }
                         }
                     }
@@ -227,11 +246,15 @@
                                 const item = compData[context.dataIndex];
                                 const reqs = item.totalRequests.toLocaleString();
                                 const blk = item.blockedRequests.toLocaleString();
-                                return [
+                                const lines = [
                                     `Requests: ${reqs} (${item.percentage}%)`,
-                                    `Blocked (429): ${blk}`,
-                                    `Subnets: ${item.subnetCount}`
+                                    `Blocked (429): ${blk}`
                                 ];
+                                if (item.markedRequests && item.markedRequests > 0) {
+                                    lines.push(`Marked: ${item.markedRequests.toLocaleString()}`);
+                                }
+                                lines.push(`Subnets: ${item.subnetCount}`);
+                                return lines;
                             }
                         }
                     }
@@ -480,9 +503,15 @@
                                     `Distinct IPs in Subnet (X): ${pt.distinctClients}`,
                                     `Ø Requests / IP (Y): ${pt.averageRequestsPerClient}`,
                                     `Total Requests: ${pt.totalRequests.toLocaleString()}`,
-                                    `Blocked (429): ${pt.blockedRequests.toLocaleString()} (${blkPct}%)`,
-                                    `💡 Click to inspect in Offenders view`
+                                    `Blocked (429): ${pt.blockedRequests.toLocaleString()} (${blkPct}%)`
                                 );
+                                if (pt.markedRequests && pt.markedRequests > 0) {
+                                    lines.push(`Marked / Simulated: ${pt.markedRequests.toLocaleString()}`);
+                                }
+                                if (pt.isReturningTracked) {
+                                    lines.push(`Cookie Retention: ${pt.returningRatioPercent.toFixed(1)}%`);
+                                }
+                                lines.push(`💡 Click to inspect in Offenders view`);
                                 return lines;
                             }
                         }

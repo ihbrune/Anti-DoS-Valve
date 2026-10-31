@@ -243,9 +243,19 @@
                             <span>All</span>
                         </label>
                         <label class="pill-label">
+                            <input type="radio" name="status" value="INCIDENTS"
+                                th:checked="${selectedStatus == 'INCIDENTS'}">
+                            <span>&#x26A0;&#xFE0F; All Incidents</span>
+                        </label>
+                        <label class="pill-label">
                             <input type="radio" name="status" value="BLOCKED"
                                 th:checked="${selectedStatus == 'BLOCKED'}">
                             <span>&#x1F6D1; Blocked (429)</span>
+                        </label>
+                        <label class="pill-label">
+                            <input type="radio" name="status" value="MARKED"
+                                th:checked="${selectedStatus == 'MARKED'}">
+                            <span>&#x1F3F7;&#xFE0F; Marked / Simulation</span>
                         </label>
                         <label class="pill-label">
                             <input type="radio" name="status" value="ACTIVE" th:checked="${selectedStatus == 'ACTIVE'}">
@@ -253,7 +263,7 @@
                         </label>
                     </div>
                     <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-                        Show blocked clients, top active monitored clients, or both.
+                        Filter by hard HTTP 429 blocks, soft-marked / simulated incidents, active clients, or all traffic.
                     </div>
                 </div>
             </div>

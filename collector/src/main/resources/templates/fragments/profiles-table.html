@@ -136,9 +136,10 @@
                             <strong th:text="${#numbers.formatInteger(p.last24hRequests(), 1, 'POINT')}">1,250</strong>
                             <span style="font-size: 11px; color: var(--text-muted);">reqs</span>
                         </div>
-                        <div style="font-size: 11px;">
+                        <div style="font-size: 11px; display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px;">
                             <span th:if="${p.last24hBlockedRequests() > 0}" style="color: var(--color-danger); font-weight: 600;" th:text="${#numbers.formatInteger(p.last24hBlockedRequests(), 1, 'POINT') + ' blocked'}">500 blocked</span>
-                            <span th:if="${p.last24hBlockedRequests() == 0}" style="color: var(--text-muted);">0 blocked</span>
+                            <span th:if="${p.last24hBlockedRequests() == 0 and p.last24hMarkedRequests() == 0}" style="color: var(--text-muted);">0 blocked</span>
+                            <span th:if="${p.last24hMarkedRequests() > 0}" class="badge badge-purple" style="font-size: 10px; padding: 0 4px;" th:title="${#numbers.formatInteger(p.last24hMarkedRequests(), 1, 'POINT')} + ' soft-marked / simulated requests in 24h'" th:text="${#numbers.formatInteger(p.last24hMarkedRequests(), 1, 'POINT') + ' marked'}">120 marked</span>
                         </div>
                         <div th:if="${p.isReturningTracked24h() or p.isAuthenticatedTracked24h()}"
                             style="font-size: 11px; margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px;">
@@ -192,8 +193,16 @@
                                 </span>
                             </div>
                             <span th:if="${p.isPotentialResidentialProxyPool()}" class="badge badge-danger" style="font-size: 10px;"
-                                  title="High distinct IP count with low requests per IP - classic rotating residential proxy pattern!">
+                                  title="High distinct IP count with low requests per IP and low cookie retention - classic rotating residential proxy pattern!">
                                 &#x26A0;&#xFE0F; Residential IP Pool Rotation
+                            </span>
+                            <span th:if="${p.isLikelyAutomatedScraper24h() and !p.isPotentialResidentialProxyPool()}" class="badge badge-warning" style="font-size: 10px;"
+                                  title="Consistent traffic with 0% visitor cookies carried across multiple requests - likely automated script / bot scraper">
+                                &#x1F916; Cookie-less Bot
+                            </span>
+                            <span th:if="${p.isLikelyHumanNat24h()}" class="badge badge-secondary" style="font-size: 10px;"
+                                  th:title="'Multiple IPs with high visitor cookie retention (' + ${#numbers.formatDecimal(p.returningRatio24h(), 1, 0)} + '%) - typical consumer ISP / CGNAT gateway'">
+                                &#x1F465; Human NAT ISP
                             </span>
                         </div>
                     </td>

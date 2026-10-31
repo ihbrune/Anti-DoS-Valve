@@ -5,9 +5,9 @@
 
     <!-- Fragment: eventsTable -->
     <div th:fragment="eventsTable" class="table-responsive" id="events-container"
-        hx-trigger="annotationChanged from:body" hx-get="/fragments/recent-events?status=BLOCKED" hx-swap="outerHTML">
+        hx-trigger="annotationChanged from:body" hx-get="/fragments/recent-events?status=INCIDENTS" hx-swap="outerHTML">
         <div th:if="${#lists.isEmpty(recentEvents)}" class="empty-state">
-            <p>No recent blocking incidents logged.</p>
+            <p>No recent incidents logged.</p>
         </div>
 
         <table th:unless="${#lists.isEmpty(recentEvents)}">
@@ -130,23 +130,27 @@
                     <td>
                         <div class="event-total-cell">
                             <strong class="event-total-count"
-                                th:classappend="${event.status == 'ACTIVE' ? 'count-active' : 'count-blocked'}"
+                                th:classappend="${event.status == 'ACTIVE' ? 'count-active' : (event.status == 'MARKED' ? 'count-marked' : 'count-blocked')}"
                                 th:text="${#numbers.formatInteger(event.totalEffectiveCount, 1, 'POINT')}">145</strong>
                             <span th:if="${event.status == 'ACTIVE'}" class="badge badge-info badge-status"
                                 title="Monitored active client within rate limits">
                                 <span class="status-dot status-dot-active"></span>Active
                             </span>
-                            <span th:if="${event.status != 'ACTIVE' and event.completed}"
+                            <span th:if="${event.status == 'MARKED'}" class="badge badge-purple badge-status"
+                                title="Rate-limit exceeded in Marking/Simulation Mode - Monitored/Tagged without HTTP 429 block">
+                                <span class="status-dot status-dot-marked"></span>Marked
+                            </span>
+                            <span th:if="${event.status != 'ACTIVE' and event.status != 'MARKED' and event.completed}"
                                 class="badge badge-danger badge-status"
-                                title="Rate-limit exceeded - Locked in completed slot">
+                                title="Rate-limit exceeded - Locked in completed slot (HTTP 429)">
                                 <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" class="status-icon">
                                     <path
                                         d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" />
                                 </svg>Locked
                             </span>
-                            <span th:if="${event.status != 'ACTIVE' and !event.completed}"
+                            <span th:if="${event.status != 'ACTIVE' and event.status != 'MARKED' and !event.completed}"
                                 class="badge badge-warning badge-status"
-                                title="Rate-limit exceeded - Currently blocked (429)">
+                                title="Rate-limit exceeded - Currently blocked (HTTP 429)">
                                 <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" class="status-icon">
                                     <path
                                         d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 6h2v6h-2V7zm0 8h2v2h-2v-2z" />

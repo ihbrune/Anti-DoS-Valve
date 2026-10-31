@@ -23,6 +23,13 @@
         <div class="stat-label">Blocked Requests (24h)</div>
         <div class="stat-value danger" th:text="${#numbers.formatInteger(fleetSummary.totalBlockedRequests24h, 1, 'POINT')}">0</div>
     </div>
+    <div class="stat-card" th:if="${fleetSummary.totalMarkedRequests24h > 0}">
+        <div class="stat-label">Marked Requests (24h)</div>
+        <div class="stat-value purple">
+            <span th:text="${#numbers.formatInteger(fleetSummary.totalMarkedRequests24h, 1, 'POINT')}">0</span>
+            <span th:if="${fleetSummary.distinctMarkedClients24h > 0}" style="font-size:14px; opacity:0.85; margin-left:4px;" th:text="'(' + ${fleetSummary.distinctMarkedClients24h} + ' IPs)'"></span>
+        </div>
+    </div>
     <div class="stat-card">
         <div class="stat-label">Unique Blocked IPs (24h)</div>
         <div class="stat-value warning" th:text="${fleetSummary.distinctBlockedClients24h}">0</div>

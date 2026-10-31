@@ -289,7 +289,7 @@ public class SubnetProfileRepository {
 				    COUNT(CASE WHEN last_24h_requests >= ? AND baseline_daily_avg > 0.0 AND last_24h_surge_factor >= ? THEN 1 END) AS high_surge,
 				    COUNT(CASE WHEN last_24h_requests > 0 AND (days_dormant_before_last_seen >= 900 OR first_seen_at >= ?) THEN 1 END) AS new_subnets,
 				    COUNT(CASE WHEN last_24h_requests > 0 AND days_dormant_before_last_seen >= 14 AND days_dormant_before_last_seen < 900 THEN 1 END) AS dormant_breaks,
-				    COUNT(CASE WHEN last_24h_requests > 0 AND last_24h_distinct_clients >= 5 AND (last_24h_requests * 1.0 / CASE WHEN last_24h_distinct_clients = 0 THEN 1 ELSE last_24h_distinct_clients END) <= 20.0 AND (last_24h_returning_tracked_requests < 20 OR (last_24h_returning_requests * 100.0 / last_24h_returning_tracked_requests) < 40.0) THEN 1 END) AS proxy_pools
+				    COUNT(CASE WHEN last_24h_requests > 0 AND last_24h_distinct_clients >= 5 AND (last_24h_requests * 1.0 / CASE WHEN last_24h_distinct_clients = 0 THEN 1 ELSE last_24h_distinct_clients END) <= 20.0 AND (last_24h_returning_tracked_requests < 20 OR (last_24h_returning_requests * 100.0 / last_24h_returning_tracked_requests) < 40.0) AND (client_type IS NULL OR client_type IN ('RESIDENTIAL', 'UNKNOWN')) THEN 1 END) AS proxy_pools
 				FROM subnet_profiles
 				""";
 		try {
@@ -459,7 +459,7 @@ public class SubnetProfileRepository {
 					params.add(minSurge);
 					params.add(surgeMultiplier);
 				}
-				case "PROXY_POOL" -> sql.append(" AND last_24h_requests > 0 AND last_24h_distinct_clients >= 5 AND (last_24h_requests * 1.0 / CASE WHEN last_24h_distinct_clients = 0 THEN 1 ELSE last_24h_distinct_clients END) <= 20.0 AND (last_24h_returning_tracked_requests < 20 OR (last_24h_returning_requests * 100.0 / last_24h_returning_tracked_requests) < 40.0)");
+				case "PROXY_POOL" -> sql.append(" AND last_24h_requests > 0 AND last_24h_distinct_clients >= 5 AND (last_24h_requests * 1.0 / CASE WHEN last_24h_distinct_clients = 0 THEN 1 ELSE last_24h_distinct_clients END) <= 20.0 AND (last_24h_returning_tracked_requests < 20 OR (last_24h_returning_requests * 100.0 / last_24h_returning_tracked_requests) < 40.0) AND (client_type IS NULL OR client_type IN ('RESIDENTIAL', 'UNKNOWN'))");
 				case "BLOCKED" -> sql.append(" AND last_24h_blocked_requests > 0");
 				case "MARKED" -> sql.append(" AND last_24h_marked_requests > 0");
 				default -> {}

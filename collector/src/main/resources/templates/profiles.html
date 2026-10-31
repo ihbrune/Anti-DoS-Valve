@@ -225,6 +225,18 @@
                         <span>All Subnets</span>
                     </label>
                     <label class="pill-label">
+                        <input type="radio" name="activityPattern" value="BLOCKED"
+                               th:checked="${activityPattern == 'BLOCKED'}"
+                               onchange="htmx.trigger('#profiles-filter-form', 'submit');">
+                        <span>&#x1F6D1; Blocked (24h)</span>
+                    </label>
+                    <label class="pill-label">
+                        <input type="radio" name="activityPattern" value="MARKED"
+                               th:checked="${activityPattern == 'MARKED'}"
+                               onchange="htmx.trigger('#profiles-filter-form', 'submit');">
+                        <span>&#x1F3F7;&#xFE0F; Marked / Simulation (24h)</span>
+                    </label>
+                    <label class="pill-label">
                         <input type="radio" name="activityPattern" value="SURGE"
                                th:checked="${activityPattern == 'SURGE'}"
                                onchange="htmx.trigger('#profiles-filter-form', 'submit');">
@@ -287,6 +299,8 @@
                     <div>
                         <select name="sortBy" class="input-control" onchange="htmx.trigger('#profiles-filter-form', 'submit');">
                             <option value="SURGE" th:selected="${sortBy == 'SURGE'}">Sort: 24h Surge Multiplier (&darr; Highest)</option>
+                            <option value="BLOCKED" th:selected="${sortBy == 'BLOCKED'}">Sort: 24h Blocked Requests (&darr; Most Blocked)</option>
+                            <option value="MARKED" th:selected="${sortBy == 'MARKED'}">Sort: 24h Marked Requests (&darr; Most Marked)</option>
                             <option value="REQUESTS" th:selected="${sortBy == 'REQUESTS'}">Sort: 24h Request Volume (&darr; Most Active)</option>
                             <option value="DISTINCT_IPS" th:selected="${sortBy == 'DISTINCT_IPS'}">Sort: Unique IPs in 24h (&darr; Most Distributed)</option>
                             <option value="DORMANT" th:selected="${sortBy == 'DORMANT'}">Sort: Inactivity Days before Return (&darr; Longest Dormancy)</option>

@@ -296,6 +296,11 @@
                             <span>&#x1F6D1; Most Blocked Requests (429)</span>
                         </label>
                         <label class="pill-label">
+                            <input type="radio" name="sortBy" value="MARKED" th:checked="${sortBy == 'MARKED'}"
+                                onchange="htmx.trigger('#offenders-filter-form', 'submit');">
+                            <span>&#x1F3F7;&#xFE0F; Most Marked / Simulated</span>
+                        </label>
+                        <label class="pill-label">
                             <input type="radio" name="sortBy" value="REQUESTS" th:checked="${sortBy == 'REQUESTS'}"
                                 onchange="htmx.trigger('#offenders-filter-form', 'submit');">
                             <span>&#x1F4CA; Highest Total Volume (Active + Blocked)</span>
@@ -307,7 +312,7 @@
                         </label>
                     </div>
                     <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-                        Order entities by enforced rate-limiting blocks (429) or overall attempted request volume.
+                        Order entities by hard rate-limiting blocks (429), soft marking / simulation events, or overall request volume.
                     </div>
                 </div>
 
@@ -320,6 +325,16 @@
                                 th:checked="${activityPattern == null or activityPattern == 'ALL'}"
                                 onchange="onActivityPatternChange(this);">
                             <span>All Patterns</span>
+                        </label>
+                        <label class="pill-label">
+                            <input type="radio" name="activityPattern" value="BLOCKED"
+                                th:checked="${activityPattern == 'BLOCKED'}" onchange="onActivityPatternChange(this);">
+                            <span>&#x1F6D1; Blocked (24h)</span>
+                        </label>
+                        <label class="pill-label">
+                            <input type="radio" name="activityPattern" value="MARKED"
+                                th:checked="${activityPattern == 'MARKED'}" onchange="onActivityPatternChange(this);">
+                            <span>&#x1F3F7;&#xFE0F; Marked / Simulation (24h)</span>
                         </label>
                         <label class="pill-label">
                             <input type="radio" name="activityPattern" value="SURGE"

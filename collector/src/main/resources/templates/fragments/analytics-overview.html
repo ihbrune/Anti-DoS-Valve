@@ -102,7 +102,7 @@
                 </div>
                 <div style="font-size: 11px; color: var(--text-muted);">
                     <span th:text="${analytics.totalRequests} + ' requests'">0 requests</span>
-                    (<span style="color: var(--color-danger);" th:text="${analytics.totalBlocked} + ' blocked'">0 blocked</span>)
+                    (<span style="color: var(--color-danger);" th:text="${analytics.totalBlocked} + ' blocked'">0 blocked</span><th:block th:if="${analytics.totalMarked > 0}">, <span style="color: var(--color-purple);" th:text="${analytics.totalMarked} + ' marked'">0 marked</span></th:block>)
                 </div>
             </div>
             <div class="chart-container-box" style="height: 300px; max-height: 300px; position: relative; overflow: hidden;">

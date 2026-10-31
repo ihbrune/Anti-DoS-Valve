@@ -304,21 +304,21 @@ public class DemoDataSeeder {
 				}
 
 				// Residential Proxy Evasion Swarms (bypassing per-IP limits: high distinct clients, low requests/IP, locked = false)
-				// 2. Deutsche Telekom Residential Proxy Swarm (82 IPs) - active in recent 24h
-				if ((hoursAgo <= 6 && (slotKey + idx * 13) % 5 == 0) || (slotKey + idx * 13) % 23 == 0) {
+				// 2. Deutsche Telekom Residential Proxy Swarm (82 IPs) - active in recent 24h (~8.5 reqs/IP)
+				if ((hoursAgo > 6 && (slotKey + idx * 13) % 37 == 0) || (hoursAgo == 2 && (slotKey + idx * 13) % 23 == 0)) {
 					events.add(createEnrichedEvent(
 							edgeServer, "Subnet-Guard", slotKey, startTime,
 							"185.246.221.0/24", 3320L, "Deutsche Telekom AG", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
-							180 + sRnd.nextInt(50), 0, false, true, endTime, 82 + sRnd.nextInt(8)
+							160 + sRnd.nextInt(40), 0, false, true, endTime, 82 + sRnd.nextInt(8)
 					));
 				}
 
-				// 3. Comcast Cable Residential Proxy Swarm (96 IPs) - pure evasion botnet
-				if ((slotKey + idx * 23) % 31 == 0) {
+				// 3. Comcast Cable Residential Proxy Swarm (96 IPs) - pure evasion botnet (~6.6 reqs/IP)
+				if ((hoursAgo > 6 && (slotKey + idx * 23) % 31 == 0) || (hoursAgo <= 6 && (slotKey + idx * 23) % 137 == 0)) {
 					events.add(createEnrichedEvent(
 							edgeServer, "Subnet-Guard", slotKey, startTime,
 							"73.15.20.0/24", 7922L, "Comcast Cable Communications", "US", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
-							170 + sRnd.nextInt(40), 0, false, true, endTime, 96 + sRnd.nextInt(6)
+							150 + sRnd.nextInt(35), 0, false, true, endTime, 96 + sRnd.nextInt(8)
 					));
 				}
 

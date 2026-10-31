@@ -17,7 +17,7 @@
                 <tr>
                     <th>Client IP / Subnet</th>
                     <th>Classification</th>
-                    <th>Blocked Requests (429)</th>
+                    <th title="Hard HTTP 429 blocked requests and soft-marked / simulated requests">Blocked / Marked</th>
                     <th>Total Requests</th>
                     <th>Targeted Servers</th>
                     <th>First Seen</th>
@@ -104,10 +104,16 @@
                             title="Unclassified / No ASN match">Unclassified</span>
                     </td>
                     <td>
-                        <span th:if="${offender.totalBlockedRequests > 0}" class="badge badge-danger"
-                            th:text="${#numbers.formatInteger(offender.totalBlockedRequests, 1, 'POINT')}">12</span>
-                        <span th:unless="${offender.totalBlockedRequests > 0}" class="badge badge-secondary"
-                            style="opacity: 0.7;" title="No blocked requests">0</span>
+                        <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+                            <span th:if="${offender.totalBlockedRequests > 0}" class="badge badge-danger"
+                                th:title="${#numbers.formatInteger(offender.totalBlockedRequests, 1, 'POINT')} + ' hard HTTP 429 blocked requests'"
+                                th:text="${#numbers.formatInteger(offender.totalBlockedRequests, 1, 'POINT')}">12</span>
+                            <span th:if="${offender.totalMarkedRequests > 0}" class="badge badge-purple"
+                                th:title="${#numbers.formatInteger(offender.totalMarkedRequests, 1, 'POINT')} + ' soft-marked / simulated requests'"
+                                th:text="${#numbers.formatInteger(offender.totalMarkedRequests, 1, 'POINT')} + ' mrk'">5 mrk</span>
+                            <span th:if="${offender.totalBlockedRequests == 0 and offender.totalMarkedRequests == 0}" class="badge badge-secondary"
+                                style="opacity: 0.7;" title="No blocked or marked requests">0</span>
+                        </div>
                     </td>
                     <td>
                         <strong th:text="${#numbers.formatInteger(offender.totalRequests, 1, 'POINT')}">1,450</strong>

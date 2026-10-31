@@ -250,7 +250,7 @@ public class DashboardController {
 	public String recentEventsFragment(
 			@RequestParam(name = "serverId", required = false) String serverId,
 			@RequestParam(name = "filterIp", required = false) String filterIp,
-			@RequestParam(name = "status", required = false, defaultValue = "BLOCKED") String status,
+			@RequestParam(name = "status", required = false, defaultValue = "INCIDENTS") String status,
 			@RequestParam(name = "limit", defaultValue = "50") int limit,
 			Model model) {
 		List<ClientEvent> events = clientEventRepository.findRecentEvents(serverId, filterIp, status, limit);
@@ -397,7 +397,7 @@ public class DashboardController {
 			@RequestParam(name = "status", required = false, defaultValue = "ALL") String status,
 			Model model) {
 		String effectiveStatus = (status != null && !status.isBlank()) ? status.trim().toUpperCase() : "ALL";
-		if (!"BLOCKED".equals(effectiveStatus) && !"ACTIVE".equals(effectiveStatus)) {
+		if (!"BLOCKED".equals(effectiveStatus) && !"ACTIVE".equals(effectiveStatus) && !"MARKED".equals(effectiveStatus)) {
 			effectiveStatus = "ALL";
 		}
 		String effectiveValve = (valve != null && !valve.isBlank()) ? valve.trim() : null;
@@ -428,10 +428,10 @@ public class DashboardController {
 						null,
 						null,
 						null,
-						"BLOCKED",
+						"INCIDENTS",
 						500,
 						0)
-				: ("BLOCKED".equals(effectiveStatus)
+				: (("BLOCKED".equals(effectiveStatus) || "MARKED".equals(effectiveStatus))
 						? recentEvents
 						: clientEventRepository.findRecentEventsFiltered(
 								List.of(serverId),
@@ -442,7 +442,7 @@ public class DashboardController {
 								null,
 								null,
 								null,
-								"BLOCKED",
+								"INCIDENTS",
 								100,
 								0));
 
@@ -623,7 +623,7 @@ public class DashboardController {
 		Instant since24h = Instant.now().minus(24, ChronoUnit.HOURS);
 
 		List<TopOffenderSummary> topOffenders = clientEventRepository.findTopOffenders(since24h, 25);
-		List<ClientEvent> recentEvents = clientEventRepository.findRecentBlockingEvents(null, null, 50);
+		List<ClientEvent> recentEvents = clientEventRepository.findRecentEvents(null, null, "INCIDENTS", 50);
 		List<SlotSnapshot> recentSlots = slotSnapshotRepository.findRecentFleet(20);
 
 		model.addAttribute("heartbeats", heartbeats);
@@ -736,8 +736,6 @@ public class DashboardController {
 		String effectiveSortBy = sortBy;
 		if (effectiveSortBy == null || effectiveSortBy.isBlank()) {
 			effectiveSortBy = "PROFILES".equals(effectiveGroupBy) ? "SURGE" : "BLOCKED";
-		} else if ("PROFILES".equals(effectiveGroupBy) && "BLOCKED".equalsIgnoreCase(effectiveSortBy)) {
-			effectiveSortBy = "SURGE";
 		} else if (!"PROFILES".equals(effectiveGroupBy) && ("SURGE".equalsIgnoreCase(effectiveSortBy) || "DISTINCT_IPS".equalsIgnoreCase(effectiveSortBy) || "DORMANT".equalsIgnoreCase(effectiveSortBy))) {
 			effectiveSortBy = "BLOCKED";
 		}
