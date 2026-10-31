@@ -789,6 +789,27 @@ public class MockValveSimulator {
 	private SlotMetrics calculateStagingMetrics(long slotKey, Random rnd) {
 		long totalRequests = 75L + (slotKey % 5) * 5L + rnd.nextInt(40);
 		int activeCounters = 25 + rnd.nextInt(15);
-		return new SlotMetrics(totalRequests, activeCounters, 0, List.of());
+
+		List<ValveDetailsDto.BlockedClientDto> marked = new ArrayList<>();
+		String lastUpdate = DateTimeFormatter.ISO_INSTANT.format(
+				Instant.ofEpochMilli(slotKey * SLOT_LENGTH_MILLIS + 2500)
+		);
+		// Simulated marking mode: clients exceeding quota are marked (soft limit), not 429-blocked
+		if (slotKey % 3 == 0) {
+			int req = 85 + rnd.nextInt(35);
+			marked.add(new ValveDetailsDto.BlockedClientDto(
+					"82.165.197.80", req, 0, req, false, lastUpdate, 1, 0, 0,
+					"GET", "/staging/catalog/items", "python-requests/2.31.0"
+			));
+		}
+		if (slotKey % 5 == 0) {
+			int req = 110 + rnd.nextInt(45);
+			marked.add(new ValveDetailsDto.BlockedClientDto(
+					"198.51.100.77", req, 0, req, false, lastUpdate, 1, (int) (req * 0.75), (int) (req * 0.50),
+					"POST", "/staging/api/load-test", "k6/0.48.0"
+			));
+		}
+
+		return new SlotMetrics(totalRequests, activeCounters, marked.size(), marked);
 	}
 }

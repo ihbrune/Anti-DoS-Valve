@@ -138,6 +138,7 @@ public class DemoDataSeeder {
 			enrichLegacyDemoEventsIfAny();
 			seedDemoMonitoredValves(Instant.now());
 			seedDemoAnnotationsIfEmpty();
+			seedMarkedDemoTelemetryIfMissing();
 			if (subnetProfileService != null && subnetProfileService.countProfilesFiltered("ALL", null, null, null, null, null) == 0) {
 				if (rollupAggregationService != null) {
 					try {
@@ -556,9 +557,31 @@ public class DemoDataSeeder {
 				Random stRnd = (idx == 0) ? rnd : new Random((slotKey * 41L) ^ stagingServer.hashCode());
 				long stagingReqs = 40L + stRnd.nextInt(70);
 				int stagingActive = 15 + stRnd.nextInt(20);
+				int stagingMarked = 0;
+
+				// Marking mode simulation: clients exceeding quota are marked (soft limit), not 429-blocked
+				if ((slotKey + idx * 7) % 31 == 0) {
+					stagingMarked++;
+					events.add(createEnrichedEvent(
+							stagingServer, "Staging-Limiter", slotKey, startTime,
+							"82.165.197.80", 8560L, "1&1 Versatel", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
+							88 + stRnd.nextInt(30), 0, false, true, endTime, 1,
+							ClientEvent.STATUS_MARKED
+					));
+				}
+				if (hoursAgo <= 6 && (slotKey + idx * 11) % 19 == 0) {
+					stagingMarked++;
+					events.add(createEnrichedEvent(
+							stagingServer, "Staging-Limiter", slotKey, startTime,
+							"198.51.100.77", null, "Staging Load Test Bot", null, org.henbru.antidos.collector.model.ClientType.PRIVATE_NETWORK,
+							115 + stRnd.nextInt(40), 0, false, true, endTime, 1,
+							ClientEvent.STATUS_MARKED
+					));
+				}
+
 				snapshots.add(new SlotSnapshot(
 						null, stagingServer, "Staging-Limiter", slotKey,
-						startTime, endTime, stagingReqs, stagingActive, 0, true, endTime
+						startTime, endTime, stagingReqs, stagingActive, 0, stagingMarked, true, endTime
 				));
 			}
 		}
@@ -705,18 +728,45 @@ public class DemoDataSeeder {
 			Instant lastUpdatedAt,
 			int distinctClients
 	) {
+		return createEnrichedEvent(
+				serverId, valveName, slotKey, slotTime,
+				ip, asn, asOrg, country, type,
+				requestCount, retainedCount, locked, completed, lastUpdatedAt, distinctClients,
+				locked ? ClientEvent.STATUS_BLOCKED : ClientEvent.STATUS_ACTIVE
+		);
+	}
+
+	private ClientEvent createEnrichedEvent(
+			String serverId,
+			String valveName,
+			long slotKey,
+			Instant slotTime,
+			String ip,
+			Long asn,
+			String asOrg,
+			String country,
+			org.henbru.antidos.collector.model.ClientType type,
+			int requestCount,
+			int retainedCount,
+			boolean locked,
+			boolean completed,
+			Instant lastUpdatedAt,
+			int distinctClients,
+			String status
+	) {
 		String sampleMethod = null;
 		String sampleUri = null;
 		String sampleUserAgent = null;
 
 		boolean isHoneypot = valveName != null && valveName.toUpperCase().contains("HONEYPOT");
-		if (locked || isHoneypot) {
+		boolean isMarked = ClientEvent.STATUS_MARKED.equalsIgnoreCase(status);
+		if (locked || isHoneypot || isMarked) {
 			int hash = Math.abs((int) ((slotKey * 31L) ^ ip.hashCode() ^ (valveName != null ? valveName.hashCode() : 0)));
-			if (isHoneypot || (hash % 10 < 7)) {
+			if (isHoneypot || isMarked || (hash % 10 < 7)) {
 				MockValveSimulator.SimulatedProbe probe = DEMO_HISTORICAL_PROBES[hash % DEMO_HISTORICAL_PROBES.length];
 				sampleMethod = probe.method();
-				sampleUri = probe.uri();
-				sampleUserAgent = probe.userAgent();
+				sampleUri = isMarked ? ("/staging/api/test-" + (hash % 5)) : probe.uri();
+				sampleUserAgent = isMarked ? "python-requests/2.31.0" : probe.userAgent();
 			}
 		}
 
@@ -757,7 +807,7 @@ public class DemoDataSeeder {
 				ip, net.version(), net.prefix(), net.v4Start(), net.v4End(),
 				net.v6Start(), net.v6End(), net.subnetGroup(),
 				requestCount, retainedCount, locked,
-				locked ? ClientEvent.STATUS_BLOCKED : ClientEvent.STATUS_ACTIVE,
+				status != null ? status : (locked ? ClientEvent.STATUS_BLOCKED : ClientEvent.STATUS_ACTIVE),
 				completed, lastUpdatedAt,
 				asn, asOrg, country, type, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED,
 				null,
@@ -1063,6 +1113,64 @@ public class DemoDataSeeder {
 			log.info("Demo network annotations seeded: 6 investigative notes created (ASNs & Subnets).");
 		} catch (Exception e) {
 			log.warn("Could not seed demo annotations: {}", e.getMessage());
+		}
+	}
+
+	private void seedMarkedDemoTelemetryIfMissing() {
+		try {
+			Integer markedCount = jdbcTemplate.queryForObject(
+					"SELECT COUNT(*) FROM slot_snapshots WHERE marked_counters > 0", Integer.class);
+			if (markedCount != null && markedCount > 0) {
+				return;
+			}
+			log.info("Demo database contains no marked simulation telemetry. Updating Staging-Limiter snapshots and seeding marked demo events...");
+			List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+					"SELECT id, server_id, slot_key FROM slot_snapshots WHERE valve_name = 'Staging-Limiter'");
+			if (rows.isEmpty()) {
+				return;
+			}
+			List<ClientEvent> markedEvents = new ArrayList<>();
+			for (Map<String, Object> r : rows) {
+				long slotKey = ((Number) r.get("slot_key")).longValue();
+				Instant start = Instant.ofEpochMilli(slotKey * SLOT_LENGTH_MILLIS);
+				Instant end = start.plusMillis(SLOT_LENGTH_MILLIS);
+				String serverId = (String) r.get("server_id");
+				int marked = 0;
+				if (slotKey % 31 == 0) {
+					marked++;
+					markedEvents.add(createEnrichedEvent(
+							serverId, "Staging-Limiter", slotKey, start,
+							"82.165.197.80", 8560L, "1&1 Versatel", "DE", org.henbru.antidos.collector.model.ClientType.RESIDENTIAL,
+							95, 0, false, true, end, 1,
+							ClientEvent.STATUS_MARKED
+					));
+				}
+				if (slotKey % 19 == 0) {
+					marked++;
+					markedEvents.add(createEnrichedEvent(
+							serverId, "Staging-Limiter", slotKey, start,
+							"198.51.100.77", null, "Staging Load Test Bot", null, org.henbru.antidos.collector.model.ClientType.PRIVATE_NETWORK,
+							120, 0, false, true, end, 1,
+							ClientEvent.STATUS_MARKED
+					));
+				}
+				if (marked > 0) {
+					jdbcTemplate.update("UPDATE slot_snapshots SET marked_counters = ? WHERE id = ?",
+							marked, r.get("id"));
+				}
+			}
+			if (!markedEvents.isEmpty()) {
+				clientEventRepository.batchInsert(markedEvents);
+				if (rollupAggregationService != null) {
+					rollupAggregationService.aggregateCatchUp(720);
+				}
+				if (subnetProfileService != null) {
+					subnetProfileService.refreshProfiles();
+				}
+				log.info("Backfilled {} marked events and updated snapshots for Staging-Limiter.", markedEvents.size());
+			}
+		} catch (Exception e) {
+			log.warn("Could not backfill marked demo telemetry: {}", e.getMessage());
 		}
 	}
 }

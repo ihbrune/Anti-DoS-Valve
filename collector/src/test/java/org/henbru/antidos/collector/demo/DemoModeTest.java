@@ -240,6 +240,9 @@ class DemoModeTest {
 		long totalBlocked24h = slotSnapshotRepository.sumBlockedRequestsSince(since24h);
 		assertTrue(totalBlocked24h > 10L, "24h blocked requests should reflect attacks");
 
+		long totalMarked24h = slotSnapshotRepository.sumMarkedRequestsSince(since24h);
+		assertTrue(totalMarked24h > 0, "24h marked requests should reflect staging/simulation mode");
+
 		// 2. Verify Top Offenders Seeding
 		var offenders24h = clientEventRepository.findTopOffenders(since24h, 10);
 		assertFalse(offenders24h.isEmpty(), "Top offenders (24h) should be populated");
@@ -379,6 +382,10 @@ class DemoModeTest {
 		// Verify NEW pattern matches (195.181.168.0/24)
 		long newCount = subnetProfileService.countProfilesFiltered("NEW", null, null, null, null, null);
 		assertTrue(newCount > 0, "Demo mode should include new subnet profile");
+
+		// Verify MARKED pattern matches (82.165.197.0/24 or 198.51.100.0/24 on Staging)
+		long markedCount = subnetProfileService.countProfilesFiltered("MARKED", null, null, null, null, null);
+		assertTrue(markedCount > 0, "Demo mode should include marked profiles from simulation/marking mode");
 	}
 
 	@Test
