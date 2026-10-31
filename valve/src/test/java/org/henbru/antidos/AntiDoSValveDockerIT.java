@@ -1,9 +1,5 @@
 package org.henbru.antidos;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -15,6 +11,9 @@ import java.nio.file.Paths;
 import java.time.Duration;
 
 import org.junit.jupiter.api.AfterAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -162,7 +161,7 @@ public class AntiDoSValveDockerIT {
 					"Marking mode should not reject request, expected HTTP 200");
 		assertTrue(markedResponse.body().contains("MARKING-VALVE"),
 				"Response HTML body should contain the marking attribute value 'MARKING-VALVE'");
-		assertTrue(markedResponse.body().contains("<span id=\"authStatus\">false</span>"),
+		assertTrue(hasAuthStatus(markedResponse.body(), "false"),
 				"Before calling /advdemo/trust, request must be unauthenticated (AUTHENTICATED=false)");
 
 		// 7. Call /advdemo/trust via GET to simulate SSO login callback -> issues Set-Cookie: AUTH_COOKIE=...
@@ -184,7 +183,7 @@ public class AntiDoSValveDockerIT {
 				.build();
 		HttpResponse<String> authResp = httpClient.send(authReq, HttpResponse.BodyHandlers.ofString());
 		assertEquals(200, authResp.statusCode());
-		assertTrue(authResp.body().contains("<span id=\"authStatus\">true</span>"),
+		assertTrue(hasAuthStatus(authResp.body(), "true"),
 				"Authenticated request carrying valid AUTH_COOKIE must show AUTHENTICATED=true");
 
 		// 9. Call /advdemo/trust?logout=true -> invalidates AUTH_COOKIE via Max-Age=0
@@ -199,8 +198,14 @@ public class AntiDoSValveDockerIT {
 		// 10. Subsequent request with the old AUTH_COOKIE must again evaluate to AUTHENTICATED=false
 		HttpResponse<String> postLogoutResp = httpClient.send(authReq, HttpResponse.BodyHandlers.ofString());
 		assertEquals(200, postLogoutResp.statusCode());
-		assertTrue(postLogoutResp.body().contains("<span id=\"authStatus\">false</span>"),
+		assertTrue(hasAuthStatus(postLogoutResp.body(), "false"),
 				"Request with logged-out AUTH_COOKIE must evaluate to AUTHENTICATED=false");
+	}
+
+	private static boolean hasAuthStatus(String body, String expectedValue) {
+		return body != null && body.replaceAll("<span id=\"authStatus\">\\s*", "<span id=\"authStatus\">")
+				.replaceAll("\\s*</span>", "</span>")
+				.contains("<span id=\"authStatus\">" + expectedValue + "</span>");
 	}
 
 	@Test

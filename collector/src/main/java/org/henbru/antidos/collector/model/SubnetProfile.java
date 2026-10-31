@@ -15,12 +15,14 @@ public record SubnetProfile(
 		long totalLifetimeRequests,
 		long totalActiveRequests,
 		long totalBlockedRequests,
+		long totalMarkedRequests,
 		double baselineDailyAvg,
 		int baselineDistinctClients,
 		long peakDailyRequests,
 		long last24hRequests,
 		int last24hDistinctClients,
 		long last24hBlockedRequests,
+		long last24hMarkedRequests,
 		double last24hSurgeFactor,
 		Long asn,
 		String asOrg,
@@ -32,6 +34,60 @@ public record SubnetProfile(
 		long last24hAuthenticatedRequests,
 		long last24hAuthenticatedTrackedRequests
 ) {
+
+	public SubnetProfile(
+			String subnetGroup,
+			Instant firstSeenAt,
+			Instant lastSeenAt,
+			int daysDormantBeforeLastSeen,
+			long totalLifetimeRequests,
+			long totalActiveRequests,
+			long totalBlockedRequests,
+			double baselineDailyAvg,
+			int baselineDistinctClients,
+			long peakDailyRequests,
+			long last24hRequests,
+			int last24hDistinctClients,
+			long last24hBlockedRequests,
+			double last24hSurgeFactor,
+			Long asn,
+			String asOrg,
+			String countryCode,
+			ClientType clientType,
+			Instant updatedAt,
+			long last24hReturningRequests,
+			long last24hReturningTrackedRequests,
+			long last24hAuthenticatedRequests,
+			long last24hAuthenticatedTrackedRequests
+	) {
+		this(
+				subnetGroup,
+				firstSeenAt,
+				lastSeenAt,
+				daysDormantBeforeLastSeen,
+				totalLifetimeRequests,
+				totalActiveRequests,
+				totalBlockedRequests,
+				0L,
+				baselineDailyAvg,
+				baselineDistinctClients,
+				peakDailyRequests,
+				last24hRequests,
+				last24hDistinctClients,
+				last24hBlockedRequests,
+				0L,
+				last24hSurgeFactor,
+				asn,
+				asOrg,
+				countryCode,
+				clientType,
+				updatedAt,
+				last24hReturningRequests,
+				last24hReturningTrackedRequests,
+				last24hAuthenticatedRequests,
+				last24hAuthenticatedTrackedRequests
+		);
+	}
 
 	public SubnetProfile(
 			String subnetGroup,
@@ -208,6 +264,13 @@ public record SubnetProfile(
 	 */
 	public double blockRate24h() {
 		return last24hRequests > 0 ? ((double) last24hBlockedRequests / last24hRequests) * 100.0 : 0.0;
+	}
+
+	/**
+	 * Calculates the soft marking rate in the last 24h as a percentage (0.0 to 100.0).
+	 */
+	public double markRate24h() {
+		return last24hRequests > 0 ? ((double) last24hMarkedRequests / last24hRequests) * 100.0 : 0.0;
 	}
 
 	/**

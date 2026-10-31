@@ -24,30 +24,39 @@ public class SlotSnapshotRepository {
 	}
 
 	@NonNull
-	private static final RowMapper<SlotSnapshot> ROW_MAPPER = (rs, rowNum) -> new SlotSnapshot(
-			rs.getLong("id"),
-			rs.getString("server_id"),
-			rs.getString("valve_name"),
-			rs.getLong("slot_key"),
-			rs.getTimestamp("start_time").toInstant(),
-			rs.getTimestamp("end_time").toInstant(),
-			rs.getLong("total_requests"),
-			rs.getInt("active_counters"),
-			rs.getInt("blocked_counters"),
-			rs.getBoolean("is_completed"),
-			rs.getTimestamp("last_polled_at").toInstant()
-	);
+	private static final RowMapper<SlotSnapshot> ROW_MAPPER = (rs, rowNum) -> {
+		int markedCounters = 0;
+		try {
+			markedCounters = rs.getInt("marked_counters");
+		} catch (java.sql.SQLException ignored) {
+		}
+		return new SlotSnapshot(
+				rs.getLong("id"),
+				rs.getString("server_id"),
+				rs.getString("valve_name"),
+				rs.getLong("slot_key"),
+				rs.getTimestamp("start_time").toInstant(),
+				rs.getTimestamp("end_time").toInstant(),
+				rs.getLong("total_requests"),
+				rs.getInt("active_counters"),
+				rs.getInt("blocked_counters"),
+				markedCounters,
+				rs.getBoolean("is_completed"),
+				rs.getTimestamp("last_polled_at").toInstant()
+		);
+	};
 
 	public void upsert(SlotSnapshot s) {
 		String sql = """
-				INSERT INTO slot_snapshots (server_id, valve_name, slot_key, start_time, end_time, total_requests, active_counters, blocked_counters, is_completed, last_polled_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				INSERT INTO slot_snapshots (server_id, valve_name, slot_key, start_time, end_time, total_requests, active_counters, blocked_counters, marked_counters, is_completed, last_polled_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (server_id, valve_name, slot_key) DO UPDATE SET
 				    start_time = EXCLUDED.start_time,
 				    end_time = EXCLUDED.end_time,
 				    total_requests = EXCLUDED.total_requests,
 				    active_counters = EXCLUDED.active_counters,
 				    blocked_counters = EXCLUDED.blocked_counters,
+				    marked_counters = EXCLUDED.marked_counters,
 				    is_completed = EXCLUDED.is_completed,
 				    last_polled_at = EXCLUDED.last_polled_at
 				""";
@@ -62,6 +71,7 @@ public class SlotSnapshotRepository {
 					s.totalRequests(),
 					s.activeCounters(),
 					s.blockedCounters(),
+					s.markedCounters(),
 					s.completed(),
 					Timestamp.from(s.lastPolledAt())
 			);
@@ -74,14 +84,15 @@ public class SlotSnapshotRepository {
 		}
 
 		String sql = """
-				INSERT INTO slot_snapshots (server_id, valve_name, slot_key, start_time, end_time, total_requests, active_counters, blocked_counters, is_completed, last_polled_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				INSERT INTO slot_snapshots (server_id, valve_name, slot_key, start_time, end_time, total_requests, active_counters, blocked_counters, marked_counters, is_completed, last_polled_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (server_id, valve_name, slot_key) DO UPDATE SET
 				    start_time = EXCLUDED.start_time,
 				    end_time = EXCLUDED.end_time,
 				    total_requests = EXCLUDED.total_requests,
 				    active_counters = EXCLUDED.active_counters,
 				    blocked_counters = EXCLUDED.blocked_counters,
+				    marked_counters = EXCLUDED.marked_counters,
 				    is_completed = EXCLUDED.is_completed,
 				    last_polled_at = EXCLUDED.last_polled_at
 				""";
@@ -99,8 +110,9 @@ public class SlotSnapshotRepository {
 					ps.setLong(6, s.totalRequests());
 					ps.setInt(7, s.activeCounters());
 					ps.setInt(8, s.blockedCounters());
-					ps.setBoolean(9, s.completed());
-					ps.setTimestamp(10, Timestamp.from(s.lastPolledAt()));
+					ps.setInt(9, s.markedCounters());
+					ps.setBoolean(10, s.completed());
+					ps.setTimestamp(11, Timestamp.from(s.lastPolledAt()));
 				}
 
 				@Override
@@ -164,6 +176,13 @@ public class SlotSnapshotRepository {
 	public long sumBlockedRequestsSince(Instant since) {
 		Long sum = jdbcTemplate.queryForObject(
 				"SELECT COALESCE(SUM(blocked_counters), 0) FROM slot_snapshots WHERE start_time >= ?",
+				Long.class, Timestamp.from(since));
+		return sum != null ? sum : 0L;
+	}
+
+	public long sumMarkedRequestsSince(Instant since) {
+		Long sum = jdbcTemplate.queryForObject(
+				"SELECT COALESCE(SUM(marked_counters), 0) FROM slot_snapshots WHERE start_time >= ?",
 				Long.class, Timestamp.from(since));
 		return sum != null ? sum : 0L;
 	}

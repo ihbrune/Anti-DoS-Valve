@@ -1208,6 +1208,63 @@ class DatabaseMigrationAndRepositoryTest {
 		assertEquals("/wp-login.php", reloaded.sampleUri());
 		assertEquals("curl/7.88.1", reloaded.sampleUserAgent());
 	}
+
+	@Test
+	void testMarkedEventsRollupsAndProfilesPersistence() {
+		Instant bucketStart = Instant.now().minus(2, ChronoUnit.HOURS).truncatedTo(ChronoUnit.HOURS);
+		Instant bucketEnd = bucketStart.plus(1, ChronoUnit.HOURS);
+
+		// 1. SlotSnapshot with marked_counters
+		SlotSnapshot markedSlot = new SlotSnapshot(
+				null, "MARK-NODE", "MAIL-GUARD", 700L, bucketStart, bucketEnd, 500L, 12, 0, 4, true, bucketEnd
+		);
+		slotSnapshotRepository.upsert(markedSlot);
+		List<SlotSnapshot> recentSlots = slotSnapshotRepository.findRecent("MARK-NODE", "MAIL-GUARD", 5);
+		assertFalse(recentSlots.isEmpty());
+		assertEquals(0, recentSlots.getFirst().blockedCounters());
+		assertEquals(4, recentSlots.getFirst().markedCounters());
+		assertTrue(slotSnapshotRepository.sumMarkedRequestsSince(bucketStart.minus(1, ChronoUnit.MINUTES)) >= 4L);
+
+		// 2. ClientEvent with STATUS_MARKED
+		ClientEvent markedEvent = new ClientEvent(
+				null, "MARK-NODE", "MAIL-GUARD", 700L, bucketStart, "198.51.100.77",
+				45, 5, true, ClientEvent.STATUS_MARKED, true, bucketEnd,
+				1, 10, 0, "GET", "/pers_publ/publ/PersonDetail.jsp", "ScraperBot/1.0"
+		);
+		clientEventRepository.batchUpsert(List.of(markedEvent));
+
+		List<ClientEvent> markedFound = clientEventRepository.findRecentEvents("MARK-NODE", "198.51.100.77", ClientEvent.STATUS_MARKED, 5);
+		assertEquals(1, markedFound.size());
+		assertTrue(markedFound.getFirst().isMarked());
+		assertFalse(markedFound.getFirst().isBlocked());
+
+		// 3. ClientSubnetRollup with marked_requests
+		org.henbru.antidos.collector.model.ClientSubnetRollup rollup = new org.henbru.antidos.collector.model.ClientSubnetRollup(
+				null, bucketStart, bucketEnd, 60, "MARK-NODE", "MAIL-GUARD", "198.51.100.0/24",
+				200L, 155L, 0L, 45L, 3, 10, 45, 1, 64500L, "Example Org", "DE",
+				ClientType.DATACENTER, bucketEnd, 10L, 200L, 0L, 0L
+		);
+		subnetRollupRepository.batchUpsert(List.of(rollup));
+
+		var loadedRollups = subnetRollupRepository.findRollupsFiltered(
+				List.of("MARK-NODE"), List.of("MAIL-GUARD"), bucketStart.minus(1, ChronoUnit.MINUTES), bucketEnd.plus(1, ChronoUnit.MINUTES),
+				"198.51.100.0/24", null, null, 10, 0
+		);
+		assertFalse(loadedRollups.isEmpty());
+		assertEquals(0L, loadedRollups.getFirst().blockedRequests());
+		assertEquals(45L, loadedRollups.getFirst().markedRequests());
+
+		// 4. SubnetProfile with total_marked_requests and last_24h_marked_requests
+		var computedProfiles = subnetProfileRepository.computeProfilesFromRollups(
+				Instant.now().minus(24, ChronoUnit.HOURS),
+				Instant.now().minus(30, ChronoUnit.DAYS)
+		);
+		subnetProfileRepository.batchUpsert(computedProfiles);
+		var profileOpt = subnetProfileRepository.findBySubnetGroup("198.51.100.0/24");
+		assertTrue(profileOpt.isPresent());
+		assertTrue(profileOpt.get().totalMarkedRequests() >= 45L);
+		assertTrue(profileOpt.get().last24hMarkedRequests() >= 45L);
+	}
 }
 
 

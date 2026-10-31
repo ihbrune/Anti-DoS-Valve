@@ -23,29 +23,37 @@ public class PollEventLogRepository {
 	}
 
 	@NonNull
-	private static final RowMapper<PollEventLog> ROW_MAPPER = (rs, rowNum) -> new PollEventLog(
-			rs.getLong("id"),
-			rs.getString("server_id"),
-			rs.getString("url"),
-			rs.getTimestamp("poll_time").toInstant(),
-			rs.getString("status"),
-			rs.getInt("http_status_code"),
-			rs.getLong("response_time_ms"),
-			rs.getInt("valves_polled"),
-			rs.getInt("slots_ingested"),
-			rs.getInt("events_ingested"),
-			rs.getInt("blocked_events_ingested"),
-			rs.getString("details"),
-			rs.getString("error_message")
-	);
+	private static final RowMapper<PollEventLog> ROW_MAPPER = (rs, rowNum) -> {
+		int markedEvents = 0;
+		try {
+			markedEvents = rs.getInt("marked_events_ingested");
+		} catch (java.sql.SQLException ignored) {
+		}
+		return new PollEventLog(
+				rs.getLong("id"),
+				rs.getString("server_id"),
+				rs.getString("url"),
+				rs.getTimestamp("poll_time").toInstant(),
+				rs.getString("status"),
+				rs.getInt("http_status_code"),
+				rs.getLong("response_time_ms"),
+				rs.getInt("valves_polled"),
+				rs.getInt("slots_ingested"),
+				rs.getInt("events_ingested"),
+				rs.getInt("blocked_events_ingested"),
+				markedEvents,
+				rs.getString("details"),
+				rs.getString("error_message")
+		);
+	};
 
 	public void insert(PollEventLog log) {
 		String sql = """
 				INSERT INTO poll_event_log (
 				    server_id, url, poll_time, status, http_status_code,
 				    response_time_ms, valves_polled, slots_ingested, events_ingested,
-				    blocked_events_ingested, details, error_message
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				    blocked_events_ingested, marked_events_ingested, details, error_message
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				""";
 
 		StorageRetryUtil.executeWithRetry("PollEventLogRepository.insert", () -> {
@@ -61,6 +69,7 @@ public class PollEventLogRepository {
 					log.slotsIngested(),
 					log.eventsIngested(),
 					log.blockedEventsIngested(),
+					log.markedEventsIngested(),
 					log.details(),
 					log.errorMessage()
 			);
@@ -76,8 +85,8 @@ public class PollEventLogRepository {
 				INSERT INTO poll_event_log (
 				    server_id, url, poll_time, status, http_status_code,
 				    response_time_ms, valves_polled, slots_ingested, events_ingested,
-				    blocked_events_ingested, details, error_message
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				    blocked_events_ingested, marked_events_ingested, details, error_message
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				""";
 
 		StorageRetryUtil.executeWithRetry("PollEventLogRepository.batchInsert", () -> {
@@ -95,8 +104,9 @@ public class PollEventLogRepository {
 					ps.setInt(8, log.slotsIngested());
 					ps.setInt(9, log.eventsIngested());
 					ps.setInt(10, log.blockedEventsIngested());
-					ps.setString(11, log.details());
-					ps.setString(12, log.errorMessage());
+					ps.setInt(11, log.markedEventsIngested());
+					ps.setString(12, log.details());
+					ps.setString(13, log.errorMessage());
 				}
 
 				@Override

@@ -36,6 +36,12 @@ public class SubnetRollupRepository {
 		String rawClientType = rs.getString("client_type");
 		ClientType clientType = rawClientType != null ? ClientType.valueOf(rawClientType) : ClientType.UNKNOWN;
 
+		long markedRequests = 0L;
+		try {
+			markedRequests = rs.getLong("marked_requests");
+		} catch (SQLException ignored) {
+		}
+
 		long returningRequests = 0L;
 		try {
 			returningRequests = rs.getLong("returning_requests");
@@ -71,6 +77,7 @@ public class SubnetRollupRepository {
 				rs.getLong("total_requests"),
 				rs.getLong("active_requests"),
 				rs.getLong("blocked_requests"),
+				markedRequests,
 				rs.getInt("distinct_clients"),
 				rs.getInt("min_requests_per_client"),
 				rs.getInt("max_requests_per_client"),
@@ -95,18 +102,19 @@ public class SubnetRollupRepository {
 		String sql = """
 				INSERT INTO client_subnet_rollups (
 				    bucket_start, bucket_end, bucket_minutes, server_id, valve_name, subnet_group,
-				    total_requests, active_requests, blocked_requests, distinct_clients,
+				    total_requests, active_requests, blocked_requests, marked_requests, distinct_clients,
 				    min_requests_per_client, max_requests_per_client, slots_active_count,
 				    asn, as_org, country_code, client_type,
 				    returning_requests, returning_tracked_requests,
 				    authenticated_requests, authenticated_tracked_requests
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (bucket_start, server_id, valve_name, subnet_group) DO UPDATE SET
 				    bucket_end = EXCLUDED.bucket_end,
 				    bucket_minutes = EXCLUDED.bucket_minutes,
 				    total_requests = EXCLUDED.total_requests,
 				    active_requests = EXCLUDED.active_requests,
 				    blocked_requests = EXCLUDED.blocked_requests,
+				    marked_requests = EXCLUDED.marked_requests,
 				    distinct_clients = EXCLUDED.distinct_clients,
 				    min_requests_per_client = EXCLUDED.min_requests_per_client,
 				    max_requests_per_client = EXCLUDED.max_requests_per_client,
@@ -134,23 +142,24 @@ public class SubnetRollupRepository {
 				ps.setLong(7, r.totalRequests());
 				ps.setLong(8, r.activeRequests());
 				ps.setLong(9, r.blockedRequests());
-				ps.setInt(10, r.distinctClients());
-				ps.setInt(11, r.minRequestsPerClient());
-				ps.setInt(12, r.maxRequestsPerClient());
-				ps.setInt(13, r.slotsActiveCount());
+				ps.setLong(10, r.markedRequests());
+				ps.setInt(11, r.distinctClients());
+				ps.setInt(12, r.minRequestsPerClient());
+				ps.setInt(13, r.maxRequestsPerClient());
+				ps.setInt(14, r.slotsActiveCount());
 
 				if (r.asn() != null) {
-					ps.setLong(14, r.asn());
+					ps.setLong(15, r.asn());
 				} else {
-					ps.setNull(14, Types.BIGINT);
+					ps.setNull(15, Types.BIGINT);
 				}
-				ps.setString(15, r.asOrg());
-				ps.setString(16, r.countryCode());
-				ps.setString(17, r.clientType() != null ? r.clientType().name() : ClientType.UNKNOWN.name());
-				ps.setLong(18, r.returningRequests());
-				ps.setLong(19, r.returningTrackedRequests());
-				ps.setLong(20, r.authenticatedRequests());
-				ps.setLong(21, r.authenticatedTrackedRequests());
+				ps.setString(16, r.asOrg());
+				ps.setString(17, r.countryCode());
+				ps.setString(18, r.clientType() != null ? r.clientType().name() : ClientType.UNKNOWN.name());
+				ps.setLong(19, r.returningRequests());
+				ps.setLong(20, r.returningTrackedRequests());
+				ps.setLong(21, r.authenticatedRequests());
+				ps.setLong(22, r.authenticatedTrackedRequests());
 			}
 
 			@Override

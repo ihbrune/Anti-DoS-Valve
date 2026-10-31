@@ -13,8 +13,10 @@ public record DailyReport(
 		String status,     // "NORMAL", "DEGRADED", "ATTACK_MITIGATED"
 		long totalRequests,
 		long totalBlocked,
+		long totalMarked,
 		double peakRequestsPerSec,
 		double peakBlockedPerSec,
+		double peakMarkedPerSec,
 		String peakValveName,
 		String peakServerId,
 		int serverCount,
@@ -23,6 +25,46 @@ public record DailyReport(
 		Instant createdAt,
 		Instant updatedAt
 ) {
+
+	/**
+	 * Backward-compatible constructor defaulting totalMarked and peakMarkedPerSec to 0.
+	 */
+	public DailyReport(
+			Long id,
+			String reportDate,
+			String status,
+			long totalRequests,
+			long totalBlocked,
+			double peakRequestsPerSec,
+			double peakBlockedPerSec,
+			String peakValveName,
+			String peakServerId,
+			int serverCount,
+			int incidentCount,
+			String reportMarkdown,
+			Instant createdAt,
+			Instant updatedAt
+	) {
+		this(id, reportDate, status, totalRequests, totalBlocked, 0L,
+				peakRequestsPerSec, peakBlockedPerSec, 0.0,
+				peakValveName, peakServerId, serverCount, incidentCount,
+				reportMarkdown, createdAt, updatedAt);
+	}
+
+	public double markRatePercentage() {
+		if (totalRequests <= 0) {
+			return 0.0;
+		}
+		return (totalMarked * 100.0) / totalRequests;
+	}
+
+	public String formattedMarkRate() {
+		return String.format(java.util.Locale.US, "%.2f%%", markRatePercentage());
+	}
+
+	public String formattedPeakMarkedPerSec() {
+		return String.format(java.util.Locale.US, "%.1f", peakMarkedPerSec);
+	}
 
 	public double blockRatePercentage() {
 		if (totalRequests <= 0) {

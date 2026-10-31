@@ -41,6 +41,7 @@ public record ClientEvent(
 ) {
 
 	public static final String STATUS_BLOCKED = "BLOCKED";
+	public static final String STATUS_MARKED = "MARKED";
 	public static final String STATUS_ACTIVE = "ACTIVE";
 
 	/**
@@ -811,10 +812,6 @@ public record ClientEvent(
 		return requestCount + retainedCount;
 	}
 
-	public boolean isBlocked() {
-		return STATUS_BLOCKED.equalsIgnoreCase(status) || locked;
-	}
-
 	public ClientEvent withEntityId(Long newEntityId) {
 		return new ClientEvent(
 				id,
@@ -916,6 +913,18 @@ public record ClientEvent(
 
 	public boolean isAuthenticatedTracked() {
 		return authenticatedCount != null;
+	}
+
+	public boolean isBlocked() {
+		return STATUS_BLOCKED.equalsIgnoreCase(status);
+	}
+
+	public boolean isMarked() {
+		return STATUS_MARKED.equalsIgnoreCase(status);
+	}
+
+	public boolean isActive() {
+		return STATUS_ACTIVE.equalsIgnoreCase(status);
 	}
 
 	/**

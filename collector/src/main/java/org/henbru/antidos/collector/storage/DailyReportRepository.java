@@ -24,36 +24,52 @@ public class DailyReportRepository {
 	}
 
 	@NonNull
-	private static final RowMapper<DailyReport> ROW_MAPPER = (rs, rowNum) -> new DailyReport(
-			rs.getLong("id"),
-			rs.getString("report_date"),
-			rs.getString("status"),
-			rs.getLong("total_requests"),
-			rs.getLong("total_blocked"),
-			rs.getDouble("peak_requests_per_sec"),
-			rs.getDouble("peak_blocked_per_sec"),
-			rs.getString("peak_valve_name"),
-			rs.getString("peak_server_id"),
-			rs.getInt("server_count"),
-			rs.getInt("incident_count"),
-			rs.getString("report_markdown"),
-			rs.getTimestamp("created_at").toInstant(),
-			rs.getTimestamp("updated_at").toInstant()
-	);
+	private static final RowMapper<DailyReport> ROW_MAPPER = (rs, rowNum) -> {
+		long totalMarked = 0L;
+		try {
+			totalMarked = rs.getLong("total_marked");
+		} catch (java.sql.SQLException ignored) {
+		}
+		double peakMarked = 0.0;
+		try {
+			peakMarked = rs.getDouble("peak_marked_per_sec");
+		} catch (java.sql.SQLException ignored) {
+		}
+		return new DailyReport(
+				rs.getLong("id"),
+				rs.getString("report_date"),
+				rs.getString("status"),
+				rs.getLong("total_requests"),
+				rs.getLong("total_blocked"),
+				totalMarked,
+				rs.getDouble("peak_requests_per_sec"),
+				rs.getDouble("peak_blocked_per_sec"),
+				peakMarked,
+				rs.getString("peak_valve_name"),
+				rs.getString("peak_server_id"),
+				rs.getInt("server_count"),
+				rs.getInt("incident_count"),
+				rs.getString("report_markdown"),
+				rs.getTimestamp("created_at").toInstant(),
+				rs.getTimestamp("updated_at").toInstant()
+		);
+	};
 
 	public void upsert(DailyReport report) {
 		String sql = """
 				INSERT INTO daily_reports (
-				    report_date, status, total_requests, total_blocked,
-				    peak_requests_per_sec, peak_blocked_per_sec, peak_valve_name, peak_server_id,
+				    report_date, status, total_requests, total_blocked, total_marked,
+				    peak_requests_per_sec, peak_blocked_per_sec, peak_marked_per_sec, peak_valve_name, peak_server_id,
 				    server_count, incident_count, report_markdown, created_at, updated_at
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (report_date) DO UPDATE SET
 				    status = EXCLUDED.status,
 				    total_requests = EXCLUDED.total_requests,
 				    total_blocked = EXCLUDED.total_blocked,
+				    total_marked = EXCLUDED.total_marked,
 				    peak_requests_per_sec = EXCLUDED.peak_requests_per_sec,
 				    peak_blocked_per_sec = EXCLUDED.peak_blocked_per_sec,
+				    peak_marked_per_sec = EXCLUDED.peak_marked_per_sec,
 				    peak_valve_name = EXCLUDED.peak_valve_name,
 				    peak_server_id = EXCLUDED.peak_server_id,
 				    server_count = EXCLUDED.server_count,
@@ -73,8 +89,10 @@ public class DailyReportRepository {
 					report.status(),
 					report.totalRequests(),
 					report.totalBlocked(),
+					report.totalMarked(),
 					report.peakRequestsPerSec(),
 					report.peakBlockedPerSec(),
+					report.peakMarkedPerSec(),
 					report.peakValveName(),
 					report.peakServerId(),
 					report.serverCount(),

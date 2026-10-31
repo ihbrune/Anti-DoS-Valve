@@ -626,6 +626,81 @@ class CollectorPollerServiceTest {
 		assertTrue(newValveOpt.isPresent());
 		assertTrue(newValveOpt.get().isActive(), "New valve should be active");
 	}
+
+	@Test
+	void testPollEndpointDifferentiatesMarkingAndSimulationValves() throws Exception {
+		EndpointConfig endpoint = new EndpointConfig(
+				"MARKING-TEST-NODE", "http://localhost:8080/antidos-status", "tok", false, true
+		);
+
+		ValveOverviewDto.ValveSummaryDto markingValve = new ValveOverviewDto.ValveSummaryDto(
+				"GEGEN MAILSAMMLER", 1, "MARKING", false, false, 15, 60, 5, 5, 2, 700L, 699L, 1000L, 120L, 10, 2
+		);
+		ValveOverviewDto.ValveSummaryDto simulationValve = new ValveOverviewDto.ValveSummaryDto(
+				"SUBNET-SIM", 2, "BLOCKING", true, false, 100, 60, 5, 5, 1, 700L, 699L, 500L, 150L, 5, 1
+		);
+		ValveOverviewDto overview = new ValveOverviewDto(
+				"2026-10-31T12:00:00Z", List.of(markingValve, simulationValve), null
+		);
+		when(statusClient.fetchOverview(any())).thenReturn(overview);
+
+		ValveDetailsDto.SelectedSlotDto markingSlot = new ValveDetailsDto.SelectedSlotDto(
+				"previous", 4, 699L, false, "2026-10-31T11:59:00Z", "2026-10-31T12:00:00Z", 120L, 10, 2
+		);
+		ValveDetailsDto.BlockedClientDto markedClient1 = new ValveDetailsDto.BlockedClientDto(
+				"198.51.100.77", 15, 8, true, "2026-10-31T11:59:20Z"
+		);
+		ValveDetailsDto.BlockedClientDto markedClient2 = new ValveDetailsDto.BlockedClientDto(
+				"198.51.100.78", 15, 4, true, "2026-10-31T11:59:40Z"
+		);
+		ValveDetailsDto markingDetails = new ValveDetailsDto(
+				"2026-10-31T12:00:00Z", null, markingSlot, 2, "all", List.of(markedClient1, markedClient2), null
+		);
+		when(statusClient.fetchSlotDetails(any(), eq("GEGEN MAILSAMMLER"), eq("previous"), eq("all"), eq("all"), eq("0")))
+				.thenReturn(markingDetails);
+
+		ValveDetailsDto.SelectedSlotDto simSlot = new ValveDetailsDto.SelectedSlotDto(
+				"previous", 4, 699L, false, "2026-10-31T11:59:00Z", "2026-10-31T12:00:00Z", 150L, 5, 1
+		);
+		ValveDetailsDto.BlockedClientDto simClient = new ValveDetailsDto.BlockedClientDto(
+				"203.0.113.0/24", 100, 35, true, "2026-10-31T11:59:30Z"
+		);
+		ValveDetailsDto simDetails = new ValveDetailsDto(
+				"2026-10-31T12:00:00Z", null, simSlot, 1, "all", List.of(simClient), null
+		);
+		when(statusClient.fetchSlotDetails(any(), eq("SUBNET-SIM"), eq("previous"), eq("all"), eq("all"), eq("0")))
+				.thenReturn(simDetails);
+
+		pollerService.pollEndpoint(endpoint);
+
+		// Verify ClientEvents have status = MARKED
+		var events1 = clientEventRepository.findRecentEvents("MARKING-TEST-NODE", "198.51.100.77", 5);
+		assertEquals(1, events1.size());
+		assertEquals(org.henbru.antidos.collector.model.ClientEvent.STATUS_MARKED, events1.getFirst().status());
+		assertTrue(events1.getFirst().isMarked());
+		assertFalse(events1.getFirst().isBlocked());
+
+		var simEvents = clientEventRepository.findRecentEvents("MARKING-TEST-NODE", "203.0.113.0/24", 5);
+		assertEquals(1, simEvents.size());
+		assertEquals(org.henbru.antidos.collector.model.ClientEvent.STATUS_MARKED, simEvents.getFirst().status());
+		assertTrue(simEvents.getFirst().isMarked());
+
+		// Verify SlotSnapshots have blockedCounters = 0 and markedCounters > 0
+		var snapshots = slotSnapshotRepository.findRecent("MARKING-TEST-NODE", "GEGEN MAILSAMMLER", 5);
+		assertEquals(1, snapshots.size());
+		assertEquals(0, snapshots.getFirst().blockedCounters());
+		assertEquals(2, snapshots.getFirst().markedCounters());
+
+		// Verify PollEventLog records 0 blocked and 3 marked events
+		var pollLogs = pollEventLogRepository.findRecent(null, "ALL", "MARKING-TEST-NODE", 5);
+		assertFalse(pollLogs.isEmpty());
+		var log = pollLogs.getFirst();
+		assertEquals(3, log.eventsIngested());
+		assertEquals(0, log.blockedEventsIngested());
+		assertEquals(3, log.markedEventsIngested());
+		assertEquals(0, log.activeEventsIngested());
+		assertTrue(log.details().contains("3 marked"));
+	}
 }
 
 

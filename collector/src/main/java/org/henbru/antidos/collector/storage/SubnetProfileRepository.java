@@ -49,6 +49,18 @@ public class SubnetProfileRepository {
 		String rawClientType = rs.getString("client_type");
 		ClientType clientType = rawClientType != null ? ClientType.valueOf(rawClientType) : ClientType.UNKNOWN;
 
+		long totalMarked = 0L;
+		try {
+			totalMarked = rs.getLong("total_marked_requests");
+		} catch (SQLException ignored) {
+		}
+
+		long last24hMarked = 0L;
+		try {
+			last24hMarked = rs.getLong("last_24h_marked_requests");
+		} catch (SQLException ignored) {
+		}
+
 		long last24hReturning = 0L;
 		try {
 			last24hReturning = rs.getLong("last_24h_returning_requests");
@@ -81,12 +93,14 @@ public class SubnetProfileRepository {
 				rs.getLong("total_lifetime_requests"),
 				rs.getLong("total_active_requests"),
 				rs.getLong("total_blocked_requests"),
+				totalMarked,
 				rs.getDouble("baseline_daily_avg"),
 				rs.getInt("baseline_distinct_clients"),
 				rs.getLong("peak_daily_requests"),
 				rs.getLong("last_24h_requests"),
 				rs.getInt("last_24h_distinct_clients"),
 				rs.getLong("last_24h_blocked_requests"),
+				last24hMarked,
 				rs.getDouble("last_24h_surge_factor"),
 				asn,
 				rs.getString("as_org"),
@@ -108,13 +122,13 @@ public class SubnetProfileRepository {
 		String sql = """
 				INSERT INTO subnet_profiles (
 				    subnet_group, first_seen_at, last_seen_at, days_dormant_before_last_seen,
-				    total_lifetime_requests, total_active_requests, total_blocked_requests,
+				    total_lifetime_requests, total_active_requests, total_blocked_requests, total_marked_requests,
 				    baseline_daily_avg, baseline_distinct_clients, peak_daily_requests,
-				    last_24h_requests, last_24h_distinct_clients, last_24h_blocked_requests,
+				    last_24h_requests, last_24h_distinct_clients, last_24h_blocked_requests, last_24h_marked_requests,
 				    last_24h_surge_factor, asn, as_org, country_code, client_type, updated_at,
 				    last_24h_returning_requests, last_24h_returning_tracked_requests,
 				    last_24h_authenticated_requests, last_24h_authenticated_tracked_requests
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (subnet_group) DO UPDATE SET
 				    first_seen_at = CASE WHEN subnet_profiles.first_seen_at < EXCLUDED.first_seen_at THEN subnet_profiles.first_seen_at ELSE EXCLUDED.first_seen_at END,
 				    last_seen_at = EXCLUDED.last_seen_at,
@@ -122,12 +136,14 @@ public class SubnetProfileRepository {
 				    total_lifetime_requests = EXCLUDED.total_lifetime_requests,
 				    total_active_requests = EXCLUDED.total_active_requests,
 				    total_blocked_requests = EXCLUDED.total_blocked_requests,
+				    total_marked_requests = EXCLUDED.total_marked_requests,
 				    baseline_daily_avg = EXCLUDED.baseline_daily_avg,
 				    baseline_distinct_clients = EXCLUDED.baseline_distinct_clients,
 				    peak_daily_requests = EXCLUDED.peak_daily_requests,
 				    last_24h_requests = EXCLUDED.last_24h_requests,
 				    last_24h_distinct_clients = EXCLUDED.last_24h_distinct_clients,
 				    last_24h_blocked_requests = EXCLUDED.last_24h_blocked_requests,
+				    last_24h_marked_requests = EXCLUDED.last_24h_marked_requests,
 				    last_24h_surge_factor = EXCLUDED.last_24h_surge_factor,
 				    asn = COALESCE(EXCLUDED.asn, subnet_profiles.asn),
 				    as_org = COALESCE(EXCLUDED.as_org, subnet_profiles.as_org),
@@ -151,27 +167,29 @@ public class SubnetProfileRepository {
 				ps.setLong(5, p.totalLifetimeRequests());
 				ps.setLong(6, p.totalActiveRequests());
 				ps.setLong(7, p.totalBlockedRequests());
-				ps.setDouble(8, p.baselineDailyAvg());
-				ps.setInt(9, p.baselineDistinctClients());
-				ps.setLong(10, p.peakDailyRequests());
-				ps.setLong(11, p.last24hRequests());
-				ps.setInt(12, p.last24hDistinctClients());
-				ps.setLong(13, p.last24hBlockedRequests());
-				ps.setDouble(14, p.last24hSurgeFactor());
+				ps.setLong(8, p.totalMarkedRequests());
+				ps.setDouble(9, p.baselineDailyAvg());
+				ps.setInt(10, p.baselineDistinctClients());
+				ps.setLong(11, p.peakDailyRequests());
+				ps.setLong(12, p.last24hRequests());
+				ps.setInt(13, p.last24hDistinctClients());
+				ps.setLong(14, p.last24hBlockedRequests());
+				ps.setLong(15, p.last24hMarkedRequests());
+				ps.setDouble(16, p.last24hSurgeFactor());
 
 				if (p.asn() != null) {
-					ps.setLong(15, p.asn());
+					ps.setLong(17, p.asn());
 				} else {
-					ps.setNull(15, Types.BIGINT);
+					ps.setNull(17, Types.BIGINT);
 				}
-				ps.setString(16, p.asOrg());
-				ps.setString(17, p.countryCode());
-				ps.setString(18, p.clientType() != null ? p.clientType().name() : ClientType.UNKNOWN.name());
-				ps.setTimestamp(19, Timestamp.from(p.updatedAt() != null ? p.updatedAt() : Instant.now()));
-				ps.setLong(20, p.last24hReturningRequests());
-				ps.setLong(21, p.last24hReturningTrackedRequests());
-				ps.setLong(22, p.last24hAuthenticatedRequests());
-				ps.setLong(23, p.last24hAuthenticatedTrackedRequests());
+				ps.setString(18, p.asOrg());
+				ps.setString(19, p.countryCode());
+				ps.setString(20, p.clientType() != null ? p.clientType().name() : ClientType.UNKNOWN.name());
+				ps.setTimestamp(21, Timestamp.from(p.updatedAt() != null ? p.updatedAt() : Instant.now()));
+				ps.setLong(22, p.last24hReturningRequests());
+				ps.setLong(23, p.last24hReturningTrackedRequests());
+				ps.setLong(24, p.last24hAuthenticatedRequests());
+				ps.setLong(25, p.last24hAuthenticatedTrackedRequests());
 			}
 
 			@Override
@@ -299,10 +317,12 @@ public class SubnetProfileRepository {
 				    SUM(total_requests) AS total_lifetime_requests,
 				    SUM(active_requests) AS total_active_requests,
 				    SUM(blocked_requests) AS total_blocked_requests,
+				    SUM(marked_requests) AS total_marked_requests,
 				    MAX(distinct_clients) AS max_distinct_clients,
 				    SUM(CASE WHEN bucket_start >= ? THEN total_requests ELSE 0 END) AS req_24h,
 				    SUM(CASE WHEN bucket_start >= ? THEN active_requests ELSE 0 END) AS active_24h,
 				    SUM(CASE WHEN bucket_start >= ? THEN blocked_requests ELSE 0 END) AS blocked_24h,
+				    SUM(CASE WHEN bucket_start >= ? THEN marked_requests ELSE 0 END) AS marked_24h,
 				    MAX(CASE WHEN bucket_start >= ? THEN distinct_clients ELSE 0 END) AS distinct_24h,
 				    SUM(CASE WHEN bucket_start >= ? THEN returning_requests ELSE 0 END) AS returning_24h,
 				    SUM(CASE WHEN bucket_start >= ? THEN returning_tracked_requests ELSE 0 END) AS returning_tracked_24h,
@@ -341,10 +361,12 @@ public class SubnetProfileRepository {
 			long totalReqs = rs.getLong("total_lifetime_requests");
 			long totalActive = rs.getLong("total_active_requests");
 			long totalBlocked = rs.getLong("total_blocked_requests");
+			long totalMarked = rs.getLong("total_marked_requests");
 			int maxClients = rs.getInt("max_distinct_clients");
 
 			long req24h = rs.getLong("req_24h");
 			long blocked24h = rs.getLong("blocked_24h");
+			long marked24h = rs.getLong("marked_24h");
 			int distinct24h = rs.getInt("distinct_24h");
 			long returning24h = rs.getLong("returning_24h");
 			long returningTracked24h = rs.getLong("returning_tracked_24h");
@@ -388,12 +410,14 @@ public class SubnetProfileRepository {
 					totalReqs,
 					totalActive,
 					totalBlocked,
+					totalMarked,
 					Math.round(baselineDailyAvg * 10.0) / 10.0,
 					maxClients,
 					peakDaily,
 					req24h,
 					distinct24h,
 					blocked24h,
+					marked24h,
 					surgeFactor,
 					asnVal,
 					rs.getString("as_org"),
@@ -405,7 +429,7 @@ public class SubnetProfileRepository {
 					auth24h,
 					authTracked24h
 			);
-		}, ts24h, ts24h, ts24h, ts24h, ts24h, ts24h, ts24h, ts24h, ts24h, ts24h, ts24h, ts30d);
+		}, ts24h, ts24h, ts24h, ts24h, ts24h, ts24h, ts24h, ts24h, ts24h, ts24h, ts24h, ts24h, ts30d);
 	}
 
 	private void appendFilterConditions(
