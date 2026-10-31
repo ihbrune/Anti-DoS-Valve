@@ -10,7 +10,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-
 import org.henbru.antidos.collector.model.ClientSubnetRollup;
 import org.henbru.antidos.collector.model.ClientType;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
