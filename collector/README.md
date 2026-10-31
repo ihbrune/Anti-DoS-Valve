@@ -43,7 +43,7 @@ Explore the complete multi-server fleet experience in **Demo Mode** with realist
 mvn package -pl collector -DskipTests
 
 # Launch Demo Mode (pre-seeds 7 days of realistic attack waves and telemetry)
-java -jar collector/target/anti-dos-collector-1.7.8.jar demo
+java -jar collector/target/anti-dos-collector-1.7.9.jar demo
 ```
 
 Open **`http://localhost:8090`** in your browser.
