@@ -116,7 +116,7 @@
                          visitorCookieName="_adv"
                          authTrackingMode="COOKIE"
                          authCookieName="AUTH_COOKIE"
-                         authLoginPaths="/trust"
+                         authLoginPaths="/advdemo/trust.*|/trust"
                          authSessionTtlSeconds="900"
                          maxAuthCacheSize="50000"
                     />

@@ -22,6 +22,8 @@ Try the adress [/valvetest/ex](http://localhost:8013/valvetest/ex) as often as y
 
 Then try the adress [/advdemo/advdemo.jsp](http://localhost:8013/advdemo/advdemo.jsp) more then 5 times and you will see the valve working in marking mode. 
 
+To test authentication session tracking (`authTrackingMode="COOKIE"`), open [/advdemo/trust](http://localhost:8013/advdemo/trust) to issue an `AUTH_COOKIE` login cookie, and then return to [/advdemo/advdemo.jsp](http://localhost:8013/advdemo/advdemo.jsp) to see `org.henbru.antidos.AUTHENTICATED` change to `true`.
+
 # Remove the container:
 
 	docker rm AntiDoSValveDemo

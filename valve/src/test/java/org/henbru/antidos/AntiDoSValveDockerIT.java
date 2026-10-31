@@ -151,17 +151,56 @@ public class AntiDoSValveDockerIT {
 			HttpRequest request = HttpRequest.newBuilder(uri).GET().build();
 			HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 			assertEquals(200, response.statusCode(), "Request " + i + " to advdemo.jsp should succeed");
-			assertFalse(response.body().contains("MARKING VALVE"),
+			assertFalse(response.body().contains("MARKING-VALVE"),
 					"Request " + i + " should not be marked yet");
 		}
 
-		// 6th request: exceeds threshold -> valve marks request with attribute "MARKING VALVE", still returns 200
+		// 6th request: exceeds threshold -> valve marks request with attribute "MARKING-VALVE", still returns 200
 		HttpRequest markedRequest = HttpRequest.newBuilder(uri).GET().build();
 		HttpResponse<String> markedResponse = httpClient.send(markedRequest, HttpResponse.BodyHandlers.ofString());
 		assertEquals(200, markedResponse.statusCode(),
 					"Marking mode should not reject request, expected HTTP 200");
-		assertTrue(markedResponse.body().contains("MARKING VALVE"),
-				"Response HTML body should contain the marking attribute value 'MARKING VALVE'");
+		assertTrue(markedResponse.body().contains("MARKING-VALVE"),
+				"Response HTML body should contain the marking attribute value 'MARKING-VALVE'");
+		assertTrue(markedResponse.body().contains("<span id=\"authStatus\">false</span>"),
+				"Before calling /advdemo/trust, request must be unauthenticated (AUTHENTICATED=false)");
+
+		// 7. Call /advdemo/trust via GET to simulate SSO login callback -> issues Set-Cookie: AUTH_COOKIE=...
+		URI trustUri = URI.create(baseUrl + "/advdemo/trust");
+		HttpRequest loginReq = HttpRequest.newBuilder(trustUri).GET().build();
+		HttpResponse<String> loginResp = httpClient.send(loginReq, HttpResponse.BodyHandlers.ofString());
+		assertEquals(200, loginResp.statusCode(), "GET /advdemo/trust should succeed with HTTP 200");
+
+		String authCookiePair = loginResp.headers().allValues("Set-Cookie").stream()
+				.filter(h -> h.startsWith("AUTH_COOKIE="))
+				.map(h -> h.substring(0, h.indexOf(';')))
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Expected Set-Cookie: AUTH_COOKIE=... from /advdemo/trust"));
+
+		// 8. Request /advdemo/advdemo.jsp with the issued AUTH_COOKIE -> Valve sets AUTHENTICATED=true
+		HttpRequest authReq = HttpRequest.newBuilder(uri)
+				.header("Cookie", authCookiePair)
+				.GET()
+				.build();
+		HttpResponse<String> authResp = httpClient.send(authReq, HttpResponse.BodyHandlers.ofString());
+		assertEquals(200, authResp.statusCode());
+		assertTrue(authResp.body().contains("<span id=\"authStatus\">true</span>"),
+				"Authenticated request carrying valid AUTH_COOKIE must show AUTHENTICATED=true");
+
+		// 9. Call /advdemo/trust?logout=true -> invalidates AUTH_COOKIE via Max-Age=0
+		URI logoutUri = URI.create(baseUrl + "/advdemo/trust?logout=true");
+		HttpRequest logoutReq = HttpRequest.newBuilder(logoutUri)
+				.header("Cookie", authCookiePair)
+				.GET()
+				.build();
+		HttpResponse<String> logoutResp = httpClient.send(logoutReq, HttpResponse.BodyHandlers.ofString());
+		assertEquals(200, logoutResp.statusCode());
+
+		// 10. Subsequent request with the old AUTH_COOKIE must again evaluate to AUTHENTICATED=false
+		HttpResponse<String> postLogoutResp = httpClient.send(authReq, HttpResponse.BodyHandlers.ofString());
+		assertEquals(200, postLogoutResp.statusCode());
+		assertTrue(postLogoutResp.body().contains("<span id=\"authStatus\">false</span>"),
+				"Request with logged-out AUTH_COOKIE must evaluate to AUTHENTICATED=false");
 	}
 
 	@Test
