@@ -140,9 +140,16 @@
                             <span th:if="${p.last24hBlockedRequests() > 0}" style="color: var(--color-danger); font-weight: 600;" th:text="${#numbers.formatInteger(p.last24hBlockedRequests(), 1, 'POINT') + ' blocked'}">500 blocked</span>
                             <span th:if="${p.last24hBlockedRequests() == 0}" style="color: var(--text-muted);">0 blocked</span>
                         </div>
-                        <div th:if="${p.isReturningTracked24h()}" style="font-size: 11px; margin-top: 3px;">
-                            <span th:if="${p.last24hReturningRequests() == 0}" class="badge badge-warning" style="font-size: 10px; padding: 1px 5px;" title="0% returning visitor cookies in last 24h (pure first contact)">🍪 0% Cookies</span>
-                            <span th:if="${p.last24hReturningRequests() > 0}" class="badge badge-info" style="font-size: 10px; padding: 1px 5px;" th:title="${p.last24hReturningRequests()} + ' of ' + ${p.last24hReturningTrackedRequests()} + ' requests carried a valid visitor cookie in last 24h'">🍪 <span th:text="${#numbers.formatDecimal(p.returningRatio24h(), 1, 0)} + '% Cookies'"></span></span>
+                        <div th:if="${p.isReturningTracked24h() or p.isAuthenticatedTracked24h()}"
+                            style="font-size: 11px; margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px;">
+                            <th:block th:if="${p.isReturningTracked24h()}">
+                                <span th:if="${p.last24hReturningRequests() == 0}" class="badge badge-warning" style="font-size: 10px; padding: 1px 5px;" title="0% returning visitor cookies in last 24h (pure first contact)">🍪 0% Cookies</span>
+                                <span th:if="${p.last24hReturningRequests() > 0}" class="badge badge-info" style="font-size: 10px; padding: 1px 5px;" th:title="${p.last24hReturningRequests()} + ' of ' + ${p.last24hReturningTrackedRequests()} + ' requests carried a valid visitor cookie in last 24h'">🍪 <span th:text="${#numbers.formatDecimal(p.returningRatio24h(), 1, 0)} + '% Cookies'"></span></span>
+                            </th:block>
+                            <th:block th:if="${p.isAuthenticatedTracked24h()}">
+                                <span th:if="${p.last24hAuthenticatedRequests() == 0}" class="badge badge-secondary" style="font-size: 10px; padding: 1px 5px;" title="0% authenticated requests in last 24h (unauthenticated traffic)">🔐 0% Auth</span>
+                                <span th:if="${p.last24hAuthenticatedRequests() > 0}" class="badge badge-success" style="font-size: 10px; padding: 1px 5px;" th:title="${p.last24hAuthenticatedRequests()} + ' of ' + ${p.last24hAuthenticatedTrackedRequests()} + ' requests carried a valid login session in last 24h'">🔐 <span th:text="${#numbers.formatDecimal(p.authenticatedRatio24h(), 1, 0)} + '% Auth'"></span></span>
+                            </th:block>
                         </div>
                     </td>
 

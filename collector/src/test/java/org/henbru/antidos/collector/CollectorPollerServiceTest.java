@@ -534,7 +534,7 @@ class CollectorPollerServiceTest {
 		when(statusClient.fetchOverview(any())).thenReturn(new ValveOverviewDto("2026-10-17T10:01:00Z", List.of(summary2), null));
 
 		ValveDetailsDto.ValveHeaderDto headerDisabled = new ValveDetailsDto.ValveHeaderDto(
-				"COOKIE_VALVE", 501L, 500L, 60, 5, false
+				"COOKIE_VALVE", 501L, 500L, 60, 5, false, false
 		);
 		ValveDetailsDto.SelectedSlotDto slotDto2 = new ValveDetailsDto.SelectedSlotDto(
 				"previous", 4, 500L, false, "2026-10-17T10:00:00Z", "2026-10-17T10:01:00Z", 200L, 10, 1
@@ -550,6 +550,7 @@ class CollectorPollerServiceTest {
 				.stream().filter(e -> e.slotKey() == 500L).findFirst();
 		assertTrue(blockedEventsDisabled.isPresent());
 		assertNull(blockedEventsDisabled.get().returningCount(), "Should be null when visitor tracking is disabled");
+		assertNull(blockedEventsDisabled.get().authenticatedCount(), "Should be null when auth tracking is disabled");
 	}
 
 	@Test

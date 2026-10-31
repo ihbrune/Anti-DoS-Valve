@@ -145,10 +145,18 @@ class DemoModeTest {
 		assertEquals("BLOCKING", primary.monitorMode());
 		assertEquals(120, primary.allowedRequestsPerSlot());
 		assertEquals(10, primary.slotLength());
+		assertTrue(primary.visitorCookieEnabled());
+		assertEquals("_adv", primary.visitorCookieName());
+		assertTrue(primary.authTrackingEnabled());
+		assertEquals("COOKIE", primary.authTrackingMode());
+		assertEquals("AUTH_COOKIE", primary.authCookieName());
+		assertEquals("/trust", primary.authLoginPaths());
 
 		ValveDetailsDto details = simulator.buildDetails("edge-eu", "Primary-Rate-Limiter", "previous", "all");
 		assertNotNull(details);
 		assertNotNull(details.valve());
+		assertTrue(Boolean.TRUE.equals(details.valve().visitorCookieEnabled()));
+		assertTrue(Boolean.TRUE.equals(details.valve().authTrackingEnabled()));
 		assertNotNull(details.selectedSlot());
 		assertEquals("previous", details.selectedSlot().type());
 
@@ -288,6 +296,15 @@ class DemoModeTest {
 		assertTrue(honeypotEvents.getFirst().isHoneypot(), "Event should be recognized as Honeypot event");
 		assertEquals(1, honeypotEvents.getFirst().requestCount(), "Honeypot events should record individual probe hits");
 		assertTrue(honeypotEvents.stream().anyMatch(e -> e.hasSample()), "Honeypot demo events should include sample probe snapshots");
+
+		// 9. Verify Auth Session Tracking is seeded for Demo-Edge-EU events and rendered on Server Details page
+		assertTrue(subnetEvents.stream().anyMatch(e -> e.authenticatedCount() != null && e.authenticatedCount() > 0),
+				"Demo-Edge-EU Subnet-Guard should include seeded events with authenticatedCount > 0");
+		mockMvc.perform(get("/server/Demo-Edge-EU"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("AUTH: COOKIE (AUTH_COOKIE)")))
+				.andExpect(content().string(containsString("Auth Session Tracking")))
+				.andExpect(content().string(containsString("/trust")));
 	}
 
 	@Test

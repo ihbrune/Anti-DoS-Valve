@@ -398,6 +398,7 @@ public class CollectorPollerService {
 					|| (monitoredValveRepository != null && monitoredValveRepository.findByServerIdAndValveName(endpoint.getName(), valveName)
 							.map(v -> v.visitorCookieEnabled())
 							.orElse(false));
+			boolean isAuthTrackingExplicitlyDisabled = (details.valve() != null && Boolean.FALSE.equals(details.valve().authTrackingEnabled()));
 
 			boolean isHoneypot = isHoneypotValve(valveName);
 
@@ -425,7 +426,7 @@ public class CollectorPollerService {
 					Integer dc = c.distinctClients();
 					int distinct = dc != null && dc > 0 ? dc : 1;
 					Integer returning = (isVisitorTrackingActive && c.returningCount() != null) ? c.returningCount() : null;
-					Integer authenticated = c.authenticatedCount();
+					Integer authenticated = (!isAuthTrackingExplicitlyDisabled && c.authenticatedCount() != null) ? c.authenticatedCount() : null;
 					events.add(new ClientEvent(
 							null,
 							endpoint.getName(),
@@ -466,7 +467,7 @@ public class CollectorPollerService {
 					Integer dc = c.distinctClients();
 					int distinct = dc != null && dc > 0 ? dc : 1;
 					Integer returning = (isVisitorTrackingActive && c.returningCount() != null) ? c.returningCount() : null;
-					Integer authenticated = c.authenticatedCount();
+					Integer authenticated = (!isAuthTrackingExplicitlyDisabled && c.authenticatedCount() != null) ? c.authenticatedCount() : null;
 					events.add(new ClientEvent(
 							null,
 							endpoint.getName(),
@@ -561,6 +562,12 @@ public class CollectorPollerService {
 				v.collectorIntegration() != null && !v.collectorIntegration().isBlank() ? v.collectorIntegration() : "auto",
 				v.visitorCookieEnabled(),
 				v.visitorCookieName() != null && !v.visitorCookieName().isBlank() ? v.visitorCookieName() : "_adv",
+				v.authTrackingEnabled(),
+				v.authTrackingMode() != null && !v.authTrackingMode().isBlank() ? v.authTrackingMode() : "OFF",
+				v.authCookieName(),
+				v.authLoginPaths(),
+				v.authSessionTtlSeconds() > 0 ? v.authSessionTtlSeconds() : 900,
+				v.maxAuthCacheSize() > 0 ? v.maxAuthCacheSize() : 50000,
 				now,
 				configHash,
 				true

@@ -105,6 +105,8 @@ class ApiControllerTest {
 				.andExpect(jsonPath("$[0].collectorIntegration", is("auto")))
 				.andExpect(jsonPath("$[0].visitorCookieEnabled", is(false)))
 				.andExpect(jsonPath("$[0].visitorCookieName", is("_adv")))
+				.andExpect(jsonPath("$[0].authTrackingEnabled", is(false)))
+				.andExpect(jsonPath("$[0].authTrackingMode", is("OFF")))
 				.andExpect(jsonPath("$[1].serverId", is("SERVER-BETA")))
 				.andExpect(jsonPath("$[1].valveName", is("Backend-Limiter")))
 				.andExpect(jsonPath("$[1].monitorMode", is("MARKING")))

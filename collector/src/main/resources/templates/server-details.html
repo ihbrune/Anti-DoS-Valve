@@ -179,6 +179,12 @@
                                             th:title="'Visitor cookie tracking: ' + ${runtimeValvesMap[v.valveName].visitorCookieLabel()}"
                                             th:text="'COOKIE: ' + ${runtimeValvesMap[v.valveName].visitorCookieLabel()}">COOKIE:
                                             OFF</span>
+                                        <span class="badge"
+                                            th:classappend="${runtimeValvesMap[v.valveName].authTrackingBadgeClass()}"
+                                            style="font-size: 9.5px; padding: 1px 5px;"
+                                            th:title="'Auth session tracking: ' + ${runtimeValvesMap[v.valveName].authTrackingLabel()}"
+                                            th:text="'AUTH: ' + ${runtimeValvesMap[v.valveName].authTrackingLabel()}">AUTH:
+                                            OFF</span>
                                         <span style="font-size: 11px; color: var(--text-muted);"
                                             th:text="${runtimeValvesMap[v.valveName].allowedRequestsPerSlot == 0 ? '0 req (Zero Tolerance) / ' + runtimeValvesMap[v.valveName].slotLength + 's' : runtimeValvesMap[v.valveName].allowedRequestsPerSlot + ' req / ' + runtimeValvesMap[v.valveName].slotLength + 's'}">50
                                             req / 60s</span>
@@ -306,6 +312,9 @@
                             <span class="badge" th:classappend="${rv.visitorCookieBadgeClass()}"
                                 th:title="'Visitor cookie tracking: ' + ${rv.visitorCookieLabel()} + ' (Reputation &amp; first-contact detection)'"
                                 th:text="'COOKIE: ' + ${rv.visitorCookieLabel()}">COOKIE: OFF</span>
+                            <span class="badge" th:classappend="${rv.authTrackingBadgeClass()}"
+                                th:title="'Authentication session tracking: ' + ${rv.authTrackingLabel()}"
+                                th:text="'AUTH: ' + ${rv.authTrackingLabel()}">AUTH: OFF</span>
                         </div>
                         <div style="font-size: 11px; color: var(--text-muted);">
                             Last Synced: <span style="font-weight: 600; color: var(--text-secondary);"
@@ -415,6 +424,25 @@
                             <div style="font-size: 11px; color: var(--text-muted); margin-top: 3px;"
                                 th:unless="${rv.visitorCookieEnabled}">
                                 Disabled &bull; No visitor cookies issued
+                            </div>
+                        </div>
+
+                        <div
+                            style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
+                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Auth Session Tracking</div>
+                            <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);"
+                                th:text="${rv.authTrackingEnabled ? 'ACTIVE (' + rv.authTrackingMode() + ')' : 'DISABLED'}">DISABLED</div>
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;"
+                                th:if="${rv.authTrackingEnabled}">
+                                Cookie: <code style="font-weight: 600; color: var(--color-primary);"
+                                    th:text="${rv.authCookieName != null ? rv.authCookieName : '—'}">AUTH_COOKIE</code>
+                                <span th:if="${rv.authLoginPaths != null and !rv.authLoginPaths.isBlank()}">
+                                    &bull; Login: <code style="color: var(--text-primary);" th:text="${rv.authLoginPaths}">/trust</code>
+                                </span>
+                            </div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-top: 3px;"
+                                th:unless="${rv.authTrackingEnabled}">
+                                Disabled &bull; No login session tracking
                             </div>
                         </div>
 

@@ -164,6 +164,11 @@ The Valve maintains strictly bounded, lock-free in-memory counters for the curre
 * The Valve verifies the token lock-free in memory. Valid tokens increment a lightweight `returningCount` in `AntiDoSCounter`.
 * **Telemetry Output & Fleet Auto-Discovery:** The Valve reports cookie state (`visitorCookieEnabled`, `visitorCookieName`, `visitorCookieDomain`) directly in its overview telemetry (`?format=json`). The Collector dynamically discovers custom cookie names without requiring default `_adv`, automatically displaying `COOKIE: ACTIVE (<name>)` and tracking returning visitor ratios per subnet.
 
+### 3b. Zero-Allocation Authentication Session Tracking (`authenticatedCount`)
+* When `authTrackingMode="COOKIE"` is configured alongside `authCookieName` (e.g., `"AUTH_COOKIE"`) and `authLoginPaths` (e.g., `"/trust"`), the Valve passively observes `Set-Cookie` headers on login responses and registers a salted 64-bit fast hash in a lock-free primitive open-addressing session cache (`AtomicLongArray`, 16 bytes/session).
+* Subsequent requests carrying a valid, non-expired login cookie increment `authenticatedCount` in `AntiDoSCounter` and propagate across cascaded Valves in the same server.
+* The Collector automatically ingests `authenticatedCount` per client/subnet event, rolls up `authenticated_requests` and `authenticated_tracked_requests` into hourly buckets and 24h subnet profiles, and displays `🔐 X% Auth` badges across Incident Explorer (`/events`), Top Offenders (`/offenders`), and Subnet Profiles (`/profiles`).
+
 ### 4. Dormant Telemetry via Rolling Collector Lease (`collectorIntegration="auto"`)
 * Extended telemetry tracking (such as bitmask updates and cookie verifications) has an extremely low, but non-zero CPU and memory footprint.
 * The Valve implements a dynamic **Collector Lease**:

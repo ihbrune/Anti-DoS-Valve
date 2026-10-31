@@ -32,10 +32,59 @@ public record MonitoredValve(
 		String collectorIntegration,
 		boolean visitorCookieEnabled,
 		String visitorCookieName,
+		boolean authTrackingEnabled,
+		String authTrackingMode,
+		String authCookieName,
+		String authLoginPaths,
+		int authSessionTtlSeconds,
+		int maxAuthCacheSize,
 		Instant lastUpdatedAt,
 		int configHash,
 		boolean isActive
 ) {
+	/**
+	 * Backwards-compatible constructor without authTracking fields.
+	 */
+	public MonitoredValve(
+			String serverId,
+			String valveName,
+			String description,
+			int pipelineOrder,
+			String monitorMode,
+			boolean simulationMode,
+			boolean serverWideBlocking,
+			int httpStatusCode,
+			int allowedRequestsPerSlot,
+			int slotLength,
+			int numberOfSlots,
+			float shareOfRetainedFormerRequests,
+			int ipv4SubnetMask,
+			int ipv6SubnetMask,
+			int maxIPCacheSize,
+			int maxBlockedIPCacheSize,
+			String relevantPaths,
+			String nonRelevantPaths,
+			String alwaysAllowedIPs,
+			String alwaysForbiddenIPs,
+			String statusUri,
+			String statusAllowedIPs,
+			String collectorIntegration,
+			boolean visitorCookieEnabled,
+			String visitorCookieName,
+			Instant lastUpdatedAt,
+			int configHash,
+			boolean isActive
+	) {
+		this(serverId, valveName, description, pipelineOrder, monitorMode, simulationMode,
+				serverWideBlocking, httpStatusCode, allowedRequestsPerSlot, slotLength, numberOfSlots,
+				shareOfRetainedFormerRequests, ipv4SubnetMask, ipv6SubnetMask, maxIPCacheSize,
+				maxBlockedIPCacheSize, relevantPaths, nonRelevantPaths, alwaysAllowedIPs,
+				alwaysForbiddenIPs, statusUri, statusAllowedIPs, collectorIntegration,
+				visitorCookieEnabled, visitorCookieName,
+				false, "OFF", null, null, 900, 50000,
+				lastUpdatedAt, configHash, isActive);
+	}
+
 	/**
 	 * Backwards-compatible constructor defaulting isActive to true.
 	 */
@@ -199,6 +248,24 @@ public record MonitoredValve(
 
 	public String visitorCookieLabel() {
 		return visitorCookieEnabled ? "ACTIVE (" + visitorCookieName() + ")" : "OFF";
+	}
+
+	public String authTrackingMode() {
+		return authTrackingMode != null && !authTrackingMode.isBlank() ? authTrackingMode : "OFF";
+	}
+
+	public String authTrackingBadgeClass() {
+		return authTrackingEnabled ? "badge-success" : "badge-secondary";
+	}
+
+	public String authTrackingLabel() {
+		if (!authTrackingEnabled) {
+			return "OFF";
+		}
+		if (authCookieName != null && !authCookieName.isBlank()) {
+			return authTrackingMode() + " (" + authCookieName + ")";
+		}
+		return authTrackingMode();
 	}
 
 	public boolean hasPathFilters() {

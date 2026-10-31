@@ -71,6 +71,8 @@ public class DemoDataSeeder {
 	private final org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService;
 	private final org.henbru.antidos.collector.annotation.NetworkAnnotationService annotationService;
 	private final org.henbru.antidos.collector.aggregation.SubnetProfileService subnetProfileService;
+	private final org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository;
+	private final MockValveSimulator mockValveSimulator;
 
 	public DemoDataSeeder(
 			SlotSnapshotRepository slotSnapshotRepository,
@@ -86,6 +88,30 @@ public class DemoDataSeeder {
 			org.henbru.antidos.collector.annotation.NetworkAnnotationService annotationService,
 			@org.springframework.beans.factory.annotation.Autowired(required = false)
 			org.henbru.antidos.collector.aggregation.SubnetProfileService subnetProfileService) {
+		this(slotSnapshotRepository, clientEventRepository, heartbeatRepository, pollEventLogRepository,
+				crawlerFeedRepository, jdbcTemplate, properties, rollupAggregationService, annotationService,
+				subnetProfileService, null, null);
+	}
+
+	@org.springframework.beans.factory.annotation.Autowired
+	public DemoDataSeeder(
+			SlotSnapshotRepository slotSnapshotRepository,
+			ClientEventRepository clientEventRepository,
+			HeartbeatRepository heartbeatRepository,
+			PollEventLogRepository pollEventLogRepository,
+			org.henbru.antidos.collector.storage.CrawlerFeedRepository crawlerFeedRepository,
+			JdbcTemplate jdbcTemplate,
+			org.henbru.antidos.collector.config.CollectorProperties properties,
+			@org.springframework.beans.factory.annotation.Autowired(required = false)
+			org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService,
+			@org.springframework.beans.factory.annotation.Autowired(required = false)
+			org.henbru.antidos.collector.annotation.NetworkAnnotationService annotationService,
+			@org.springframework.beans.factory.annotation.Autowired(required = false)
+			org.henbru.antidos.collector.aggregation.SubnetProfileService subnetProfileService,
+			@org.springframework.beans.factory.annotation.Autowired(required = false)
+			org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository,
+			@org.springframework.beans.factory.annotation.Autowired(required = false)
+			MockValveSimulator mockValveSimulator) {
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
 		this.heartbeatRepository = heartbeatRepository;
@@ -96,6 +122,8 @@ public class DemoDataSeeder {
 		this.rollupAggregationService = rollupAggregationService;
 		this.annotationService = annotationService;
 		this.subnetProfileService = subnetProfileService;
+		this.monitoredValveRepository = monitoredValveRepository;
+		this.mockValveSimulator = mockValveSimulator;
 	}
 
 	@EventListener(ApplicationReadyEvent.class)
@@ -108,6 +136,7 @@ public class DemoDataSeeder {
 		if (!slotSnapshotRepository.findRecentFleet(1).isEmpty()) {
 			log.info("Demo database already contains historical telemetry. Updating any legacy un-enriched demo events...");
 			enrichLegacyDemoEventsIfAny();
+			seedDemoMonitoredValves(Instant.now());
 			seedDemoAnnotationsIfEmpty();
 			if (subnetProfileService != null && subnetProfileService.countProfilesFiltered("ALL", null, null, null, null, null) == 0) {
 				if (rollupAggregationService != null) {
@@ -539,7 +568,7 @@ public class DemoDataSeeder {
 		clientEventRepository.batchUpsert(events);
 		enrichLegacyDemoEventsIfAny();
 
-		// 2. Pre-populate initial Heartbeats
+		// 2. Pre-populate initial Heartbeats and Monitored Valve Configurations
 		List<org.henbru.antidos.collector.config.EndpointConfig> demoEndpoints =
 				DemoModeService.createDemoEndpoints(8090, instanceCount);
 		for (org.henbru.antidos.collector.config.EndpointConfig ep : demoEndpoints) {
@@ -549,6 +578,7 @@ public class DemoDataSeeder {
 					ep.getName(), ep.getUrl(), true, now, now, null, lat, valves
 			));
 		}
+		seedDemoMonitoredValves(now);
 
 		// 3. Pre-populate Poll Event Audit Logs over the last 24h
 		List<PollEventLog> logs = new ArrayList<>();
@@ -691,6 +721,37 @@ public class DemoDataSeeder {
 		}
 
 		org.henbru.antidos.collector.model.IpNetworkInfo net = org.henbru.antidos.collector.util.IpNetworkUtil.parse(ip);
+		Integer returningCount = null;
+		Integer authenticatedCount = null;
+		if (serverId == null || !serverId.toLowerCase().contains("api")) {
+			// Visitor Cookie and Auth Session Tracking are active on Demo-Edge-EU and Demo-Staging-Node
+			switch (ip) {
+				case "10.68.42.0/24", "10.68.42.15" -> {
+					returningCount = (int) Math.round(requestCount * 0.90);
+					authenticatedCount = (int) Math.round(requestCount * 0.78);
+				}
+				case "fd00:10:68::42" -> {
+					returningCount = (int) Math.round(requestCount * 0.88);
+					authenticatedCount = (int) Math.round(requestCount * 0.72);
+				}
+				case "134.130.4.0/24" -> {
+					returningCount = (int) Math.round(requestCount * 0.84);
+					authenticatedCount = (int) Math.round(requestCount * 0.65);
+				}
+				case "198.51.100.0/24", "198.51.100.42" -> {
+					returningCount = (int) Math.round(requestCount * 0.82);
+					authenticatedCount = (int) Math.round(requestCount * 0.68);
+				}
+				case "185.246.222.0/24" -> {
+					returningCount = (int) Math.round(requestCount * 0.78);
+					authenticatedCount = (int) Math.round(requestCount * 0.52);
+				}
+				default -> {
+					returningCount = 0;
+					authenticatedCount = 0;
+				}
+			}
+		}
 		return new ClientEvent(
 				null, serverId, valveName, slotKey, slotTime,
 				ip, net.version(), net.prefix(), net.v4Start(), net.v4End(),
@@ -701,9 +762,66 @@ public class DemoDataSeeder {
 				asn, asOrg, country, type, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED,
 				null,
 				Math.max(1, distinctClients),
-				null, null,
+				returningCount, authenticatedCount,
 				sampleMethod, sampleUri, sampleUserAgent
 		);
+	}
+
+	private void seedDemoMonitoredValves(Instant now) {
+		if (monitoredValveRepository == null || mockValveSimulator == null) {
+			return;
+		}
+		try {
+			int instanceCount = Math.max(1, Math.min(26, properties.getDemoInstanceCount()));
+			List<org.henbru.antidos.collector.config.EndpointConfig> demoEndpoints =
+					DemoModeService.createDemoEndpoints(8090, instanceCount);
+			for (org.henbru.antidos.collector.config.EndpointConfig ep : demoEndpoints) {
+				org.henbru.antidos.collector.model.ValveOverviewDto overview =
+						mockValveSimulator.buildOverview(ep.getName(), null);
+				if (overview != null && overview.valves() != null) {
+					for (org.henbru.antidos.collector.model.ValveOverviewDto.ValveSummaryDto v : overview.valves()) {
+						monitoredValveRepository.upsert(new org.henbru.antidos.collector.model.MonitoredValve(
+								ep.getName(),
+								v.monitorName(),
+								v.description(),
+								v.pipelineOrder(),
+								v.monitorMode() != null ? v.monitorMode() : "BLOCKING",
+								v.simulationMode(),
+								v.serverWideBlocking(),
+								v.httpStatusCode() > 0 ? v.httpStatusCode() : 429,
+								v.allowedRequestsPerSlot(),
+								v.slotLength(),
+								v.numberOfSlots(),
+								v.shareOfRetainedFormerRequests(),
+								v.ipv4SubnetMask() > 0 ? v.ipv4SubnetMask() : 32,
+								v.ipv6SubnetMask() > 0 ? v.ipv6SubnetMask() : 64,
+								v.maxIPCacheSize() > 0 ? v.maxIPCacheSize() : 10000,
+								v.maxBlockedIPCacheSize() > 0 ? v.maxBlockedIPCacheSize() : 10000,
+								v.relevantPaths(),
+								v.nonRelevantPaths(),
+								v.alwaysAllowedIPs(),
+								v.alwaysForbiddenIPs(),
+								v.statusUri(),
+								v.statusAllowedIPs(),
+								v.collectorIntegration() != null && !v.collectorIntegration().isBlank() ? v.collectorIntegration() : "auto",
+								v.visitorCookieEnabled(),
+								v.visitorCookieNameOrDefault(),
+								v.authTrackingEnabled(),
+								v.authTrackingModeOrDefault(),
+								v.authCookieName(),
+								v.authLoginPaths(),
+								v.authSessionTtlSeconds() > 0 ? v.authSessionTtlSeconds() : 900,
+								v.maxAuthCacheSize() > 0 ? v.maxAuthCacheSize() : 50000,
+								now,
+								v.configHashCode(),
+								true
+						));
+					}
+				}
+			}
+		} catch (Exception e) {
+			log.warn("Could not seed demo monitored valve configurations: {}", e.getMessage());
+		}
 	}
 
 	private void enrichLegacyDemoEventsIfAny() {
@@ -781,6 +899,40 @@ public class DemoDataSeeder {
 					SET as_org = 'Unique Local Address (RFC 4193)', client_type = 'PRIVATE_NETWORK', enrichment_status = 'ENRICHED'
 					WHERE client_key = '2001:db8:85a3::8a2e:370:7334' OR client_key = 'fd00:10:68::42'
 					""");
+			// Backfill visitor cookie and auth session counts for existing demo databases if missing on Edge/Staging
+			int backfilledAuth = jdbcTemplate.update("""
+					UPDATE client_events
+					SET returning_count = CASE
+					        WHEN client_key IN ('10.68.42.0/24', '10.68.42.15') THEN CAST(ROUND(request_count * 0.90) AS INTEGER)
+					        WHEN client_key = 'fd00:10:68::42' THEN CAST(ROUND(request_count * 0.88) AS INTEGER)
+					        WHEN client_key = '134.130.4.0/24' THEN CAST(ROUND(request_count * 0.84) AS INTEGER)
+					        WHEN client_key IN ('198.51.100.0/24', '198.51.100.42') THEN CAST(ROUND(request_count * 0.82) AS INTEGER)
+					        WHEN client_key = '185.246.222.0/24' THEN CAST(ROUND(request_count * 0.78) AS INTEGER)
+					        ELSE 0
+					    END,
+					    authenticated_count = CASE
+					        WHEN client_key IN ('10.68.42.0/24', '10.68.42.15') THEN CAST(ROUND(request_count * 0.78) AS INTEGER)
+					        WHEN client_key = 'fd00:10:68::42' THEN CAST(ROUND(request_count * 0.72) AS INTEGER)
+					        WHEN client_key = '134.130.4.0/24' THEN CAST(ROUND(request_count * 0.65) AS INTEGER)
+					        WHEN client_key IN ('198.51.100.0/24', '198.51.100.42') THEN CAST(ROUND(request_count * 0.68) AS INTEGER)
+					        WHEN client_key = '185.246.222.0/24' THEN CAST(ROUND(request_count * 0.52) AS INTEGER)
+					        ELSE 0
+					    END
+					WHERE server_id NOT LIKE '%API%'
+					  AND authenticated_count IS NULL
+					""");
+			if (backfilledAuth > 0) {
+				log.info("Backfilled visitor cookie and auth session counts for {} legacy demo events.", backfilledAuth);
+				if (rollupAggregationService != null) {
+					try {
+						rollupAggregationService.aggregateCatchUp(720);
+						if (subnetProfileService != null) {
+							subnetProfileService.refreshProfiles();
+						}
+					} catch (Exception ignored) {
+					}
+				}
+			}
 			// Ensure network_entity records exist for all demo events
 			jdbcTemplate.update("""
 					INSERT INTO network_entity (

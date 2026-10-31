@@ -267,6 +267,7 @@ Summarizes all Valve instances configured on the node and how the Collector inge
   * `SIMULATION` (Orange): Simulates threshold evaluations for dry-run testing.
   * `COLLECTOR: AUTO / ALWAYS ON / DISABLED`: Indicates the Valve's `collectorIntegration` mode for administrative tracking and remote lifecycle control.
   * `COOKIE: ACTIVE (_adv) / OFF`: Indicates whether tamper-proof visitor cookie tracking is enabled on the Valve to distinguish returning visitors from first-contact requests.
+  * `AUTH: COOKIE (AUTH_COOKIE) / OFF`: Indicates whether Authentication Session Tracking is enabled on the Valve to distinguish logged-in users from unauthenticated traffic.
   * **Configured Threshold:** Quick summary of allowed request volume (e.g., `50 req / 60s`).
 * **Polling Scope (`INCLUDED` / `EXCLUDED`):** Shows whether the Valve is actively scraped or skipped via endpoint valve regex filters.
 * **Active Tracking (`ENABLED` / `DISABLED`):** Indicates whether non-blocked active client counters are pulled.
@@ -277,7 +278,7 @@ Summarizes all Valve instances configured on the node and how the Collector inge
 ### 3. Discovered Valve Runtime Configurations
 Automatically discovered and synchronized from the live Valve JSON API (`?format=json`) into the Collector database without requiring manual configuration. An in-memory hash check guarantees zero redundant database writes during steady-state polling.
 
-* **Pipeline Order & Mode Badges:** Displays pipeline placement (`#1 IN PIPELINE`), operational mode (`BLOCKING` or `MARKING`), simulation flags, server-wide blocking flags, `COLLECTOR: AUTO / ALWAYS ON / DISABLED` mode badge, and `COOKIE: ACTIVE (<name>) / OFF` reputation tracking badge (e.g., `COOKIE: ACTIVE (_adv)` or reflecting any custom `visitorCookieName` configured on the Valve).
+* **Pipeline Order & Mode Badges:** Displays pipeline placement (`#1 IN PIPELINE`), operational mode (`BLOCKING` or `MARKING`), simulation flags, server-wide blocking flags, `COLLECTOR: AUTO / ALWAYS ON / DISABLED` mode badge, `COOKIE: ACTIVE (<name>) / OFF` reputation tracking badge, and `AUTH: COOKIE (<name>) / OFF` authentication session tracking badge (e.g., `AUTH: COOKIE (AUTH_COOKIE)`).
 * **Valve Description:** Custom operational description configured directly in Tomcat's `server.xml`.
 * **Rate Limit Threshold Card:**
   * **Allowed Volume:** Requests permitted per time slice (e.g., `100 req / 60s`).
@@ -292,6 +293,8 @@ Automatically discovered and synchronized from the live Valve JSON API (`?format
   * Displays the configured collector integration mode (`auto`: dynamic 60s active lease upon collector poll, `true`: permanently active independent of pollers, or `false`: disabled, no collector events generated).
 * **Visitor Tracking & Cookies Card:**
   * Displays whether encrypted visitor tracking is active (`ACTIVE` or `DISABLED`) and the dynamically discovered cookie name (e.g., `Cookie: _adv` or a custom name like `Cookie: my_app_cookie`), confirming that request streams carry returning visitor telemetry.
+* **Auth Session Tracking Card:**
+  * Displays whether Authentication Session Tracking is active (`ACTIVE (COOKIE)` or `DISABLED`), along with the monitored login cookie name (e.g., `Cookie: AUTH_COOKIE`) and login endpoint paths (e.g., `Login: /trust`).
 * **Status Dashboard URI Card:**
   * Internal status path (e.g., `/antidos-status`) and allowed client IP ranges configured for administrative access.
 * **Configured Path Filters & IP Lists (Collapsible):**
@@ -506,11 +509,12 @@ Events are streamed with configurable limits (`25`, `50`, `100`, `250`) and offs
 * **Direct Navigation:** From the central Notes repository (`/notes`) or note modals, clicking any ASN or Subnet target pill immediately jumps back into Incident Explorer with that target pre-filtered.
 
 ### 4. Visitor Cookie & Authentication Telemetry
-* **Cookies Column (`🍪`):**
+* **Cookies & Auth Column (`🍪` & `🔐`):**
   * **Verified Returning Visitors (`🍪 85% (K)`):** Displays green/neutral ratio badges when requests present valid HMAC-signed visitor cookies.
   * **Zero Returning / First-Contact (`🍪 0% (0/N)`):** Highlighted with an amber warning badge when a burst of requests arrives with 0 valid visitor cookies (characteristic of rotating proxy farms, headless scrapers, and botnet probes).
-  * **Untracked Valve (`—`):** Explicit dash displayed when the originating Valve has cookie tracking disabled (`visitorCookieEnabled="false"`). Prevents misinterpreting unmonitored endpoints as 0% returning traffic.
-  * **Custom Cookie Names:** Telemetry collection and returning visitor ratios operate identically whether using the default `_adv` cookie name or a custom `visitorCookieName`; the Collector automatically identifies and binds the configured cookie name from overview telemetry.
+  * **Authenticated Login Sessions (`🔐 68% (K)` / `🔐 0% (0/N)`):** Displays the percentage and count of requests carrying a valid authentication session cookie observed on a configured login endpoint (e.g., `AUTH_COOKIE` issued at `/trust`). Enables instant differentiation between legitimate logged-in users behind shared NAT gateways and unauthenticated scrapers.
+  * **Untracked Valve (`—`):** Explicit dash displayed when the originating Valve has both visitor cookie and authentication tracking disabled (`visitorCookieEnabled="false"` and `authTrackingMode="OFF"`). Prevents misinterpreting unmonitored endpoints as 0% returning or authenticated traffic.
+  * **Custom Cookie Names:** Telemetry collection and ratios operate identically whether using default cookie names or custom names (`visitorCookieName`, `authCookieName`); the Collector automatically identifies and binds the configured cookie names from overview telemetry.
 
 ### 5. First-Block Request Sample Snapshot (`🔍 METHOD /path`) & 1-Click Note Triage
 When an abusive client IP address or subnet transitions into rate-limit blocking (`HTTP 429 Too Many Requests`), the Valve automatically captures an immutable, privacy-safe snapshot of that offending HTTP request:

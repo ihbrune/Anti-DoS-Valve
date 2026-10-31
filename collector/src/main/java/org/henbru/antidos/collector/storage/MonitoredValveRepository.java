@@ -56,6 +56,12 @@ public class MonitoredValveRepository {
 			rs.getString("collector_integration"),
 			rs.getBoolean("visitor_cookie_enabled"),
 			rs.getString("visitor_cookie_name"),
+			rs.getBoolean("auth_tracking_enabled"),
+			rs.getString("auth_tracking_mode"),
+			rs.getString("auth_cookie_name"),
+			rs.getString("auth_login_paths"),
+			rs.getInt("auth_session_ttl_seconds"),
+			rs.getInt("max_auth_cache_size"),
 			toInstant(rs.getTimestamp("last_updated_at")),
 			rs.getInt("config_hash"),
 			rs.getBoolean("is_active")
@@ -75,9 +81,11 @@ public class MonitoredValveRepository {
 				    relevant_paths, non_relevant_paths, always_allowed_ips, always_forbidden_ips,
 				    status_uri, status_allowed_ips, collector_integration,
 				    visitor_cookie_enabled, visitor_cookie_name,
+				    auth_tracking_enabled, auth_tracking_mode, auth_cookie_name, auth_login_paths,
+				    auth_session_ttl_seconds, max_auth_cache_size,
 				    last_updated_at, config_hash, is_active
 				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (server_id, valve_name) DO UPDATE SET
 				    description = EXCLUDED.description,
 				    pipeline_order = EXCLUDED.pipeline_order,
@@ -102,6 +110,12 @@ public class MonitoredValveRepository {
 				    collector_integration = EXCLUDED.collector_integration,
 				    visitor_cookie_enabled = EXCLUDED.visitor_cookie_enabled,
 				    visitor_cookie_name = EXCLUDED.visitor_cookie_name,
+				    auth_tracking_enabled = EXCLUDED.auth_tracking_enabled,
+				    auth_tracking_mode = EXCLUDED.auth_tracking_mode,
+				    auth_cookie_name = EXCLUDED.auth_cookie_name,
+				    auth_login_paths = EXCLUDED.auth_login_paths,
+				    auth_session_ttl_seconds = EXCLUDED.auth_session_ttl_seconds,
+				    max_auth_cache_size = EXCLUDED.max_auth_cache_size,
 				    last_updated_at = EXCLUDED.last_updated_at,
 				    config_hash = EXCLUDED.config_hash,
 				    is_active = EXCLUDED.is_active
@@ -133,6 +147,12 @@ public class MonitoredValveRepository {
 				v.collectorIntegration(),
 				v.visitorCookieEnabled(),
 				v.visitorCookieName(),
+				v.authTrackingEnabled(),
+				v.authTrackingMode(),
+				v.authCookieName(),
+				v.authLoginPaths(),
+				v.authSessionTtlSeconds() > 0 ? v.authSessionTtlSeconds() : 900,
+				v.maxAuthCacheSize() > 0 ? v.maxAuthCacheSize() : 50000,
 				v.lastUpdatedAt() != null ? Timestamp.from(v.lastUpdatedAt()) : Timestamp.from(Instant.now()),
 				v.configHash(),
 				v.isActive()

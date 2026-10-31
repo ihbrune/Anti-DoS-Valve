@@ -160,7 +160,8 @@
                             <td>
                                 <div style="display: flex; flex-direction: column; gap: 4px;">
                                     <div th:with="threshold=${minSurgeRequests != null ? minSurgeRequests : 1000}">
-                                        <span th:if="${p.last24hRequests() >= threshold and p.last24hSurgeFactor() >= 10.0 and p.baselineDailyAvg() > 0.0}"
+                                        <span
+                                            th:if="${p.last24hRequests() >= threshold and p.last24hSurgeFactor() >= 10.0 and p.baselineDailyAvg() > 0.0}"
                                             class="badge badge-danger" style="font-weight: 700; font-size: 11px;"
                                             th:title="'Current 24h volume (' + ${p.last24hRequests()} + ') is ' + ${p.last24hSurgeFactor()} + 'x above baseline average (' + ${p.baselineDailyAvg()} + '/day)'">
                                             &#x26A1; <span
@@ -177,7 +178,8 @@
                                             th:if="${p.last24hRequests() < threshold and p.last24hSurgeFactor() >= 3.0 and p.baselineDailyAvg() > 0.0}"
                                             class="badge badge-secondary" style="font-size: 10px; opacity: 0.85;"
                                             th:title="'Current 24h volume (' + ${p.last24hRequests()} + ') is ' + ${p.last24hSurgeFactor()} + 'x above baseline average (' + ${p.baselineDailyAvg()} + '/day), but below ' + ${#numbers.formatInteger(threshold, 1, 'POINT')} + ' req/24h threshold'">
-                                            <span th:text="${#numbers.formatDecimal(p.last24hSurgeFactor(), 1, 1)} + 'x (Low Vol)'"></span>
+                                            <span
+                                                th:text="${#numbers.formatDecimal(p.last24hSurgeFactor(), 1, 1)} + 'x (Low Vol)'"></span>
                                         </span>
                                         <span
                                             th:if="${p.last24hSurgeFactor() >= 1.0 and p.last24hSurgeFactor() < 3.0 and p.baselineDailyAvg() > 0.0}"
@@ -356,17 +358,31 @@
                                         th:text="${#numbers.formatInteger(rollup.activeRequests(), 1, 'POINT') + ' active'}">750
                                         active</span>
                                 </div>
-                                <div th:if="${rollup.isReturningTracked()}" style="font-size: 11px; margin-top: 3px;">
-                                    <span th:if="${rollup.returningRequests() == 0}" class="badge badge-warning"
-                                        style="font-size: 10px; padding: 1px 5px;"
-                                        title="0% returning visitor cookies in this window (pure first contact / cookies ignored)">🍪
-                                        0% Cookies</span>
-                                    <span th:if="${rollup.returningRequests() > 0}" class="badge badge-info"
-                                        style="font-size: 10px; padding: 1px 5px;"
-                                        th:title="${rollup.returningRequests()} + ' of ' + ${rollup.returningTrackedRequests()} + ' requests carried a valid visitor cookie'">🍪
-                                        <span
-                                            th:text="${#numbers.formatDecimal(rollup.returningRatio(), 1, 0)} + '% Cookies'"></span></span>
-                                </div>
+                                    <div th:if="${rollup.isReturningTracked() or rollup.isAuthenticatedTracked()}"
+                                        style="font-size: 11px; margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px;">
+                                        <th:block th:if="${rollup.isReturningTracked()}">
+                                            <span th:if="${rollup.returningRequests() == 0}" class="badge badge-warning"
+                                                style="font-size: 10px; padding: 1px 5px;"
+                                                title="0% returning visitor cookies in this window (pure first contact / cookies ignored)">🍪
+                                                0% Cookies</span>
+                                            <span th:if="${rollup.returningRequests() > 0}" class="badge badge-info"
+                                                style="font-size: 10px; padding: 1px 5px;"
+                                                th:title="${rollup.returningRequests()} + ' of ' + ${rollup.returningTrackedRequests()} + ' requests carried a valid visitor cookie'">🍪
+                                                <span
+                                                    th:text="${#numbers.formatDecimal(rollup.returningRatio(), 1, 0)} + '% Cookies'"></span></span>
+                                        </th:block>
+                                        <th:block th:if="${rollup.isAuthenticatedTracked()}">
+                                            <span th:if="${rollup.authenticatedRequests() == 0}"
+                                                class="badge badge-secondary" style="font-size: 10px; padding: 1px 5px;"
+                                                title="0% authenticated requests in this window (unauthenticated traffic)">🔐
+                                                0% Auth</span>
+                                            <span th:if="${rollup.authenticatedRequests() > 0}"
+                                                class="badge badge-success" style="font-size: 10px; padding: 1px 5px;"
+                                                th:title="${rollup.authenticatedRequests()} + ' of ' + ${rollup.authenticatedTrackedRequests()} + ' requests carried a valid login session'">🔐
+                                                <span
+                                                    th:text="${#numbers.formatDecimal(rollup.authenticatedRatio(), 1, 0)} + '% Auth'"></span></span>
+                                        </th:block>
+                                    </div>
                             </td>
                             <td>
                                 <div>
@@ -398,17 +414,18 @@
                                         th:if="${subnetProfilesMap != null and subnetProfilesMap.containsKey(rollup.subnetGroup())}"
                                         th:with="prof=${subnetProfilesMap.get(rollup.subnetGroup())}">
                                         <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;"
-                                             th:with="threshold=${minSurgeRequests != null ? minSurgeRequests : 1000}">
+                                            th:with="threshold=${minSurgeRequests != null ? minSurgeRequests : 1000}">
                                             <span th:if="${prof.isHighSurge(5.0, threshold)}" class="badge badge-danger"
                                                 style="font-size: 10px; font-weight: 700;"
                                                 th:title="'Surge: ' + ${prof.last24hSurgeFactor()} + 'x over 30d baseline (' + ${prof.baselineDailyAvg()} + ' req/day)'">
                                                 &#x26A1; <span
                                                     th:text="${#numbers.formatDecimal(prof.last24hSurgeFactor(), 1, 1)} + 'x Surge'"></span>
                                             </span>
-                                            <span th:if="${prof.isSubThresholdSurge(5.0, threshold)}" class="badge badge-secondary"
-                                                style="font-size: 10px; opacity: 0.85;"
+                                            <span th:if="${prof.isSubThresholdSurge(5.0, threshold)}"
+                                                class="badge badge-secondary" style="font-size: 10px; opacity: 0.85;"
                                                 th:title="'Surge: ' + ${prof.last24hSurgeFactor()} + 'x over 30d baseline (' + ${prof.baselineDailyAvg()} + ' req/day), but below ' + ${#numbers.formatInteger(threshold, 1, 'POINT')} + ' req/24h threshold'">
-                                                <span th:text="${#numbers.formatDecimal(prof.last24hSurgeFactor(), 1, 1)} + 'x (Low Vol)'"></span>
+                                                <span
+                                                    th:text="${#numbers.formatDecimal(prof.last24hSurgeFactor(), 1, 1)} + 'x (Low Vol)'"></span>
                                             </span>
                                             <span th:if="${prof.isDormantBreakout(14)}" class="badge badge-purple"
                                                 style="font-size: 10px;"

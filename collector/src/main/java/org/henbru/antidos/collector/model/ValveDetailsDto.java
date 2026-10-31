@@ -40,10 +40,15 @@ public record ValveDetailsDto(
 			long lastCompletedSlotKey,
 			int slotLength,
 			int numberOfSlots,
-			Boolean visitorCookieEnabled
+			Boolean visitorCookieEnabled,
+			Boolean authTrackingEnabled
 	) {
+		public ValveHeaderDto(String monitorName, long currentSlotKey, long lastCompletedSlotKey, int slotLength, int numberOfSlots, Boolean visitorCookieEnabled) {
+			this(monitorName, currentSlotKey, lastCompletedSlotKey, slotLength, numberOfSlots, visitorCookieEnabled, null);
+		}
+
 		public ValveHeaderDto(String monitorName, long currentSlotKey, long lastCompletedSlotKey, int slotLength, int numberOfSlots) {
-			this(monitorName, currentSlotKey, lastCompletedSlotKey, slotLength, numberOfSlots, null);
+			this(monitorName, currentSlotKey, lastCompletedSlotKey, slotLength, numberOfSlots, null, null);
 		}
 	}
 

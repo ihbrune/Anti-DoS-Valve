@@ -784,6 +784,10 @@ class DatabaseMigrationAndRepositoryTest {
 		assertEquals("_adv", found.visitorCookieName());
 		assertEquals("OFF", found.visitorCookieLabel());
 		assertEquals("badge-secondary", found.visitorCookieBadgeClass());
+		assertFalse(found.authTrackingEnabled());
+		assertEquals("OFF", found.authTrackingMode());
+		assertEquals("OFF", found.authTrackingLabel());
+		assertEquals("badge-secondary", found.authTrackingBadgeClass());
 		assertEquals(12345, found.configHash());
 		assertTrue(found.hasPathFilters());
 		assertTrue(found.hasIpLists());
@@ -815,8 +819,15 @@ class DatabaseMigrationAndRepositoryTest {
 				"true",
 				true,
 				"_mycookie",
+				true,
+				"COOKIE",
+				"AUTH_COOKIE",
+				"/trust",
+				900,
+				50000,
 				now.plusSeconds(10),
-				99999
+				99999,
+				true
 		);
 		monitoredValveRepository.upsert(updated);
 
@@ -834,6 +845,14 @@ class DatabaseMigrationAndRepositoryTest {
 		assertEquals("_mycookie", afterUpdate.get().visitorCookieName());
 		assertEquals("ACTIVE (_mycookie)", afterUpdate.get().visitorCookieLabel());
 		assertEquals("badge-success", afterUpdate.get().visitorCookieBadgeClass());
+		assertTrue(afterUpdate.get().authTrackingEnabled());
+		assertEquals("COOKIE", afterUpdate.get().authTrackingMode());
+		assertEquals("AUTH_COOKIE", afterUpdate.get().authCookieName());
+		assertEquals("/trust", afterUpdate.get().authLoginPaths());
+		assertEquals(900, afterUpdate.get().authSessionTtlSeconds());
+		assertEquals(50000, afterUpdate.get().maxAuthCacheSize());
+		assertEquals("COOKIE (AUTH_COOKIE)", afterUpdate.get().authTrackingLabel());
+		assertEquals("badge-success", afterUpdate.get().authTrackingBadgeClass());
 		assertEquals(99999, afterUpdate.get().configHash());
 
 		List<org.henbru.antidos.collector.model.MonitoredValve> serverValves =

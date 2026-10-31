@@ -118,13 +118,15 @@ public class MockValveSimulator {
 
 		String resolvedValve = resolveValveName(nodeId, valveName);
 		boolean visitorCookieActive = !"api-gateway".equalsIgnoreCase(normalizeNodeId(nodeId));
+		boolean authTrackingActive = !"api-gateway".equalsIgnoreCase(normalizeNodeId(nodeId));
 		ValveDetailsDto.ValveHeaderDto header = new ValveDetailsDto.ValveHeaderDto(
 				resolvedValve,
 				currentSlotKey,
 				lastCompletedSlotKey,
 				SLOT_LENGTH_MILLIS,
 				NUMBER_OF_SLOTS,
-				visitorCookieActive
+				visitorCookieActive,
+				authTrackingActive
 		);
 
 		long targetSlotKey = resolveSlotKey(slotParam, currentSlotKey, lastCompletedSlotKey);
@@ -169,8 +171,12 @@ public class MockValveSimulator {
 			int c1 = Math.max(min, 2);
 			int c2 = Math.max(min, 5);
 			activeList = List.of(
-					new ValveDetailsDto.ActiveClientDto("192.168.1.50", c1, 0, c1, 60, 5, 1, visitorCookieActive ? c1 : null, null),
-					new ValveDetailsDto.ActiveClientDto("10.0.0.12", c2, 1, c2 + 1, 60, 10, 1, visitorCookieActive ? (c2 - 1) : null, null)
+					new ValveDetailsDto.ActiveClientDto("192.168.1.50", c1, 0, c1, 60, 5, 1,
+							visitorCookieActive ? c1 : null,
+							authTrackingActive ? Math.max(1, c1 - 1) : null),
+					new ValveDetailsDto.ActiveClientDto("10.0.0.12", c2, 1, c2 + 1, 60, 10, 1,
+							visitorCookieActive ? (c2 - 1) : null,
+							authTrackingActive ? Math.max(1, c2 - 2) : null)
 			);
 		}
 
@@ -245,6 +251,8 @@ public class MockValveSimulator {
 
 		long offset = (nodeId != null) ? Math.abs(nodeId.hashCode() % 10_000L) : 0L;
 		long cumulative = 240_000L + offset + (currentKey % 50_000L) * 1100L;
+		long totalAuth = (long) (cumulative * 0.42);
+		long prevAuth = (long) (prev.totalRequests() * 0.42);
 		return new ValveOverviewDto.ValveSummaryDto(
 				"Primary-Rate-Limiter",
 				"Primary per-IP sliding window rate limiter protecting web assets and API endpoints.",
@@ -267,13 +275,25 @@ public class MockValveSimulator {
 				null,
 				"/antidos-status",
 				"127.0.0.1, 10.0.0.0/8",
+				"auto",
+				true,
+				"_adv",
+				true,
+				"COOKIE",
+				"AUTH_COOKIE",
+				"/trust",
+				900,
+				50000,
+				142,
 				0L,
 				cur.activeCounters(),
 				cur.blockedCounters(),
 				currentKey,
 				lastCompletedKey,
 				cumulative,
+				totalAuth,
 				prev.totalRequests(),
+				prevAuth,
 				prev.activeCounters(),
 				prev.blockedCounters(),
 				NUMBER_OF_SLOTS,
@@ -288,6 +308,8 @@ public class MockValveSimulator {
 
 		long offset = (nodeId != null) ? Math.abs(nodeId.hashCode() % 10_000L) : 0L;
 		long cumulative = 310_000L + offset + (currentKey % 50_000L) * 1400L;
+		long totalAuth = (long) (cumulative * 0.38);
+		long prevAuth = (long) (prev.totalRequests() * 0.38);
 		return new ValveOverviewDto.ValveSummaryDto(
 				"Subnet-Guard",
 				"Subnet-level DDoS traffic partition absorbing distributed botnet clusters across /24 and /48 prefixes.",
@@ -310,13 +332,25 @@ public class MockValveSimulator {
 				null,
 				"/antidos-status",
 				null,
+				"auto",
+				true,
+				"_adv",
+				true,
+				"COOKIE",
+				"AUTH_COOKIE",
+				"/trust",
+				900,
+				50000,
+				142,
 				0L,
 				cur.activeCounters(),
 				cur.blockedCounters(),
 				currentKey,
 				lastCompletedKey,
 				cumulative,
+				totalAuth,
 				prev.totalRequests(),
+				prevAuth,
 				prev.activeCounters(),
 				prev.blockedCounters(),
 				NUMBER_OF_SLOTS,
@@ -331,6 +365,8 @@ public class MockValveSimulator {
 
 		long offset = (nodeId != null) ? Math.abs(nodeId.hashCode() % 10_000L) : 0L;
 		long cumulative = 180_000L + offset + (currentKey % 50_000L) * 900L;
+		long totalAuth = (long) (cumulative * 0.35);
+		long prevAuth = (long) (prev.totalRequests() * 0.35);
 		return new ValveOverviewDto.ValveSummaryDto(
 				"IPv6-Rate-Limiter",
 				"Dedicated IPv6 subnet rate limiter guarding against rotating privacy extension prefixes.",
@@ -353,13 +389,25 @@ public class MockValveSimulator {
 				null,
 				"/antidos-status",
 				null,
+				"auto",
+				true,
+				"_adv",
+				true,
+				"COOKIE",
+				"AUTH_COOKIE",
+				"/trust",
+				900,
+				50000,
+				142,
 				0L,
 				cur.activeCounters(),
 				cur.blockedCounters(),
 				currentKey,
 				lastCompletedKey,
 				cumulative,
+				totalAuth,
 				prev.totalRequests(),
+				prevAuth,
 				prev.activeCounters(),
 				prev.blockedCounters(),
 				NUMBER_OF_SLOTS,
@@ -396,13 +444,25 @@ public class MockValveSimulator {
 				null,
 				"/antidos-status",
 				null,
+				"auto",
+				true,
+				"_adv",
+				true,
+				"COOKIE",
+				"AUTH_COOKIE",
+				"/trust",
+				900,
+				50000,
+				142,
 				0L,
 				cur.activeCounters(),
 				cur.blockedCounters(),
 				currentKey,
 				lastCompletedKey,
 				cumulative,
+				0L,
 				prev.totalRequests(),
+				0L,
 				prev.activeCounters(),
 				prev.blockedCounters(),
 				NUMBER_OF_SLOTS,
@@ -460,6 +520,8 @@ public class MockValveSimulator {
 
 		long offset = (nodeId != null) ? Math.abs(nodeId.hashCode() % 2_000L) : 0L;
 		long cumulative = 45_000L + offset + (currentKey % 50_000L) * 85L;
+		long totalAuth = (long) (cumulative * 0.65);
+		long prevAuth = (long) (prev.totalRequests() * 0.65);
 		return new ValveOverviewDto.ValveSummaryDto(
 				"Staging-Limiter",
 				"Staging environment limiter operating in marking simulation mode.",
@@ -482,13 +544,25 @@ public class MockValveSimulator {
 				null,
 				"/antidos-status",
 				null,
+				"auto",
+				true,
+				"_adv",
+				true,
+				"COOKIE",
+				"AUTH_COOKIE",
+				"/trust",
+				900,
+				50000,
+				28,
 				0L,
 				cur.activeCounters(),
 				cur.blockedCounters(),
 				currentKey,
 				lastCompletedKey,
 				cumulative,
+				totalAuth,
 				prev.totalRequests(),
+				prevAuth,
 				prev.activeCounters(),
 				prev.blockedCounters(),
 				NUMBER_OF_SLOTS,
@@ -606,12 +680,12 @@ public class MockValveSimulator {
 					Instant.ofEpochMilli(slotKey * SLOT_LENGTH_MILLIS + 4000)
 			);
 			blocked.add(new ValveDetailsDto.BlockedClientDto(
-					"198.51.100.42", 145, 0, 145, false, lastUpdate, 24, 120, null,
+					"198.51.100.42", 145, 0, 145, false, lastUpdate, 24, 120, 95,
 					"POST", "/login", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
 			));
 			if (rnd.nextBoolean()) {
 				blocked.add(new ValveDetailsDto.BlockedClientDto(
-						"203.0.113.88", 128, 0, 128, false, lastUpdate, 28, 0, null,
+						"203.0.113.88", 128, 0, 128, false, lastUpdate, 28, 0, 0,
 						"GET", "/products/search", "Googlebot/2.1 (+http://www.google.com/bot.html)"
 				));
 			}
@@ -628,16 +702,16 @@ public class MockValveSimulator {
 		String lastUpdate = DateTimeFormatter.ISO_INSTANT.format(
 				Instant.ofEpochMilli(slotKey * SLOT_LENGTH_MILLIS + 3500)
 			);
-		// Baseline aggregated /24 subnet exceeding threshold (legitimate heavy traffic with ~82% cookies)
+		// Baseline aggregated /24 subnet exceeding threshold (legitimate heavy traffic with ~82% cookies and ~68% authenticated sessions)
 		int req1 = 320 + rnd.nextInt(90);
 		blocked.add(new ValveDetailsDto.BlockedClientDto(
-				"198.51.100.0/24", req1, 0, req1, true, lastUpdate, 24 + rnd.nextInt(8), (int) (req1 * 0.82), null
+				"198.51.100.0/24", req1, 0, req1, true, lastUpdate, 24 + rnd.nextInt(8), (int) (req1 * 0.82), (int) (req1 * 0.68)
 		));
 		if (slotKey % 2 == 0) {
-			// Residential proxy swarm cluster: 260 reqs spread across 75-90 distinct client IPs (~3.2 reqs/IP) - 0% cookies!
+			// Residential proxy swarm cluster: 260 reqs spread across 75-90 distinct client IPs (~3.2 reqs/IP) - 0% cookies & 0% auth!
 			int req2 = 260 + rnd.nextInt(70);
 			blocked.add(new ValveDetailsDto.BlockedClientDto(
-					"185.246.221.0/24", req2, 0, req2, false, lastUpdate, 82 + rnd.nextInt(8), 0, null,
+					"185.246.221.0/24", req2, 0, req2, false, lastUpdate, 82 + rnd.nextInt(8), 0, 0,
 					"POST", "/api/v1/auth/token", "python-urllib3/2.0.7"
 			));
 		}
@@ -645,13 +719,13 @@ public class MockValveSimulator {
 			// Comcast residential proxy swarm: 180 reqs spread across 90-100 distinct client IPs (~1.9 reqs/IP)
 			int reqComcast = 180 + rnd.nextInt(40);
 			blocked.add(new ValveDetailsDto.BlockedClientDto(
-					"73.15.20.0/24", reqComcast, 0, reqComcast, false, lastUpdate, 96 + rnd.nextInt(6), 0, null
+					"73.15.20.0/24", reqComcast, 0, reqComcast, false, lastUpdate, 96 + rnd.nextInt(6), 0, 0
 			));
 		}
 		if (slotKey % 5 == 0) {
 			int req3 = 290 + rnd.nextInt(80);
 			blocked.add(new ValveDetailsDto.BlockedClientDto(
-					"45.154.255.0/24", req3, 0, req3, true, lastUpdate, 34 + rnd.nextInt(8), 0, null,
+					"45.154.255.0/24", req3, 0, req3, true, lastUpdate, 34 + rnd.nextInt(8), 0, 0,
 					"POST", "/wp-login.php", "Mozilla/5.0 (X11; Ubuntu; Linux x86_64)"
 			));
 		}
@@ -668,15 +742,20 @@ public class MockValveSimulator {
 				Instant.ofEpochMilli(slotKey * SLOT_LENGTH_MILLIS + 4500)
 		);
 		// Baseline blocked IPv6 scraper
+		int reqV6a = 165 + rnd.nextInt(30);
 		blocked.add(new ValveDetailsDto.BlockedClientDto(
-				"2a02:1205:502c:3b00:1c44:98ff:fe22:1011", 165 + rnd.nextInt(30), 0, 165 + rnd.nextInt(30), true, lastUpdate, 1, null, null,
+				"2a02:1205:502c:3b00:1c44:98ff:fe22:1011", reqV6a, 0, reqV6a, true, lastUpdate, 1, 0, 0,
 				"GET", "/.env", "curl/8.4.0"
 		));
 		// Rotating second client from the same residential /64 prefix to demonstrate Subnet Rollup
-		blocked.add(new ValveDetailsDto.BlockedClientDto("2a02:1205:502c:3b00:2d55:77aa:1122:3344", 142 + rnd.nextInt(25), 0, true, lastUpdate));
+		int reqV6b = 142 + rnd.nextInt(25);
+		blocked.add(new ValveDetailsDto.BlockedClientDto(
+				"2a02:1205:502c:3b00:2d55:77aa:1122:3344", reqV6b, 0, reqV6b, true, lastUpdate, 1, 0, 0
+		));
 		if (slotKey % 2 == 0) {
+			int reqV6c = 138 + rnd.nextInt(20);
 			blocked.add(new ValveDetailsDto.BlockedClientDto(
-					"2001:db8:85a3::8a2e:370:7334", 138 + rnd.nextInt(20), 0, 138 + rnd.nextInt(20), true, lastUpdate, 1, null, null,
+					"2001:db8:85a3::8a2e:370:7334", reqV6c, 0, reqV6c, true, lastUpdate, 1, 0, 0,
 					"GET", "/actuator/env", "python-requests/2.31.0"
 			));
 		}
@@ -700,7 +779,7 @@ public class MockValveSimulator {
 			String ip = scannerIps[(int) ((slotKey + i) % scannerIps.length)];
 			SimulatedProbe probe = HONEYPOT_PROBES[Math.abs((int) ((slotKey + i) % HONEYPOT_PROBES.length))];
 			blocked.add(new ValveDetailsDto.BlockedClientDto(
-					ip, 1, 0, 1, true, lastUpdate, 1, 0, null,
+					ip, 1, 0, 1, true, lastUpdate, 1, 0, 0,
 					probe.method(), probe.uri(), probe.userAgent()
 			));
 		}
