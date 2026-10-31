@@ -281,34 +281,40 @@ Automated background schedules execute daily at **03:00 AM** and **03:30 AM**:
 
 ## Relational Database Schema & Data Model
 
-The database separates real-time transient telemetry, persistent subnet aggregations, and normalized network intelligence:
+The database separates real-time transient telemetry, persistent subnet aggregations, daily operational summaries, and normalized network intelligence:
 
 ```
  +------------------------+             +------------------------+
  |  endpoint_heartbeats   |             |     poll_event_log     |
  +------------------------+             +------------------------+
- | PK server_id           |<- - - - - - | id (PK)                |
- |    url                 |  (logical)  | server_id              |
- |    is_online           |             | status, poll_time      |
- +-----------+------------+             +------------------------+
-             | 1
-             | (logical)
-             | N
- +-----------v------------+
- |     slot_snapshots     |
- +------------------------+
- | PK id                  |
- | UQ (server, valve, key)|
- +-----------+------------+
-             | 1
-             | (logical)
-             | N
- +-----------v---------------------------------------------------+
+ | PK server_id           |<- - - - - - | PK id                  |
+ |    url, is_online      |  (logical)  |    server_id, status   |
+ +-----------+------------+             |    blocked/marked/     |
+             | 1                        |    active_ingested     |
+             | (logical)                +------------------------+
+             +-------------------------+
+             | N                       | N
+ +-----------v------------+  +---------v--------------+
+ |    monitored_valves    |  |     slot_snapshots     |
+ +------------------------+  +------------------------+
+ | PK id                  |  | PK id                  |
+ | UQ (server, valve_name)|  | UQ (server, valve, key)|
+ |    monitor_mode        |  |    total_requests      |
+ |    simulation_mode     |  |    active_counters     |
+ |    visitor/auth_track  |  |    blocked_counters    |
+ +------------------------+  |    marked_counters     |
+                             +-----------+------------+
+                                         | 1
+                                         | (logical)
+                                         | N
+ +---------------------------------------v-----------------------+
  |                         client_events                         |
  +---------------------------------------------------------------+
  | PK id                                                         |
  | UQ (server_id, valve_name, slot_key, client_key)              |
- |    request_count, retained_count, is_locked, status           |
+ |    request_count, retained_count, is_locked                   |
+ |    status ('BLOCKED' | 'MARKED' | 'ACTIVE')                   |
+ |    returning_count, authenticated_count                       |
  |    ip_version, cidr_prefix, ip_v4_start/end, ip_v6_start/end   |
  |    subnet_group, asn, as_org, country_code, client_type       |
  |    sample_method, sample_uri, sample_user_agent               |
@@ -324,12 +330,13 @@ The database separates real-time transient telemetry, persistent subnet aggregat
  | PK id                             |     | PK id               |
  | UQ (bucket_start, server, valve,  |     | UQ client_key       |
  |     subnet_group)                 |     |    ip_v4_start/end  |
- |    total/active/blocked_requests  |     |    subnet_group     |
- |    distinct/min/max_clients       |     |    asn, as_org      |
- |    asn, as_org, client_type       |     |    client_type      |
- +-----------+-----------------------+     +----------+----------+
-             | 1                                      | 1
-             |                                        |
+ |    total/active/blocked/          |     |    subnet_group     |
+ |    marked_requests                |     |    asn, as_org      |
+ |    returning/authenticated_reqs   |     |    client_type      |
+ |    distinct/min/max_clients       |     +----------+----------+
+ |    asn, as_org, client_type       |                | 1
+ +-----------+-----------------------+                |
+             | 1                                      |
              +-----------------------+                |
              |                       |                |
              | computed into (30d)   | N              | N
@@ -341,38 +348,37 @@ The database separates real-time transient telemetry, persistent subnet aggregat
  |    first/last_seen_at |  | FK rollup_id   |  | FK entity_id        |
  |    days_dormant       |  |    ua_id       |  | FK range_id         |
  |    baseline_daily_avg |  |    req_count   |  +----------+----------+
- |    peak_daily_reqs    |  +----------------+
- |    last_24h_requests  |
- |    last_24h_surge     |
- |    asn, client_type   |
- +-----------------------+
-                                                      | N
-                                                      |
-                                                      | 1
- +---------------------+                   +----------v----------+
- |      asn_info       |                   |     intel_range     |
- +---------------------+                   +---------------------+
- | PK asn              |                   | PK id               |
- |    as_org           |                   | FK source_key       |
- |    category         |                   |    cidr, category   |
- +---------------------+                   +----------+----------+
-                                                      | N
-                                                      |
- +------------------------+                           | 1
- |     crawler_feeds      |                +----------v----------+
- +------------------------+                |    intel_source     |
- | PK id                  |                +---------------------+
- |    feed_name, status   |                | PK source_key       |
- |    etag, last_synced_at|                |    display_name     |
- +-----------+------------+                |    category, feed_url|
-             | 1                           +---------------------+
-             |
+ |    peak_daily_reqs    |  +----------------+             | N
+ |    total/last_24h_reqs|                                 |
+ |    total/24h_blocked  |  +-----------------------+      | 1
+ |    total/24h_marked   |  |     daily_reports     |  +---v-----------------+
+ |    24h_returning/auth |  +-----------------------+  |     intel_range     |
+ |    last_24h_surge     |  | PK report_date        |  +---------------------+
+ |    asn, client_type   |  |    status, total_reqs |  | PK id               |
+ +-----------------------+  |    total_blocked      |  | FK source_key       |
+                            |    total_marked       |  |    cidr, category   |
+ +-----------------------+  |    peak_req/blk/mrk_s |  +----------+----------+
+ |  network_annotations  |  |    markdown_content   |             | N
+ +-----------------------+  +-----------------------+             | 1
+ | PK id                 |                             +----------v----------+
+ | UQ (target_type, key) |  +-----------------------+  |    intel_source     |
+ |    category, title    |  |       asn_info        |  +---------------------+
+ |    markdown_notes     |  +-----------------------+  | PK source_key       |
+ +-----------------------+  | PK asn                |  |    display_name     |
+                            |    as_org, category   |  |    category, feed   |
+ +------------------------+ +-----------------------+  +---------------------+
+ |     crawler_feeds      |
+ +------------------------+
+ | PK id                  |
+ |    feed_name, status   |
+ |    etag, last_synced_at|
+ +-----------+------------+
+             | 1
              | N
  +-----------v------------+
  |     bot_ip_ranges      |
  +------------------------+
- | PK id                  |
- | FK feed_id             |
+ | PK id, FK feed_id      |
  |    bot_name, cidr      |
  |    ip_v4/v6_start/end  |
  +------------------------+
@@ -380,18 +386,19 @@ The database separates real-time transient telemetry, persistent subnet aggregat
 
 ### Key Tables Overview
 1. **`endpoint_heartbeats`:** Real-time health, latency, online/offline status, and valve discovery per monitored server node.
-2. **`slot_snapshots`:** Completed and active 1-minute time slots per server and valve instance with total request and client counts.
-3. **`client_events`:** Granular rate-limit events (both blocked attacks and tracked active clients) with numeric IPv4/IPv6 boundaries (`ip_v4_start`, `ip_v4_end`) for sub-millisecond range lookups, plus captured first-block request sample snapshots (`sample_method`, `sample_uri`, `sample_user_agent`).
-4. **`client_subnet_rollups`:** Persistent 1-hour time-bucket aggregations per `/24` (IPv4) or `/64` (IPv6) subnet partition with distinct client tracking, request percentiles, and botnet heuristic metrics.
-5. **`subnet_profiles`:** Long-term frequency baselines (30-day lookback with dynamic 3-phase calibration on new deployments), dormancy periods (inactivity before reappearance), and 24-hour surge multipliers per subnet partition for rapid detection of dormant breakouts and residential proxy sweeps.
-6. **`network_annotations`:** Persistent operator knowledge, threat notes, and verdict badges (Legitimate, Suspicious, Malicious, etc.) assigned to specific IPs, subnets, or ASNs.
-7. **`rollup_signatures`:** Optional User-Agent and client signature dimensions linked to subnet rollups for distributed fingerprinting.
-8. **`network_entity`:** Normalized directory of enriched client IPs and subnets with ASN, geolocation, threat classification, and first/last seen timestamps.
-9. **`network_entity_match`:** Cross-reference junction table linking detected network entities to specific matched threat intelligence ranges.
-10. **`intel_source` & `intel_range`:** Threat intelligence directory containing verified CIDR blocks from search engine bots, commercial AI scrapers, and Tor exit relays.
-11. **`asn_info`:** Autonomous System catalog caching organization names and datacenter / hosting provider classifications.
-12. **`crawler_feeds` & `bot_ip_ranges`:** Automatic synchronization catalog for official bot feeds (Googlebot, Bingbot, OpenAI, Anthropic) with versioning and orphan pruning.
-13. **`poll_event_log`:** Diagnostic audit trail tracking background ingestion cycles, communication latency, warnings, and recovery gap-fills.
+2. **`monitored_valves`:** Persisted runtime configurations for each discovered Valve (`monitor_mode`, `simulation_mode`, rate-limit thresholds, slot duration, `visitor_cookie_enabled`, and `auth_tracking_enabled`).
+3. **`slot_snapshots`:** Completed and active time slots per server and valve instance with total request counts, active counters, hard-blocked counters (`blocked_counters`, HTTP 429), and soft-marked/simulated counters (`marked_counters`).
+4. **`client_events`:** Granular rate-limit events distinguishing hard blocks (`status = 'BLOCKED'`), soft-marking/simulation threshold hits (`status = 'MARKED'`), and tracked active clients (`status = 'ACTIVE'`). Stores numeric IPv4/IPv6 boundaries (`ip_v4_start`, `ip_v4_end`) for sub-millisecond range lookups, visitor cookie and authentication counters (`returning_count`, `authenticated_count`), and first-trigger request samples (`sample_method`, `sample_uri`, `sample_user_agent`).
+5. **`client_subnet_rollups`:** Persistent time-bucket aggregations per `/24` (IPv4) or `/64` (IPv6) subnet partition tracking `total_requests`, `active_requests`, `blocked_requests`, `marked_requests`, returning visitor / authenticated ratios, distinct client counts, and botnet heuristic metrics.
+6. **`subnet_profiles`:** Long-term frequency baselines (30-day lookback with dynamic 3-phase calibration), dormancy periods, 24-hour surge multipliers, lifetime and 24h blocked vs. marked request totals (`total_blocked_requests`, `last_24h_blocked_requests`, `total_marked_requests`, `last_24h_marked_requests`), and 24h visitor cookie / authentication ratios per subnet partition for rapid detection of dormant breakouts and residential proxy sweeps.
+7. **`daily_reports`:** Permanent daily operational summaries (`report_date`, `status`, `total_requests`, `total_blocked`, `total_marked`, `peak_requests_per_sec`, `peak_blocked_per_sec`, `peak_marked_per_sec`, and rendered GFM `markdown_content`) archived prior to raw telemetry retention cleanup.
+8. **`network_annotations`:** Persistent operator knowledge archive, threat notes, and verdict badges (`LEGITIMATE`, `INTERNAL`, `SUSPICIOUS`, `MALICIOUS`, `INFO`) assigned to specific Subnets or ASNs.
+9. **`rollup_signatures`:** Optional User-Agent and client signature dimensions linked to subnet rollups for distributed fingerprinting.
+10. **`network_entity` & `network_entity_match`:** Normalized directory of enriched client IPs and subnets with ASN, geolocation, threat classification, and cross-references to matched threat intelligence ranges.
+11. **`intel_source` & `intel_range`:** Threat intelligence directory containing verified CIDR blocks from search engine bots, commercial AI scrapers, and Tor exit relays.
+12. **`asn_info`:** Autonomous System catalog caching organization names and datacenter / hosting provider classifications.
+13. **`crawler_feeds` & `bot_ip_ranges`:** Automatic synchronization catalog for official bot feeds (Googlebot, Bingbot, OpenAI, Anthropic) with versioning and orphan pruning.
+14. **`poll_event_log`:** Diagnostic audit trail tracking background ingestion cycles (`blocked_events_ingested`, `marked_events_ingested`, `events_ingested`), communication latency, warnings, and recovery gap-fills.
 
 ---
 
