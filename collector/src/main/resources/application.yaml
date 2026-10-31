@@ -42,11 +42,15 @@ collector:
   config-file: ${COLLECTOR_CONFIG_FILE:collector-config.yaml}
   poll-interval-seconds: 15
   retention-days: 30
+  active-event-retention-hours: ${COLLECTOR_ACTIVE_EVENT_RETENTION_HOURS:24}
   poll-log-retention-days: 1
   entity-retention-days: 60
   rollup-enabled: ${COLLECTOR_ROLLUP_ENABLED:true}
   rollup-window-minutes: ${COLLECTOR_ROLLUP_WINDOW_MINUTES:60}
-  rollup-retention-days: ${COLLECTOR_ROLLUP_RETENTION_DAYS:180}
+  rollup-retention-days: ${COLLECTOR_ROLLUP_RETENTION_DAYS:30}
+  auto-vacuum-enabled: ${COLLECTOR_AUTO_VACUUM_ENABLED:true}
+  vacuum-threshold-bytes: ${COLLECTOR_VACUUM_THRESHOLD_BYTES:52428800}
+  active-event-cleanup-cron: ${COLLECTOR_ACTIVE_EVENT_CLEANUP_CRON:0 15 * * * *}
   surge-min-requests: ${COLLECTOR_SURGE_MIN_REQUESTS:1000}
   surge-multiplier-alert: ${COLLECTOR_SURGE_MULTIPLIER_ALERT:5.0}
   slow-poll-threshold-ms: 1000

@@ -15,6 +15,7 @@ public class CollectorProperties {
 	private String configFile = "collector-config.yaml";
 	private int pollIntervalSeconds = 15;
 	private int retentionDays = 30;
+	private int activeEventRetentionHours = 24;
 	private int pollLogRetentionDays = 1;
 	private int entityRetentionDays = 60;
 	private int slowPollThresholdMs = 1000;
@@ -22,7 +23,9 @@ public class CollectorProperties {
 	private int demoInstanceCount = 1;
 	private boolean parallelFleetPolling = true;
 	private int rollupWindowMinutes = 60;
-	private int rollupRetentionDays = 180;
+	private int rollupRetentionDays = 30;
+	private boolean autoVacuumEnabled = true;
+	private long vacuumThresholdBytes = 50L * 1024L * 1024L; // 50 MB freespace threshold for auto-vacuum
 	private boolean rollupEnabled = true;
 	private boolean reportEnabled = true;
 	private String reportCron = "0 0 1 * * *"; // Daily at 01:00 AM (2 hours prior to 03:00 AM retention cleanup)
@@ -65,6 +68,30 @@ public class CollectorProperties {
 
 	public void setRetentionDays(int retentionDays) {
 		this.retentionDays = retentionDays;
+	}
+
+	public int getActiveEventRetentionHours() {
+		return activeEventRetentionHours;
+	}
+
+	public void setActiveEventRetentionHours(int activeEventRetentionHours) {
+		this.activeEventRetentionHours = Math.max(1, activeEventRetentionHours);
+	}
+
+	public boolean isAutoVacuumEnabled() {
+		return autoVacuumEnabled;
+	}
+
+	public void setAutoVacuumEnabled(boolean autoVacuumEnabled) {
+		this.autoVacuumEnabled = autoVacuumEnabled;
+	}
+
+	public long getVacuumThresholdBytes() {
+		return vacuumThresholdBytes;
+	}
+
+	public void setVacuumThresholdBytes(long vacuumThresholdBytes) {
+		this.vacuumThresholdBytes = Math.max(1024L * 1024L, vacuumThresholdBytes);
 	}
 
 	public int getPollLogRetentionDays() {

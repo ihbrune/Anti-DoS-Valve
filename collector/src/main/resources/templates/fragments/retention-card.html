@@ -13,7 +13,15 @@
 
     <div class="sys-prop-list" style="margin-bottom: 20px;">
         <div class="sys-prop-row">
-            <span class="sys-prop-key">Raw Snapshots &amp; Client Events</span>
+            <span class="sys-prop-key">Active Client Events</span>
+            <span class="sys-prop-val" th:text="${status.config.activeEventRetentionHours} + ' hours'">24 hours</span>
+        </div>
+        <div class="sys-prop-row">
+            <span class="sys-prop-key">Security Incidents (Blocked &amp; Marked)</span>
+            <span class="sys-prop-val" th:text="${status.config.retentionDays} + ' days'">30 days</span>
+        </div>
+        <div class="sys-prop-row">
+            <span class="sys-prop-key">Raw Snapshots &amp; High-Water Slots</span>
             <span class="sys-prop-val" th:text="${status.config.retentionDays} + ' days'">30 days</span>
         </div>
         <div class="sys-prop-row">
@@ -26,17 +34,25 @@
         </div>
         <div class="sys-prop-row">
             <span class="sys-prop-key">Subnet Rollup Retention</span>
-            <span class="sys-prop-val" th:text="${status.config.rollupRetentionDays} + ' days'">180 days</span>
+            <span class="sys-prop-val" th:text="${status.config.rollupRetentionDays} + ' days'">30 days</span>
         </div>
         <div class="sys-prop-row">
             <span class="sys-prop-key">Threat Intel Enrichment TTL</span>
             <span class="sys-prop-val" th:text="${status.intel.ttlDays} + ' days'">30 days</span>
         </div>
+        <div th:if="${status.database.isSqlite}" class="sys-prop-row">
+            <span class="sys-prop-key">SQLite Freelist (Reclaimable)</span>
+            <span class="sys-prop-val" th:text="${status.database.sqliteFreelistFormatted} + ' (' + ${#numbers.formatInteger(status.database.sqliteFreelistPages, 1, 'COMMA')} + ' pages)'">0 B (0 pages)</span>
+        </div>
+        <div th:if="${status.database.isSqlite}" class="sys-prop-row">
+            <span class="sys-prop-key">Auto-Compaction (VACUUM)</span>
+            <span class="sys-prop-val" th:text="${status.config.autoVacuumEnabled ? 'Enabled (&gt; ' + status.config.vacuumThresholdFormatted + ')' : 'Disabled'}">Enabled (&gt; 50.0 MB)</span>
+        </div>
     </div>
 
     <div style="margin-bottom: 14px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
         <div style="font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">
-            Daily Housekeeping Schedule (03:00 AM)
+            Daily Housekeeping Schedule (03:00 AM) &amp; Hourly Active Pruning (:15)
         </div>
         <div style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.4;"
              th:text="'Last run: ' + ${status.schedulers.lastRetentionSummary}">
@@ -82,6 +98,15 @@
                     hx-swap="outerHTML"
                     hx-disabled-elt="this">
                 <span>&#x1F9F9;</span> Run Retention Cleanup Now
+            </button>
+            <button th:if="${status.database.isSqlite}"
+                    type="button" class="btn"
+                    style="font-size: 12px; padding: 6px 12px;"
+                    hx-post="/system/vacuum"
+                    hx-target="#retention-card"
+                    hx-swap="outerHTML"
+                    hx-disabled-elt="this">
+                <span>&#x1F4BE;</span> Compact SQLite (VACUUM)
             </button>
             <button type="button" class="btn"
                     style="font-size: 12px; padding: 6px 12px;"

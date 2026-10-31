@@ -57,6 +57,7 @@ public class SystemStatusService {
 	private final IntelRegistry intelRegistry;
 	private final EntityResolver entityResolver;
 	private final HeartbeatRepository heartbeatRepository;
+	private final DatabaseMaintenanceService databaseMaintenanceService;
 	private final boolean virtualThreadsEnabled;
 
 	@Autowired
@@ -74,6 +75,7 @@ public class SystemStatusService {
 			IntelRegistry intelRegistry,
 			EntityResolver entityResolver,
 			HeartbeatRepository heartbeatRepository,
+			@Autowired(required = false) DatabaseMaintenanceService databaseMaintenanceService,
 			@Value("${spring.threads.virtual.enabled:false}") boolean virtualThreadsEnabled) {
 		this.properties = properties;
 		this.jdbcTemplate = jdbcTemplate;
@@ -88,6 +90,7 @@ public class SystemStatusService {
 		this.intelRegistry = intelRegistry;
 		this.entityResolver = entityResolver;
 		this.heartbeatRepository = heartbeatRepository;
+		this.databaseMaintenanceService = databaseMaintenanceService;
 		this.virtualThreadsEnabled = virtualThreadsEnabled;
 	}
 
@@ -136,12 +139,16 @@ public class SystemStatusService {
 				properties.isParallelFleetPolling(),
 				properties.getSlowPollThresholdMs(),
 				properties.getRetentionDays(),
+				properties.getActiveEventRetentionHours(),
 				properties.getPollLogRetentionDays(),
 				properties.getEntityRetentionDays(),
 				properties.isRollupEnabled(),
 				properties.getRollupWindowMinutes(),
 				properties.getRollupRetentionDays(),
 				ttlDays,
+				properties.isAutoVacuumEnabled(),
+				properties.getVacuumThresholdBytes(),
+				formatBytes(properties.getVacuumThresholdBytes()),
 				properties.isDemoMode(),
 				properties.getDefaultValveRules(),
 				properties.getValveRules(),
@@ -225,6 +232,16 @@ public class SystemStatusService {
 			}
 		}
 
+		long sqliteFreelistBytes = 0;
+		String sqliteFreelistFormatted = "0 B";
+		long sqliteFreelistPages = 0;
+		if (isSqlite && databaseMaintenanceService != null) {
+			DatabaseMaintenanceService.FreelistInfo freelist = databaseMaintenanceService.getFreelistInfo();
+			sqliteFreelistBytes = freelist.freeBytes();
+			sqliteFreelistFormatted = freelist.formattedBytes();
+			sqliteFreelistPages = freelist.freelistPages();
+		}
+
 		return new SystemStatusDto.DatabaseInfo(
 				engine,
 				sanitizedUrl,
@@ -232,6 +249,9 @@ public class SystemStatusService {
 				sqliteFilePath,
 				sqliteFileSizeBytes,
 				sqliteFileSizeFormatted,
+				sqliteFreelistBytes,
+				sqliteFreelistFormatted,
+				sqliteFreelistPages,
 				sqliteLastModified,
 				tableCounts,
 				hikariInfo,
@@ -244,9 +264,11 @@ public class SystemStatusService {
 				? collectorScheduler.getLastRetentionResult() : null;
 		Instant lastRetentionRun = retentionResult != null ? retentionResult.executedAt() : null;
 		String lastRetentionSummary = retentionResult != null
-				? String.format(Locale.ROOT, "Purged %d snapshots, %d events, %d logs, %d orphan entities (%dms)",
-				retentionResult.deletedSlots(), retentionResult.deletedEvents(),
-				retentionResult.deletedLogs(), retentionResult.deletedEntities(), retentionResult.durationMs())
+				? String.format(Locale.ROOT, "Purged %d snapshots, %d events (%d active), %d logs, %d orphan entities%s (%dms)",
+				retentionResult.deletedSlots(), retentionResult.deletedEvents(), retentionResult.deletedActiveEvents(),
+				retentionResult.deletedLogs(), retentionResult.deletedEntities(),
+				retentionResult.vacuumExecuted() ? ", compacted DB" : "",
+				retentionResult.durationMs())
 				: "Pending next scheduled run (daily at 03:00)";
 
 		RollupAggregationService.RollupExecutionResult rollupResult = rollupAggregationService != null

@@ -662,7 +662,7 @@ Accessible via `/system`. The administrative and telemetry health center of the 
 ### 3. Telemetry Cascade & Rollup Rules
 * **Rollup Window Interval:** Bucketing granularity for background aggregation (default: 60 minutes). Scheduled background aggregation evaluates completed windows every 15 minutes; in-flight traffic for the current ongoing window is preserved in `client_events` and committed to `client_subnet_rollups` once the window closes.
 * **Lookback Horizon:** Number of past hours evaluated during scheduled rollups (default: 6 hours catch-up window).
-* **Retention Cleanup:** Daily cleanup at 03:30 AM purging rollups older than the configured retention horizon (default: 180 days).
+* **Retention Cleanup:** Daily cleanup at 03:30 AM purging rollups older than the configured retention horizon (default: 30 days).
 
 ### 4. Threat Intelligence & MMDB Status
 * **ASN Lookup Engine:** GeoLite2 / MaxMind ASN database path and status.
@@ -672,9 +672,10 @@ Accessible via `/system`. The administrative and telemetry health center of the 
 
 ### 5. Operational Maintenance Triggers
 Admins can trigger asynchronous maintenance actions directly from the web interface:
-* **Run Subnet Rollup Now:** Manually recalculates persistent subnet aggregations across recent events.
-* **Refresh Threat Intel:** Triggers an immediate crawler feed sync and IP classification cache reload.
-* **Optimize / Vacuum DB:** Executes SQLite `PRAGMA incremental_vacuum` or `OPTIMIZE` to reclaim unallocated disk blocks and refresh B-tree statistics.
+* **Run Retention Cleanup Now:** Triggers an immediate retention cleanup purging aged snapshots, events (with differential retention for active vs. incident events), logs, and orphan entities.
+* **Compact SQLite (VACUUM):** Runs a full database compaction (`VACUUM`) on SQLite standalone instances, immediately reclaiming unallocated freelist pages and shrinking the database file on disk.
+* **Catch Up Subnet Rollups:** Manually recalculates persistent subnet aggregations across recent events.
+* **Clear Resolver Cache:** Clears the in-memory ASN/crawler IP classification cache, forcing fresh lookups against persistent storage and MMDB.
 * **Force Fleet Poll:** Triggers an immediate polling sweep across all monitored servers.
 * **Reset Demo Data (Demo Mode Only):** Re-seeds the demo database with clean, realistic 7-day telemetry curves.
 

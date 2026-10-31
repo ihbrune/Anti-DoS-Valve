@@ -5,6 +5,7 @@ import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 import org.henbru.antidos.collector.model.ClientEvent;
@@ -1160,7 +1161,7 @@ public class DemoDataSeeder {
 				}
 			}
 			if (!markedEvents.isEmpty()) {
-				clientEventRepository.batchInsert(markedEvents);
+				clientEventRepository.batchUpsert(markedEvents);
 				if (rollupAggregationService != null) {
 					rollupAggregationService.aggregateCatchUp(720);
 				}

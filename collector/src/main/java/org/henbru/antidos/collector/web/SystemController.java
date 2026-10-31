@@ -23,6 +23,7 @@ public class SystemController {
 	private final CollectorScheduler collectorScheduler;
 	private final RollupAggregationService rollupAggregationService;
 	private final EntityResolver entityResolver;
+	private final org.henbru.antidos.collector.system.DatabaseMaintenanceService databaseMaintenanceService;
 	private final CollectorProperties properties;
 
 	public SystemController(
@@ -30,11 +31,13 @@ public class SystemController {
 			CollectorScheduler collectorScheduler,
 			RollupAggregationService rollupAggregationService,
 			EntityResolver entityResolver,
+			@org.springframework.beans.factory.annotation.Autowired(required = false) org.henbru.antidos.collector.system.DatabaseMaintenanceService databaseMaintenanceService,
 			CollectorProperties properties) {
 		this.systemStatusService = systemStatusService;
 		this.collectorScheduler = collectorScheduler;
 		this.rollupAggregationService = rollupAggregationService;
 		this.entityResolver = entityResolver;
+		this.databaseMaintenanceService = databaseMaintenanceService;
 		this.properties = properties;
 	}
 
@@ -54,14 +57,34 @@ public class SystemController {
 		try {
 			CollectorScheduler.RetentionCleanupResult result = collectorScheduler.runRetentionCleanup();
 			model.addAttribute("actionSuccess", true);
+			String vacuumSuffix = result.vacuumExecuted() ? ", and compacted SQLite database (VACUUM)" : "";
 			model.addAttribute("actionMessage", String.format(
-					"Retention cleanup executed successfully in %dms: purged %d snapshots, %d events, %d logs, %d orphan entities, and expired %d stale entities.",
-					result.durationMs(), result.deletedSlots(), result.deletedEvents(),
-					result.deletedLogs(), result.deletedEntities(), result.expiredEntities()
+					"Retention cleanup executed successfully in %dms: purged %d snapshots, %d events (%d active), %d logs, %d orphan entities, and expired %d stale entities%s.",
+					result.durationMs(), result.deletedSlots(), result.deletedEvents(), result.deletedActiveEvents(),
+					result.deletedLogs(), result.deletedEntities(), result.expiredEntities(), vacuumSuffix
 			));
 		} catch (Exception e) {
 			model.addAttribute("actionSuccess", false);
 			model.addAttribute("actionMessage", "Failed to execute retention cleanup: " + e.getMessage());
+		}
+		populateModel(model);
+		return "fragments/retention-card :: retentionCard";
+	}
+
+	@PostMapping("/system/vacuum")
+	public String triggerVacuum(Model model) {
+		try {
+			if (databaseMaintenanceService == null || !databaseMaintenanceService.isSqlite()) {
+				model.addAttribute("actionSuccess", false);
+				model.addAttribute("actionMessage", "Database compaction (VACUUM) is only applicable for SQLite standalone deployments.");
+			} else {
+				org.henbru.antidos.collector.system.DatabaseMaintenanceService.VacuumResult res = databaseMaintenanceService.vacuum();
+				model.addAttribute("actionSuccess", res.success());
+				model.addAttribute("actionMessage", res.message());
+			}
+		} catch (Exception e) {
+			model.addAttribute("actionSuccess", false);
+			model.addAttribute("actionMessage", "Failed to execute database VACUUM: " + e.getMessage());
 		}
 		populateModel(model);
 		return "fragments/retention-card :: retentionCard";

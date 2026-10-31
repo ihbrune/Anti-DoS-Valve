@@ -128,10 +128,13 @@ collector:
   poll-interval-seconds: 15
   parallel-fleet-polling: true
   retention-days: 30
+  active-event-retention-hours: 24
   poll-log-retention-days: 1
   entity-retention-days: 60
   rollup-window-minutes: 60
-  rollup-retention-days: 180
+  rollup-retention-days: 30
+  auto-vacuum-enabled: true
+  vacuum-threshold-bytes: 52428800
   slow-poll-threshold-ms: 1000
 
   enrichment:
@@ -269,13 +272,17 @@ Create `/etc/antidos/custom-datacenter-asns.txt` to override categorization:
 
 ---
 
-## Data Retention & Entity Hygiene Strategy
+## Data Retention & Storage Hygiene Strategy
 
-Automated background schedules execute daily at **03:00 AM** and **03:30 AM**:
-1. **Telemetry & Incidents (`retention-days: 30`):** Prunes raw `client_events` and `slot_snapshots` older than 30 days.
-2. **Audit Diagnostics (`poll-log-retention-days: 1`):** Purges diagnostic polling event logs older than 24 hours.
-3. **Orphan Entity Cleanup (`entity-retention-days: 60`):** Deletes inactive `network_entity` records with zero remaining associated events.
-4. **Persistent Subnet Rollups (`rollup-retention-days: 180`):** Retains aggregated `/24` and `/64` subnet traffic buckets for 180 days.
+Automated background schedules execute hourly and nightly at **03:00 AM** and **03:30 AM**:
+1. **Differential Client Event Retention:**
+   - **High-Volume Active Events (`active-event-retention-hours: 24`):** Prunes raw `status = 'ACTIVE'` events older than 24 hours via an hourly lightweight maintenance job (`0 15 * * * *`) and during nightly retention cleanup. Raw high-throughput telemetry is aggregated into persistent subnet rollups (`client_subnet_rollups`) before raw pruning.
+   - **Security Incidents & Forensics (`retention-days: 30`):** Retains full forensic detail (IP, URI, User-Agent, cookie/auth counters) for `BLOCKED` and `MARKED` events for 30 days.
+2. **Raw High-Water Snapshots (`retention-days: 30`):** Prunes completed `slot_snapshots` older than 30 days.
+3. **Audit Diagnostics (`poll-log-retention-days: 1`):** Purges diagnostic polling event logs older than 24 hours.
+4. **Orphan Entity Cleanup (`entity-retention-days: 60`):** Deletes inactive `network_entity` records with zero remaining associated events.
+5. **Persistent Subnet Rollups (`rollup-retention-days: 30`):** Retains aggregated `/24` and `/64` subnet traffic buckets for 30 days (reducing long-term table footprint while preserving 30-day baseline analytics).
+6. **SQLite Storage Compaction (`auto-vacuum-enabled: true`, `vacuum-threshold-bytes: 52428800`):** Automatically compacts SQLite standalone database files (`VACUUM`) during nightly retention cleanup if reclaimable freelist space exceeds 50 MB. Can also be triggered on demand via the System Status UI.
 
 ---
 

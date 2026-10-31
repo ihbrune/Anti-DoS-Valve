@@ -26,6 +26,7 @@ public class CollectorScheduler {
 	private final org.henbru.antidos.collector.storage.NetworkEntityRepository networkEntityRepository;
 	private final org.henbru.antidos.collector.enrichment.EntityResolver entityResolver;
 	private final org.henbru.antidos.collector.report.DailyReportService dailyReportService;
+	private final org.henbru.antidos.collector.system.DatabaseMaintenanceService databaseMaintenanceService;
 	private final CollectorProperties properties;
 
 	public CollectorScheduler(
@@ -37,6 +38,7 @@ public class CollectorScheduler {
 			org.henbru.antidos.collector.storage.NetworkEntityRepository networkEntityRepository,
 			org.henbru.antidos.collector.enrichment.EntityResolver entityResolver,
 			org.henbru.antidos.collector.report.DailyReportService dailyReportService,
+			@org.springframework.beans.factory.annotation.Autowired(required = false) org.henbru.antidos.collector.system.DatabaseMaintenanceService databaseMaintenanceService,
 			CollectorProperties properties) {
 		this.pollerService = pollerService;
 		this.slotSnapshotRepository = slotSnapshotRepository;
@@ -46,6 +48,7 @@ public class CollectorScheduler {
 		this.networkEntityRepository = networkEntityRepository;
 		this.entityResolver = entityResolver;
 		this.dailyReportService = dailyReportService;
+		this.databaseMaintenanceService = databaseMaintenanceService;
 		this.properties = properties;
 	}
 
@@ -75,9 +78,11 @@ public class CollectorScheduler {
 			Instant executedAt,
 			int deletedSlots,
 			int deletedEvents,
+			int deletedActiveEvents,
 			int deletedLogs,
 			int deletedEntities,
 			int expiredEntities,
+			boolean vacuumExecuted,
 			long durationMs
 	) {}
 
@@ -88,18 +93,54 @@ public class CollectorScheduler {
 	}
 
 	/**
-	 * Daily retention cleanup: deletes snapshots, client events, and poll event logs older than configured retention days.
-	 * Also purges unreferenced/orphan network entities and marks stale enrichments (> TTL) for re-resolution.
+	 * Hourly lightweight retention cleanup: deletes high-volume ACTIVE client events older than
+	 * configured activeEventRetentionHours (default: 24h).
+	 * Ensures memory and disk footprints remain bounded throughout high-throughput traffic bursts
+	 * without having to wait for the nightly 03:00 AM cycle.
+	 */
+	@Scheduled(cron = "${collector.active-event-cleanup-cron:0 15 * * * *}")
+	public int runHourlyActiveEventCleanup() {
+		try {
+			int hours = properties.getActiveEventRetentionHours() > 0 ? properties.getActiveEventRetentionHours() : 24;
+			Instant activeCutoff = Instant.now().minus(hours, ChronoUnit.HOURS);
+			int deletedActive = clientEventRepository.deleteOlderThan(activeCutoff, org.henbru.antidos.collector.model.ClientEvent.STATUS_ACTIVE);
+			if (deletedActive > 0) {
+				log.info("Hourly active event retention cleanup purged {} ACTIVE client events older than {} hours (cutoff: {})",
+						deletedActive, hours, activeCutoff);
+			}
+			return deletedActive;
+		} catch (Exception e) {
+			log.error("Unexpected error in hourly active event cleanup: {}", e.getMessage(), e);
+			return 0;
+		}
+	}
+
+	/**
+	 * Daily retention cleanup: executes differential retention for client events (short retention for
+	 * high-volume ACTIVE events vs. long-term retention for BLOCKED/MARKED security incidents),
+	 * purges old slot snapshots and poll logs, cleans up orphan network entities, expires stale threat intel,
+	 * and executes automatic SQLite storage compaction (VACUUM) if freelist space exceeds threshold.
 	 */
 	@Scheduled(cron = "0 0 3 * * *") // Daily at 03:00 AM
 	public RetentionCleanupResult runRetentionCleanup() {
 		long start = System.currentTimeMillis();
 		int days = properties.getRetentionDays() > 0 ? properties.getRetentionDays() : 30;
 		Instant cutoff = Instant.now().minus(days, ChronoUnit.DAYS);
-		log.info("Running daily data retention cleanup for records older than {} days (cutoff: {})", days, cutoff);
+
+		int activeHours = properties.getActiveEventRetentionHours() > 0 ? properties.getActiveEventRetentionHours() : 24;
+		Instant activeCutoff = Instant.now().minus(activeHours, ChronoUnit.HOURS);
+
+		log.info("Running daily data retention cleanup (active events > {}h cutoff: {}, security events & snapshots > {}d cutoff: {})",
+				activeHours, activeCutoff, days, cutoff);
 
 		int deletedSlots = slotSnapshotRepository.deleteOlderThan(cutoff);
-		int deletedEvents = clientEventRepository.deleteOlderThan(cutoff);
+
+		// First prune short-retention high-volume ACTIVE client events
+		int deletedActiveEvents = clientEventRepository.deleteOlderThan(activeCutoff, org.henbru.antidos.collector.model.ClientEvent.STATUS_ACTIVE);
+
+		// Then prune remaining security incident events (BLOCKED & MARKED) and any other events older than full retentionDays
+		int deletedSecurityEvents = clientEventRepository.deleteOlderThan(cutoff);
+		int totalDeletedEvents = deletedActiveEvents + deletedSecurityEvents;
 
 		int logDays = properties.getPollLogRetentionDays() > 0 ? properties.getPollLogRetentionDays() : 1;
 		Instant logCutoff = Instant.now().minus(logDays, ChronoUnit.DAYS);
@@ -119,14 +160,24 @@ public class CollectorScheduler {
 			entityResolver.clearCache();
 		}
 
+		// Perform automatic database storage compaction (VACUUM) for SQLite if freelist threshold is exceeded
+		boolean vacuumExecuted = false;
+		if (properties.isAutoVacuumEnabled() && databaseMaintenanceService != null) {
+			try {
+				vacuumExecuted = databaseMaintenanceService.vacuumIfFreelistExceeds(properties.getVacuumThresholdBytes());
+			} catch (Exception e) {
+				log.warn("Automatic database compaction check failed: {}", e.getMessage());
+			}
+		}
+
 		long durationMs = System.currentTimeMillis() - start;
 		RetentionCleanupResult result = new RetentionCleanupResult(
-				Instant.now(), deletedSlots, deletedEvents, deletedLogs, deletedEntities, expiredEntities, durationMs
+				Instant.now(), deletedSlots, totalDeletedEvents, deletedActiveEvents, deletedLogs, deletedEntities, expiredEntities, vacuumExecuted, durationMs
 		);
 		this.lastRetentionResult = result;
 
-		log.info("Retention cleanup completed in {}ms: purged {} slot snapshots, {} client events, {} poll event logs, {} orphan entities, and expired {} stale entities for re-enrichment",
-				durationMs, deletedSlots, deletedEvents, deletedLogs, deletedEntities, expiredEntities);
+		log.info("Retention cleanup completed in {}ms: purged {} slot snapshots, {} client events ({} active, {} security), {} poll logs, {} orphan entities, expired {} stale entities, vacuum: {}",
+				durationMs, deletedSlots, totalDeletedEvents, deletedActiveEvents, deletedSecurityEvents, deletedLogs, deletedEntities, expiredEntities, vacuumExecuted);
 		return result;
 	}
 

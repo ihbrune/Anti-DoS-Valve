@@ -168,6 +168,10 @@
                     <span class="sys-prop-key">File Size on Disk</span>
                     <span class="sys-prop-val" th:text="${status.database.sqliteFileSizeFormatted}">14.5 MB</span>
                 </div>
+                <div th:if="${status.database.isSqlite}" class="sys-prop-row">
+                    <span class="sys-prop-key">Freelist (Reclaimable Space)</span>
+                    <span class="sys-prop-val" th:text="${status.database.sqliteFreelistFormatted} + ' (' + ${#numbers.formatInteger(status.database.sqliteFreelistPages, 1, 'COMMA')} + ' pages)'">0 B (0 pages)</span>
+                </div>
                 <div th:if="${status.database.flyway != null}" class="sys-prop-row">
                     <span class="sys-prop-key">Flyway Schema Version</span>
                     <span class="sys-prop-val" th:text="'v' + ${status.database.flyway.currentVersion} + ' (' + ${status.database.flyway.description} + ')'">v7 (create_intel_sources)</span>
@@ -352,8 +356,8 @@
                         <span style="font-size: 11px; margin-left: 6px;" th:text="${status.intel.asnMmdb.fileSizeFormatted}">12.4 MB</span>
                         <span th:if="${status.intel.asnMmdb.buildDateFormatted != null}"
                               style="font-size: 11px; margin-left: 8px; color: var(--text-muted); font-weight: normal;"
-                              th:text="'&bull; Stand: ' + ${status.intel.asnMmdb.buildDateFormatted}">
-                            &bull; Stand: 2026-10-01 (vor 23 Tagen)
+                              th:text="'&bull; Built: ' + ${status.intel.asnMmdb.buildDateFormatted}">
+                            &bull; Built: 2026-10-01 (23 days ago)
                         </span>
                     </span>
                 </div>
@@ -365,8 +369,8 @@
                         <span style="font-size: 11px; margin-left: 6px;" th:text="${status.intel.countryMmdb.fileSizeFormatted}">4.2 MB</span>
                         <span th:if="${status.intel.countryMmdb.buildDateFormatted != null}"
                               style="font-size: 11px; margin-left: 8px; color: var(--text-muted); font-weight: normal;"
-                              th:text="'&bull; Stand: ' + ${status.intel.countryMmdb.buildDateFormatted}">
-                            &bull; Stand: 2026-10-01 (vor 23 Tagen)
+                              th:text="'&bull; Built: ' + ${status.intel.countryMmdb.buildDateFormatted}">
+                            &bull; Built: 2026-10-01 (23 days ago)
                         </span>
                     </span>
                 </div>

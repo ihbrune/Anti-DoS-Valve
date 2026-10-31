@@ -37,6 +37,7 @@ class SystemControllerTest {
 				.andExpect(content().string(containsString("Threat Intelligence &amp; Enrichment State")))
 				.andExpect(content().string(containsString("Runtime &amp; Environment")))
 				.andExpect(content().string(containsString("Run Retention Cleanup Now")))
+				.andExpect(content().string(containsString("Compact SQLite (VACUUM)")))
 				.andExpect(content().string(containsString("Catch Up Subnet Rollups")))
 				.andExpect(content().string(containsString("Clear Resolver Cache")));
 	}
@@ -53,6 +54,13 @@ class SystemControllerTest {
 		mockMvc.perform(post("/system/retention-cleanup"))
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("Retention cleanup executed successfully")));
+	}
+
+	@Test
+	void testVacuumTrigger() throws Exception {
+		mockMvc.perform(post("/system/vacuum"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("compacted successfully")));
 	}
 
 	@Test
@@ -82,6 +90,10 @@ class SystemControllerTest {
 
 		assertTrue(dto.config().pollIntervalSeconds() > 0);
 		assertTrue(dto.config().retentionDays() > 0);
+		assertTrue(dto.config().activeEventRetentionHours() > 0);
+		assertTrue(dto.config().autoVacuumEnabled());
+		assertTrue(dto.config().vacuumThresholdBytes() > 0);
+		assertNotNull(dto.database().sqliteFreelistFormatted());
 		assertNotNull(dto.intel().asnMmdb());
 		assertNotNull(dto.intel().countryMmdb());
 		assertTrue(dto.database().tableCounts().containsKey("slot_snapshots"));

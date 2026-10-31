@@ -30,14 +30,27 @@ collector:
   # Global default poll interval in seconds
   poll-interval-seconds: 15
 
-  # Historical retention period for completed slots and client events
+  # Historical retention period for security incidents (BLOCKED & MARKED) and raw snapshots (default: 30 days)
   retention-days: 30
+
+  # Short-term retention horizon for transient, high-volume ACTIVE client events (default: 24 hours).
+  # Raw in-flight traffic is aggregated hourly into subnet rollups before being pruned, saving gigabytes of storage.
+  active-event-retention-hours: 24
 
   # Retention period for inactive unreferenced network entities (default: 60 days)
   entity-retention-days: 60
 
   # Retention period for the polling event audit log (default: 1 day)
   poll-log-retention-days: 1
+
+  # Subnet rollup aggregation retention horizon (default: 30 days, provides 30-day baseline analytics)
+  rollup-retention-days: 30
+
+  # Automatic database storage compaction (VACUUM) for SQLite deployments (default: true)
+  auto-vacuum-enabled: true
+
+  # Minimum reclaimable freelist space in bytes before auto-vacuum executes during nightly cleanup (default: 50 MB)
+  vacuum-threshold-bytes: 52428800
 
   # Latency threshold in ms before marking a poll cycle as WARNING (default: 1000 ms)
   slow-poll-threshold-ms: 1000
