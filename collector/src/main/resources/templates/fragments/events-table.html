@@ -183,9 +183,9 @@
                         </td>
                         <td>
                             <div style="display: flex; flex-direction: column; gap: 3px;">
-                                    th:if="${event.returningCount == null and event.authenticatedCount == null}"
+                                <span th:if="${event.returningCount == null and event.authenticatedCount == null}"
                                     class="text-muted" style="font-size: 11px; color: var(--text-muted);"
-                                title="Visitor cookie and auth session tracking not active on this valve">—</span>
+                                    title="Visitor cookie and auth session tracking not active on this valve">—</span>
                                 <span th:if="${event.returningCount != null and event.returningCount == 0}"
                                     class="badge badge-warning" style="font-size: 10px; padding: 1px 6px;"
                                     th:title="'0 of ' + ${event.requestCount} + ' requests carried a valid visitor cookie (first contact / cookies ignored)'">🍪

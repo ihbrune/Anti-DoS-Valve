@@ -160,10 +160,19 @@ class DashboardControllerTest {
 
 	@Test
 	void testEventsPageAndFragment() throws Exception {
+		clientEventRepository.batchUpsert(List.of(
+				new org.henbru.antidos.collector.model.ClientEvent(
+						null, "TestServer", "RateLimiter", 2001L,
+						Instant.now(), "198.51.100.77",
+						40, 0, false, "BLOCKED", true, Instant.now()
+				)
+		));
+
 		mockMvc.perform(get("/events"))
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("Multi-Server Incident Explorer")))
-				.andExpect(content().string(containsString("events-filter-form")));
+				.andExpect(content().string(containsString("events-filter-form")))
+				.andExpect(content().string(not(containsString("th:if="))));
 
 		mockMvc.perform(get("/events")
 						.param("clientTypes", "PRIVATE_NETWORK")
@@ -187,7 +196,8 @@ class DashboardControllerTest {
 						.param("asn", "AS3320")
 						.param("limit", "25"))
 				.andExpect(status().isOk())
-				.andExpect(content().string(containsString("events-table-container")));
+				.andExpect(content().string(containsString("events-table-container")))
+				.andExpect(content().string(not(containsString("th:if="))));
 	}
 
 	@Test
