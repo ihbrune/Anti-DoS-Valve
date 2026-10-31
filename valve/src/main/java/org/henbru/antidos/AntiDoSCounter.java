@@ -36,6 +36,7 @@ public class AntiDoSCounter {
 	private static final VarHandle ACCESS_ORDER;
 	private static final VarHandle CARDINALITY_TRACKER;
 	private static final VarHandle RETURNING_COUNT;
+	private static final VarHandle AUTHENTICATED_COUNT;
 	private static final VarHandle SAMPLE_REQUEST;
 
 	/**
@@ -52,6 +53,7 @@ public class AntiDoSCounter {
 			ACCESS_ORDER = l.findVarHandle(AntiDoSCounter.class, "accessOrder", long.class);
 			CARDINALITY_TRACKER = l.findVarHandle(AntiDoSCounter.class, "cardinalityTracker", AntiDoSCardinalityBitSet.class);
 			RETURNING_COUNT = l.findVarHandle(AntiDoSCounter.class, "returningCount", int.class);
+			AUTHENTICATED_COUNT = l.findVarHandle(AntiDoSCounter.class, "authenticatedCount", int.class);
 			SAMPLE_REQUEST = l.findVarHandle(AntiDoSCounter.class, "sampleRequest", SampleRequest.class);
 		} catch (ReflectiveOperationException e) {
 			throw new ExceptionInInitializerError(e);
@@ -64,6 +66,7 @@ public class AntiDoSCounter {
 	private volatile boolean locked = false;
 	private volatile AntiDoSCardinalityBitSet cardinalityTracker = null;
 	private volatile int returningCount = 0;
+	private volatile int authenticatedCount = 0;
 	private volatile SampleRequest sampleRequest = null;
 
 	/**
@@ -157,6 +160,41 @@ public class AntiDoSCounter {
 	 */
 	public void setReturningCount(int value) {
 		RETURNING_COUNT.setVolatile(this, value);
+	}
+
+	/**
+	 * Atomically increments the authenticated request count by 1.
+	 * 
+	 * @return The updated authenticated request count
+	 */
+	public int incrementAuthenticatedCount() {
+		return (int) AUTHENTICATED_COUNT.getAndAdd(this, 1) + 1;
+	}
+
+	/**
+	 * Atomically adds the given delta to the authenticated request count.
+	 * 
+	 * @param delta The value to add
+	 * @return The updated authenticated request count
+	 */
+	public int addAndGetAuthenticatedCount(int delta) {
+		return (int) AUTHENTICATED_COUNT.getAndAdd(this, delta) + delta;
+	}
+
+	/**
+	 * @return The current authenticated request count
+	 */
+	public int getAuthenticatedCount() {
+		return authenticatedCount;
+	}
+
+	/**
+	 * Sets the authenticated request count directly to the specified value.
+	 * 
+	 * @param value The new authenticated request count
+	 */
+	public void setAuthenticatedCount(int value) {
+		AUTHENTICATED_COUNT.setVolatile(this, value);
 	}
 
 	/**
@@ -340,6 +378,7 @@ public class AntiDoSCounter {
 		return "Count:" + getCount() + " Retained:" + getRetainedCounts() + " Locked:" + (locked ? "yes" : "no")
 				+ (cardinalityTracker != null ? " DistinctClients:" + getDistinctClients() : "")
 				+ (returningCount > 0 ? " Returning:" + returningCount : "")
+				+ (authenticatedCount > 0 ? " Authenticated:" + authenticatedCount : "")
 				+ (sampleRequest != null ? " Sample:" + sampleRequest.method() + " " + sampleRequest.uri() : "");
 	}
 }

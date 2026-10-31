@@ -114,6 +114,11 @@
                          simulationMode="true"
                          visitorCookieEnabled="true"
                          visitorCookieName="_adv"
+                         authTrackingMode="COOKIE"
+                         authCookieName="AUTH_COOKIE"
+                         authLoginPaths="/trust"
+                         authSessionTtlSeconds="900"
+                         maxAuthCacheSize="50000"
                     />
 
                     <!-- AntiDoSValve Honeypot demo configuration:

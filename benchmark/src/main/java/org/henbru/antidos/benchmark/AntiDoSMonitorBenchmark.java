@@ -2,6 +2,7 @@ package org.henbru.antidos.benchmark;
 
 import java.util.concurrent.TimeUnit;
 
+import org.henbru.antidos.AntiDoSAuthSessionCache;
 import org.henbru.antidos.AntiDoSMonitor;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -36,6 +37,9 @@ public class AntiDoSMonitorBenchmark {
 
 	private TrafficSimulator trafficSimulator;
 	private AntiDoSMonitor monitor;
+	private AntiDoSAuthSessionCache authSessionCache;
+	private String sampleAuthToken;
+	private long validNowMillis;
 
 	@Setup
 	public void setup() {
@@ -52,6 +56,14 @@ public class AntiDoSMonitorBenchmark {
 				100,    // allowedRequestsPerSlot
 				0.5f    // shareOfRetainedFormerRequests
 		);
+
+		// Pre-populate auth session cache with 10,000 active sessions to simulate realistic load
+		this.authSessionCache = new AntiDoSAuthSessionCache(50_000);
+		this.validNowMillis = System.currentTimeMillis();
+		for (int i = 0; i < 10_000; i++) {
+			this.authSessionCache.registerSession("AUTH_COOKIE_SAML_PAYLOAD_USER_SESSION_" + i + "_LONG_ENCRYPTED_VALUE", 900_000L, validNowMillis);
+		}
+		this.sampleAuthToken = "AUTH_COOKIE_SAML_PAYLOAD_USER_SESSION_42_LONG_ENCRYPTED_VALUE";
 	}
 
 	@TearDown
@@ -73,5 +85,13 @@ public class AntiDoSMonitorBenchmark {
 	public boolean registerAndCheckRequestReturningVisitor() {
 		String ip = trafficSimulator.nextIp();
 		return monitor.registerAndCheckRequest(ip, ip, null, false, 0, 0, true);
+	}
+
+	@Benchmark
+	@Threads(Threads.MAX)
+	public boolean registerAndCheckRequestAuthenticated() {
+		String ip = trafficSimulator.nextIp();
+		boolean isAuth = authSessionCache.isValidSession(sampleAuthToken, validNowMillis);
+		return monitor.registerAndCheckRequest(ip, ip, null, false, 0, 0, true, isAuth);
 	}
 }

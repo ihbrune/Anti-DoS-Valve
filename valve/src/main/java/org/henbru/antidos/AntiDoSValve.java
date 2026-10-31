@@ -138,6 +138,22 @@ public class AntiDoSValve extends ValveBase {
 	 */
 	public static final String VISITOR_CONTEXT_ATTRIBUTE_NAME = "org.henbru.antidos.VISITOR_CONTEXT";
 
+	/**
+	 * Request attribute indicating whether a request carried a valid authenticated login session cookie (Boolean),
+	 * shared across upstream and downstream valves in the pipeline.
+	 */
+	public static final String AUTHENTICATED_ATTRIBUTE_NAME = "org.henbru.antidos.AUTHENTICATED";
+
+	/**
+	 * Auth tracking mode constant: disables authentication session tracking (default).
+	 */
+	public static final String AUTH_TRACKING_MODE_OFF = "OFF";
+
+	/**
+	 * Auth tracking mode constant: tracks authenticated sessions via login cookies issued on configured login endpoints.
+	 */
+	public static final String AUTH_TRACKING_MODE_COOKIE = "COOKIE";
+
 	public AntiDoSValve() {
 		super(true);
 	}
@@ -229,6 +245,15 @@ public class AntiDoSValve extends ValveBase {
 	private volatile String visitorCookieSecure = "auto";
 	private volatile String visitorCookieDomain = null;
 	private volatile AntiDoSVisitorTokenService visitorTokenService = null;
+
+	private static final AntiDoSAuthSessionCache sharedAuthSessionCache = new AntiDoSAuthSessionCache();
+	private volatile String authTrackingMode = AUTH_TRACKING_MODE_OFF;
+	private volatile String authCookieName = null;
+	private volatile Pattern authLoginPaths = null;
+	private volatile String authLoginPathsConfigValue = null;
+	private volatile boolean authLoginPathsValid = true;
+	private volatile int authSessionTtlSeconds = AntiDoSAuthSessionCache.DEFAULT_SESSION_TTL_SECONDS;
+	private volatile int maxAuthCacheSize = AntiDoSAuthSessionCache.DEFAULT_MAX_CAPACITY;
 
 	/**
 	 * Monitor operation mode. If not set the default mode is used
@@ -1019,6 +1044,237 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
+	 * @return The shared server-wide authentication session cache
+	 */
+	public static AntiDoSAuthSessionCache getSharedAuthSessionCache() {
+		return sharedAuthSessionCache;
+	}
+
+	/**
+	 * Clears the shared server-wide authentication session cache. Primarily used in unit tests.
+	 */
+	public static void clearAuthSessionCache() {
+		sharedAuthSessionCache.clear();
+		sharedAuthSessionCache.setMaxCapacity(AntiDoSAuthSessionCache.DEFAULT_MAX_CAPACITY);
+	}
+
+	/**
+	 * @return Configured authentication tracking mode ("OFF" or "COOKIE"). Defaults to "OFF".
+	 */
+	public String getAuthTrackingMode() {
+		return authTrackingMode;
+	}
+
+	/**
+	 * Sets the authentication tracking mode. Supported values: "OFF" (or "NONE", "FALSE", empty) and "COOKIE".
+	 *
+	 * @param authTrackingMode The authentication tracking mode
+	 */
+	public void setAuthTrackingMode(String authTrackingMode) {
+		if (authTrackingMode == null || authTrackingMode.trim().isEmpty()) {
+			this.authTrackingMode = AUTH_TRACKING_MODE_OFF;
+		} else {
+			String normalized = authTrackingMode.trim().toUpperCase();
+			if ("NONE".equals(normalized) || "FALSE".equals(normalized) || "OFF".equals(normalized)) {
+				this.authTrackingMode = AUTH_TRACKING_MODE_OFF;
+			} else {
+				this.authTrackingMode = normalized;
+			}
+		}
+	}
+
+	/**
+	 * @return {@code true} if {@link #getAuthTrackingMode()} is a valid supported mode ("OFF" or "COOKIE")
+	 */
+	public boolean isAuthTrackingModeValid() {
+		return AUTH_TRACKING_MODE_OFF.equals(authTrackingMode) || AUTH_TRACKING_MODE_COOKIE.equals(authTrackingMode);
+	}
+
+	/**
+	 * @return {@code true} if authentication session tracking is explicitly enabled on this valve instance
+	 */
+	public boolean isAuthTrackingEnabled() {
+		return AUTH_TRACKING_MODE_COOKIE.equals(authTrackingMode);
+	}
+
+	/**
+	 * Returns {@code true} if this valve actively tracks authentication sessions itself, OR if another
+	 * active valve in the Tomcat JVM has authentication tracking enabled (allowing this valve to share
+	 * the session cache and inherit authenticated request state).
+	 *
+	 * @return {@code true} if authentication tracking is active on this valve or inherited from an active valve
+	 */
+	public boolean isAuthTrackingActive() {
+		if (this.isAuthTrackingEnabled()) {
+			return true;
+		}
+		for (AntiDoSValve v : activeValves) {
+			if (v != this && v.isAuthTrackingEnabled()) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Returns the active valve from which authentication tracking configuration is inherited,
+	 * or {@code null} if this valve manages authentication tracking itself or no active valve has it enabled.
+	 *
+	 * @return inherited {@link AntiDoSValve} or {@code null}
+	 */
+	public AntiDoSValve getInheritedAuthTrackingValve() {
+		if (this.isAuthTrackingEnabled()) {
+			return null;
+		}
+		for (AntiDoSValve v : activeValves) {
+			if (v != this && v.isAuthTrackingEnabled()) {
+				return v;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * @return The effective authentication tracking mode (either configured on this valve or inherited)
+	 */
+	public String getEffectiveAuthTrackingMode() {
+		if (this.isAuthTrackingEnabled()) {
+			return this.authTrackingMode;
+		}
+		AntiDoSValve inherited = getInheritedAuthTrackingValve();
+		return inherited != null ? inherited.getAuthTrackingMode() : this.authTrackingMode;
+	}
+
+	/**
+	 * @return The effective authentication cookie name (either configured on this valve or inherited)
+	 */
+	public String getEffectiveAuthCookieName() {
+		if (this.isAuthTrackingEnabled()) {
+			return this.authCookieName;
+		}
+		AntiDoSValve inherited = getInheritedAuthTrackingValve();
+		return inherited != null ? inherited.getAuthCookieName() : this.authCookieName;
+	}
+
+	/**
+	 * @return The effective login paths regex pattern string (either configured on this valve or inherited)
+	 */
+	public String getEffectiveAuthLoginPathsConfigValue() {
+		if (this.isAuthTrackingEnabled()) {
+			return this.authLoginPathsConfigValue;
+		}
+		AntiDoSValve inherited = getInheritedAuthTrackingValve();
+		return inherited != null ? inherited.getAuthLoginPathsConfigValue() : this.authLoginPathsConfigValue;
+	}
+
+	/**
+	 * @return The effective fallback session TTL in seconds (either configured on this valve or inherited)
+	 */
+	public int getEffectiveAuthSessionTtlSeconds() {
+		if (this.isAuthTrackingEnabled()) {
+			return this.authSessionTtlSeconds;
+		}
+		AntiDoSValve inherited = getInheritedAuthTrackingValve();
+		return inherited != null ? inherited.getAuthSessionTtlSeconds() : this.authSessionTtlSeconds;
+	}
+
+	/**
+	 * @return The effective maximum authentication session cache size (either configured on this valve or inherited)
+	 */
+	public int getEffectiveMaxAuthCacheSize() {
+		if (this.isAuthTrackingEnabled()) {
+			return this.maxAuthCacheSize;
+		}
+		AntiDoSValve inherited = getInheritedAuthTrackingValve();
+		return inherited != null ? inherited.getMaxAuthCacheSize() : this.maxAuthCacheSize;
+	}
+
+	/**
+	 * @return The current number of non-expired authenticated sessions in the shared server cache
+	 */
+	public int getActiveAuthSessionCount() {
+		return isAuthTrackingActive() ? sharedAuthSessionCache.getActiveSessionCount(getTimeInMillis()) : 0;
+	}
+
+	public String getAuthCookieName() {
+		return authCookieName;
+	}
+
+	public void setAuthCookieName(String authCookieName) {
+		if (authCookieName == null || authCookieName.trim().isEmpty()) {
+			this.authCookieName = null;
+		} else {
+			this.authCookieName = authCookieName.trim();
+		}
+	}
+
+	public String getAuthLoginPathsConfigValue() {
+		return authLoginPathsConfigValue;
+	}
+
+	public void setAuthLoginPaths(String authLoginPaths) {
+		if (authLoginPaths == null || authLoginPaths.trim().isEmpty()) {
+			this.authLoginPaths = null;
+			this.authLoginPathsConfigValue = null;
+			this.authLoginPathsValid = true;
+		} else {
+			boolean valid = false;
+			try {
+				this.authLoginPathsConfigValue = authLoginPaths.trim();
+				this.authLoginPaths = Pattern.compile(this.authLoginPathsConfigValue);
+				valid = true;
+			} catch (Exception ex) {
+			} finally {
+				this.authLoginPathsValid = valid;
+			}
+		}
+	}
+
+	public boolean isAuthLoginPathsValid() {
+		return authLoginPathsValid;
+	}
+
+	public boolean isRequestURIInAuthLoginPaths(String requestURI) {
+		Pattern loginPattern = this.authLoginPaths;
+		return loginPattern != null && requestURI != null && loginPattern.matcher(requestURI).matches();
+	}
+
+	public int getAuthSessionTtlSeconds() {
+		return authSessionTtlSeconds;
+	}
+
+	public void setAuthSessionTtlSeconds(int authSessionTtlSeconds) {
+		this.authSessionTtlSeconds = authSessionTtlSeconds;
+	}
+
+	public void setAuthSessionTtlSeconds(String authSessionTtlSeconds) {
+		if (authSessionTtlSeconds == null || authSessionTtlSeconds.trim().isEmpty()) {
+			this.authSessionTtlSeconds = AntiDoSAuthSessionCache.DEFAULT_SESSION_TTL_SECONDS;
+		} else {
+			this.authSessionTtlSeconds = Integer.parseInt(authSessionTtlSeconds.trim());
+		}
+	}
+
+	public int getMaxAuthCacheSize() {
+		return maxAuthCacheSize;
+	}
+
+	public void setMaxAuthCacheSize(int maxAuthCacheSize) {
+		this.maxAuthCacheSize = maxAuthCacheSize;
+		if (maxAuthCacheSize > 0) {
+			sharedAuthSessionCache.setMaxCapacity(maxAuthCacheSize);
+		}
+	}
+
+	public void setMaxAuthCacheSize(String maxAuthCacheSize) {
+		if (maxAuthCacheSize == null || maxAuthCacheSize.trim().isEmpty()) {
+			setMaxAuthCacheSize(AntiDoSAuthSessionCache.DEFAULT_MAX_CAPACITY);
+		} else {
+			setMaxAuthCacheSize(Integer.parseInt(maxAuthCacheSize.trim()));
+		}
+	}
+
+	/**
 	 * 
 	 * @param numberOfSlots The number of slots to be held. More slots allow a
 	 *                      further look into the past, but increase the memory
@@ -1209,6 +1465,7 @@ public class AntiDoSValve extends ValveBase {
 		}
 		activeValves.clear();
 		registrationSequence.set(0);
+		clearAuthSessionCache();
 	}
 
 	/**
@@ -1398,7 +1655,23 @@ public class AntiDoSValve extends ValveBase {
 			request.setAttribute(VISITOR_COUNTER_ATTRIBUTE_NAME, visitorCounter);
 		}
 
-		boolean allowed = isRequestAllowed(ip, path, isReturningVisitor);
+		boolean isAuthenticated = false;
+		String incomingAuthCookieVal = null;
+		Object upstreamAuthObj = request.getAttribute(AUTHENTICATED_ATTRIBUTE_NAME);
+		if (upstreamAuthObj instanceof Boolean b) {
+			isAuthenticated = b.booleanValue();
+		} else if (isAuthTrackingActive()) {
+			String effAuthCookieName = getEffectiveAuthCookieName();
+			if (effAuthCookieName != null && !effAuthCookieName.isEmpty()) {
+				incomingAuthCookieVal = extractCookieValue(request, effAuthCookieName);
+				if (incomingAuthCookieVal != null) {
+					isAuthenticated = sharedAuthSessionCache.isValidSession(incomingAuthCookieVal, now);
+				}
+			}
+			request.setAttribute(AUTHENTICATED_ATTRIBUTE_NAME, Boolean.valueOf(isAuthenticated));
+		}
+
+		boolean allowed = isRequestAllowed(ip, path, isReturningVisitor, isAuthenticated);
 		if (!allowed) {
 			recordBlockedSampleIfAbsent(ip, request, path);
 		}
@@ -1412,6 +1685,7 @@ public class AntiDoSValve extends ValveBase {
 			if (getNext() != null) {
 				getNext().invoke(request, response);
 			}
+			inspectAuthLoginResponse(request, response, path, incomingAuthCookieVal);
 			return;
 		}
 
@@ -1428,7 +1702,27 @@ public class AntiDoSValve extends ValveBase {
 			if (getNext() != null) {
 				getNext().invoke(request, response);
 			}
+			inspectAuthLoginResponse(request, response, path, incomingAuthCookieVal);
 		}
+	}
+
+	void inspectAuthLoginResponse(Request request, Response response, String path, String incomingAuthCookieVal) {
+		if (!isAuthTrackingEnabled() || !isRequestURIInAuthLoginPaths(path) || response == null) {
+			return;
+		}
+		int status = response.getStatus();
+		if (status < 200 || status >= 400) {
+			return;
+		}
+		java.util.Collection<String> setCookieHeaders = response.getHeaders("Set-Cookie");
+		if (setCookieHeaders == null || setCookieHeaders.isEmpty()) {
+			return;
+		}
+		String reqCookie = incomingAuthCookieVal != null
+				? incomingAuthCookieVal
+				: extractCookieValue(request, authCookieName);
+		sharedAuthSessionCache.processSetCookieHeaders(
+				setCookieHeaders, authCookieName, authSessionTtlSeconds, reqCookie, getTimeInMillis());
 	}
 
 	void recordBlockedSampleIfAbsent(String ip, Request request, String path) {
@@ -1889,6 +2183,27 @@ public class AntiDoSValve extends ValveBase {
 				initVisitorTokenService();
 			}
 		}
+		if (!isAuthTrackingModeValid()) {
+			throw new LifecycleException(name4logging + ".authTrackingMode is invalid: " + authTrackingMode);
+		}
+		if (!authLoginPathsValid) {
+			throw new LifecycleException(name4logging + ".authLoginPaths is invalid: " + authLoginPathsConfigValue);
+		}
+		if (isAuthTrackingEnabled()) {
+			if (authCookieName == null || authCookieName.isEmpty()) {
+				throw new LifecycleException(name4logging + ".authCookieName must be configured when authTrackingMode=COOKIE");
+			}
+			if (authLoginPaths == null) {
+				throw new LifecycleException(name4logging + ".authLoginPaths must be configured when authTrackingMode=COOKIE");
+			}
+			if (authSessionTtlSeconds <= 0) {
+				throw new LifecycleException(name4logging + ".authSessionTtlSeconds must be positive: " + authSessionTtlSeconds);
+			}
+			if (maxAuthCacheSize <= 0) {
+				throw new LifecycleException(name4logging + ".maxAuthCacheSize must be positive: " + maxAuthCacheSize);
+			}
+			sharedAuthSessionCache.setMaxCapacity(maxAuthCacheSize);
+		}
 
 		if (provideMonitor() == null) {
 			String monitorMsg = reloadMonitor();
@@ -1924,6 +2239,9 @@ public class AntiDoSValve extends ValveBase {
 
 				if (visitorCookieEnabled && visitorTokenService == null) {
 					initVisitorTokenService();
+				}
+				if (isAuthTrackingEnabled() && maxAuthCacheSize > 0) {
+					sharedAuthSessionCache.setMaxCapacity(maxAuthCacheSize);
 				}
 
 				AntiDoSMonitor old = monitors.put(monitorName, monitor);
@@ -2116,6 +2434,10 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	public boolean isRequestAllowed(String ip, String requestURI, boolean returningVisitor) {
+		return isRequestAllowed(ip, requestURI, returningVisitor, false);
+	}
+
+	public boolean isRequestAllowed(String ip, String requestURI, boolean returningVisitor, boolean authenticated) {
 		if (isIPAddressInAlwaysForbidden(ip)) {
 			alwaysForbiddenBlockedRequests.increment();
 			if (log.isDebugEnabled())
@@ -2139,7 +2461,7 @@ public class AntiDoSValve extends ValveBase {
 		}
 
 		if (isRequestURIInRelevantPaths(requestURI)) {
-			return !isIPAddressBlocked(ip, returningVisitor);
+			return !isIPAddressBlocked(ip, returningVisitor, authenticated);
 		}
 
 		if (serverWideBlocking && isIPAddressCurrentlyBlocked(ip)) {
@@ -2166,7 +2488,7 @@ public class AntiDoSValve extends ValveBase {
 	 *                                  empty
 	 */
 	public boolean isIPAddressBlocked(String ip) throws IllegalArgumentException {
-		return isIPAddressBlocked(ip, false);
+		return isIPAddressBlocked(ip, false, false);
 	}
 
 	/**
@@ -2179,6 +2501,22 @@ public class AntiDoSValve extends ValveBase {
 	 * @throws IllegalArgumentException If the parameter is null or empty
 	 */
 	public boolean isIPAddressBlocked(String ip, boolean returningVisitor) throws IllegalArgumentException {
+		return isIPAddressBlocked(ip, returningVisitor, false);
+	}
+
+	/**
+	 * This method checks if an IP address is blocked in the internal
+	 * {@link AntiDoSMonitor} instance, registering the access, returning visitor state,
+	 * and authenticated login session state.
+	 * 
+	 * @param ip               The IP address
+	 * @param returningVisitor true if request presented a valid authenticated visitor cookie
+	 * @param authenticated    true if request presented a valid authenticated login session cookie
+	 * @return true if blocked, false if allowed
+	 * @throws IllegalArgumentException If the parameter is null or empty
+	 */
+	public boolean isIPAddressBlocked(String ip, boolean returningVisitor, boolean authenticated)
+			throws IllegalArgumentException {
 		if (ip == null || ip.isEmpty()) {
 			throw new IllegalArgumentException("IP address must not be null or empty");
 		}
@@ -2205,7 +2543,7 @@ public class AntiDoSValve extends ValveBase {
 
 		boolean trackCardinality = isExtendedMetricsActive() && !counterName.equals(ip);
 		AntiDoSMonitor monitor = provideMonitor();
-		if (monitor == null || monitor.registerAndCheckRequest(counterName, ip, rawIpv4Bytes, trackCardinality, v4Mask, v6Mask, returningVisitor)) {
+		if (monitor == null || monitor.registerAndCheckRequest(counterName, ip, rawIpv4Bytes, trackCardinality, v4Mask, v6Mask, returningVisitor, authenticated)) {
 			if (log.isDebugEnabled())
 				if (monitor == null)
 					log.debug(name4logging + " not available");

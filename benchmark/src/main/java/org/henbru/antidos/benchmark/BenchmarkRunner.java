@@ -147,7 +147,11 @@ public class BenchmarkRunner {
 			if (dist == null) {
 				dist = "ZIPF";
 			}
-			String suffix = "registerAndCheckRequestReturningVisitor".equals(method) ? " (Returning Visitor)" : "";
+			String suffix = switch (method) {
+				case "registerAndCheckRequestReturningVisitor" -> " (Returning Visitor)";
+				case "registerAndCheckRequestAuthenticated" -> " (Auth Cookie Hash + Monitor)";
+				default -> "";
+			};
 			String key = "Monitor [" + dist + suffix + "]";
 			map.put(key, res.getPrimaryResult().getScore());
 		}

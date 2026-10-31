@@ -327,6 +327,47 @@ The Valve automatically populates request attributes for all downstream Valves, 
 >
 > When the upstream Valve validates the visitor cookie, it stores the immutable `AntiDoSVisitorContext` in the request attributes. All downstream Valves automatically detect this context and inherit the returning visitor status for their own rate-limiting calculations and monitor counters without any configuration needed (`visitorCookieEnabled` does not even have to be set on downstream Valves). This completely eliminates redundant cookie parsing and cryptographic operations across multi-valve pipelines.
 
+## authTrackingMode (optional) — Authentication Session Tracking
+
+Enables passive tracking of requests originating from authenticated application users without requiring the Valve to understand application-specific session formats, SAML assertions, or cryptographic keys. Default: `"OFF"`.
+
+When `authTrackingMode="COOKIE"` is configured, the Valve monitors responses on the configured login callback endpoint(s) (`authLoginPaths`, e.g. `/trust` for an SSO/SAML assertion consumer service) after downstream execution (`getNext().invoke(request, response)`). Whenever the application responds with a successful or redirect HTTP status (`200 <= status < 400`) and emits a `Set-Cookie` header for `authCookieName` (e.g. `AUTH_COOKIE`), the Valve computes a salted 64-bit hash of the cookie value and registers its expiration timestamp in a shared, server-wide in-memory session cache (`AntiDoSAuthSessionCache`).
+
+On subsequent incoming requests, the Valve checks whether the `Cookie` header contains `authCookieName` and looks up its 64-bit hash in the session cache:
+* **Authenticated Request:** If the hash is present and unexpired, the request is counted as authenticated in the IP/subnet counter (`authenticatedCount`), the active time slot (`authenticatedRequests`), and the monitor lifetime total (`totalAuthenticatedRequests`).
+* **Session Expiry & Logout Invalidation:** If the `Set-Cookie` header on `authLoginPaths` specifies `Max-Age`, that value determines the session's cache lifetime; otherwise, `authSessionTtlSeconds` is used as a fallback. If `Max-Age <= 0` or the cookie value is empty (e.g. upon logout), the hash is immediately removed from the session cache.
+
+### Authentication Tracking Parameters
+
+| Attribute | Required | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `authTrackingMode` | No | `"OFF"` | Activation mode for authentication tracking. Set to `"COOKIE"` to enable login cookie observation, or `"OFF"` to disable. |
+| `authCookieName` | Yes *(when `COOKIE`)* | *(none)* | Name of the HTTP cookie set by the application upon successful login (e.g. `"AUTH_COOKIE"`). |
+| `authLoginPaths` | Yes *(when `COOKIE`)* | *(none)* | Regular expression matching the login / SSO callback path(s) where `Set-Cookie` is issued (e.g. `"/trust"` or `"^/trust$"`). Evaluated on all requests passing through the Valve, even if the login path is excluded from rate limiting via `nonRelevantPaths` or omitted from `relevantPaths`. |
+| `authSessionTtlSeconds` | No | `900` | Fallback session validity in seconds (`>= 1`) when the `Set-Cookie` header does not include a `Max-Age` attribute (default: `900` = 15 minutes). |
+| `maxAuthCacheSize` | No | `50000` | Maximum number of concurrent authenticated session hashes held in the shared server-wide open-addressing cache (`>= 1`). Default `50000` consumes only ~800 KB of heap (16 bytes per slot). |
+
+### Multi-Valve Cascade & Inter-Valve Request Attributes
+
+Just like Visitor Cookie tracking, Authentication Session Tracking is designed for zero-redundancy operation across a cascade of Valves in the same Tomcat server:
+* **Single Configuration Point:** You only need to configure `authTrackingMode="COOKIE"` on **one** Valve in the pipeline (ideally the upstream Valve).
+* **Request Attribute Propagation (`org.henbru.antidos.AUTHENTICATED`):** When the upstream Valve verifies a request's login cookie, it sets the request attribute `org.henbru.antidos.AUTHENTICATED` to `Boolean.TRUE` (or `Boolean.FALSE`). All downstream Valves read this attribute in $O(1)$ without re-parsing cookies or re-hashing.
+* **Shared Server-Wide Session Cache & Automatic Discovery:** The underlying `AntiDoSAuthSessionCache` is shared across all `AntiDoSValve` instances in the JVM. Even if a downstream Valve processes a path before or independently of the valve that observed `/trust`, it automatically inherits the active Auth Tracking state (`AUTH TRACKING: INHERITED`) and can verify cookies directly against the shared cache.
+* **Adaptive Status Dashboard & JSON Telemetry:** The internal Status Dashboard (`/antidos-status`) automatically detects whether any Valve in the server has `authTrackingMode="COOKIE"` enabled. Only when active does it display the `Auth Tracking` status row and the `Authenticated` request columns in the Slot Ring Buffer Timeline, Blocked Clients, and Top Active Clients tables.
+
+### Architectural Design Rationale: Salted 64-Bit Fast Hashing & Primitive Open-Addressing
+
+To track tens of thousands of concurrent login cookies (which may themselves be large encrypted SAML/JWT payloads of several kilobytes) directly inside Tomcat's hot request processing path, `AntiDoSAuthSessionCache` combines a **per-JVM salted 64-bit keyed fast hash** with a **lock-free primitive open-addressing table (`AtomicLongArray`)**:
+
+1. **True Zero Heap Allocation on the Hot Path (No Digest Arrays, No `Long` Autoboxing):**
+   * Computing `MessageDigest.getInstance("SHA-256")` requires converting the cookie `String` into a `byte[]` array and allocating a 32-byte digest array plus a wrapper key object on every request. Instead, our 64-bit SplitMix64 / MurmurHash3-64 mixer operates directly on `String.charAt(i)` in CPU registers.
+   * Furthermore, storing hashes in a generic `ConcurrentHashMap<Long, Long>` would autobox primitive `long` hashes and expiration timestamps into `java.lang.Long` objects and allocate `Node` wrappers (~80–96 bytes per entry), creating GC pressure on lookups and insertions.
+   * To eliminate autoboxing completely without external libraries (such as `fastutil`), `AntiDoSAuthSessionCache` stores interleaved `[hash, expiresAt]` primitive `long` pairs in a flat `AtomicLongArray` with bounded linear probing (up to 16 consecutive slots = 4 CPU cache lines). Both `isValidSession()` and `registerSession()` execute with **zero object allocations**.
+2. **Ultra-Compact Memory Footprint (16 Bytes per Session Slot):** Because each slot consists of just two primitive 64-bit `long` values (`hash` and `expiresAt`) in a contiguous array, 10,000 sessions require only ~160 KB and the default capacity of 50,000 sessions requires only **~800 KB** of heap memory, regardless of whether the raw `AUTH_COOKIE` payload is 32 bytes or 4 KB long.
+3. **Lock-Free Local TTL Eviction:** When all 16 slots in a bounded linear probe window are occupied by active sessions, `registerSession()` atomically overwrites whichever slot in that 16-slot neighborhood has the earliest `expiresAt` timestamp. This achieves $O(1)$ local TTL eviction within the same CPU cache lines without global eviction locks or `PriorityQueue` allocations.
+4. **Protection Against Hash-Flooding (Per-JVM CSPRNG Salting):** At class initialization, `AntiDoSAuthSessionCache` generates two independent 64-bit secret seeds using `java.security.SecureRandom`. Because these 128 bits of key material are unknown to external clients and change on every JVM restart, attackers cannot precompute hash collisions to manipulate probe windows or spoof another session's hash.
+5. **Negligible Collision Probability:** By the birthday bound over a $2^{64}$ hash space, the probability that a random forged cookie collides with any of 10,000 active sessions is $\approx 5.4 \times 10^{-16}$ (less than 1 in a quadrillion). Even in that purely theoretical event, the impact is strictly limited to rate-limit accounting in the Valve and never grants application-level authentication.
+
 ## slotLength
 
 The duration of a slot in seconds (must be an integer greater than 0). The slot length and *allowedRequestsPerSlot* are closely related:

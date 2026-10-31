@@ -45,18 +45,24 @@ public class AntiDoSStatusRenderer {
 		this.valve = valve;
 	}
 
-	static record CounterEntry(String key, int count, int retained, int effective, boolean locked, int distinctClients, int returningCount, AntiDoSCounter.SampleRequest sample)
+	static record CounterEntry(String key, int count, int retained, int effective, boolean locked, int distinctClients,
+			int returningCount, int authenticatedCount, AntiDoSCounter.SampleRequest sample)
 			implements Comparable<CounterEntry> {
+		public CounterEntry(String key, int count, int retained, int effective, boolean locked, int distinctClients,
+				int returningCount, AntiDoSCounter.SampleRequest sample) {
+			this(key, count, retained, effective, locked, distinctClients, returningCount, 0, sample);
+		}
+
 		public CounterEntry(String key, int count, int retained, int effective, boolean locked, int distinctClients, int returningCount) {
-			this(key, count, retained, effective, locked, distinctClients, returningCount, null);
+			this(key, count, retained, effective, locked, distinctClients, returningCount, 0, null);
 		}
 
 		public CounterEntry(String key, int count, int retained, int effective, boolean locked, int distinctClients) {
-			this(key, count, retained, effective, locked, distinctClients, 0, null);
+			this(key, count, retained, effective, locked, distinctClients, 0, 0, null);
 		}
 
 		public CounterEntry(String key, int count, int retained, int effective, boolean locked) {
-			this(key, count, retained, effective, locked, 1, 0, null);
+			this(key, count, retained, effective, locked, 1, 0, 0, null);
 		}
 
 		@Override
@@ -207,7 +213,8 @@ public class AntiDoSStatusRenderer {
 				int rawRetained = c.getRetainedCounts();
 				int retained = rawRetained > 0 ? rawRetained : 0;
 				int distinct = c.hasCardinalityTracker() ? c.getDistinctClients() : -1;
-				list.add(new CounterEntry(entry.getKey(), count, retained, count + retained, locked, distinct, c.getReturningCount(), c.getSample()));
+				list.add(new CounterEntry(entry.getKey(), count, retained, count + retained, locked, distinct,
+						c.getReturningCount(), c.getAuthenticatedCount(), c.getSample()));
 			}
 			Collections.sort(list);
 			return new FilteredEntries(list, maxOrder);
@@ -232,13 +239,15 @@ public class AntiDoSStatusRenderer {
 				if (effective < worst.effective()) {
 					continue;
 				}
-				CounterEntry candidate = new CounterEntry(entry.getKey(), count, retained, effective, locked, distinct, c.getReturningCount(), c.getSample());
+				CounterEntry candidate = new CounterEntry(entry.getKey(), count, retained, effective, locked, distinct,
+						c.getReturningCount(), c.getAuthenticatedCount(), c.getSample());
 				if (candidate.compareTo(worst) < 0) {
 					minHeap.poll();
 					minHeap.offer(candidate);
 				}
 			} else {
-				minHeap.offer(new CounterEntry(entry.getKey(), count, retained, effective, locked, distinct, c.getReturningCount(), c.getSample()));
+				minHeap.offer(new CounterEntry(entry.getKey(), count, retained, effective, locked, distinct,
+						c.getReturningCount(), c.getAuthenticatedCount(), c.getSample()));
 			}
 		}
 
@@ -274,7 +283,8 @@ public class AntiDoSStatusRenderer {
 				int effective = count + retained;
 				if (effective >= min) {
 					int distinct = c.hasCardinalityTracker() ? c.getDistinctClients() : -1;
-					list.add(new CounterEntry(entry.getKey(), count, retained, effective, locked, distinct, c.getReturningCount(), c.getSample()));
+					list.add(new CounterEntry(entry.getKey(), count, retained, effective, locked, distinct,
+							c.getReturningCount(), c.getAuthenticatedCount(), c.getSample()));
 				}
 			}
 		}
@@ -462,6 +472,27 @@ public class AntiDoSStatusRenderer {
 
 	private long getTimeInMillis() {
 		return valve.getTimeInMillis();
+	}
+
+	static String formatAuthTrackingHtmlStatus(AntiDoSValve v) {
+		if (v.isAuthTrackingEnabled()) {
+			return "Enabled (mode: <code>" + escapeHtml(v.getAuthTrackingMode())
+					+ "</code>, cookie: <code>" + escapeHtml(v.getAuthCookieName())
+					+ "</code>, login paths: <code>" + escapeHtml(v.getAuthLoginPathsConfigValue())
+					+ "</code>, fallback TTL: <strong>" + v.getAuthSessionTtlSeconds()
+					+ "s</strong>, active sessions: <strong>" + v.getActiveAuthSessionCount()
+					+ " / " + v.getMaxAuthCacheSize() + "</strong>)";
+		}
+		if (v.isAuthTrackingActive()) {
+			AntiDoSValve inherited = v.getInheritedAuthTrackingValve();
+			String upstreamName = inherited != null ? escapeHtml(inherited.getMonitorName()) : "upstream";
+			return "Inherited from <strong>" + upstreamName + "</strong> (mode: <code>"
+					+ escapeHtml(v.getEffectiveAuthTrackingMode())
+					+ "</code>, cookie: <code>" + escapeHtml(v.getEffectiveAuthCookieName())
+					+ "</code>, active sessions: <strong>" + v.getActiveAuthSessionCount()
+					+ " / " + v.getEffectiveMaxAuthCacheSize() + "</strong>)";
+		}
+		return "Disabled";
 	}
 
 	static String formatDuration(long seconds) {
@@ -722,8 +753,15 @@ public class AntiDoSStatusRenderer {
 					.append(" <div class=\"metric-bar\"><div class=\"metric-fill ").append(blockedFillClass)
 					.append("\" style=\"width:").append(blockedPercent).append("%\"></div></div></td></tr>\n");
 
+			long totalAuthReqs = monitor != null ? monitor.getTotalAuthenticatedRequests() : 0;
 			sb.append("    <tr><th>Total Requests Processed</th><td><strong>").append(totalReqs)
-					.append("</strong> (Active Slots: ").append(activeSlots).append(" / ").append(v.getNumberOfSlots()).append(")</td></tr>\n");
+					.append("</strong> (Active Slots: ").append(activeSlots).append(" / ").append(v.getNumberOfSlots())
+					.append(v.isAuthTrackingActive() ? " &bull; Authenticated: <strong>" + totalAuthReqs + "</strong>" : "")
+					.append(")</td></tr>\n");
+
+			if (v.isAuthTrackingActive()) {
+				sb.append("    <tr><th>Auth Tracking</th><td>").append(formatAuthTrackingHtmlStatus(v)).append("</td></tr>\n");
+			}
 
 			// Log Throttling & Async Eviction
 			String logThrottling = v.getMaxBlockLogsPerSecond() >= 0 ? v.getMaxBlockLogsPerSecond() + " logs/s" : "disabled";
@@ -967,8 +1005,11 @@ public class AntiDoSStatusRenderer {
 				.append(" <div class=\"metric-bar\"><div class=\"metric-fill ").append(blockedFillClass)
 				.append("\" style=\"width:").append(blockedPercent).append("%\"></div></div></td></tr>\n");
 
+		long totalAuthReqs = monitor != null ? monitor.getTotalAuthenticatedRequests() : 0;
 		sb.append("    <tr><th>Total Requests Processed</th><td><strong>").append(totalReqs)
-				.append("</strong> (Active Slots: ").append(activeSlots).append(" / ").append(target.getNumberOfSlots()).append(")</td></tr>\n");
+				.append("</strong> (Active Slots: ").append(activeSlots).append(" / ").append(target.getNumberOfSlots())
+				.append(target.isAuthTrackingActive() ? " &bull; Authenticated: <strong>" + totalAuthReqs + "</strong>" : "")
+				.append(")</td></tr>\n");
 
 		sb.append("    <tr><th>Slot Timeline Keys</th><td>Current: <code>").append(currentSlotKey)
 				.append("</code> &bull; Last Completed: <code>").append(currentSlotKey > 0 ? (currentSlotKey - 1) : 0).append("</code></td></tr>\n");
@@ -994,16 +1035,20 @@ public class AntiDoSStatusRenderer {
 			visitorCookieStatus = "Disabled";
 		}
 		sb.append("    <tr><th>Visitor Cookie</th><td>").append(visitorCookieStatus).append("</td></tr>\n");
+		sb.append("    <tr><th>Auth Tracking</th><td>").append(formatAuthTrackingHtmlStatus(target)).append("</td></tr>\n");
 
 		sb.append("  </table>\n</div>\n");
 
 		// Card 2: Slot Timeline
 		boolean isSubnetMode = target.isSubnetAggregationActive();
+		boolean showAuthTimeline = target.isAuthTrackingActive();
 		sb.append("<div class=\"card\">\n")
 				.append("  <div class=\"card-header\"><div class=\"card-title-group\"><span class=\"valve-name\">Slot Ring Buffer Timeline</span>")
 				.append(" <span class=\"subtitle\">(").append(numSlots).append(" slots &bull; ").append(slotLength / 1000).append("s each)</span></div></div>\n")
 				.append("  <table class=\"data-table\">\n")
-				.append("    <thead><tr><th>Slot #</th><th>Slot Key</th><th>Start Time</th><th>Age</th><th>Status</th><th>Requests</th><th>")
+				.append("    <thead><tr><th>Slot #</th><th>Slot Key</th><th>Start Time</th><th>Age</th><th>Status</th><th>Requests</th>")
+				.append(showAuthTimeline ? "<th title=\"Authenticated requests in this slot\">Authenticated</th>" : "")
+				.append("<th>")
 				.append(isSubnetMode ? "Active Subnets" : "Active IPs")
 				.append("</th><th>")
 				.append(isSubnetMode ? "Blocked Subnets" : "Blocked IPs")
@@ -1015,7 +1060,9 @@ public class AntiDoSStatusRenderer {
 				AntiDoSSlot slot = monitor.getSlot(i);
 				if (slot == null) {
 					sb.append("      <tr><td>#").append(i).append("</td><td>-</td><td>-</td><td>-</td>")
-							.append("<td><span class=\"badge\">EMPTY</span></td><td>0</td><td>0</td><td>0</td><td>-</td></tr>\n");
+							.append("<td><span class=\"badge\">EMPTY</span></td><td>0</td>")
+							.append(showAuthTimeline ? "<td>0</td>" : "")
+							.append("<td>0</td><td>0</td><td>-</td></tr>\n");
 				} else {
 					long slotKey = slot.getSlotKey();
 					boolean isCurrent = (slotKey == currentSlotKey);
@@ -1039,7 +1086,9 @@ public class AntiDoSStatusRenderer {
 							.append("</td><td>").append(ageStr)
 							.append("</td><td>").append(statusBadge)
 							.append("</td><td>").append(slot.getTotalRequests())
-							.append("</td><td>").append(slot.getActiveCounterCount())
+							.append("</td>")
+							.append(showAuthTimeline ? "<td>" + slot.getAuthenticatedRequests() + "</td>" : "")
+							.append("<td>").append(slot.getActiveCounterCount())
 							.append("</td><td>").append(slot.getBlockedCounterCount())
 							.append("</td><td><a class=\"btn\" href=\"").append(inspectUrl).append("\">Inspect</a></td></tr>\n");
 				}
@@ -1089,6 +1138,7 @@ public class AntiDoSStatusRenderer {
 		} else {
 			boolean showSubnetDistinct = target.isSubnetAggregationActive();
 			boolean showReturning = target.isVisitorTrackingActive();
+			boolean showAuthenticated = target.isAuthTrackingActive();
 			sb.append("  <table class=\"data-table\">\n")
 					.append("    <thead><tr><th>IP / Subnet Key</th>");
 			if (showSubnetDistinct) {
@@ -1096,6 +1146,7 @@ public class AntiDoSStatusRenderer {
 			}
 			sb.append("<th>Slot Requests</th><th>Retained</th><th>Effective</th>")
 					.append(showReturning ? "<th title=\"Requests carrying valid visitor cookie\">Returning</th>" : "")
+					.append(showAuthenticated ? "<th title=\"Requests carrying valid authenticated login session\">Authenticated</th>" : "")
 					.append("<th>Limit</th><th>Sample</th><th>Status</th></tr></thead>\n")
 					.append("    <tbody>\n");
 			for (int i = 0; i < blockedDisplay; i++) {
@@ -1114,6 +1165,9 @@ public class AntiDoSStatusRenderer {
 						.append("<td><strong>").append(e.effective()).append("</strong></td>");
 				if (showReturning) {
 					sb.append("<td>").append(e.returningCount()).append("</td>");
+				}
+				if (showAuthenticated) {
+					sb.append("<td>").append(e.authenticatedCount()).append("</td>");
 				}
 				sb.append("<td>").append(allowedReqs).append("</td>");
 				if (e.sample() != null && e.sample().uri() != null) {
@@ -1147,6 +1201,7 @@ public class AntiDoSStatusRenderer {
 		} else {
 			boolean showSubnetDistinct = target.isSubnetAggregationActive();
 			boolean showReturning = target.isVisitorTrackingActive();
+			boolean showAuthenticated = target.isAuthTrackingActive();
 			sb.append("  <table class=\"data-table\">\n")
 					.append("    <thead><tr><th>IP / Subnet Key</th>");
 			if (showSubnetDistinct) {
@@ -1154,6 +1209,7 @@ public class AntiDoSStatusRenderer {
 			}
 			sb.append("<th>Slot Requests</th><th>Retained</th><th>Effective</th>")
 					.append(showReturning ? "<th title=\"Requests carrying valid visitor cookie\">Returning</th>" : "")
+					.append(showAuthenticated ? "<th title=\"Requests carrying valid authenticated login session\">Authenticated</th>" : "")
 					.append("<th>Limit</th><th>Quota Usage</th></tr></thead>\n")
 					.append("    <tbody>\n");
 			for (int i = 0; i < activeDisplay; i++) {
@@ -1174,6 +1230,9 @@ public class AntiDoSStatusRenderer {
 						.append("<td><strong>").append(e.effective()).append("</strong></td>");
 				if (showReturning) {
 					sb.append("<td>").append(e.returningCount()).append("</td>");
+				}
+				if (showAuthenticated) {
+					sb.append("<td>").append(e.authenticatedCount()).append("</td>");
 				}
 				sb.append("<td>").append(allowedReqs).append("</td>")
 						.append("<td>").append(pct).append("% <div class=\"metric-bar\"><div class=\"metric-fill ").append(fillClass)
@@ -1248,6 +1307,14 @@ public class AntiDoSStatusRenderer {
 					.append("      \"visitorCookieInherited\": ").append(!v.isVisitorCookieEnabled() && v.isVisitorTrackingActive()).append(",\n")
 					.append("      \"visitorCookieName\": \"").append(escapeJson(v.getEffectiveVisitorCookieName())).append("\",\n")
 					.append("      \"visitorCookieDomain\": ").append(v.getEffectiveVisitorCookieDomain() != null ? "\"" + escapeJson(v.getEffectiveVisitorCookieDomain()) + "\"" : "null").append(",\n")
+					.append("      \"authTrackingEnabled\": ").append(v.isAuthTrackingActive()).append(",\n")
+					.append("      \"authTrackingInherited\": ").append(!v.isAuthTrackingEnabled() && v.isAuthTrackingActive()).append(",\n")
+					.append("      \"authTrackingMode\": \"").append(escapeJson(v.getEffectiveAuthTrackingMode())).append("\",\n")
+					.append("      \"authCookieName\": ").append(v.getEffectiveAuthCookieName() != null ? "\"" + escapeJson(v.getEffectiveAuthCookieName()) + "\"" : "null").append(",\n")
+					.append("      \"authLoginPaths\": ").append(v.getEffectiveAuthLoginPathsConfigValue() != null ? "\"" + escapeJson(v.getEffectiveAuthLoginPathsConfigValue()) + "\"" : "null").append(",\n")
+					.append("      \"authSessionTtlSeconds\": ").append(v.getEffectiveAuthSessionTtlSeconds()).append(",\n")
+					.append("      \"maxAuthCacheSize\": ").append(v.getEffectiveMaxAuthCacheSize()).append(",\n")
+					.append("      \"activeAuthSessions\": ").append(v.getActiveAuthSessionCount()).append(",\n")
 					.append("      \"maxIPCacheSize\": ").append(maxActive).append(",\n")
 					.append("      \"maxBlockedIPCacheSize\": ").append(maxBlocked).append(",\n")
 					.append("      \"currentActiveCounters\": ").append(activeCounters).append(",\n")
@@ -1257,7 +1324,9 @@ public class AntiDoSStatusRenderer {
 					.append("      \"previousActiveCounters\": ").append(prevSlot != null ? prevSlot.getActiveCounterCount() : 0).append(",\n")
 					.append("      \"previousBlockedCounters\": ").append(prevSlot != null ? prevSlot.getBlockedCounterCount() : 0).append(",\n")
 					.append("      \"previousTotalRequests\": ").append(prevSlot != null ? prevSlot.getTotalRequests() : 0).append(",\n")
+					.append("      \"previousAuthenticatedRequests\": ").append(prevSlot != null ? prevSlot.getAuthenticatedRequests() : 0).append(",\n")
 					.append("      \"totalRequests\": ").append(totalReqs).append(",\n")
+					.append("      \"totalAuthenticatedRequests\": ").append(monitor != null ? monitor.getTotalAuthenticatedRequests() : 0).append(",\n")
 					.append("      \"activeSlots\": ").append(activeSlots).append(",\n")
 					.append("      \"statusUri\": ").append(v.getStatusUri() != null ? "\"" + escapeJson(v.getStatusUri()) + "\"" : "null").append(",\n")
 					.append("      \"statusAllowedIPs\": ").append(v.getStatusAllowedIPs() != null ? "\"" + escapeJson(v.getStatusAllowedIPs()) + "\"" : "null").append(",\n")
@@ -1350,6 +1419,14 @@ public class AntiDoSStatusRenderer {
 				.append("    \"visitorCookieInherited\": ").append(!target.isVisitorCookieEnabled() && target.isVisitorTrackingActive()).append(",\n")
 				.append("    \"visitorCookieName\": \"").append(escapeJson(target.getEffectiveVisitorCookieName())).append("\",\n")
 				.append("    \"visitorCookieDomain\": ").append(target.getEffectiveVisitorCookieDomain() != null ? "\"" + escapeJson(target.getEffectiveVisitorCookieDomain()) + "\"" : "null").append(",\n")
+				.append("    \"authTrackingEnabled\": ").append(target.isAuthTrackingActive()).append(",\n")
+				.append("    \"authTrackingInherited\": ").append(!target.isAuthTrackingEnabled() && target.isAuthTrackingActive()).append(",\n")
+				.append("    \"authTrackingMode\": \"").append(escapeJson(target.getEffectiveAuthTrackingMode())).append("\",\n")
+				.append("    \"authCookieName\": ").append(target.getEffectiveAuthCookieName() != null ? "\"" + escapeJson(target.getEffectiveAuthCookieName()) + "\"" : "null").append(",\n")
+				.append("    \"authLoginPaths\": ").append(target.getEffectiveAuthLoginPathsConfigValue() != null ? "\"" + escapeJson(target.getEffectiveAuthLoginPathsConfigValue()) + "\"" : "null").append(",\n")
+				.append("    \"authSessionTtlSeconds\": ").append(target.getEffectiveAuthSessionTtlSeconds()).append(",\n")
+				.append("    \"maxAuthCacheSize\": ").append(target.getEffectiveMaxAuthCacheSize()).append(",\n")
+				.append("    \"activeAuthSessions\": ").append(target.getActiveAuthSessionCount()).append(",\n")
 				.append("    \"maxIPCacheSize\": ").append(maxActive).append(",\n")
 				.append("    \"maxBlockedIPCacheSize\": ").append(maxBlocked).append(",\n")
 				.append("    \"currentActiveCounters\": ").append(activeCounters).append(",\n")
@@ -1357,6 +1434,7 @@ public class AntiDoSStatusRenderer {
 				.append("    \"currentSlotKey\": ").append(currentSlotKey).append(",\n")
 				.append("    \"lastCompletedSlotKey\": ").append(currentSlotKey > 0 ? (currentSlotKey - 1) : 0).append(",\n")
 				.append("    \"totalRequests\": ").append(totalReqs).append(",\n")
+				.append("    \"totalAuthenticatedRequests\": ").append(monitor != null ? monitor.getTotalAuthenticatedRequests() : 0).append(",\n")
 				.append("    \"activeSlots\": ").append(activeSlots).append(",\n")
 				.append("    \"statusUri\": ").append(target.getStatusUri() != null ? "\"" + escapeJson(target.getStatusUri()) + "\"" : "null").append(",\n")
 				.append("    \"statusAllowedIPs\": ").append(target.getStatusAllowedIPs() != null ? "\"" + escapeJson(target.getStatusAllowedIPs()) + "\"" : "null").append(",\n")
@@ -1377,7 +1455,7 @@ public class AntiDoSStatusRenderer {
 				if (!firstSlot) sb.append(",\n");
 				firstSlot = false;
 				if (slot == null) {
-					sb.append("    {\"index\": ").append(i).append(", \"slotKey\": null, \"totalRequests\": 0}");
+					sb.append("    {\"index\": ").append(i).append(", \"slotKey\": null, \"totalRequests\": 0, \"authenticatedRequests\": 0}");
 				} else {
 					long slotKey = slot.getSlotKey();
 					boolean isCurrent = (slotKey == currentSlotKey);
@@ -1392,6 +1470,7 @@ public class AntiDoSStatusRenderer {
 							.append("      \"endTime\": \"").append(endTime).append("\",\n")
 							.append("      \"ageSeconds\": ").append(ageSec).append(",\n")
 							.append("      \"totalRequests\": ").append(slot.getTotalRequests()).append(",\n")
+							.append("      \"authenticatedRequests\": ").append(slot.getAuthenticatedRequests()).append(",\n")
 							.append("      \"activeCounters\": ").append(slot.getActiveCounterCount()).append(",\n")
 							.append("      \"blockedCounters\": ").append(slot.getBlockedCounterCount()).append("\n")
 							.append("    }");
@@ -1421,6 +1500,7 @@ public class AntiDoSStatusRenderer {
 					.append("    \"endTime\": \"").append(selEnd).append("\",\n")
 					.append("    \"ageSeconds\": ").append(selAgeSec).append(",\n")
 					.append("    \"totalRequests\": ").append(selectedSlot.getTotalRequests()).append(",\n")
+					.append("    \"authenticatedRequests\": ").append(selectedSlot.getAuthenticatedRequests()).append(",\n")
 					.append("    \"activeCounters\": ").append(selectedSlot.getActiveCounterCount()).append(",\n")
 					.append("    \"blockedCounters\": ").append(selectedSlot.getBlockedCounterCount()).append("\n")
 					.append("  },\n");
@@ -1457,7 +1537,8 @@ public class AntiDoSStatusRenderer {
 					.append("      \"effective\": ").append(e.effective()).append(",\n")
 					.append("      \"limit\": ").append(target.getAllowedRequestsPerSlot()).append(",\n")
 					.append("      \"distinctClients\": ").append(e.distinctClients() > 0 ? e.distinctClients() : 1).append(",\n")
-					.append("      \"returningCount\": ").append(target.isVisitorTrackingActive() ? e.returningCount() : "null").append(",\n");
+					.append("      \"returningCount\": ").append(target.isVisitorTrackingActive() ? e.returningCount() : "null").append(",\n")
+					.append("      \"authenticatedCount\": ").append(target.isAuthTrackingActive() ? e.authenticatedCount() : "null").append(",\n");
 			if (e.sample() != null) {
 				sb.append("      \"sampleMethod\": ").append(e.sample().method() != null ? "\"" + escapeJson(e.sample().method()) + "\"" : "null").append(",\n")
 						.append("      \"sampleUri\": ").append(e.sample().uri() != null ? "\"" + escapeJson(e.sample().uri()) + "\"" : "null").append(",\n")
@@ -1510,7 +1591,8 @@ public class AntiDoSStatusRenderer {
 					.append("      \"limit\": ").append(target.getAllowedRequestsPerSlot()).append(",\n")
 					.append("      \"quotaPercent\": ").append(pct).append(",\n")
 					.append("      \"distinctClients\": ").append(e.distinctClients() > 0 ? e.distinctClients() : 1).append(",\n")
-					.append("      \"returningCount\": ").append(target.isVisitorTrackingActive() ? e.returningCount() : "null").append("\n")
+					.append("      \"returningCount\": ").append(target.isVisitorTrackingActive() ? e.returningCount() : "null").append(",\n")
+					.append("      \"authenticatedCount\": ").append(target.isAuthTrackingActive() ? e.authenticatedCount() : "null").append("\n")
 					.append("    }");
 		}
 		sb.append("\n  ]\n}\n");

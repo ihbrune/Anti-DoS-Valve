@@ -50,6 +50,7 @@ public class AntiDoSMonitor {
 	private float shareOfRetainedFormerRequests;
 
 	private final LongAdder totalrequests = new LongAdder();
+	private final LongAdder totalAuthenticatedRequests = new LongAdder();
 	private final ExecutorService evictionExecutor;
 	private volatile Boolean asyncEviction = null;
 	private final AntiDoSLogThrottler blockLogThrottler = new AntiDoSLogThrottler();
@@ -180,21 +181,52 @@ public class AntiDoSMonitor {
 	 */
 	public boolean registerAndCheckRequest(String counterName, String clientIp, byte[] ipv4Bytes,
 			boolean trackCardinality, int v4Mask, int v6Mask, boolean returningVisitor) throws IllegalArgumentException {
+		return registerAndCheckRequest(counterName, clientIp, ipv4Bytes, trackCardinality, v4Mask, v6Mask,
+				returningVisitor, false);
+	}
+
+	/**
+	 * Registers an increment to a specific counter, optionally tracks distinct client IPs
+	 * within an aggregated subnet, and increments returning visitor and authenticated counts if verified.
+	 * 
+	 * @param counterName      The name of the counter (e.g. IP or subnet)
+	 * @param clientIp         The original client IP address
+	 * @param ipv4Bytes        The parsed 4-byte IPv4 literal array (or null)
+	 * @param trackCardinality true if extended metrics / cardinality tracking is active
+	 * @param v4Mask           IPv4 subnet prefix length
+	 * @param v6Mask           IPv6 subnet prefix length
+	 * @param returningVisitor true if request presented a valid authenticated visitor cookie
+	 * @param authenticated    true if request presented a valid authenticated login session cookie
+	 * @return true if allowed, false if blocked
+	 * @throws IllegalArgumentException If counterName is null or empty
+	 */
+	public boolean registerAndCheckRequest(String counterName, String clientIp, byte[] ipv4Bytes,
+			boolean trackCardinality, int v4Mask, int v6Mask, boolean returningVisitor, boolean authenticated)
+			throws IllegalArgumentException {
 
 		if (counterName == null || counterName.length() == 0)
 			throw new IllegalArgumentException();
 
 		totalrequests.increment();
+		if (authenticated) {
+			totalAuthenticatedRequests.increment();
+		}
 
 		// Step 1: Provide current slot, create it if necessary:
 		AntiDoSSlot slot = provideCurrentSlot();
 		slot.incrementTotalRequests();
+		if (authenticated) {
+			slot.incrementAuthenticatedRequests();
+		}
 
 		// Step 2: Get and increment counter
 		AntiDoSCounter counter = slot.getCounter(counterName);
 		counter.incrementCount();
 		if (returningVisitor) {
 			counter.incrementReturningCount();
+		}
+		if (authenticated) {
+			counter.incrementAuthenticatedCount();
 		}
 		if (trackCardinality && clientIp != null) {
 			counter.registerClientIp(ipv4Bytes, clientIp, v4Mask, v6Mask);
@@ -440,6 +472,13 @@ public class AntiDoSMonitor {
 	 */
 	public long getTotalrequests() {
 		return totalrequests.sum();
+	}
+
+	/**
+	 * @return The total number of authenticated requests observed in the lifetime of this monitor instance
+	 */
+	public long getTotalAuthenticatedRequests() {
+		return totalAuthenticatedRequests.sum();
 	}
 
 	/**

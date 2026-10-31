@@ -1917,6 +1917,237 @@ class AntiDoSValveTest {
 		testValve.stop();
 	}
 
+	@Test
+	void testAuthSessionCacheParsingAndHashing() {
+		AntiDoSAuthSessionCache cache = new AntiDoSAuthSessionCache(5);
+		long now = 1_700_000_000_000L;
+
+		// 1. Deterministic 64-bit hash & distinctness
+		long h1 = AntiDoSAuthSessionCache.computeHash("cookie-payload-alpha");
+		long h2 = AntiDoSAuthSessionCache.computeHash("cookie-payload-alpha");
+		long h3 = AntiDoSAuthSessionCache.computeHash("cookie-payload-beta");
+		assertEquals(h1, h2);
+		assertTrue(h1 != h3);
+
+		// 2. Parse Set-Cookie with explicit Max-Age
+		cache.processSetCookieHeaders(
+				java.util.List.of("AUTH_COOKIE=\"encrypted-saml-session-123\"; Path=/; Max-Age=600; Secure; HttpOnly"),
+				"AUTH_COOKIE", 900, null, now);
+		assertTrue(cache.isValidSession("encrypted-saml-session-123", now + 599_000L));
+		assertFalse(cache.isValidSession("encrypted-saml-session-123", now + 601_000L), "Must expire after Max-Age");
+
+		// 3. Parse Set-Cookie without Max-Age (uses fallback TTL = 900s)
+		cache.processSetCookieHeaders(
+				java.util.List.of("AUTH_COOKIE=fallback-ttl-token; Path=/; HttpOnly"),
+				"AUTH_COOKIE", 900, null, now);
+		assertTrue(cache.isValidSession("fallback-ttl-token", now + 899_000L));
+		assertFalse(cache.isValidSession("fallback-ttl-token", now + 901_000L));
+
+		// 4. Logout invalidation via Max-Age=0
+		cache.processSetCookieHeaders(
+				java.util.List.of("AUTH_COOKIE=session-to-logout; Path=/; Max-Age=1200"),
+				"AUTH_COOKIE", 900, null, now);
+		assertTrue(cache.isValidSession("session-to-logout", now));
+		cache.processSetCookieHeaders(
+				java.util.List.of("AUTH_COOKIE=; Path=/; Max-Age=0"),
+				"AUTH_COOKIE", 900, "session-to-logout", now + 1000L);
+		assertFalse(cache.isValidSession("session-to-logout", now + 1000L), "Max-Age=0 must invalidate session");
+
+		// 5. Capacity enforcement & local earliest-expiry replacement (maxEntries = 5)
+		cache.clear();
+		for (int i = 0; i < 10; i++) {
+			cache.registerSession("bulk-token-" + i, 900_000L, now + i * 1000L);
+		}
+		assertEquals(5, cache.getRawSize(), "Cache size must strictly respect maxCapacity");
+		assertEquals(5, cache.getActiveSessionCount(now + 10_000L));
+		for (int i = 0; i < 5; i++) {
+			assertFalse(cache.isValidSession("bulk-token-" + i, now + 10_000L), "Earlier-expiring session " + i + " must be replaced");
+		}
+		for (int i = 5; i < 10; i++) {
+			assertTrue(cache.isValidSession("bulk-token-" + i, now + 10_000L), "Newer session " + i + " must be retained");
+		}
+	}
+
+	@Test
+	void testAuthTrackingConfigurationValidation() {
+		// Invalid authTrackingMode
+		AntiDoSValve v1 = new AntiDoSValve();
+		v1.setContainer(new org.apache.catalina.core.StandardEngine());
+		v1.setRelevantPaths(".*");
+		v1.setAllowedRequestsPerSlot(10);
+		v1.setNumberOfSlots(2);
+		v1.setSlotLength(10);
+		v1.setMaxIPCacheSize(50);
+		v1.setAuthTrackingMode("BEARER_INVALID");
+		assertThrows(LifecycleException.class, v1::start);
+
+		// COOKIE mode missing authCookieName
+		AntiDoSValve v2 = new AntiDoSValve();
+		v2.setContainer(new org.apache.catalina.core.StandardEngine());
+		v2.setRelevantPaths(".*");
+		v2.setAllowedRequestsPerSlot(10);
+		v2.setNumberOfSlots(2);
+		v2.setSlotLength(10);
+		v2.setMaxIPCacheSize(50);
+		v2.setAuthTrackingMode("COOKIE");
+		v2.setAuthLoginPaths("/trust");
+		assertThrows(LifecycleException.class, v2::start);
+
+		// COOKIE mode missing authLoginPaths
+		AntiDoSValve v3 = new AntiDoSValve();
+		v3.setContainer(new org.apache.catalina.core.StandardEngine());
+		v3.setRelevantPaths(".*");
+		v3.setAllowedRequestsPerSlot(10);
+		v3.setNumberOfSlots(2);
+		v3.setSlotLength(10);
+		v3.setMaxIPCacheSize(50);
+		v3.setAuthTrackingMode("COOKIE");
+		v3.setAuthCookieName("AUTH_COOKIE");
+		assertThrows(LifecycleException.class, v3::start);
+
+		// COOKIE mode with invalid regex in authLoginPaths
+		AntiDoSValve v4 = new AntiDoSValve();
+		v4.setContainer(new org.apache.catalina.core.StandardEngine());
+		v4.setRelevantPaths(".*");
+		v4.setAllowedRequestsPerSlot(10);
+		v4.setNumberOfSlots(2);
+		v4.setSlotLength(10);
+		v4.setMaxIPCacheSize(50);
+		v4.setAuthTrackingMode("COOKIE");
+		v4.setAuthCookieName("AUTH_COOKIE");
+		v4.setAuthLoginPaths("[unclosed-regex");
+		assertThrows(LifecycleException.class, v4::start);
+	}
+
+	@Test
+	void testAuthTrackingLoginAndCascadeInheritance() throws Exception {
+		AntiDoSValve.getSharedAuthSessionCache().clear();
+
+		// Upstream Valve: configured with authTrackingMode="COOKIE", authCookieName="AUTH_COOKIE", authLoginPaths="/trust"
+		// Note: /trust is placed in nonRelevantPaths to verify login observation works even on excluded paths!
+		AntiDoSValve upstreamValve = new AntiDoSValve();
+		upstreamValve.setContainer(new org.apache.catalina.core.StandardEngine());
+		upstreamValve.setMonitorName("UPSTREAM_AUTH_VALVE");
+		upstreamValve.setRelevantPaths(".*");
+		upstreamValve.setNonRelevantPaths("/trust");
+		upstreamValve.setAllowedRequestsPerSlot(50);
+		upstreamValve.setNumberOfSlots(5);
+		upstreamValve.setSlotLength(60);
+		upstreamValve.setMaxIPCacheSize(100);
+		upstreamValve.setAuthTrackingMode("COOKIE");
+		upstreamValve.setAuthCookieName("AUTH_COOKIE");
+		upstreamValve.setAuthLoginPaths("/trust");
+		upstreamValve.setAuthSessionTtlSeconds(900);
+		upstreamValve.setMaxAuthCacheSize(10000);
+
+		// Downstream Valve: no authTrackingMode configured (OFF by default), inherits from upstream
+		AntiDoSValve downstreamValve = new AntiDoSValve();
+		downstreamValve.setContainer(new org.apache.catalina.core.StandardEngine());
+		downstreamValve.setMonitorName("DOWNSTREAM_APP_VALVE");
+		downstreamValve.setRelevantPaths("/app/.*");
+		downstreamValve.setAllowedRequestsPerSlot(50);
+		downstreamValve.setNumberOfSlots(5);
+		downstreamValve.setSlotLength(60);
+		downstreamValve.setMaxIPCacheSize(100);
+
+		// Wire pipeline: upstream -> downstream -> mock application servlet
+		final String validSamlCookie = "SAML_ENCRYPTED_TOKEN_987654321";
+		downstreamValve.setNext(new org.apache.catalina.valves.ValveBase() {
+			@Override
+			public void invoke(Request request, Response response) {
+				if ("/trust".equals(request.getRequestURI())) {
+					String failParam = request.getParameter("fail");
+					if ("true".equals(failParam)) {
+						response.setStatus(401);
+						response.addHeader("Set-Cookie", "AUTH_COOKIE=should-not-be-trusted; Path=/; Max-Age=900");
+					} else {
+						response.setStatus(302);
+						response.addHeader("Set-Cookie", "AUTH_COOKIE=" + validSamlCookie + "; Path=/; Max-Age=900; HttpOnly; Secure");
+					}
+				}
+			}
+		});
+		upstreamValve.setNext(downstreamValve);
+
+		upstreamValve.start();
+		downstreamValve.start();
+
+		try {
+			String clientIp = "198.51.100.42";
+
+			// Step 1: Unauthenticated request to /app/dashboard
+			TestRequest req1 = new TestRequest("/app/dashboard", clientIp);
+			TestResponse resp1 = new TestResponse();
+			upstreamValve.invoke(req1, resp1);
+
+			assertEquals(Boolean.FALSE, req1.getAttribute(AntiDoSValve.AUTHENTICATED_ATTRIBUTE_NAME));
+			AntiDoSCounter upCounter = upstreamValve.provideMonitor().provideCurrentCounter(clientIp);
+			AntiDoSCounter downCounter = downstreamValve.provideMonitor().provideCurrentCounter(clientIp);
+			assertEquals(1, upCounter.getCount());
+			assertEquals(0, upCounter.getAuthenticatedCount());
+			assertEquals(1, downCounter.getCount());
+			assertEquals(0, downCounter.getAuthenticatedCount());
+
+			// Step 2: Failed login attempt on /trust (HTTP 401) -> Set-Cookie must be ignored
+			TestRequest reqFailLogin = new TestRequest("/trust", clientIp);
+			reqFailLogin.setParameter("fail", "true");
+			TestResponse respFailLogin = new TestResponse();
+			upstreamValve.invoke(reqFailLogin, respFailLogin);
+			assertEquals(0, AntiDoSValve.getSharedAuthSessionCache().getRawSize(), "401 response must not register auth cookie");
+
+			// Step 3: Successful SSO callback on /trust (HTTP 302 with Set-Cookie: AUTH_COOKIE=...)
+			TestRequest reqLogin = new TestRequest("/trust", clientIp);
+			TestResponse respLogin = new TestResponse();
+			upstreamValve.invoke(reqLogin, respLogin);
+			assertEquals(1, AntiDoSValve.getSharedAuthSessionCache().getRawSize(), "302 response on /trust must register AUTH_COOKIE hash");
+
+			// Step 4: Subsequent request with valid AUTH_COOKIE cookie -> recognized by both upstream & downstream valves
+			TestRequest reqAuth = new TestRequest("/app/dashboard", clientIp);
+			reqAuth.setCookies(new Cookie[]{new Cookie("AUTH_COOKIE", validSamlCookie)});
+			TestResponse respAuth = new TestResponse();
+			upstreamValve.invoke(reqAuth, respAuth);
+
+			assertEquals(Boolean.TRUE, reqAuth.getAttribute(AntiDoSValve.AUTHENTICATED_ATTRIBUTE_NAME));
+			assertEquals(2, upCounter.getCount());
+			assertEquals(1, upCounter.getAuthenticatedCount());
+			assertEquals(1L, upstreamValve.provideMonitor().getTotalAuthenticatedRequests());
+			assertEquals(2, downCounter.getCount());
+			assertEquals(1, downCounter.getAuthenticatedCount(), "Downstream valve must inherit authenticated status");
+			assertEquals(1L, downstreamValve.provideMonitor().getTotalAuthenticatedRequests());
+
+			// Step 5: Forged/unknown AUTH_COOKIE cookie -> must NOT be counted as authenticated
+			TestRequest reqForged = new TestRequest("/app/dashboard", clientIp);
+			reqForged.setCookies(new Cookie[]{new Cookie("AUTH_COOKIE", "FORGED_COOKIE_VALUE")});
+			TestResponse respForged = new TestResponse();
+			upstreamValve.invoke(reqForged, respForged);
+
+			assertEquals(Boolean.FALSE, reqForged.getAttribute(AntiDoSValve.AUTHENTICATED_ATTRIBUTE_NAME));
+			assertEquals(3, upCounter.getCount());
+			assertEquals(1, upCounter.getAuthenticatedCount(), "Forged cookie must not increment authenticatedCount");
+
+			// Step 6: Verify Status Renderer HTML & JSON output for both upstream and downstream valves
+			assertTrue(upstreamValve.isAuthTrackingActive());
+			assertTrue(downstreamValve.isAuthTrackingActive());
+			assertEquals(upstreamValve, downstreamValve.getInheritedAuthTrackingValve());
+
+			String downJson = downstreamValve.getStatusRenderer().buildStatusJsonDetails("DOWNSTREAM_APP_VALVE", null, null, null, null, null, null);
+			assertTrue(downJson.contains("\"authTrackingEnabled\": true"));
+			assertTrue(downJson.contains("\"authTrackingInherited\": true"));
+			assertTrue(downJson.contains("\"authTrackingMode\": \"COOKIE\""));
+			assertTrue(downJson.contains("\"authCookieName\": \"AUTH_COOKIE\""));
+			assertTrue(downJson.contains("\"authenticatedCount\": 1"));
+			assertTrue(downJson.contains("\"totalAuthenticatedRequests\": 1"));
+
+			String downHtml = downstreamValve.getStatusRenderer().buildStatusHtmlDetails("DOWNSTREAM_APP_VALVE");
+			assertTrue(downHtml.contains("Inherited from <strong>UPSTREAM_AUTH_VALVE</strong>"));
+			assertTrue(downHtml.contains("<th title=\"Requests carrying valid authenticated login session\">Authenticated</th>"));
+		} finally {
+			upstreamValve.stop();
+			downstreamValve.stop();
+			AntiDoSValve.getSharedAuthSessionCache().clear();
+		}
+	}
+
 	private static class TestRequest extends Request {
 		private final String testUri;
 		private final String testRemoteAddr;
@@ -1991,6 +2222,7 @@ class AntiDoSValveTest {
 
 	private static class TestResponse extends Response {
 		private int errorCode = -1;
+		private int statusCode = 200;
 		private final StringWriter sw = new StringWriter();
 		private final PrintWriter pw = new PrintWriter(sw);
 		private final Map<String, String> headers = new HashMap<>();
@@ -1998,6 +2230,16 @@ class AntiDoSValveTest {
 
 		TestResponse() {
 			super();
+		}
+
+		@Override
+		public void setStatus(int status) {
+			this.statusCode = status;
+		}
+
+		@Override
+		public int getStatus() {
+			return errorCode != -1 ? errorCode : statusCode;
 		}
 
 		@Override
@@ -2015,6 +2257,10 @@ class AntiDoSValveTest {
 
 		@Override
 		public void setHeader(String name, String value) {
+			if ("Set-Cookie".equalsIgnoreCase(name)) {
+				setCookies.clear();
+				setCookies.add(value);
+			}
 			headers.put(name, value);
 		}
 
@@ -2024,6 +2270,15 @@ class AntiDoSValveTest {
 				setCookies.add(value);
 			}
 			headers.put(name, value);
+		}
+
+		@Override
+		public java.util.Collection<String> getHeaders(String name) {
+			if ("Set-Cookie".equalsIgnoreCase(name)) {
+				return setCookies;
+			}
+			String v = headers.get(name);
+			return v != null ? java.util.Collections.singletonList(v) : java.util.Collections.emptyList();
 		}
 
 		List<String> getSetCookies() {

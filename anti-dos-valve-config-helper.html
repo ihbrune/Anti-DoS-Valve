@@ -429,7 +429,8 @@
     }
 
     .status-field-group,
-    .visitor-cookie-field-group {
+    .visitor-cookie-field-group,
+    .auth-tracking-field-group {
       background: #ffffff;
       padding: 12px 14px;
       border-radius: 6px;
@@ -443,6 +444,16 @@
       background: #f8fafc;
       border: 1px solid #cbd5e1;
       border-left: 4px solid #10b981;
+      border-radius: var(--radius);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    }
+
+    .auth-tracking-section {
+      margin-top: 24px;
+      padding: 18px 20px;
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-left: 4px solid #8b5cf6;
       border-radius: var(--radius);
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
     }
@@ -1780,6 +1791,78 @@
                 </div>
               </div>
             </div>
+
+            <!-- Optional Feature: Authentication Session Tracking -->
+            <div class="auth-tracking-section">
+              <div class="status-dashboard-header">
+                <div class="status-dashboard-title">
+                  <span class="status-dashboard-icon" style="color: #8b5cf6;">&#128272;</span>
+                  <span>Authentication Session Tracking (Login Cookie)</span>
+                </div>
+                <span class="badge badge-optional-feature" style="background: #ede9fe; color: #6d28d9; border-color: #ddd6fe;">Optional Feature</span>
+              </div>
+              <div class="status-dashboard-desc">
+                Passively observes application login endpoints (e.g. SSO / SAML callbacks such as <code>/trust</code>) for <code>Set-Cookie</code> headers and stores a fast, salted 64-bit hash of issued authentication cookies in a shared in-memory session cache across all valves in the server. Tracks how many requests per IP/subnet and time slot originate from authenticated users.
+              </div>
+
+              <!-- 31. authTrackingMode -->
+              <div class="field-group auth-tracking-field-group">
+                <div class="field-header">
+                  <label for="authTrackingMode" class="field-label">authTrackingMode</label>
+                  <span class="badge badge-optional">Optional</span>
+                </div>
+                <div class="field-desc">Activation mode for authentication session tracking. Set to <code>COOKIE</code> to observe login cookies on configured login paths. Default: <code>OFF</code>.</div>
+                <select id="authTrackingMode" name="authTrackingMode">
+                  <option value="OFF" selected>OFF (Disabled - Default)</option>
+                  <option value="COOKIE">COOKIE (Login Cookie Observation)</option>
+                </select>
+              </div>
+
+              <div id="authTrackingOptions" style="display: none;">
+                <!-- 32. authCookieName -->
+                <div class="field-group auth-tracking-field-group">
+                  <div class="field-header">
+                    <label for="authCookieName" class="field-label">authCookieName</label>
+                    <span class="badge badge-required">Required for COOKIE</span>
+                  </div>
+                  <div class="field-desc">Name of the HTTP cookie set by the application upon successful authentication (e.g. <code>AUTH_COOKIE</code>). Only a salted 64-bit hash of the cookie value is held in memory.</div>
+                  <input type="text" id="authCookieName" name="authCookieName" placeholder="e.g. AUTH_COOKIE">
+                  <div id="hintAuthCookieName" class="status-field-hint neutral"></div>
+                </div>
+
+                <!-- 33. authLoginPaths -->
+                <div class="field-group auth-tracking-field-group">
+                  <div class="field-header">
+                    <label for="authLoginPaths" class="field-label">authLoginPaths</label>
+                    <span class="badge badge-required">Required for COOKIE</span>
+                  </div>
+                  <div class="field-desc">Regular expression matching the application login / SSO callback path(s) where <code>Set-Cookie</code> is issued (e.g. <code>/trust</code> or <code>^/trust$</code>). Observed on successful responses (HTTP 200&ndash;399), independent of <code>relevantPaths</code>.</div>
+                  <input type="text" id="authLoginPaths" name="authLoginPaths" placeholder="e.g. /trust or ^/trust$">
+                  <div id="hintAuthLoginPaths" class="status-field-hint neutral"></div>
+                </div>
+
+                <!-- 34. authSessionTtlSeconds -->
+                <div class="field-group auth-tracking-field-group">
+                  <div class="field-header">
+                    <label for="authSessionTtlSeconds" class="field-label">authSessionTtlSeconds</label>
+                    <span class="badge badge-optional">Optional</span>
+                  </div>
+                  <div class="field-desc">Fallback validity duration in seconds (&ge; 1) if the <code>Set-Cookie</code> response header does not include a <code>Max-Age</code> attribute. Default: <code>900</code> (15 minutes).</div>
+                  <input type="number" id="authSessionTtlSeconds" name="authSessionTtlSeconds" min="1" step="1" placeholder="900 (Default: 900s / 15m)">
+                </div>
+
+                <!-- 35. maxAuthCacheSize -->
+                <div class="field-group auth-tracking-field-group" style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
+                  <div class="field-header">
+                    <label for="maxAuthCacheSize" class="field-label">maxAuthCacheSize</label>
+                    <span class="badge badge-optional">Optional</span>
+                  </div>
+                  <div class="field-desc">Maximum number of concurrent authenticated session hashes stored in the server-wide open-addressing cache (&ge; 1). Default: <code>50000</code> (~781 KB fixed array at 16 Bytes per slot).</div>
+                  <input type="number" id="maxAuthCacheSize" name="maxAuthCacheSize" min="1" step="1000" placeholder="50000 (Default: 50,000 sessions)">
+                  <div id="hintMaxAuthCacheSize" class="status-field-hint neutral"></div>
+                </div>
+              </div>
+            </div>
           </form>
         </div>
       </div>
@@ -2381,7 +2464,12 @@
       { key: 'visitorCookiePath', isRequired: false, defaultVal: '/' },
       { key: 'visitorCookieDomain', isRequired: false, defaultVal: '' },
       { key: 'visitorCookieSameSite', isRequired: false, defaultVal: 'Lax' },
-      { key: 'visitorCookieSecure', isRequired: false, defaultVal: true, isBoolean: true }
+      { key: 'visitorCookieSecure', isRequired: false, defaultVal: true, isBoolean: true },
+      { key: 'authTrackingMode', isRequired: false, defaultVal: 'OFF' },
+      { key: 'authCookieName', isRequired: false, defaultVal: '' },
+      { key: 'authLoginPaths', isRequired: false, defaultVal: '' },
+      { key: 'authSessionTtlSeconds', isRequired: false, defaultVal: 900 },
+      { key: 'maxAuthCacheSize', isRequired: false, defaultVal: 50000 }
     ];
 
     const form = document.getElementById('valveForm');
@@ -2459,6 +2547,7 @@
       updateSubnetMaskIndicators();
       updateStatusDashboardIndicators();
       updateVisitorCookieIndicators();
+      updateAuthTrackingIndicators();
       updateMonitorNameIndicators();
       runSimulation();
       saveStateToLocalStorage();
@@ -2521,6 +2610,11 @@
             if (param.key === 'visitorCookieDomain' && val === '') return;
             if (param.key === 'visitorCookieSameSite' && (val === 'Lax' || val === '')) return;
             if (param.key.startsWith('visitorCookie') && param.key !== 'visitorCookieEnabled' && !document.getElementById('visitorCookieEnabled').checked) return;
+            const authModeVal = (document.getElementById('authTrackingMode').value || 'OFF').trim().toUpperCase();
+            if (param.key === 'authTrackingMode' && (authModeVal === 'OFF' || authModeVal === '')) return;
+            if ((param.key === 'authCookieName' || param.key === 'authLoginPaths' || param.key === 'authSessionTtlSeconds' || param.key === 'maxAuthCacheSize') && authModeVal !== 'COOKIE') return;
+            if (param.key === 'authSessionTtlSeconds' && (val === '900' || val === 900 || parseInt(val, 10) === 900)) return;
+            if (param.key === 'maxAuthCacheSize' && (val === '50000' || val === 50000 || parseInt(val, 10) === 50000)) return;
           }
         }
 
@@ -2647,10 +2741,22 @@
       const nominalHeapBytes = totalNominalCounters * BYTES_PER_COUNTER;
       const hardCapHeapBytes = Math.round(nominalHeapBytes * 1.2);
 
-      cfgMaxHeapFootprint.textContent = `~${formatBytes(nominalHeapBytes)}`;
-      cfgMaxHeapDetails.innerHTML = `${numSlots.toLocaleString()} slots &times; (${maxIPVal.toLocaleString()} active + ${effectiveBlockedVal.toLocaleString()} blocked) = <strong>${totalNominalCounters.toLocaleString()} total counters</strong>.<br>Nominal: <strong>~${formatBytes(nominalHeapBytes)}</strong> &bull; Peak with 120% hard-cap: <strong>~${formatBytes(hardCapHeapBytes)}</strong>.`;
+      const authModeEl = document.getElementById('authTrackingMode');
+      const maxAuthEl = document.getElementById('maxAuthCacheSize');
+      const isAuthCookie = authModeEl && authModeEl.value.trim().toUpperCase() === 'COOKIE';
+      const maxAuthVal = isAuthCookie ? Math.max(1, parseInt(maxAuthEl ? maxAuthEl.value : '', 10) || 50000) : 0;
+      const authCacheBytes = maxAuthVal * 16; // 16 Bytes per primitive slot (2 * long in AtomicLongArray)
+
+      const totalNominalWithAuth = nominalHeapBytes + authCacheBytes;
+      const totalHardCapWithAuth = hardCapHeapBytes + authCacheBytes;
+
+      cfgMaxHeapFootprint.textContent = `~${formatBytes(totalNominalWithAuth)}`;
+      const authNote = isAuthCookie
+        ? `<br>Shared Auth Session Cache: <strong>${maxAuthVal.toLocaleString()} slots</strong> (~${formatBytes(authCacheBytes)} at 16 B/slot).`
+        : '';
+      cfgMaxHeapDetails.innerHTML = `${numSlots.toLocaleString()} slots &times; (${maxIPVal.toLocaleString()} active + ${effectiveBlockedVal.toLocaleString()} blocked) = <strong>${totalNominalCounters.toLocaleString()} total counters</strong>.${authNote}<br>Nominal: <strong>~${formatBytes(totalNominalWithAuth)}</strong> &bull; Peak with 120% hard-cap: <strong>~${formatBytes(totalHardCapWithAuth)}</strong>.`;
       if (cfgBytesPerCounterNote) {
-        cfgBytesPerCounterNote.innerHTML = `Calculated at <strong>${BYTES_PER_COUNTER} Bytes</strong> per counter on 64-bit JVM (AntiDoSCounter + IP String + Map Node).`;
+        cfgBytesPerCounterNote.innerHTML = `Calculated at <strong>${BYTES_PER_COUNTER} Bytes</strong> per IP counter (AntiDoSCounter + IP String + Map Node)${isAuthCookie ? ' + <strong>16 Bytes</strong> per primitive Auth Session slot (AtomicLongArray)' : ''}.`;
       }
     }
 
@@ -3005,6 +3111,99 @@
           domainHint.innerHTML = `<span>&#10003;</span><div><strong>Shared subdomain scope:</strong> Cookie valid for <code>*.${escapeHtml(cleanDomain)}</code> and apex domain. Ensure identical <code>visitorCookieSecret</code> on all participating nodes.</div>`;
         }
       }
+    }
+
+    function updateAuthTrackingIndicators() {
+      const modeSelect = document.getElementById('authTrackingMode');
+      const optionsContainer = document.getElementById('authTrackingOptions');
+      const cookieInput = document.getElementById('authCookieName');
+      const cookieHint = document.getElementById('hintAuthCookieName');
+      const pathsInput = document.getElementById('authLoginPaths');
+      const pathsHint = document.getElementById('hintAuthLoginPaths');
+      const ttlInput = document.getElementById('authSessionTtlSeconds');
+      const maxCacheInput = document.getElementById('maxAuthCacheSize');
+      const maxCacheHint = document.getElementById('hintMaxAuthCacheSize');
+
+      if (!modeSelect) return;
+
+      const isCookieMode = modeSelect.value.trim().toUpperCase() === 'COOKIE';
+      if (optionsContainer) {
+        optionsContainer.style.display = isCookieMode ? 'block' : 'none';
+      }
+
+      if (!isCookieMode) {
+        updateMemoryEstimates();
+        return;
+      }
+
+      // 1. authCookieName validation
+      if (cookieInput && cookieHint) {
+        const rawCookie = cookieInput.value.trim();
+        if (!rawCookie) {
+          cookieInput.classList.add('input-invalid');
+          cookieHint.className = 'status-field-hint invalid';
+          cookieHint.innerHTML = '<span>&#9888;</span><div><strong>Required when <code>authTrackingMode="COOKIE"</code>:</strong> Specify the login cookie name (e.g. <code>AUTH_COOKIE</code>). Missing value causes a Tomcat startup LifecycleException.</div>';
+        } else if (/[\s;=,]/.test(rawCookie)) {
+          cookieInput.classList.add('input-invalid');
+          cookieHint.className = 'status-field-hint invalid';
+          cookieHint.innerHTML = '<span>&#9888;</span><div><strong>Invalid cookie name:</strong> Cookie name must not contain spaces, semicolons, commas, or equals signs.</div>';
+        } else {
+          cookieInput.classList.remove('input-invalid');
+          cookieHint.className = 'status-field-hint valid';
+          cookieHint.innerHTML = `<span>&#10003;</span><div><strong>Tracking login cookie:</strong> Observes <code>Set-Cookie: ${escapeHtml(rawCookie)}=...</code> on login paths and verifies incoming <code>Cookie</code> headers via 64-bit keyed hash.</div>`;
+        }
+      }
+
+      // 2. authLoginPaths validation
+      if (pathsInput && pathsHint) {
+        const rawPaths = pathsInput.value.trim();
+        if (!rawPaths) {
+          pathsInput.classList.add('input-invalid');
+          pathsHint.className = 'status-field-hint invalid';
+          pathsHint.innerHTML = '<span>&#9888;</span><div><strong>Required when <code>authTrackingMode="COOKIE"</code>:</strong> Specify the login endpoint regex (e.g. <code>/trust</code> or <code>^/trust$</code>). Missing value causes a Tomcat startup LifecycleException.</div>';
+        } else {
+          try {
+            new RegExp(rawPaths);
+            pathsInput.classList.remove('input-invalid');
+            pathsHint.className = 'status-field-hint valid';
+            pathsHint.innerHTML = `<span>&#10003;</span><div><strong>Valid login path pattern:</strong> Matches <code>${escapeHtml(rawPaths)}</code> on HTTP 200&ndash;399 responses across the valve pipeline.</div>`;
+          } catch (e) {
+            pathsInput.classList.add('input-invalid');
+            pathsHint.className = 'status-field-hint invalid';
+            pathsHint.innerHTML = `<span>&#9888;</span><div><strong>Invalid Regular Expression:</strong> ${escapeHtml(e.message)}</div>`;
+          }
+        }
+      }
+
+      // 3. authSessionTtlSeconds validation
+      if (ttlInput) {
+        const rawTtl = ttlInput.value.trim();
+        const ttlVal = rawTtl ? parseInt(rawTtl, 10) : 900;
+        if (rawTtl !== '' && (isNaN(ttlVal) || ttlVal < 1)) {
+          ttlInput.classList.add('input-invalid');
+        } else {
+          ttlInput.classList.remove('input-invalid');
+        }
+      }
+
+      // 4. maxAuthCacheSize validation & memory estimate
+      if (maxCacheInput && maxCacheHint) {
+        const rawMax = maxCacheInput.value.trim();
+        const maxVal = rawMax ? parseInt(rawMax, 10) : 50000;
+        if (rawMax !== '' && (isNaN(maxVal) || maxVal < 1)) {
+          maxCacheInput.classList.add('input-invalid');
+          maxCacheHint.className = 'status-field-hint invalid';
+          maxCacheHint.innerHTML = '<span>&#9888;</span><div><strong>Invalid cache size:</strong> Must be &ge; 1.</div>';
+        } else {
+          maxCacheInput.classList.remove('input-invalid');
+          const effMax = (!isNaN(maxVal) && maxVal > 0) ? maxVal : 50000;
+          const bytes = effMax * 16;
+          maxCacheHint.className = 'status-field-hint neutral';
+          maxCacheHint.innerHTML = `<span>&#9432;</span><div><strong>Shared Zero-Allocation Session Cache:</strong> Primitive open-addressing array holding up to <strong>${effMax.toLocaleString()}</strong> salted 64-bit cookie hashes (~<strong>${formatBytes(bytes)}</strong> fixed array at 16 B/slot). Shared across all valves in the server.</div>`;
+        }
+      }
+
+      updateMemoryEstimates();
     }
 
     // ==========================================
@@ -3932,6 +4131,7 @@
         updateSubnetMaskIndicators();
         updateStatusDashboardIndicators();
         updateVisitorCookieIndicators();
+        updateAuthTrackingIndicators();
         updateMonitorNameIndicators();
         runSimulation();
 
@@ -3951,6 +4151,7 @@
       updateSubnetMaskIndicators();
       updateStatusDashboardIndicators();
       updateVisitorCookieIndicators();
+      updateAuthTrackingIndicators();
       updateMonitorNameIndicators();
       runSimulation();
       saveStateToLocalStorage();
@@ -3962,6 +4163,7 @@
       updateSubnetMaskIndicators();
       updateStatusDashboardIndicators();
       updateVisitorCookieIndicators();
+      updateAuthTrackingIndicators();
       updateMonitorNameIndicators();
       runSimulation();
       saveStateToLocalStorage();

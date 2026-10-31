@@ -47,6 +47,7 @@ public class AntiDoSSlot {
 	private final long slotKey;
 	private String name4logging;
 	private final LongAdder totalRequests = new LongAdder();
+	private final LongAdder authenticatedRequests = new LongAdder();
 
 	private final ConcurrentHashMap<String, AntiDoSCounter> activeCounters;
 	private final ConcurrentHashMap<String, AntiDoSCounter> blockedCounters;
@@ -445,6 +446,14 @@ public class AntiDoSSlot {
 
 	public long getTotalRequests() {
 		return totalRequests.sum();
+	}
+
+	public void incrementAuthenticatedRequests() {
+		authenticatedRequests.increment();
+	}
+
+	public long getAuthenticatedRequests() {
+		return authenticatedRequests.sum();
 	}
 
 	@Override
