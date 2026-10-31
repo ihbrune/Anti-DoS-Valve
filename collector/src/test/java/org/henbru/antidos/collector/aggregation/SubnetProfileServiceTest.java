@@ -328,4 +328,86 @@ class SubnetProfileServiceTest {
 		assertNotNull(freshness.latestRollupEnd());
 		assertTrue(freshness.hasData());
 	}
+
+	@Test
+	void testVisitorCookieHeuristicsAndMarkedProfiles() {
+		Instant now = Instant.now();
+
+		// 1. Human NAT / ISP Subnet (10 distinct clients, 100 reqs -> 10 avg/client, 75% returning visitor cookies)
+		SubnetProfile humanNat = new SubnetProfile(
+				"84.150.10.0/24",
+				now.minus(10, ChronoUnit.DAYS),
+				now,
+				0,
+				500,
+				500,
+				0,
+				20,
+				50.0,
+				10,
+				100,
+				100,
+				10,
+				0,
+				20,
+				2.0,
+				3320L,
+				"Deutsche Telekom AG",
+				"DE",
+				ClientType.RESIDENTIAL,
+				now,
+				75,
+				100,
+				10,
+				100
+		);
+		assertFalse(humanNat.isPotentialResidentialProxyPool(), "High returning cookie ratio (75%) must exclude human ISP subnet from proxy pool");
+		assertTrue(humanNat.isLikelyHumanNat24h());
+		assertFalse(humanNat.isLikelyAutomatedScraper24h());
+
+		// 2. Headless Residential Proxy / Scraper Pool (10 distinct clients, 100 reqs -> 10 avg/client, 2% returning cookies, 40 marked reqs)
+		SubnetProfile headlessProxy = new SubnetProfile(
+				"91.200.12.0/24",
+				now.minus(5, ChronoUnit.DAYS),
+				now,
+				0,
+				200,
+				160,
+				0,
+				40,
+				20.0,
+				10,
+				100,
+				100,
+				10,
+				0,
+				40,
+				5.0,
+				12345L,
+				"Regional ISP",
+				"DE",
+				ClientType.RESIDENTIAL,
+				now,
+				2,
+				100,
+				0,
+				100
+		);
+		assertTrue(headlessProxy.isPotentialResidentialProxyPool(), "Low returning cookie ratio (2%) must remain flagged as residential proxy pool");
+		assertTrue(headlessProxy.isLikelyAutomatedScraper24h());
+		assertFalse(headlessProxy.isLikelyHumanNat24h());
+
+		profileRepository.batchUpsert(List.of(humanNat, headlessProxy));
+
+		// SQL filter PROXY_POOL must only return headlessProxy, NOT humanNat
+		List<SubnetProfile> proxyPools = profileRepository.findProfilesFiltered("PROXY_POOL", null, null, null, null, null, "DISTINCT_IPS", 10, 0);
+		assertEquals(1, proxyPools.size());
+		assertEquals("91.200.12.0/24", proxyPools.getFirst().subnetGroup());
+
+		// SQL filter MARKED sorted by MARKED must return both with headlessProxy (40 marked) first
+		List<SubnetProfile> markedProfiles = profileRepository.findProfilesFiltered("MARKED", null, null, null, null, null, "MARKED", 10, 0);
+		assertEquals(2, markedProfiles.size());
+		assertEquals("91.200.12.0/24", markedProfiles.getFirst().subnetGroup());
+		assertEquals(40L, markedProfiles.getFirst().last24hMarkedRequests());
+	}
 }

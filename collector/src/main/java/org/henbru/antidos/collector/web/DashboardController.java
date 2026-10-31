@@ -954,6 +954,8 @@ public class DashboardController {
 		long totalRequests = slotSnapshotRepository.sumRequestsSince(since24h);
 		long totalBlocked = slotSnapshotRepository.sumBlockedRequestsSince(since24h);
 		long distinctBlocked = clientEventRepository.countDistinctBlockedClientsSince(since24h);
+		long totalMarked = slotSnapshotRepository.sumMarkedRequestsSince(since24h);
+		long distinctMarked = clientEventRepository.countDistinctMarkedClientsSince(since24h);
 
 		return new FleetSummary(
 				totalEndpoints,
@@ -962,7 +964,9 @@ public class DashboardController {
 				totalValves,
 				totalRequests,
 				totalBlocked,
-				distinctBlocked
+				distinctBlocked,
+				totalMarked,
+				distinctMarked
 		);
 	}
 

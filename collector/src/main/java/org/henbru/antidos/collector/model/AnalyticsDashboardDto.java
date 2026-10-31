@@ -17,5 +17,23 @@ public record AnalyticsDashboardDto(
 		long totalRequests,
 		long totalActive,
 		long totalBlocked,
-		double blockedRatioPercent
-) {}
+		long totalMarked,
+		double blockedRatioPercent,
+		double markedRatioPercent
+) {
+	public AnalyticsDashboardDto(
+			Instant windowFrom,
+			Instant windowTo,
+			int hours,
+			List<TimelinePoint> timeline,
+			List<TrafficCompositionPoint> composition,
+			List<SubnetScatterPoint> scatterPoints,
+			long totalRequests,
+			long totalActive,
+			long totalBlocked,
+			double blockedRatioPercent
+	) {
+		this(windowFrom, windowTo, hours, timeline, composition, scatterPoints,
+				totalRequests, totalActive, totalBlocked, 0L, blockedRatioPercent, 0.0);
+	}
+}

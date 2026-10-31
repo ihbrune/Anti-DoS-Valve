@@ -275,11 +275,40 @@ public record SubnetProfile(
 
 	/**
 	 * Heuristic indicator for potential distributed residential proxy pools / low-and-slow campaigns.
+	 * Excludes multi-user human ISP / CGNAT subnets when visitor cookie tracking confirms a high returning
+	 * visitor ratio (>= 40% across >= 20 tracked requests).
 	 */
 	public boolean isPotentialResidentialProxyPool() {
+		Double retRatio = returningRatio24h();
+		boolean isHighReturningHumanNat = last24hReturningTrackedRequests >= 20 && retRatio != null && retRatio >= 40.0;
 		return last24hDistinctClients >= 5
 				&& averageRequestsPerClient24h() <= 20.0
+				&& !isHighReturningHumanNat
 				&& (ClientType.RESIDENTIAL.equals(clientType) || ClientType.UNKNOWN.equals(clientType));
+	}
+
+	/**
+	 * Heuristic indicator for headless scrapers or cookie-less bots based on low visitor cookie
+	 * retention (< 15% across at least 20 tracked requests) combined with rate-limit or marking triggers.
+	 */
+	public boolean isLikelyAutomatedScraper24h() {
+		Double retRatio = returningRatio24h();
+		return last24hReturningTrackedRequests >= 20
+				&& retRatio != null
+				&& retRatio < 15.0
+				&& (last24hBlockedRequests > 0 || last24hMarkedRequests > 0 || last24hRequests >= 100);
+	}
+
+	/**
+	 * Heuristic indicator for legitimate multi-user human NAT / CGNAT subnets based on high visitor
+	 * cookie retention (>= 50% across at least 20 tracked requests) without hard 429 blocks.
+	 */
+	public boolean isLikelyHumanNat24h() {
+		Double retRatio = returningRatio24h();
+		return last24hReturningTrackedRequests >= 20
+				&& retRatio != null
+				&& retRatio >= 50.0
+				&& last24hBlockedRequests == 0;
 	}
 
 	public Double returningRatio24h() {

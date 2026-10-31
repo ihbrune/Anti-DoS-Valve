@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+
 import org.henbru.antidos.collector.model.ClientSubnetRollup;
 import org.henbru.antidos.collector.model.ClientType;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
@@ -267,7 +268,8 @@ public class SubnetRollupRepository {
 				    bucket_start,
 				    SUM(total_requests) AS total_reqs,
 				    SUM(active_requests) AS active_reqs,
-				    SUM(blocked_requests) AS blocked_reqs
+				    SUM(blocked_requests) AS blocked_reqs,
+				    SUM(COALESCE(marked_requests, 0)) AS marked_reqs
 				FROM client_subnet_rollups
 				WHERE 1=1
 				""");
@@ -279,7 +281,8 @@ public class SubnetRollupRepository {
 				rs.getTimestamp("bucket_start").toInstant(),
 				rs.getLong("total_reqs"),
 				rs.getLong("active_reqs"),
-				rs.getLong("blocked_reqs")
+				rs.getLong("blocked_reqs"),
+				rs.getLong("marked_reqs")
 		), params.toArray());
 	}
 
@@ -287,8 +290,18 @@ public class SubnetRollupRepository {
 			ClientType clientType,
 			long totalRequests,
 			long blockedRequests,
+			long markedRequests,
 			int subnetCount
-	) {}
+	) {
+		public RawCompositionRow(
+				ClientType clientType,
+				long totalRequests,
+				long blockedRequests,
+				int subnetCount
+		) {
+			this(clientType, totalRequests, blockedRequests, 0L, subnetCount);
+		}
+	}
 
 	public List<RawCompositionRow> findTrafficComposition(
 			List<String> servers,
@@ -301,6 +314,7 @@ public class SubnetRollupRepository {
 				    client_type,
 				    SUM(total_requests) AS total_reqs,
 				    SUM(blocked_requests) AS blocked_reqs,
+				    SUM(COALESCE(marked_requests, 0)) AS marked_reqs,
 				    COUNT(DISTINCT subnet_group) AS subnets_cnt
 				FROM client_subnet_rollups
 				WHERE 1=1
@@ -316,6 +330,7 @@ public class SubnetRollupRepository {
 					type,
 					rs.getLong("total_reqs"),
 					rs.getLong("blocked_reqs"),
+					rs.getLong("marked_reqs"),
 					rs.getInt("subnets_cnt")
 			);
 		}, params.toArray());
@@ -326,12 +341,36 @@ public class SubnetRollupRepository {
 			long totalRequests,
 			long activeRequests,
 			long blockedRequests,
+			long markedRequests,
 			int distinctClients,
 			Long asn,
 			String asOrg,
 			String countryCode,
-			ClientType clientType
-	) {}
+			ClientType clientType,
+			long returningRequests,
+			long returningTrackedRequests
+	) {
+		public RawScatterCluster(
+				String subnetGroup,
+				long totalRequests,
+				long activeRequests,
+				long blockedRequests,
+				int distinctClients,
+				Long asn,
+				String asOrg,
+				String countryCode,
+				ClientType clientType
+		) {
+			this(subnetGroup, totalRequests, activeRequests, blockedRequests, 0L,
+					distinctClients, asn, asOrg, countryCode, clientType, 0L, 0L);
+		}
+
+		public Double returningRatio() {
+			return returningTrackedRequests > 0
+					? Math.round((returningRequests * 1000.0) / returningTrackedRequests) / 10.0
+					: null;
+		}
+	}
 
 	public List<RawScatterCluster> findScatterClusters(
 			List<String> servers,
@@ -346,18 +385,21 @@ public class SubnetRollupRepository {
 				    SUM(total_requests) AS total_reqs,
 				    SUM(active_requests) AS active_reqs,
 				    SUM(blocked_requests) AS blocked_reqs,
+				    SUM(COALESCE(marked_requests, 0)) AS marked_reqs,
 				    MAX(distinct_clients) AS max_distinct_clients,
 				    MAX(asn) AS asn,
 				    MAX(as_org) AS as_org,
 				    MAX(country_code) AS country_code,
-				    MAX(client_type) AS client_type
+				    MAX(client_type) AS client_type,
+				    SUM(COALESCE(returning_requests, 0)) AS returning_reqs,
+				    SUM(COALESCE(returning_tracked_requests, 0)) AS returning_tracked_reqs
 				FROM client_subnet_rollups
 				WHERE 1=1
 				""");
 		List<Object> params = new ArrayList<>();
 		appendFilterConditions(sql, params, servers, valves, from, to, null, null, null);
 		sql.append(" GROUP BY subnet_group HAVING SUM(total_requests) > 0");
-		sql.append(" ORDER BY SUM(blocked_requests) DESC, SUM(total_requests) DESC LIMIT ?");
+		sql.append(" ORDER BY SUM(blocked_requests) DESC, SUM(COALESCE(marked_requests, 0)) DESC, SUM(total_requests) DESC LIMIT ?");
 		params.add(limit);
 
 		return jdbcTemplate.query(Objects.requireNonNull(sql.toString()), (rs, rowNum) -> {
@@ -369,11 +411,14 @@ public class SubnetRollupRepository {
 					rs.getLong("total_reqs"),
 					rs.getLong("active_reqs"),
 					rs.getLong("blocked_reqs"),
+					rs.getLong("marked_reqs"),
 					rs.getInt("max_distinct_clients"),
 					asnVal,
 					rs.getString("as_org"),
 					rs.getString("country_code"),
-					type
+					type,
+					rs.getLong("returning_reqs"),
+					rs.getLong("returning_tracked_reqs")
 			);
 		}, params.toArray());
 	}

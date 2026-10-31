@@ -8,6 +8,7 @@ import java.time.Instant;
 public record TopOffenderSummary(
 		String clientKey,
 		long totalBlockedRequests,
+		long totalMarkedRequests,
 		long totalRequests,
 		int distinctServersTargeted,
 		String serversList,
@@ -27,11 +28,43 @@ public record TopOffenderSummary(
 			int distinctServersTargeted,
 			String serversList,
 			Instant firstSeen,
+			Instant lastSeen,
+			Long asn,
+			String asOrg,
+			String countryCode,
+			ClientType clientType,
+			int distinctClientsCount
+	) {
+		this(
+				clientKey,
+				totalBlockedRequests,
+				0L,
+				totalRequests,
+				distinctServersTargeted,
+				serversList,
+				firstSeen,
+				lastSeen,
+				asn,
+				asOrg,
+				countryCode,
+				clientType,
+				distinctClientsCount
+		);
+	}
+
+	public TopOffenderSummary(
+			String clientKey,
+			long totalBlockedRequests,
+			long totalRequests,
+			int distinctServersTargeted,
+			String serversList,
+			Instant firstSeen,
 			Instant lastSeen
 	) {
 		this(
 				clientKey,
 				totalBlockedRequests,
+				0L,
 				totalRequests,
 				distinctServersTargeted,
 				serversList,
@@ -50,6 +83,10 @@ public record TopOffenderSummary(
 	 */
 	public long totalBlockIncidents() {
 		return totalBlockedRequests;
+	}
+
+	public long totalMarkIncidents() {
+		return totalMarkedRequests;
 	}
 
 	/**

@@ -294,11 +294,15 @@ public record ClientSubnetRollup(
 
 	/**
 	 * Heuristic indicator for potential distributed residential proxy / low-and-slow abuse:
-	 * High number of distinct IPs, low average requests per IP, and classified as residential or unknown ISP.
+	 * High number of distinct IPs, low average requests per IP, classified as residential or unknown ISP,
+	 * and not confirmed as a high-cookie human NAT subnet.
 	 */
 	public boolean isPotentialResidentialProxy() {
+		Double retRatio = returningRatio();
+		boolean isHighReturningHumanNat = returningTrackedRequests >= 20 && retRatio != null && retRatio >= 40.0;
 		return distinctClients >= 5
 				&& averageRequestsPerClient() <= 5.0
+				&& !isHighReturningHumanNat
 				&& (ClientType.RESIDENTIAL.equals(clientType) || ClientType.UNKNOWN.equals(clientType));
 	}
 

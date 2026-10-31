@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+
 import org.henbru.antidos.collector.model.EndpointHeartbeat;
 import org.henbru.antidos.collector.model.FleetSummary;
 import org.henbru.antidos.collector.model.PollEventLog;
@@ -80,6 +81,8 @@ public class ApiController {
 		long totalRequests = slotSnapshotRepository.sumRequestsSince(since24h);
 		long totalBlocked = slotSnapshotRepository.sumBlockedRequestsSince(since24h);
 		long distinctBlocked = clientEventRepository.countDistinctBlockedClientsSince(since24h);
+		long totalMarked = slotSnapshotRepository.sumMarkedRequestsSince(since24h);
+		long distinctMarked = clientEventRepository.countDistinctMarkedClientsSince(since24h);
 
 		int online = (int) heartbeats.stream().filter(EndpointHeartbeat::online).count();
 		int totalValves = heartbeats.stream().mapToInt(EndpointHeartbeat::valvesCount).sum();
@@ -91,7 +94,9 @@ public class ApiController {
 				totalValves,
 				totalRequests,
 				totalBlocked,
-				distinctBlocked
+				distinctBlocked,
+				totalMarked,
+				distinctMarked
 		);
 
 		return Map.of(

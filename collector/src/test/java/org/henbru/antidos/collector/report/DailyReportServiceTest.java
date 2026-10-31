@@ -246,4 +246,53 @@ class DailyReportServiceTest {
 		assertTrue(reportAfterDelete.isPresent());
 		assertFalse(reportAfterDelete.get().reportMarkdown().contains("Migration succeeded without downtime"));
 	}
+
+	@Test
+	void testMarkingValveDoesNotTriggerAttackStatusAndReportsMarkedMetrics() {
+		LocalDate markDate = LocalDate.of(2026, 10, 23);
+		dailyReportRepository.deleteByReportDate(markDate.toString());
+		jdbcTemplate.update("DELETE FROM slot_snapshots WHERE server_id = 'SRV-MARK'");
+		jdbcTemplate.update("DELETE FROM client_events WHERE server_id = 'SRV-MARK'");
+		jdbcTemplate.update("DELETE FROM monitored_valves WHERE server_id = 'SRV-MARK'");
+
+		ZonedDateTime startDay = markDate.atStartOfDay(ZoneId.systemDefault());
+		Instant baseTime = startDay.plusHours(14).toInstant();
+
+		monitoredValveRepository.upsert(new MonitoredValve(
+				"SRV-MARK", "GEGEN MAILSAMMLER", "Email obfuscation marker", 1, "MARKING", false, false,
+				429, 15, 60, 5, 0.5f, 24, 64, 10000, 5000, "", "", "", "", "/status", "*", "auto",
+				true, "_adv", Instant.now(), 7777, true
+		));
+
+		// Slot with 30 marked counters and 0 blocked counters in 60s => 0.5 marks/s
+		slotSnapshotRepository.upsert(new SlotSnapshot(
+				null, "SRV-MARK", "GEGEN MAILSAMMLER", 8001L, baseTime, baseTime.plus(60, ChronoUnit.SECONDS),
+				1000L, 40, 0, 30, true, baseTime.plus(60, ChronoUnit.SECONDS)
+		));
+
+		// Insert 15 marked client events (300 total marked requests)
+		for (int i = 1; i <= 15; i++) {
+			jdbcTemplate.update("""
+					INSERT INTO client_events (
+						server_id, valve_name, slot_key, slot_time, client_key, request_count, status, client_type, enrichment_status, last_updated_at
+					) VALUES (?, ?, ?, ?, ?, ?, 'MARKED', 'SEARCH_ENGINE', 'ENRICHED', ?)
+					""", "SRV-MARK", "GEGEN MAILSAMMLER", 8001L, java.sql.Timestamp.from(baseTime),
+					"66.249.66." + i, 20L, java.sql.Timestamp.from(baseTime));
+		}
+
+		DailyReport report = dailyReportService.generateDailyReport(markDate);
+		assertNotNull(report);
+		assertEquals("NORMAL", report.status(), "Soft-marking events must NOT trigger ATTACK_MITIGATED status");
+		assertEquals(1000L, report.totalRequests());
+		assertEquals(0L, report.totalBlocked());
+		assertEquals(300L, report.totalMarked());
+		assertEquals(0.0, report.peakBlockedPerSec(), 0.01);
+		assertEquals(0.5, report.peakMarkedPerSec(), 0.01);
+
+		String md = report.reportMarkdown();
+		assertTrue(md.contains("Marked / Simulated Requests"));
+		assertTrue(md.contains("30.00%"));
+		assertTrue(md.contains("Top Marked / Monitored Clients (Soft-Marking & Simulation)"));
+		assertTrue(md.contains("`MARKING`"));
+	}
 }

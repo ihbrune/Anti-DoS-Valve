@@ -33,6 +33,7 @@ public record SubnetScatterPoint(
 		double averageRequestsPerClient,
 		long totalRequests,
 		long blockedRequests,
+		long markedRequests,
 		boolean isPotentialResidentialProxy,
 		Long asn,
 		String asOrg,
@@ -50,8 +51,40 @@ public record SubnetScatterPoint(
 		String subnetNoteSnippet,
 		String asnNoteVerdict,
 		String asnNoteIcon,
-		String asnNoteSnippet
+		String asnNoteSnippet,
+		Double returningRatio
 ) {
+	public SubnetScatterPoint(
+			String subnetGroup,
+			int distinctClients,
+			double averageRequestsPerClient,
+			long totalRequests,
+			long blockedRequests,
+			boolean isPotentialResidentialProxy,
+			Long asn,
+			String asOrg,
+			String countryCode,
+			ClientType clientType,
+			String classification,
+			boolean hasNote,
+			String noteVerdict,
+			String noteVerdictIcon,
+			String noteVerdictDisplayName,
+			String noteVerdictColor,
+			String noteSnippet,
+			String subnetNoteVerdict,
+			String subnetNoteIcon,
+			String subnetNoteSnippet,
+			String asnNoteVerdict,
+			String asnNoteIcon,
+			String asnNoteSnippet
+	) {
+		this(subnetGroup, distinctClients, averageRequestsPerClient, totalRequests, blockedRequests, 0L,
+				isPotentialResidentialProxy, asn, asOrg, countryCode, clientType, classification,
+				hasNote, noteVerdict, noteVerdictIcon, noteVerdictDisplayName, noteVerdictColor, noteSnippet,
+				subnetNoteVerdict, subnetNoteIcon, subnetNoteSnippet, asnNoteVerdict, asnNoteIcon, asnNoteSnippet, null);
+	}
+
 	public SubnetScatterPoint(
 			String subnetGroup,
 			int distinctClients,
@@ -65,9 +98,9 @@ public record SubnetScatterPoint(
 			ClientType clientType,
 			String classification
 	) {
-		this(subnetGroup, distinctClients, averageRequestsPerClient, totalRequests, blockedRequests,
+		this(subnetGroup, distinctClients, averageRequestsPerClient, totalRequests, blockedRequests, 0L,
 				isPotentialResidentialProxy, asn, asOrg, countryCode, clientType, classification,
-				false, null, null, null, null, null, null, null, null, null, null, null);
+				false, null, null, null, null, null, null, null, null, null, null, null, null);
 	}
 
 	public double blockedRatioPercent() {
@@ -75,6 +108,13 @@ public record SubnetScatterPoint(
 			return 0.0;
 		}
 		return Math.round(((double) blockedRequests / totalRequests) * 1000.0) / 10.0;
+	}
+
+	public double markedRatioPercent() {
+		if (totalRequests <= 0) {
+			return 0.0;
+		}
+		return Math.round(((double) markedRequests / totalRequests) * 1000.0) / 10.0;
 	}
 
 	public double bubbleRadius() {

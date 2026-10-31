@@ -496,6 +496,7 @@ public class ClientEventRepository {
 				.append("MAX(client_type) AS client_type, ")
 				.append("CASE WHEN MAX(distinct_clients) > COUNT(DISTINCT client_key) THEN MAX(distinct_clients) ELSE COUNT(DISTINCT client_key) END AS distinct_clients, ")
 				.append("SUM(CASE WHEN UPPER(status) = 'BLOCKED' THEN request_count ELSE 0 END) AS total_blocked_requests, ")
+				.append("SUM(CASE WHEN UPPER(status) = 'MARKED' THEN request_count ELSE 0 END) AS total_marked_requests, ")
 				.append("SUM(request_count) AS total_requests, ")
 				.append("COUNT(DISTINCT server_id) AS distinct_servers, ")
 				.append("MIN(slot_time) AS first_seen, ")
@@ -508,9 +509,11 @@ public class ClientEventRepository {
 
 		sql.append("GROUP BY ").append(groupCol).append(" ");
 		if ("REQUESTS".equalsIgnoreCase(sortBy) || "VOLUME".equalsIgnoreCase(sortBy)) {
-			sql.append("ORDER BY total_requests DESC, total_blocked_requests DESC LIMIT ?");
+			sql.append("ORDER BY total_requests DESC, total_blocked_requests DESC, total_marked_requests DESC LIMIT ?");
+		} else if ("MARKED".equalsIgnoreCase(sortBy)) {
+			sql.append("ORDER BY total_marked_requests DESC, total_blocked_requests DESC, total_requests DESC LIMIT ?");
 		} else {
-			sql.append("ORDER BY total_blocked_requests DESC, total_requests DESC LIMIT ?");
+			sql.append("ORDER BY total_blocked_requests DESC, total_marked_requests DESC, total_requests DESC LIMIT ?");
 		}
 		params.add(Math.max(1, Math.min(limit, 500)));
 
@@ -522,6 +525,7 @@ public class ClientEventRepository {
 			return new TopOffenderSummary(
 					rs.getString("client_key") != null ? rs.getString("client_key") : "unknown",
 					rs.getLong("total_blocked_requests"),
+					rs.getLong("total_marked_requests"),
 					rs.getLong("total_requests"),
 					rs.getInt("distinct_servers"),
 					"",
@@ -643,8 +647,13 @@ public class ClientEventRepository {
 		}
 
 		if (status != null && !status.isBlank() && !"ALL".equalsIgnoreCase(status.trim())) {
-			sql.append("AND status = ? ");
-			params.add(status.trim().toUpperCase());
+			String normalizedStatus = status.trim().toUpperCase();
+			if ("BLOCKED_OR_MARKED".equals(normalizedStatus) || "INCIDENTS".equals(normalizedStatus)) {
+				sql.append("AND status IN ('BLOCKED', 'MARKED') ");
+			} else {
+				sql.append("AND status = ? ");
+				params.add(normalizedStatus);
+			}
 		}
 
 		if (clientTypes != null && !clientTypes.isEmpty()) {
@@ -741,6 +750,13 @@ public class ClientEventRepository {
 	public long countDistinctBlockedClientsSince(Instant since) {
 		Long count = jdbcTemplate.queryForObject(
 				"SELECT COUNT(DISTINCT client_key) FROM client_events WHERE status = 'BLOCKED' AND slot_time >= ?",
+				Long.class, Timestamp.from(since));
+		return count != null ? count : 0L;
+	}
+
+	public long countDistinctMarkedClientsSince(Instant since) {
+		Long count = jdbcTemplate.queryForObject(
+				"SELECT COUNT(DISTINCT client_key) FROM client_events WHERE status = 'MARKED' AND slot_time >= ?",
 				Long.class, Timestamp.from(since));
 		return count != null ? count : 0L;
 	}

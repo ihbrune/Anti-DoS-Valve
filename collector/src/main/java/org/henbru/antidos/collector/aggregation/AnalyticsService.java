@@ -65,11 +65,13 @@ public class AnalyticsService {
 		long totalRequests = 0;
 		long totalActive = 0;
 		long totalBlocked = 0;
+		long totalMarked = 0;
 
 		for (TimelinePoint pt : timeline) {
 			totalRequests += pt.totalRequests();
 			totalActive += pt.activeRequests();
 			totalBlocked += pt.blockedRequests();
+			totalMarked += pt.markedRequests();
 		}
 
 		// 2. Traffic Composition
@@ -91,6 +93,7 @@ public class AnalyticsService {
 					getClientTypeIcon(row.clientType()),
 					row.totalRequests(),
 					row.blockedRequests(),
+					row.markedRequests(),
 					row.subnetCount(),
 					roundedPct
 			));
@@ -111,7 +114,11 @@ public class AnalyticsService {
 		for (SubnetRollupRepository.RawScatterCluster c : rawClusters) {
 			int distinctClients = Math.max(1, c.distinctClients());
 			double avgReqs = Math.round(((double) c.totalRequests() / distinctClients) * 10.0) / 10.0;
-			boolean isResidential = (c.clientType() == ClientType.RESIDENTIAL || distinctClients >= 5) && avgReqs < 50.0;
+			Double retRatio = c.returningRatio();
+			boolean isHighReturningHumanNat = c.returningTrackedRequests() >= 20 && retRatio != null && retRatio >= 40.0 && c.blockedRequests() == 0;
+			boolean isResidential = (c.clientType() == ClientType.RESIDENTIAL || distinctClients >= 5)
+					&& avgReqs < 50.0
+					&& !isHighReturningHumanNat;
 
 			String classification;
 			if (c.clientType() == ClientType.AI_CRAWLER || c.clientType() == ClientType.SEARCH_ENGINE) {
@@ -122,7 +129,7 @@ public class AnalyticsService {
 				classification = "DATACENTER_CLUSTER";
 			} else if (c.clientType() == ClientType.PRIVATE_NETWORK) {
 				classification = "REGULAR_SUBNET";
-			} else if (isResidential && (distinctClients >= 5 || c.blockedRequests() > 0)) {
+			} else if (isResidential && (distinctClients >= 5 || c.blockedRequests() > 0 || c.markedRequests() > 0)) {
 				classification = "HIGH_RISK_RESIDENTIAL";
 			} else if (distinctClients >= 10) {
 				classification = "DISTRIBUTED_ACTIVE";
@@ -157,6 +164,7 @@ public class AnalyticsService {
 					avgReqs,
 					c.totalRequests(),
 					c.blockedRequests(),
+					c.markedRequests(),
 					isResidential,
 					c.asn(),
 					c.asOrg() != null ? c.asOrg() : "Unknown Provider",
@@ -174,12 +182,16 @@ public class AnalyticsService {
 					subnetNoteSnippet,
 					asnNoteVerdict,
 					asnNoteIcon,
-					asnNoteSnippet
+					asnNoteSnippet,
+					retRatio
 			));
 		}
 
 		double blockedRatio = totalRequests > 0
 				? Math.round(((double) totalBlocked / totalRequests) * 1000.0) / 10.0
+				: 0.0;
+		double markedRatio = totalRequests > 0
+				? Math.round(((double) totalMarked / totalRequests) * 1000.0) / 10.0
 				: 0.0;
 
 		return new AnalyticsDashboardDto(
@@ -192,7 +204,9 @@ public class AnalyticsService {
 				totalRequests,
 				totalActive,
 				totalBlocked,
-				blockedRatio
+				totalMarked,
+				blockedRatio,
+				markedRatio
 		);
 	}
 
