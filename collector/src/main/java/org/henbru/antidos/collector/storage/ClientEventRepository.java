@@ -103,12 +103,6 @@ public class ClientEventRepository {
 		} catch (SQLException ignored) {
 		}
 
-		Integer distinctUserAgents = null;
-		try {
-			distinctUserAgents = rs.getObject("distinct_user_agents") != null ? rs.getInt("distinct_user_agents") : null;
-		} catch (SQLException ignored) {
-		}
-
 		String sampleMethod = null;
 		String sampleUri = null;
 		String sampleUserAgent = null;
