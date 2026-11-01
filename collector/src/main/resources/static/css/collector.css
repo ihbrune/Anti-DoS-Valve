@@ -229,6 +229,13 @@ body {
     padding: 0;
 }
 
+.nav-util-btn.btn-json-api {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: -0.5px;
+}
+
 .pulse-indicator {
     display: inline-flex;
     align-items: center;
