@@ -1,14 +1,5 @@
 package org.henbru.antidos;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.ArrayList;
@@ -22,8 +13,17 @@ import org.apache.catalina.connector.Connector;
 import org.apache.catalina.connector.Request;
 import org.apache.catalina.connector.Response;
 import org.apache.catalina.core.StandardEngine;
-import jakarta.servlet.http.Cookie;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
+
+import jakarta.servlet.http.Cookie;
 
 /**
  * Unit test for the valve implementation
@@ -2169,6 +2169,184 @@ class AntiDoSValveTest {
 		} finally {
 			upstreamValve.stop();
 			downstreamValve.stop();
+			AntiDoSValve.getSharedAuthSessionCache().clear();
+		}
+	}
+
+	@Test
+	void testRelevantAuthScopeConfigurationAndValidation() {
+		AntiDoSValve v = new AntiDoSValve();
+		assertEquals(AntiDoSValve.RELEVANT_AUTH_SCOPE_ALL, v.getRelevantAuthScope());
+		assertTrue(v.isRelevantAuthScopeValid());
+
+		v.setRelevantAuthScope(" aUTHENTICATED_ONLY");
+		assertEquals(AntiDoSValve.RELEVANT_AUTH_SCOPE_AUTHENTICATED_ONLY, v.getRelevantAuthScope());
+		assertTrue(v.isRelevantAuthScopeValid());
+
+		v.setRelevantAuthScope("UNAUTHENTICATED_only ");
+		assertEquals(AntiDoSValve.RELEVANT_AUTH_SCOPE_UNAUTHENTICATED_ONLY, v.getRelevantAuthScope());
+		assertTrue(v.isRelevantAuthScopeValid());
+
+		v.setRelevantAuthScope("all");
+		assertEquals(AntiDoSValve.RELEVANT_AUTH_SCOPE_ALL, v.getRelevantAuthScope());
+		assertTrue(v.isRelevantAuthScopeValid());
+
+		v.setRelevantAuthScope("   ");
+		assertEquals(AntiDoSValve.RELEVANT_AUTH_SCOPE_ALL, v.getRelevantAuthScope());
+
+		v.setRelevantAuthScope("INVALID_SCOPE");
+		assertEquals("INVALID_SCOPE", v.getRelevantAuthScope());
+		assertFalse(v.isRelevantAuthScopeValid());
+
+		v.setContainer(new org.apache.catalina.core.StandardEngine());
+		v.setRelevantPaths(".*");
+		v.setAllowedRequestsPerSlot(10);
+		v.setNumberOfSlots(2);
+		v.setSlotLength(10);
+		v.setMaxIPCacheSize(50);
+		assertThrows(LifecycleException.class, v::start);
+	}
+
+	@Test
+	void testRelevantAuthScopeFiltering() {
+		AntiDoSValve v = new AntiDoSValve();
+		v.setMonitorName("RELEVANT_AUTH_SCOPE_FILTER_TEST");
+		v.setAllowedRequestsPerSlot(1);
+		v.setNumberOfSlots(2);
+		v.setSlotLength(60);
+		v.setMaxIPCacheSize(50);
+		v.setRelevantPaths(".*");
+		v.reloadMonitor();
+
+		// Default (ALL): monitors and blocks regardless of auth
+		v.setRelevantAuthScope(AntiDoSValve.RELEVANT_AUTH_SCOPE_ALL);
+		assertTrue(v.isRequestAllowed("10.0.0.1", "/api/test", false, false));
+		assertFalse(v.isRequestAllowed("10.0.0.1", "/api/test", false, false), "Limit exceeded: should be blocked");
+		assertFalse(v.isRequestAllowed("10.0.0.1", "/api/test", false, true), "Limit exceeded: should be blocked even when authenticated");
+
+		// AUTHENTICATED_ONLY: unauthenticated requests bypass completely without counting
+		v.reloadMonitor();
+		v.setRelevantAuthScope(AntiDoSValve.RELEVANT_AUTH_SCOPE_AUTHENTICATED_ONLY);
+		for (int i = 0; i < 10; i++) {
+			assertTrue(v.isRequestAllowed("10.0.0.2", "/api/test", false, false), "Unauthenticated request should bypass AUTHENTICATED_ONLY valve");
+		}
+		// Counter should not have incremented for unauthenticated requests
+		assertNull(v.provideMonitor().provideCurrentCounter("10.0.0.2"), "Bypassed requests must not create counters");
+
+		// Authenticated requests are counted and enforced
+		assertTrue(v.isRequestAllowed("10.0.0.2", "/api/test", false, true), "First authenticated request allowed");
+		assertFalse(v.isRequestAllowed("10.0.0.2", "/api/test", false, true), "Second authenticated request exceeds limit and is blocked");
+
+		// UNAUTHENTICATED_ONLY: authenticated requests bypass completely without counting
+		v.reloadMonitor();
+		v.setRelevantAuthScope(AntiDoSValve.RELEVANT_AUTH_SCOPE_UNAUTHENTICATED_ONLY);
+		for (int i = 0; i < 10; i++) {
+			assertTrue(v.isRequestAllowed("10.0.0.3", "/api/test", false, true), "Authenticated request should bypass UNAUTHENTICATED_ONLY valve");
+		}
+		assertNull(v.provideMonitor().provideCurrentCounter("10.0.0.3"), "Bypassed requests must not create counters");
+
+		// Unauthenticated requests are counted and enforced
+		assertTrue(v.isRequestAllowed("10.0.0.3", "/api/test", false, false), "First unauthenticated request allowed");
+		assertFalse(v.isRequestAllowed("10.0.0.3", "/api/test", false, false), "Second unauthenticated request exceeds limit and is blocked");
+	}
+
+	@Test
+	void testTieredRateLimitingWithCascadedValves() throws Exception {
+		AntiDoSValve.getSharedAuthSessionCache().clear();
+
+		// Valve 1 (Public / Anonymous): strict limit (2 req/slot), observes /trust login cookie, only monitors unauthenticated users
+		AntiDoSValve anonValve = new AntiDoSValve();
+		anonValve.setContainer(new org.apache.catalina.core.StandardEngine());
+		anonValve.setMonitorName("ANON_VALVE");
+		anonValve.setRelevantPaths(".*");
+		anonValve.setNonRelevantPaths("/trust");
+		anonValve.setAllowedRequestsPerSlot(2);
+		anonValve.setNumberOfSlots(5);
+		anonValve.setSlotLength(60);
+		anonValve.setMaxIPCacheSize(50);
+		anonValve.setAuthTrackingMode("COOKIE");
+		anonValve.setAuthCookieName("AUTH_COOKIE");
+		anonValve.setAuthLoginPaths("/trust");
+		anonValve.setRelevantAuthScope("UNAUTHENTICATED_ONLY");
+
+		// Valve 2 (Customer / Authenticated): generous limit (5 req/slot), only monitors authenticated users
+		AntiDoSValve authValve = new AntiDoSValve();
+		authValve.setContainer(new org.apache.catalina.core.StandardEngine());
+		authValve.setMonitorName("AUTH_VALVE");
+		authValve.setRelevantPaths(".*");
+		authValve.setAllowedRequestsPerSlot(5);
+		authValve.setNumberOfSlots(5);
+		authValve.setSlotLength(60);
+		authValve.setMaxIPCacheSize(50);
+		authValve.setRelevantAuthScope("AUTHENTICATED_ONLY");
+
+		final String userCookieVal = "VALID_USER_TOKEN_ABCD1234";
+		authValve.setNext(new org.apache.catalina.valves.ValveBase() {
+			@Override
+			public void invoke(Request request, Response response) {
+				if ("/trust".equals(request.getRequestURI())) {
+					response.setStatus(200);
+					response.addHeader("Set-Cookie", "AUTH_COOKIE=" + userCookieVal + "; Path=/; Max-Age=900");
+				}
+			}
+		});
+		anonValve.setNext(authValve);
+
+		anonValve.start();
+		authValve.start();
+
+		try {
+			String ip = "198.51.100.88";
+
+			// 1. Two unauthenticated requests pass Anon valve (2 allowed) and skip Auth valve
+			TestRequest req1 = new TestRequest("/search", ip);
+			TestResponse resp1 = new TestResponse();
+			anonValve.invoke(req1, resp1);
+			assertEquals(200, resp1.getStatus());
+
+			TestRequest req2 = new TestRequest("/search", ip);
+			TestResponse resp2 = new TestResponse();
+			anonValve.invoke(req2, resp2);
+			assertEquals(200, resp2.getStatus());
+
+			// 2. Third unauthenticated request is blocked by Anon valve (HTTP 429)
+			TestRequest req3 = new TestRequest("/search", ip);
+			TestResponse resp3 = new TestResponse();
+			anonValve.invoke(req3, resp3);
+			assertEquals(429, resp3.getStatus(), "3rd unauthenticated request must be blocked by ANON_VALVE");
+
+			// 3. User authenticates via /trust (which is in nonRelevantPaths so it is allowed through)
+			TestRequest reqLogin = new TestRequest("/trust", ip);
+			TestResponse respLogin = new TestResponse();
+			anonValve.invoke(reqLogin, respLogin);
+			assertEquals(200, respLogin.getStatus());
+			assertEquals(1, AntiDoSValve.getSharedAuthSessionCache().getRawSize());
+
+			// 4. Now sending authenticated requests:
+			// ANON_VALVE ignores them because relevantAuthScope="UNAUTHENTICATED_ONLY"
+			// AUTH_VALVE enforces its own 5-request limit
+			for (int i = 1; i <= 5; i++) {
+				TestRequest reqAuth = new TestRequest("/search", ip);
+				reqAuth.setCookies(new Cookie[]{new Cookie("AUTH_COOKIE", userCookieVal)});
+				TestResponse respAuth = new TestResponse();
+				anonValve.invoke(reqAuth, respAuth);
+				assertEquals(200, respAuth.getStatus(), "Authenticated request #" + i + " must pass under AUTH_VALVE's 5-request limit");
+			}
+
+			// 5. 6th authenticated request exceeds AUTH_VALVE's 5-request limit -> blocked by AUTH_VALVE
+			TestRequest reqAuthBlocked = new TestRequest("/search", ip);
+			reqAuthBlocked.setCookies(new Cookie[]{new Cookie("AUTH_COOKIE", userCookieVal)});
+			TestResponse respAuthBlocked = new TestResponse();
+			anonValve.invoke(reqAuthBlocked, respAuthBlocked);
+			assertEquals(429, respAuthBlocked.getStatus(), "6th authenticated request must be blocked by AUTH_VALVE");
+
+			// 6. JSON output verification
+			String overviewJson = anonValve.getStatusRenderer().buildStatusJson(null);
+			assertTrue(overviewJson.contains("\"relevantAuthScope\": \"UNAUTHENTICATED_ONLY\""));
+			assertTrue(overviewJson.contains("\"relevantAuthScope\": \"AUTHENTICATED_ONLY\""));
+		} finally {
+			anonValve.stop();
+			authValve.stop();
 			AntiDoSValve.getSharedAuthSessionCache().clear();
 		}
 	}

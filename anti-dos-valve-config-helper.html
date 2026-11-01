@@ -561,6 +561,7 @@
       .secret-input-wrapper {
         flex-wrap: wrap;
       }
+
       .btn-secret-gen {
         flex: 1;
         justify-content: center;
@@ -1324,10 +1325,11 @@
         <div class="card">
           <div class="card-title">
             <span>Configuration Presets</span>
-            <button type="button" id="resetBtn" class="btn-reset" title="Reset configuration to default preset and clear saved browser state">
+            <button type="button" id="resetBtn" class="btn-reset"
+              title="Reset configuration to default preset and clear saved browser state">
               <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                <path d="M3 3v5h5"/>
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
               </svg>
               <span>Reset to Default</span>
             </button>
@@ -1364,7 +1366,8 @@
               </div>
               <div class="field-desc">An optional description text explaining the purpose of this valve instance.
                 Displayed in the monitoring dashboard when present.</div>
-              <input type="text" id="description" name="description" placeholder="e.g. Rate limiter for public API endpoints">
+              <input type="text" id="description" name="description"
+                placeholder="e.g. Rate limiter for public API endpoints">
             </div>
 
             <!-- 2. alwaysForbiddenIPs -->
@@ -1470,7 +1473,8 @@
               </div>
               <div class="field-desc">Subnet prefix length for aggregating IPv4 addresses (1 to 32, e.g.
                 <code>24</code>, <code>/24</code>, or <code>255.255.255.0</code>). <code>32</code> or empty disables
-                aggregation. <strong>Recommendation:</strong> Use <code>/24</code> for IPv4 to enable exact 256-bit cardinality tracking for Residential Proxy cluster detection.
+                aggregation. <strong>Recommendation:</strong> Use <code>/24</code> for IPv4 to enable exact 256-bit
+                cardinality tracking for Residential Proxy cluster detection.
               </div>
               <input type="text" id="ipv4SubnetMask" name="ipv4SubnetMask"
                 placeholder="e.g. 24, /24, or 255.255.255.0 (Default: 32)">
@@ -1496,8 +1500,10 @@
                 <label for="collectorIntegration" class="field-label">collectorIntegration</label>
                 <span class="badge badge-optional">Optional</span>
               </div>
-              <div class="field-desc">Extended telemetry mode for Anti-DoS Collector integration (distinct client IP tracking in subnets).
-                <code>auto</code> (default) automatically activates extended telemetry for 2 minutes when queried by a Collector, and remains zero-overhead otherwise.
+              <div class="field-desc">Extended telemetry mode for Anti-DoS Collector integration (distinct client IP
+                tracking in subnets).
+                <code>auto</code> (default) automatically activates extended telemetry for 2 minutes when queried by a
+                Collector, and remains zero-overhead otherwise.
               </div>
               <select id="collectorIntegration" name="collectorIntegration">
                 <option value="" selected>auto (Default - automatic lease on Collector query)</option>
@@ -1602,7 +1608,8 @@
                 <span class="badge badge-optional-feature">Optional Feature</span>
               </div>
               <div class="status-dashboard-desc">
-                Exposes a high-performance, self-contained HTTP dashboard showing the real-time configuration and cache status of all valves running in the Tomcat JVM. Fully protected by rate-limiting against brute force.
+                Exposes a high-performance, self-contained HTTP dashboard showing the real-time configuration and cache
+                status of all valves running in the Tomcat JVM. Fully protected by rate-limiting against brute force.
               </div>
 
               <!-- 17. statusUri -->
@@ -1611,8 +1618,11 @@
                   <label for="statusUri" class="field-label">statusUri</label>
                   <span class="badge badge-optional">Optional</span>
                 </div>
-                <div class="field-desc">URI path under which the status dashboard is served (must start with <code>/</code>, e.g. <code>/antidos-status</code>). Leave empty to completely disable the status endpoint.</div>
-                <input type="text" id="statusUri" name="statusUri" pattern="^/.*" placeholder="e.g. /antidos-status (Default: disabled)">
+                <div class="field-desc">URI path under which the status dashboard is served (must start with
+                  <code>/</code>, e.g. <code>/antidos-status</code>). Leave empty to completely disable the status
+                  endpoint.</div>
+                <input type="text" id="statusUri" name="statusUri" pattern="^/.*"
+                  placeholder="e.g. /antidos-status (Default: disabled)">
                 <div id="hintStatusUri" class="status-field-hint neutral"></div>
               </div>
 
@@ -1622,27 +1632,36 @@
                   <label for="statusAllowedIPs" class="field-label">statusAllowedIPs</label>
                   <span class="badge badge-optional">Optional</span>
                 </div>
-                <div class="field-desc">Regular expression matching client IPs allowed to query the dashboard (e.g. <code>127\.0\.0\.1|::1|10\..*</code>). Requests from unauthorized IPs receive <code>404 Not Found</code>.</div>
-                <input type="text" id="statusAllowedIPs" name="statusAllowedIPs" placeholder="e.g. 127\.0\.0\.1|::1 (Default: any IP)">
+                <div class="field-desc">Regular expression matching client IPs allowed to query the dashboard (e.g.
+                  <code>127\.0\.0\.1|::1|10\..*</code>). Requests from unauthorized IPs receive
+                  <code>404 Not Found</code>.</div>
+                <input type="text" id="statusAllowedIPs" name="statusAllowedIPs"
+                  placeholder="e.g. 127\.0\.0\.1|::1 (Default: any IP)">
                 <div id="hintStatusAllowedIPs" class="status-field-hint neutral"></div>
               </div>
 
               <!-- 19. statusPassword -->
-              <div class="field-group status-field-group" style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
+              <div class="field-group status-field-group"
+                style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
                 <div class="field-header">
                   <label for="statusPassword" class="field-label">statusPassword</label>
                   <span class="badge badge-optional">Optional</span>
                 </div>
                 <div class="secret-input-wrapper">
-                  <input type="text" id="statusPassword" name="statusPassword" minlength="10" placeholder="Leave empty for auto-generated HEX token (min. 10 chars)" autocomplete="off" spellcheck="false">
-                  <button type="button" id="btnGenStatusPassword" class="btn-secret-gen" title="Generate cryptographically secure 128-bit HEX token (32 hex characters)">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <input type="text" id="statusPassword" name="statusPassword" minlength="10"
+                    placeholder="Leave empty for auto-generated HEX token (min. 10 chars)" autocomplete="off"
+                    spellcheck="false">
+                  <button type="button" id="btnGenStatusPassword" class="btn-secret-gen"
+                    title="Generate cryptographically secure 128-bit HEX token (32 hex characters)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                      stroke-linecap="round" stroke-linejoin="round">
                       <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                       <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                     </svg>
                     <span>Generate Token</span>
                   </button>
-                  <button type="button" id="btnClearStatusPassword" class="btn-secret-clear" title="Clear password (reverts to auto-generated token on startup)" style="display: none;">
+                  <button type="button" id="btnClearStatusPassword" class="btn-secret-clear"
+                    title="Clear password (reverts to auto-generated token on startup)" style="display: none;">
                     &times;
                   </button>
                 </div>
@@ -1657,10 +1676,13 @@
                   <span class="status-dashboard-icon" style="color: #10b981;">&#127850;</span>
                   <span>Visitor Tracking &amp; Reputation Cookies</span>
                 </div>
-                <span class="badge badge-optional-feature" style="background: #d1fae5; color: #047857; border-color: #a7f3d0;">Optional Feature</span>
+                <span class="badge badge-optional-feature"
+                  style="background: #d1fae5; color: #047857; border-color: #a7f3d0;">Optional Feature</span>
               </div>
               <div class="status-dashboard-desc">
-                Issues encrypted, tamper-proof AES-256-GCM visitor tokens (<code>_adv</code>) bound to client IP subnets. Distinguishes first-contact requests from returning visitors without session cookies or server-side session state.
+                Issues encrypted, tamper-proof AES-256-GCM visitor tokens (<code>_adv</code>) bound to client IP
+                subnets. Distinguishes first-contact requests from returning visitors without session cookies or
+                server-side session state.
               </div>
 
               <!-- 20. visitorCookieEnabled -->
@@ -1678,7 +1700,8 @@
                     <label for="visitorCookieName" class="field-label">visitorCookieName</label>
                     <span class="badge badge-optional">Optional</span>
                   </div>
-                  <div class="field-desc">Cookie name used to track returning visitors. Default: <code>_adv</code>.</div>
+                  <div class="field-desc">Cookie name used to track returning visitors. Default: <code>_adv</code>.
+                  </div>
                   <input type="text" id="visitorCookieName" name="visitorCookieName" placeholder="_adv (Default: _adv)">
                 </div>
 
@@ -1688,18 +1711,27 @@
                     <label for="visitorCookieSecret" class="field-label">visitorCookieSecret</label>
                     <span class="badge badge-optional">Optional</span>
                   </div>
-                  <div class="field-desc">256-bit AES secret key (64 hex chars, 44 Base64 chars, or passphrase &ge; 16 chars). <strong>Leave empty to auto-generate a secure ephemeral key in memory on startup</strong> (recommended for single nodes; configure identical secret across multi-node clusters).</div>
+                  <div class="field-desc">256-bit AES secret key (64 hex chars, 44 Base64 chars, or passphrase &ge; 16
+                    chars). <strong>Leave empty to auto-generate a secure ephemeral key in memory on startup</strong>
+                    (recommended for single nodes; configure identical secret across multi-node clusters).</div>
                   <div class="secret-input-wrapper">
-                    <input type="text" id="visitorCookieSecret" name="visitorCookieSecret" placeholder="Auto-generated ephemeral 256-bit AES key if empty" autocomplete="off" spellcheck="false">
-                    <button type="button" id="btnGenVisitorSecret" class="btn-secret-gen" title="Generate cryptographically secure 256-bit AES key (64 hex characters)">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                    <input type="text" id="visitorCookieSecret" name="visitorCookieSecret"
+                      placeholder="Auto-generated ephemeral 256-bit AES key if empty" autocomplete="off"
+                      spellcheck="false">
+                    <button type="button" id="btnGenVisitorSecret" class="btn-secret-gen"
+                      title="Generate cryptographically secure 256-bit AES key (64 hex characters)">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path
+                          d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
+                        </path>
                         <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
                         <line x1="12" y1="22.08" x2="12" y2="12"></line>
                       </svg>
                       <span>Generate 256-bit Key</span>
                     </button>
-                    <button type="button" id="btnClearVisitorSecret" class="btn-secret-clear" title="Clear key (reverts to ephemeral key on startup)" style="display: none;">
+                    <button type="button" id="btnClearVisitorSecret" class="btn-secret-clear"
+                      title="Clear key (reverts to ephemeral key on startup)" style="display: none;">
                       &times;
                     </button>
                   </div>
@@ -1712,8 +1744,10 @@
                     <label for="visitorCookieTtlSeconds" class="field-label">visitorCookieTtlSeconds</label>
                     <span class="badge badge-optional">Optional</span>
                   </div>
-                  <div class="field-desc">Validity lifetime of the visitor cookie in seconds (&ge; 1). Default: <code>900</code> (15 minutes).</div>
-                  <input type="number" id="visitorCookieTtlSeconds" name="visitorCookieTtlSeconds" min="1" step="1" placeholder="900 (Default: 900s / 15m)">
+                  <div class="field-desc">Validity lifetime of the visitor cookie in seconds (&ge; 1). Default:
+                    <code>900</code> (15 minutes).</div>
+                  <input type="number" id="visitorCookieTtlSeconds" name="visitorCookieTtlSeconds" min="1" step="1"
+                    placeholder="900 (Default: 900s / 15m)">
                 </div>
 
                 <!-- 24. visitorCookieRefreshRatio -->
@@ -1722,8 +1756,11 @@
                     <label for="visitorCookieRefreshRatio" class="field-label">visitorCookieRefreshRatio</label>
                     <span class="badge badge-optional">Optional</span>
                   </div>
-                  <div class="field-desc">Threshold ratio of remaining TTL before refreshing the cookie (0.01 &ndash; 0.99, max. 2 decimal places). Default: <code>0.5</code> (refreshes when remaining lifetime falls below 50% of TTL).</div>
-                  <input type="number" id="visitorCookieRefreshRatio" name="visitorCookieRefreshRatio" min="0.01" max="0.99" step="0.01" placeholder="0.50 (Default: 0.5)">
+                  <div class="field-desc">Threshold ratio of remaining TTL before refreshing the cookie (0.01 &ndash;
+                    0.99, max. 2 decimal places). Default: <code>0.5</code> (refreshes when remaining lifetime falls
+                    below 50% of TTL).</div>
+                  <input type="number" id="visitorCookieRefreshRatio" name="visitorCookieRefreshRatio" min="0.01"
+                    max="0.99" step="0.01" placeholder="0.50 (Default: 0.5)">
                   <div id="hintVisitorCookieRefresh" class="status-field-hint neutral"></div>
                 </div>
 
@@ -1733,8 +1770,10 @@
                     <label for="visitorCookieSubnetMaskV4" class="field-label">visitorCookieSubnetMaskV4</label>
                     <span class="badge badge-optional">Optional</span>
                   </div>
-                  <div class="field-desc">IPv4 prefix length for cryptographic subnet binding (0 &ndash; 32). Default: <code>24</code> (/24 subnet binding).</div>
-                  <input type="number" id="visitorCookieSubnetMaskV4" name="visitorCookieSubnetMaskV4" min="0" max="32" step="1" placeholder="24 (Default: /24)">
+                  <div class="field-desc">IPv4 prefix length for cryptographic subnet binding (0 &ndash; 32). Default:
+                    <code>24</code> (/24 subnet binding).</div>
+                  <input type="number" id="visitorCookieSubnetMaskV4" name="visitorCookieSubnetMaskV4" min="0" max="32"
+                    step="1" placeholder="24 (Default: /24)">
                 </div>
 
                 <!-- 26. visitorCookieSubnetMaskV6 -->
@@ -1743,8 +1782,10 @@
                     <label for="visitorCookieSubnetMaskV6" class="field-label">visitorCookieSubnetMaskV6</label>
                     <span class="badge badge-optional">Optional</span>
                   </div>
-                  <div class="field-desc">IPv6 prefix length for cryptographic subnet binding (0 &ndash; 128). Default: <code>64</code> (/64 subnet binding).</div>
-                  <input type="number" id="visitorCookieSubnetMaskV6" name="visitorCookieSubnetMaskV6" min="0" max="128" step="1" placeholder="64 (Default: /64)">
+                  <div class="field-desc">IPv6 prefix length for cryptographic subnet binding (0 &ndash; 128). Default:
+                    <code>64</code> (/64 subnet binding).</div>
+                  <input type="number" id="visitorCookieSubnetMaskV6" name="visitorCookieSubnetMaskV6" min="0" max="128"
+                    step="1" placeholder="64 (Default: /64)">
                 </div>
 
                 <!-- 27. visitorCookiePath -->
@@ -1763,8 +1804,12 @@
                     <label for="visitorCookieDomain" class="field-label">visitorCookieDomain</label>
                     <span class="badge badge-optional">Optional</span>
                   </div>
-                  <div class="field-desc">Cookie Domain attribute for sharing reputation across subdomains (e.g. <code>example.com</code> allows sharing between <code>auth.example.com</code> and <code>app.example.com</code>). <strong>Leave empty for host-only cookies</strong> (recommended for single-domain sites).</div>
-                  <input type="text" id="visitorCookieDomain" name="visitorCookieDomain" placeholder="e.g. example.com (Default: host-only)">
+                  <div class="field-desc">Cookie Domain attribute for sharing reputation across subdomains (e.g.
+                    <code>example.com</code> allows sharing between <code>auth.example.com</code> and
+                    <code>app.example.com</code>). <strong>Leave empty for host-only cookies</strong> (recommended for
+                    single-domain sites).</div>
+                  <input type="text" id="visitorCookieDomain" name="visitorCookieDomain"
+                    placeholder="e.g. example.com (Default: host-only)">
                   <div id="hintVisitorCookieDomain" class="status-field-hint neutral"></div>
                 </div>
 
@@ -1774,7 +1819,8 @@
                     <label for="visitorCookieSameSite" class="field-label">visitorCookieSameSite</label>
                     <span class="badge badge-optional">Optional</span>
                   </div>
-                  <div class="field-desc">SameSite attribute for the cookie (<code>Lax</code>, <code>Strict</code>, <code>None</code>). Default: <code>Lax</code>.</div>
+                  <div class="field-desc">SameSite attribute for the cookie (<code>Lax</code>, <code>Strict</code>,
+                    <code>None</code>). Default: <code>Lax</code>.</div>
                   <select id="visitorCookieSameSite" name="visitorCookieSameSite">
                     <option value="" selected>Lax (Default)</option>
                     <option value="Strict">Strict</option>
@@ -1783,10 +1829,12 @@
                 </div>
 
                 <!-- 30. visitorCookieSecure -->
-                <div class="field-group checkbox-group visitor-cookie-field-group" style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
+                <div class="field-group checkbox-group visitor-cookie-field-group"
+                  style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
                   <label class="checkbox-label">
                     <input type="checkbox" id="visitorCookieSecure" name="visitorCookieSecure" checked>
-                    <span>Emit Secure flag in Set-Cookie (<code>visitorCookieSecure="true"</code>, recommended for HTTPS)</span>
+                    <span>Emit Secure flag in Set-Cookie (<code>visitorCookieSecure="true"</code>, recommended for
+                      HTTPS)</span>
                   </label>
                 </div>
               </div>
@@ -1799,10 +1847,14 @@
                   <span class="status-dashboard-icon" style="color: #8b5cf6;">&#128272;</span>
                   <span>Authentication Session Tracking (Login Cookie)</span>
                 </div>
-                <span class="badge badge-optional-feature" style="background: #ede9fe; color: #6d28d9; border-color: #ddd6fe;">Optional Feature</span>
+                <span class="badge badge-optional-feature"
+                  style="background: #ede9fe; color: #6d28d9; border-color: #ddd6fe;">Optional Feature</span>
               </div>
               <div class="status-dashboard-desc">
-                Passively observes application login endpoints (e.g. SSO / SAML callbacks such as <code>/trust</code>) for <code>Set-Cookie</code> headers and stores a fast, salted 64-bit hash of issued authentication cookies in a shared in-memory session cache across all valves in the server. Tracks how many requests per IP/subnet and time slot originate from authenticated users.
+                Passively observes application login endpoints (e.g. SSO / SAML callbacks such as <code>/trust</code>)
+                for <code>Set-Cookie</code> headers and stores a fast, salted 64-bit hash of issued authentication
+                cookies in a shared in-memory session cache across all valves in the server. Tracks how many requests
+                per IP/subnet and time slot originate from authenticated users.
               </div>
 
               <!-- 31. authTrackingMode -->
@@ -1811,7 +1863,8 @@
                   <label for="authTrackingMode" class="field-label">authTrackingMode</label>
                   <span class="badge badge-optional">Optional</span>
                 </div>
-                <div class="field-desc">Activation mode for authentication session tracking. Set to <code>COOKIE</code> to observe login cookies on configured login paths. Default: <code>OFF</code>.</div>
+                <div class="field-desc">Activation mode for authentication session tracking. Set to <code>COOKIE</code>
+                  to observe login cookies on configured login paths. Default: <code>OFF</code>.</div>
                 <select id="authTrackingMode" name="authTrackingMode">
                   <option value="OFF" selected>OFF (Disabled - Default)</option>
                   <option value="COOKIE">COOKIE (Login Cookie Observation)</option>
@@ -1825,7 +1878,9 @@
                     <label for="authCookieName" class="field-label">authCookieName</label>
                     <span class="badge badge-required">Required for COOKIE</span>
                   </div>
-                  <div class="field-desc">Name of the HTTP cookie set by the application upon successful authentication (e.g. <code>AUTH_COOKIE</code>). Only a salted 64-bit hash of the cookie value is held in memory.</div>
+                  <div class="field-desc">Name of the HTTP cookie set by the application upon successful authentication
+                    (e.g. <code>AUTH_COOKIE</code>). Only a salted 64-bit hash of the cookie value is held in memory.
+                  </div>
                   <input type="text" id="authCookieName" name="authCookieName" placeholder="e.g. AUTH_COOKIE">
                   <div id="hintAuthCookieName" class="status-field-hint neutral"></div>
                 </div>
@@ -1836,7 +1891,9 @@
                     <label for="authLoginPaths" class="field-label">authLoginPaths</label>
                     <span class="badge badge-required">Required for COOKIE</span>
                   </div>
-                  <div class="field-desc">Regular expression matching the application login / SSO callback path(s) where <code>Set-Cookie</code> is issued (e.g. <code>/trust</code> or <code>^/trust$</code>). Observed on successful responses (HTTP 200&ndash;399), independent of <code>relevantPaths</code>.</div>
+                  <div class="field-desc">Regular expression matching the application login / SSO callback path(s) where
+                    <code>Set-Cookie</code> is issued (e.g. <code>/trust</code> or <code>^/trust$</code>). Observed on
+                    successful responses (HTTP 200&ndash;399), independent of <code>relevantPaths</code>.</div>
                   <input type="text" id="authLoginPaths" name="authLoginPaths" placeholder="e.g. /trust or ^/trust$">
                   <div id="hintAuthLoginPaths" class="status-field-hint neutral"></div>
                 </div>
@@ -1847,20 +1904,54 @@
                     <label for="authSessionTtlSeconds" class="field-label">authSessionTtlSeconds</label>
                     <span class="badge badge-optional">Optional</span>
                   </div>
-                  <div class="field-desc">Fallback validity duration in seconds (&ge; 1) if the <code>Set-Cookie</code> response header does not include a <code>Max-Age</code> attribute. Default: <code>900</code> (15 minutes).</div>
-                  <input type="number" id="authSessionTtlSeconds" name="authSessionTtlSeconds" min="1" step="1" placeholder="900 (Default: 900s / 15m)">
+                  <div class="field-desc">Fallback validity duration in seconds (&ge; 1) if the <code>Set-Cookie</code>
+                    response header does not include a <code>Max-Age</code> attribute. Default: <code>900</code> (15
+                    minutes).</div>
+                  <input type="number" id="authSessionTtlSeconds" name="authSessionTtlSeconds" min="1" step="1"
+                    placeholder="900 (Default: 900s / 15m)">
                 </div>
 
                 <!-- 35. maxAuthCacheSize -->
-                <div class="field-group auth-tracking-field-group" style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
+                <div class="field-group auth-tracking-field-group"
+                  style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
                   <div class="field-header">
                     <label for="maxAuthCacheSize" class="field-label">maxAuthCacheSize</label>
                     <span class="badge badge-optional">Optional</span>
                   </div>
-                  <div class="field-desc">Maximum number of concurrent authenticated session hashes stored in the server-wide open-addressing cache (&ge; 1). Default: <code>50000</code> (~781 KB fixed array at 16 Bytes per slot).</div>
-                  <input type="number" id="maxAuthCacheSize" name="maxAuthCacheSize" min="1" step="1000" placeholder="50000 (Default: 50,000 sessions)">
+                  <div class="field-desc">Maximum number of concurrent authenticated session hashes stored in the
+                    server-wide open-addressing cache (&ge; 1). Default: <code>50000</code> (~781 KB fixed array at 16
+                    Bytes per slot).</div>
+                  <input type="number" id="maxAuthCacheSize" name="maxAuthCacheSize" min="1" step="1000"
+                    placeholder="50000 (Default: 50,000 sessions)">
                   <div id="hintMaxAuthCacheSize" class="status-field-hint neutral"></div>
                 </div>
+              </div>
+
+              <!-- 36. relevantAuthScope -->
+              <div class="field-group auth-tracking-field-group"
+                style="border-bottom:none; margin-bottom:0; padding-bottom:0; margin-top: 16px; border-top: 1px solid #f1f5f9; padding-top: 16px;">
+                <div class="field-header">
+                  <label for="relevantAuthScope" class="field-label">relevantAuthScope</label>
+                  <span class="badge badge-optional">Optional</span>
+                </div>
+                <div class="field-desc">
+                  Specifies which requests this Valve monitors and enforces rate limits on based on authentication
+                  state: <code>ALL</code> (default), <code>AUTHENTICATED_ONLY</code>, or
+                  <code>UNAUTHENTICATED_ONLY</code>.
+                  <br>
+                  <em>Tiered Multi-Valve Setup:</em> You do <strong>not</strong> need to configure cookie tracking on
+                  every Valve. A single Valve in the server can observe login cookies
+                  (<code>authTrackingMode="COOKIE"</code>), while other Valves in the pipeline enforce different limits
+                  using <code>relevantAuthScope</code> (e.g. strict limits for unauthenticated visitors and generous
+                  limits for authenticated customers).
+                </div>
+                <select id="relevantAuthScope" name="relevantAuthScope">
+                  <option value="ALL" selected>ALL (Default - Enforces rate limits on all requests)</option>
+                  <option value="AUTHENTICATED_ONLY">AUTHENTICATED_ONLY (Enforces rate limits only on authenticated
+                    requests)</option>
+                  <option value="UNAUTHENTICATED_ONLY">UNAUTHENTICATED_ONLY (Enforces rate limits only on
+                    unauthenticated requests)</option>
+                </select>
               </div>
             </div>
           </form>
@@ -1899,7 +1990,8 @@
                 Calculating...
               </div>
               <div class="memory-calc-hint" id="cfgBytesPerCounterNote">
-                Calculated at <strong>150 Bytes</strong> per counter on 64-bit JVM (AntiDoSCounter + IP String + Map Node).
+                Calculated at <strong>150 Bytes</strong> per counter on 64-bit JVM (AntiDoSCounter + IP String + Map
+                Node).
               </div>
             </div>
 
@@ -1937,7 +2029,8 @@
         </div>
       </div>
       <p class="field-desc">
-        Simulates how the Anti-DoS Monitor reacts to traffic spikes, sustained single-IP DoS attacks, or distributed Multi-IP botnets over 49 consecutive time slots.
+        Simulates how the Anti-DoS Monitor reacts to traffic spikes, sustained single-IP DoS attacks, or distributed
+        Multi-IP botnets over 49 consecutive time slots.
         Calculations automatically update whenever you tweak valve settings above or select a preset!
       </p>
 
@@ -2017,12 +2110,15 @@
           </button>
         </div>
 
-        <div style="margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85rem; font-weight:600; color:#334155;">
+        <div
+          style="margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+          <label
+            style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85rem; font-weight:600; color:#334155;">
             <input type="checkbox" id="simMultiIsMixed">
             <span>Split into Legitimate Visitors &amp; Attacking Bots</span>
           </label>
-          <span style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono);">Continuous traffic across all 49 slots</span>
+          <span style="font-size:0.75rem; color:var(--text-muted); font-family:var(--font-mono);">Continuous traffic
+            across all 49 slots</span>
         </div>
 
         <!-- Uniform Fleet Inputs Grid (Hidden when split into mixed traffic) -->
@@ -2092,7 +2188,9 @@
               </div>
             </div>
           </div>
-          <div style="margin-top:10px; font-size:0.78rem; font-family:var(--font-mono); color:#475569; background:#f8fafc; padding:6px 10px; border-radius:4px; border:1px solid #e2e8f0;" id="simMixedSummaryHint">
+          <div
+            style="margin-top:10px; font-size:0.78rem; font-family:var(--font-mono); color:#475569; background:#f8fafc; padding:6px 10px; border-radius:4px; border:1px solid #e2e8f0;"
+            id="simMixedSummaryHint">
             Combined Fleet: 1,500 clients (500 visitors + 1,000 bots) • Combined Ingress: 15,500 req/s
           </div>
         </div>
@@ -2146,7 +2244,8 @@
               <div class="gauge-marker" style="left: 75%;" title="90% Low-Watermark Eviction Trigger">
                 <span class="gauge-marker-label">90% Evict</span>
               </div>
-              <div class="gauge-marker" style="left: 83.33%; background: #ef4444;" title="100% Capacity (Overflow Leak Threshold)">
+              <div class="gauge-marker" style="left: 83.33%; background: #ef4444;"
+                title="100% Capacity (Overflow Leak Threshold)">
                 <span class="gauge-marker-label" style="color:#b91c1c;">100%</span>
               </div>
               <div class="gauge-marker" style="left: 100%; background: #7f1d1d;" title="120% Circuit-Breaker Hard-Cap">
@@ -2165,7 +2264,9 @@
           <span class="unblocking-alert-icon">⚠️</span>
           <div>
             <strong>Security Alert: Blocked Cache Overflow (Unblocking Leak)!</strong><br>
-            <span id="unblockingAlertMsg">More unique IPs were blocked than fit into <code>maxBlockedIPCacheSize</code>. Older blocked attackers are evicted from the block cache and will be treated as brand-new unblocked clients! Increase <code>maxBlockedIPCacheSize</code> to prevent this.</span>
+            <span id="unblockingAlertMsg">More unique IPs were blocked than fit into <code>maxBlockedIPCacheSize</code>.
+              Older blocked attackers are evicted from the block cache and will be treated as brand-new unblocked
+              clients! Increase <code>maxBlockedIPCacheSize</code> to prevent this.</span>
           </div>
         </div>
       </div>
@@ -2227,13 +2328,15 @@
         <div class="kpi-card">
           <div class="kpi-label">Fleet Protection Ratio</div>
           <div class="kpi-value" id="kpiMultiBlockedRatio">--</div>
-          <div class="kpi-desc" id="kpiMultiBlockedRatioDesc">Total requests blocked vs. allowed across all 49 slots.</div>
+          <div class="kpi-desc" id="kpiMultiBlockedRatioDesc">Total requests blocked vs. allowed across all 49 slots.
+          </div>
         </div>
 
         <div class="kpi-card">
           <div class="kpi-label">Estimated Heap Footprint</div>
           <div class="kpi-value" id="kpiMultiHeapFootprint">--</div>
-          <div class="kpi-desc" id="kpiMultiHeapDesc">Simulated live heap across slots vs. max configured limit (~150 B / counter).</div>
+          <div class="kpi-desc" id="kpiMultiHeapDesc">Simulated live heap across slots vs. max configured limit (~150 B
+            / counter).</div>
         </div>
       </div>
 
@@ -2469,7 +2572,8 @@
       { key: 'authCookieName', isRequired: false, defaultVal: '' },
       { key: 'authLoginPaths', isRequired: false, defaultVal: '' },
       { key: 'authSessionTtlSeconds', isRequired: false, defaultVal: 900 },
-      { key: 'maxAuthCacheSize', isRequired: false, defaultVal: 50000 }
+      { key: 'maxAuthCacheSize', isRequired: false, defaultVal: 50000 },
+      { key: 'relevantAuthScope', isRequired: false, defaultVal: 'ALL' }
     ];
 
     const form = document.getElementById('valveForm');
@@ -2615,6 +2719,7 @@
             if ((param.key === 'authCookieName' || param.key === 'authLoginPaths' || param.key === 'authSessionTtlSeconds' || param.key === 'maxAuthCacheSize') && authModeVal !== 'COOKIE') return;
             if (param.key === 'authSessionTtlSeconds' && (val === '900' || val === 900 || parseInt(val, 10) === 900)) return;
             if (param.key === 'maxAuthCacheSize' && (val === '50000' || val === 50000 || parseInt(val, 10) === 50000)) return;
+            if (param.key === 'relevantAuthScope' && (val === 'ALL' || val === '')) return;
           }
         }
 
@@ -3797,7 +3902,7 @@
       // Update Multi KPIs
       kpiMultiIngressRate.innerHTML = `${Math.round(totalFleetRate).toLocaleString()} req/s <small style="font-size:0.85rem;font-weight:400;color:var(--text-muted);">(Continuous Fleet Ingress)</small>`;
       kpiMultiActiveState.innerHTML = `${peakActiveIPs.toLocaleString()} / ${maxIPCacheSize.toLocaleString()} <small style="font-size:0.85rem;font-weight:400;color:var(--text-muted);">(${Math.round((peakActiveIPs / maxIPCacheSize) * 100)}%)</small>`;
-      
+
       const blockedRatioPct = peakBlockedIPs > 0 ? Math.round((peakBlockedIPs / maxBlockedIPCacheSize) * 100) : 0;
       kpiMultiBlockedState.innerHTML = `${peakBlockedIPs.toLocaleString()} / ${maxBlockedIPCacheSize.toLocaleString()} <small style="font-size:0.85rem;font-weight:400;color:${peakBlockedIPs > maxBlockedIPCacheSize ? '#b91c1c' : 'var(--text-muted)'};">(${blockedRatioPct}%${peakBlockedIPs > maxBlockedIPCacheSize ? ' - OVERFLOW' : ''})</small>`;
 

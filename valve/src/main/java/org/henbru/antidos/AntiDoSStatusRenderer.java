@@ -770,6 +770,9 @@ public class AntiDoSStatusRenderer {
 			if (v.isAuthTrackingActive()) {
 				sb.append("    <tr><th>Auth Tracking</th><td>").append(formatAuthTrackingHtmlStatus(v)).append("</td></tr>\n");
 			}
+			if (!AntiDoSValve.RELEVANT_AUTH_SCOPE_ALL.equals(v.getRelevantAuthScope())) {
+				sb.append("    <tr><th>Relevant Auth Scope</th><td><span class=\"badge badge-yellow\">").append(escapeHtml(v.getRelevantAuthScope())).append("</span></td></tr>\n");
+			}
 
 			// Log Throttling & Async Eviction
 			String logThrottling = v.getMaxBlockLogsPerSecond() >= 0 ? v.getMaxBlockLogsPerSecond() + " logs/s" : "disabled";
@@ -1044,6 +1047,9 @@ public class AntiDoSStatusRenderer {
 		}
 		sb.append("    <tr><th>Visitor Cookie</th><td>").append(visitorCookieStatus).append("</td></tr>\n");
 		sb.append("    <tr><th>Auth Tracking</th><td>").append(formatAuthTrackingHtmlStatus(target)).append("</td></tr>\n");
+		if (!AntiDoSValve.RELEVANT_AUTH_SCOPE_ALL.equals(target.getRelevantAuthScope())) {
+			sb.append("    <tr><th>Relevant Auth Scope</th><td><span class=\"badge badge-yellow\">").append(escapeHtml(target.getRelevantAuthScope())).append("</span></td></tr>\n");
+		}
 
 		sb.append("  </table>\n</div>\n");
 
@@ -1332,6 +1338,7 @@ public class AntiDoSStatusRenderer {
 					.append("      \"authTrackingEnabled\": ").append(v.isAuthTrackingActive()).append(",\n")
 					.append("      \"authTrackingInherited\": ").append(!v.isAuthTrackingEnabled() && v.isAuthTrackingActive()).append(",\n")
 					.append("      \"authTrackingMode\": \"").append(escapeJson(v.getEffectiveAuthTrackingMode())).append("\",\n")
+					.append("      \"relevantAuthScope\": \"").append(escapeJson(v.getRelevantAuthScope())).append("\",\n")
 					.append("      \"authCookieName\": ").append(v.getEffectiveAuthCookieName() != null ? "\"" + escapeJson(v.getEffectiveAuthCookieName()) + "\"" : "null").append(",\n")
 					.append("      \"authLoginPaths\": ").append(v.getEffectiveAuthLoginPathsConfigValue() != null ? "\"" + escapeJson(v.getEffectiveAuthLoginPathsConfigValue()) + "\"" : "null").append(",\n")
 					.append("      \"authSessionTtlSeconds\": ").append(v.getEffectiveAuthSessionTtlSeconds()).append(",\n")
@@ -1444,6 +1451,7 @@ public class AntiDoSStatusRenderer {
 				.append("    \"authTrackingEnabled\": ").append(target.isAuthTrackingActive()).append(",\n")
 				.append("    \"authTrackingInherited\": ").append(!target.isAuthTrackingEnabled() && target.isAuthTrackingActive()).append(",\n")
 				.append("    \"authTrackingMode\": \"").append(escapeJson(target.getEffectiveAuthTrackingMode())).append("\",\n")
+				.append("    \"relevantAuthScope\": \"").append(escapeJson(target.getRelevantAuthScope())).append("\",\n")
 				.append("    \"authCookieName\": ").append(target.getEffectiveAuthCookieName() != null ? "\"" + escapeJson(target.getEffectiveAuthCookieName()) + "\"" : "null").append(",\n")
 				.append("    \"authLoginPaths\": ").append(target.getEffectiveAuthLoginPathsConfigValue() != null ? "\"" + escapeJson(target.getEffectiveAuthLoginPathsConfigValue()) + "\"" : "null").append(",\n")
 				.append("    \"authSessionTtlSeconds\": ").append(target.getEffectiveAuthSessionTtlSeconds()).append(",\n")

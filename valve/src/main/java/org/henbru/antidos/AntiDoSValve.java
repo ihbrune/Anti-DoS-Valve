@@ -12,6 +12,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -154,6 +155,21 @@ public class AntiDoSValve extends ValveBase {
 	 */
 	public static final String AUTH_TRACKING_MODE_COOKIE = "COOKIE";
 
+	/**
+	 * Relevant auth scope constant: applies rate limiting to all requests regardless of authentication status (default).
+	 */
+	public static final String RELEVANT_AUTH_SCOPE_ALL = "ALL";
+
+	/**
+	 * Relevant auth scope constant: applies rate limiting only to authenticated requests.
+	 */
+	public static final String RELEVANT_AUTH_SCOPE_AUTHENTICATED_ONLY = "AUTHENTICATED_ONLY";
+
+	/**
+	 * Relevant auth scope constant: applies rate limiting only to unauthenticated requests.
+	 */
+	public static final String RELEVANT_AUTH_SCOPE_UNAUTHENTICATED_ONLY = "UNAUTHENTICATED_ONLY";
+
 	public AntiDoSValve() {
 		super(true);
 	}
@@ -254,6 +270,7 @@ public class AntiDoSValve extends ValveBase {
 	private volatile boolean authLoginPathsValid = true;
 	private volatile int authSessionTtlSeconds = AntiDoSAuthSessionCache.DEFAULT_SESSION_TTL_SECONDS;
 	private volatile int maxAuthCacheSize = AntiDoSAuthSessionCache.DEFAULT_MAX_CAPACITY;
+	private volatile String relevantAuthScope = RELEVANT_AUTH_SCOPE_ALL;
 
 	/**
 	 * Monitor operation mode. If not set the default mode is used
@@ -1275,6 +1292,44 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
+	 * @return The relevant auth scope controlling which requests this valve enforces limits on ("ALL", "AUTHENTICATED_ONLY", or "UNAUTHENTICATED_ONLY")
+	 */
+	public String getRelevantAuthScope() {
+		return relevantAuthScope;
+	}
+
+	/**
+	 * Sets the relevant auth scope for this valve.
+	 *
+	 * @param relevantAuthScope The auth scope: "ALL" (default), "AUTHENTICATED_ONLY", or "UNAUTHENTICATED_ONLY"
+	 */
+	public void setRelevantAuthScope(String relevantAuthScope) {
+		if (relevantAuthScope == null || relevantAuthScope.trim().isEmpty()) {
+			this.relevantAuthScope = RELEVANT_AUTH_SCOPE_ALL;
+		} else {
+			String normalized = relevantAuthScope.trim().toUpperCase(Locale.ROOT);
+			if (RELEVANT_AUTH_SCOPE_AUTHENTICATED_ONLY.equals(normalized)) {
+				this.relevantAuthScope = RELEVANT_AUTH_SCOPE_AUTHENTICATED_ONLY;
+			} else if (RELEVANT_AUTH_SCOPE_UNAUTHENTICATED_ONLY.equals(normalized)) {
+				this.relevantAuthScope = RELEVANT_AUTH_SCOPE_UNAUTHENTICATED_ONLY;
+			} else if (RELEVANT_AUTH_SCOPE_ALL.equals(normalized)) {
+				this.relevantAuthScope = RELEVANT_AUTH_SCOPE_ALL;
+			} else {
+				this.relevantAuthScope = normalized;
+			}
+		}
+	}
+
+	/**
+	 * @return {@code true} if {@link #getRelevantAuthScope()} is a valid supported scope ("ALL", "AUTHENTICATED_ONLY", or "UNAUTHENTICATED_ONLY")
+	 */
+	public boolean isRelevantAuthScopeValid() {
+		return RELEVANT_AUTH_SCOPE_ALL.equals(relevantAuthScope)
+				|| RELEVANT_AUTH_SCOPE_AUTHENTICATED_ONLY.equals(relevantAuthScope)
+				|| RELEVANT_AUTH_SCOPE_UNAUTHENTICATED_ONLY.equals(relevantAuthScope);
+	}
+
+	/**
 	 * 
 	 * @param numberOfSlots The number of slots to be held. More slots allow a
 	 *                      further look into the past, but increase the memory
@@ -2187,6 +2242,9 @@ public class AntiDoSValve extends ValveBase {
 		if (!isAuthTrackingModeValid()) {
 			throw new LifecycleException(name4logging + ".authTrackingMode is invalid: " + authTrackingMode);
 		}
+		if (!isRelevantAuthScopeValid()) {
+			throw new LifecycleException(name4logging + ".relevantAuthScope is invalid: " + relevantAuthScope);
+		}
 		if (!authLoginPathsValid) {
 			throw new LifecycleException(name4logging + ".authLoginPaths is invalid: " + authLoginPathsConfigValue);
 		}
@@ -2394,44 +2452,7 @@ public class AntiDoSValve extends ValveBase {
 	 *         should be blocked
 	 */
 	public boolean isRequestAllowed(String ip, String requestURI) {
-
-		if (isIPAddressInAlwaysForbidden(ip)) {
-			alwaysForbiddenBlockedRequests.increment();
-			if (log.isDebugEnabled())
-				log.debug(name4logging + " Is in AlwaysForbiddenIPs: " + ip);
-
-			return false;
-		}
-
-		if (isIPAddressInAlwaysAllowed(ip)) {
-			if (log.isDebugEnabled())
-				log.debug(name4logging + " Is in alwaysAllowedIPs: " + ip);
-
-			return true;
-		}
-
-		if (isRequestURIInNonRelevantPaths(requestURI)) {
-			if (log.isDebugEnabled())
-				log.debug(name4logging + " Is in nonRelevantPaths: " + requestURI);
-
-			return true;
-		}
-
-		if (isRequestURIInRelevantPaths(requestURI)) {
-			return !isIPAddressBlocked(ip, false);
-		}
-
-		if (serverWideBlocking && isIPAddressCurrentlyBlocked(ip)) {
-			if (log.isDebugEnabled())
-				log.debug(name4logging + " Server-wide blocked: " + ip);
-
-			return false;
-		}
-
-		if (log.isDebugEnabled())
-			log.debug(name4logging + " Not in relevantPaths: " + requestURI);
-
-		return true;
+		return isRequestAllowed(ip, requestURI, false, false, null);
 	}
 
 	public boolean isRequestAllowed(String ip, String requestURI, boolean returningVisitor) {
@@ -2463,6 +2484,20 @@ public class AntiDoSValve extends ValveBase {
 			if (log.isDebugEnabled())
 				log.debug(name4logging + " Is in nonRelevantPaths: " + requestURI);
 
+			return true;
+		}
+
+		if (RELEVANT_AUTH_SCOPE_AUTHENTICATED_ONLY.equals(relevantAuthScope) && !authenticated) {
+			if (log.isDebugEnabled()) {
+				log.debug(name4logging + " Skipped: relevantAuthScope is AUTHENTICATED_ONLY, but request is unauthenticated");
+			}
+			return true;
+		}
+
+		if (RELEVANT_AUTH_SCOPE_UNAUTHENTICATED_ONLY.equals(relevantAuthScope) && authenticated) {
+			if (log.isDebugEnabled()) {
+				log.debug(name4logging + " Skipped: relevantAuthScope is UNAUTHENTICATED_ONLY, but request is authenticated");
+			}
 			return true;
 		}
 

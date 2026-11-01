@@ -150,6 +150,10 @@ When an incoming HTTP request reaches the valve, it is processed in two distinct
    *(Evaluated directly on the individual client IP address string; request is not counted in the dynamic rate monitor).*
 3. **Path Whitelist (`nonRelevantPaths`)**: Does the request URI match `nonRelevantPaths`? &rarr; **Allow**.  
    *(Evaluated before `relevantPaths`; request is not counted; bypasses rate limiting for health-checks or static error pages even if the client IP or its subnet is currently blocked).*
+3b. **Auth Scope Filter (`relevantAuthScope`)**: Does the request match the configured authentication scope?
+   * If `relevantAuthScope="AUTHENTICATED_ONLY"` and the request is unauthenticated &rarr; **Allow** *(bypasses rate limiting; request is not counted in the monitor)*.
+   * If `relevantAuthScope="UNAUTHENTICATED_ONLY"` and the request is authenticated &rarr; **Allow** *(bypasses rate limiting; request is not counted in the monitor)*.
+   * If `relevantAuthScope="ALL"` (default) or matches the scope &rarr; continues to step 4.
 4. **Detector Match (`relevantPaths`)**: Does the request URI match `relevantPaths`?
    * **Yes**: The client IP is resolved to a counter key — either the **individual IP address** or the **aggregated CIDR subnet** (if `ipv4SubnetMask` or `ipv6SubnetMask` is configured). The request is registered and counted in the rate limiting monitor (tracking returning-visitor and authenticated status). If the threshold for this counter key is exceeded (or already locked) &rarr; **Block**; otherwise &rarr; **Allow**.
 5. **Server-Wide Enforcement (`serverWideBlocking`)**: If the URI does *not* match `relevantPaths`, but `serverWideBlocking="true"` is enabled:
@@ -368,6 +372,7 @@ On subsequent incoming requests, the Valve checks whether the `Cookie` header co
 | `authLoginPaths` | Yes *(when `COOKIE`)* | *(none)* | Regular expression matching the login / SSO callback path(s) where `Set-Cookie` is issued (e.g. `"/trust"` or `"^/trust$"`). Evaluated on all requests passing through the Valve, even if the login path is excluded from rate limiting via `nonRelevantPaths` or omitted from `relevantPaths`. |
 | `authSessionTtlSeconds` | No | `900` | Fallback session validity in seconds (`>= 1`) when the `Set-Cookie` header does not include a `Max-Age` attribute (default: `900` = 15 minutes). |
 | `maxAuthCacheSize` | No | `50000` | Maximum number of concurrent authenticated session hashes held in the shared server-wide open-addressing cache (`>= 1`). Default `50000` consumes only ~800 KB of heap (16 bytes per slot). |
+| `relevantAuthScope` | No | `"ALL"` | Traffic filter controlling which requests this Valve monitors and enforces rate limits on based on authentication state: `"ALL"` (default; monitors both authenticated and unauthenticated traffic), `"AUTHENTICATED_ONLY"` (monitors only authenticated requests; unauthenticated requests bypass rate-limiting), or `"UNAUTHENTICATED_ONLY"` (monitors only unauthenticated requests; authenticated requests bypass rate-limiting). |
 
 ### Multi-Valve Cascade & Inter-Valve Request Attributes
 
@@ -376,6 +381,33 @@ Just like Visitor Cookie tracking, Authentication Session Tracking is designed f
 * **Request Attribute Propagation (`org.henbru.antidos.AUTHENTICATED`):** When the upstream Valve verifies a request's login cookie, it sets the request attribute `org.henbru.antidos.AUTHENTICATED` to `Boolean.TRUE` (or `Boolean.FALSE`). All downstream Valves read this attribute in $O(1)$ without re-parsing cookies or re-hashing.
 * **Shared Server-Wide Session Cache & Automatic Discovery:** The underlying `AntiDoSAuthSessionCache` is shared across all `AntiDoSValve` instances in the JVM. Even if a downstream Valve processes a path before or independently of the valve that observed `/trust`, it automatically inherits the active Auth Tracking state (`AUTH TRACKING: INHERITED`) and can verify cookies directly against the shared cache.
 * **Adaptive Status Dashboard & JSON Telemetry:** The internal Status Dashboard (`/antidos-status`) automatically detects whether any Valve in the server has `authTrackingMode="COOKIE"` enabled. Only when active does it display the `Auth Tracking` status row and the `Authenticated` request columns in the Slot Ring Buffer Timeline, Blocked Clients, and Top Active Clients tables.
+
+### Tiered Rate Limiting via `relevantAuthScope` (Decoupled Multi-Valve Setup)
+
+`relevantAuthScope` enables operators to define independent rate limiting tiers for anonymous visitors versus authenticated users across multiple cascaded Valves:
+
+* **Decoupled Configuration (No Need to Configure Everything in One Valve):** In a tiered multi-valve setup, you do **not** need to configure `authTrackingMode="COOKIE"` on every Valve. A single Valve in the server can observe login cookies (e.g. at `/trust`), while separate Valves in the pipeline enforce different rate limits using `relevantAuthScope`.
+* **Example — Tiered Protection Configuration:**
+  ```xml
+  <!-- Valve 1: Strict rate limiting for anonymous visitors, scrapers & bots -->
+  <Valve className="org.henbru.antidos.AntiDoSValve"
+         monitorName="Public-Anonymous-Valve"
+         authTrackingMode="COOKIE"
+         authCookieName="AUTH_COOKIE"
+         authLoginPaths="^/trust$"
+         relevantAuthScope="UNAUTHENTICATED_ONLY"
+         allowedRequestsPerSlot="60" />
+
+  <!-- Valve 2: Relaxed budget for authenticated customers / internal users -->
+  <Valve className="org.henbru.antidos.AntiDoSValve"
+         monitorName="Customer-Portal-Valve"
+         relevantAuthScope="AUTHENTICATED_ONLY"
+         allowedRequestsPerSlot="600" />
+  ```
+  In this configuration:
+  1. An unauthenticated scraper hitting the site is evaluated by Valve 1 (strict limit: 60 req/slot). Valve 2 ignores the scraper completely (`relevantAuthScope="AUTHENTICATED_ONLY"`).
+  2. When a user authenticates via `/trust`, Valve 1 registers the session in the shared cache.
+  3. Subsequent requests from that user carry the valid login cookie: Valve 1 ignores them (`relevantAuthScope="UNAUTHENTICATED_ONLY"`), while Valve 2 monitors them under the relaxed 600 req/slot limit.
 
 ### Architectural Design Rationale: Salted 64-Bit Fast Hashing & Primitive Open-Addressing
 
