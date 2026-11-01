@@ -105,7 +105,7 @@
                          maxIPCacheSize="500"
                          ipv4SubnetMask="/24"
                          ipv6SubnetMask="/64"
-                         collectorIntegration="auto"
+                         collectorIntegration="true"
                          slotLength="900"
                          allowedRequestsPerSlot="30000"
                          numberOfSlots="8"
