@@ -536,6 +536,10 @@ Events are streamed with configurable limits (`25`, `50`, `100`, `250`) and offs
   * **Untracked Valve (`—`):** Explicit dash displayed when the originating Valve has both visitor cookie and authentication tracking disabled (`visitorCookieEnabled="false"` and `authTrackingMode="OFF"`). Prevents misinterpreting unmonitored endpoints as 0% returning or authenticated traffic.
   * **Custom Cookie Names:** Telemetry collection and ratios operate identically whether using default cookie names or custom names (`visitorCookieName`, `authCookieName`); the Collector automatically identifies and binds the configured cookie names from overview telemetry.
 
+> [!NOTE] Cold-Start Behavior & Pre-Existing Browser Sessions
+> The Valve's internal session cache (`AntiDoSAuthSessionCache`) is held entirely in memory for high performance and zero disk I/O. When an Apache Tomcat instance or Valve restarts, its session cache begins completely empty.
+> Consequently, existing browser clients holding valid cookies from before the restart are initially treated as unauthenticated (`🔐 0%`) until they perform a re-authentication, login, or transparent SSO token roundtrip hitting one of the configured `authLoginPaths` (e.g., `/trust`, `/login`, ..). On servers protected entirely behind authentication, observing unauthenticated requests immediately following a server cold start is expected behavior and will naturally transition to ~100% as active client sessions re-register.
+
 ### 5. First-Block Request Sample Snapshot (`🔍 METHOD /path`) & 1-Click Note Triage
 When an abusive client IP address or subnet transitions into rate-limit blocking (`HTTP 429 Too Many Requests`), the Valve automatically captures an immutable, privacy-safe snapshot of that offending HTTP request:
 * **Captured Fields:** HTTP Method (e.g. `POST`), Request URI Path (with query strings stripped for GDPR/privacy compliance, capped at 256 characters), and the `User-Agent` header (capped at 128 characters).
@@ -595,10 +599,14 @@ Accessible via `/reports`. Generates permanent daily executive summaries, normal
 * **Permanence:** Daily reports and operator notes are stored in dedicated tables (`daily_reports`, `daily_report_notes`) and are **completely immune** to data retention cleanups.
 * **Normalized Peak Performance:** Compares Valves with varying slot configurations (e.g. 5s API protection vs. 60s page throttle) by normalizing peak rates to requests/sec and blocks/sec.
 * **Dual Incident Metrics:** Evaluates both total blocked requests (and percentage of traffic) and the exact ratio of affected time slots (e.g. `48 of 8,640 (0.56%)`).
+* **Fleet Server Traffic & Authentication Distribution:** Summarizes traffic distribution across all servers in the fleet, displaying each server's total request volume, fleet traffic share (%), and authenticated request ratio (`X of Y (Z%)`), complemented by individual Valve tables tracking authenticated proportions.
+
+> [!NOTE] Cold-Start Impact on Auth Telemetry & Reports
+> Because the Valve's session cache is volatile and memory-only, an edge node restarted during the day starts with an empty cache. Requests carrying pre-existing browser cookies will register as unauthenticated until clients hit an `authLoginPaths` endpoint. In daily reports or telemetry, a server that was recently restarted may temporarily exhibit a lower authenticated ratio than steady-state operations.
 
 ### 2. Operator Day Notes & Human Knowledge Preservation
 * **Independent Lifecycle:** Operators can record notes for **Today (In Progress)**, past dates, or upcoming maintenance *before* the automated report is compiled.
-* **Zero Risk of Overwrite:** Maschinelle Re-Aggregationen never overwrite human observations. Notes are safely stored in `daily_report_notes` and re-embedded into the Markdown report.
+* **Zero Risk of Overwrite:** Automated re-aggregations never overwrite human observations. Notes are safely stored in `daily_report_notes` and re-embedded into the Markdown report.
 * **Live In-Progress Support:** Selecting Today allows reviewing ongoing telemetry and logging operational remarks immediately.
 * **Archive Sidebar Indicators:** Dates with operator notes are tagged with a `📝` icon in the archive navigation.
 

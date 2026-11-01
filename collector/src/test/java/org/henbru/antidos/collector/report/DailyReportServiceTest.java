@@ -295,4 +295,83 @@ class DailyReportServiceTest {
 		assertTrue(md.contains("Top Marked / Monitored Clients (Soft-Marking & Simulation)"));
 		assertTrue(md.contains("`MARKING`"));
 	}
+
+	@Test
+	void testDailyReportWithAuthenticatedTraffic() {
+		LocalDate authDate = LocalDate.of(2026, 10, 24);
+		dailyReportRepository.deleteByReportDate(authDate.toString());
+		jdbcTemplate.update("DELETE FROM slot_snapshots WHERE server_id IN ('SRV-AUTH-APP', 'SRV-PUBLIC-API')");
+		jdbcTemplate.update("DELETE FROM client_events WHERE server_id IN ('SRV-AUTH-APP', 'SRV-PUBLIC-API')");
+		jdbcTemplate.update("DELETE FROM monitored_valves WHERE server_id IN ('SRV-AUTH-APP', 'SRV-PUBLIC-API')");
+
+		ZonedDateTime startDay = authDate.atStartOfDay(ZoneId.systemDefault());
+		Instant baseTime = startDay.plusHours(10).toInstant();
+
+		// Configure SRV-AUTH-APP with auth tracking enabled
+		monitoredValveRepository.upsert(new MonitoredValve(
+				"SRV-AUTH-APP", "Web-App-Limiter", "Protected Application", 1, "BLOCKING", false, false,
+				429, 200, 10, 10, 0.5f, 24, 64, 10000, 5000, "", "", "", "", "/status", "*", "auto",
+				false, "_adv",
+				true, "COOKIE", "AUTH_COOKIE", "^/trust$", 900, 50000,
+				Instant.now(), 9999, true
+		));
+
+		// Configure SRV-PUBLIC-API without auth tracking
+		monitoredValveRepository.upsert(new MonitoredValve(
+				"SRV-PUBLIC-API", "Public-Api-Limiter", "Public API Gateway", 1, "BLOCKING", false, false,
+				429, 100, 10, 10, 0.5f, 24, 64, 10000, 5000, "", "", "", "", "/status", "*", "auto",
+				false, "_adv",
+				false, "OFF", null, null, 900, 50000,
+				Instant.now(), 9999, true
+		));
+
+		// Snapshots
+		slotSnapshotRepository.upsert(new SlotSnapshot(
+				null, "SRV-AUTH-APP", "Web-App-Limiter", 9001L, baseTime, baseTime.plus(60, ChronoUnit.SECONDS),
+				1000L, 50, 0, 0, true, baseTime.plus(60, ChronoUnit.SECONDS)
+		));
+		slotSnapshotRepository.upsert(new SlotSnapshot(
+				null, "SRV-PUBLIC-API", "Public-Api-Limiter", 9002L, baseTime, baseTime.plus(60, ChronoUnit.SECONDS),
+				500L, 25, 0, 0, true, baseTime.plus(60, ChronoUnit.SECONDS)
+		));
+
+		// Client events on SRV-AUTH-APP with 750 of 1000 requests authenticated
+		jdbcTemplate.update("""
+				INSERT INTO client_events (
+					server_id, valve_name, slot_key, slot_time, client_key, request_count, returning_count, authenticated_count, status, client_type, enrichment_status, last_updated_at
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 'RESIDENTIAL', 'ENRICHED', ?)
+				""", "SRV-AUTH-APP", "Web-App-Limiter", 9001L, java.sql.Timestamp.from(baseTime),
+				"198.51.100.10", 1000L, 800, 750, java.sql.Timestamp.from(baseTime));
+
+		// Client events on SRV-PUBLIC-API without auth tracking (nulls)
+		jdbcTemplate.update("""
+				INSERT INTO client_events (
+					server_id, valve_name, slot_key, slot_time, client_key, request_count, returning_count, authenticated_count, status, client_type, enrichment_status, last_updated_at
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 'RESIDENTIAL', 'ENRICHED', ?)
+				""", "SRV-PUBLIC-API", "Public-Api-Limiter", 9002L, java.sql.Timestamp.from(baseTime),
+				"198.51.100.20", 500L, null, null, java.sql.Timestamp.from(baseTime));
+
+		DailyReport report = dailyReportService.generateDailyReport(authDate);
+		assertNotNull(report);
+		assertEquals(1500L, report.totalRequests());
+
+		String md = report.reportMarkdown();
+		assertNotNull(md);
+
+		// 1. Executive Summary checks
+		assertTrue(md.contains("Authenticated Requests"));
+		assertTrue(md.contains("750 of 1,000 (75.00%)"));
+
+		// 2. Server Traffic & Authentication Distribution table checks
+		assertTrue(md.contains("Fleet Server Traffic & Authentication Distribution"));
+		assertTrue(md.contains("`SRV-AUTH-APP`"));
+		assertTrue(md.contains("`SRV-PUBLIC-API`"));
+		assertTrue(md.contains("66.67%")); // SRV-AUTH-APP share: 1000 / 1500
+		assertTrue(md.contains("33.33%")); // SRV-PUBLIC-API share: 500 / 1500
+		assertTrue(md.contains("750 of 1,000"));
+
+		// 3. Per-valve table checks
+		assertTrue(md.contains("Auth Requests (Ratio)"));
+		assertTrue(md.contains("750 (75.0%)"));
+	}
 }

@@ -53,6 +53,68 @@ public class DailyReportService {
 	private final ClientEventRepository clientEventRepository;
 	private final AnnotationMarkdownService markdownService;
 
+	public record ValveAggregate(
+			String serverId,
+			String valveName,
+			String modeLabel,
+			long totalRequests,
+			long blockedRequests,
+			long markedRequests,
+			int slotCount,
+			int blockedSlotCount,
+			int markedSlotCount,
+			int configuredSlotLength,
+			int allowedRequestsPerSlot,
+			double peakReqRatePerSec,
+			long peakRawRequests,
+			long peakReqDurationSec,
+			Instant peakReqTime,
+			double peakBlockRatePerSec,
+			long peakRawBlocked,
+			long peakBlockDurationSec,
+			Instant peakBlockTime,
+			double peakMarkRatePerSec,
+			long peakRawMarked,
+			long peakMarkDurationSec,
+			Instant peakMarkTime,
+			double peakUtilizationPercent,
+			boolean authTrackingActive,
+			long authenticatedRequests,
+			long authenticatedTrackedRequests
+	) {}
+
+	public record PollSummary(
+			long totalPolls,
+			long successPolls,
+			long warningPolls,
+			long errorPolls,
+			long minMs,
+			double avgMs,
+			long maxMs,
+			long bucketLt50,
+			long bucket50to200,
+			long bucket200to500,
+			long bucketGte500
+	) {}
+
+	public record ServerPollStat(
+			String serverId,
+			long totalPolls,
+			long successPolls,
+			long errorPolls,
+			long minMs,
+			double avgMs,
+			long maxMs
+	) {}
+
+	public record OutageLog(
+			String serverId,
+			Instant pollTime,
+			int httpStatusCode,
+			long responseTimeMs,
+			String errorMessage
+	) {}
+
 	public DailyReportService(
 			JdbcTemplate jdbcTemplate,
 			DailyReportRepository reportRepository,
@@ -184,34 +246,6 @@ public class DailyReportService {
 		}
 
 		// 3. Per-Valve Summaries & Peak Calculation (Normalized to Requests / Sec)
-		record ValveAggregate(
-				String serverId,
-				String valveName,
-				String modeLabel,
-				long totalRequests,
-				long blockedRequests,
-				long markedRequests,
-				int slotCount,
-				int blockedSlotCount,
-				int markedSlotCount,
-				int configuredSlotLength,
-				int allowedRequestsPerSlot,
-				double peakReqRatePerSec,
-				long peakRawRequests,
-				long peakReqDurationSec,
-				Instant peakReqTime,
-				double peakBlockRatePerSec,
-				long peakRawBlocked,
-				long peakBlockDurationSec,
-				Instant peakBlockTime,
-				double peakMarkRatePerSec,
-				long peakRawMarked,
-				long peakMarkDurationSec,
-				Instant peakMarkTime,
-				double peakUtilizationPercent
-		) {
-		}
-
 		List<ValveAggregate> valveAggregates = new ArrayList<>();
 		double fleetPeakReqRate = 0.0;
 		double fleetPeakBlockRate = 0.0;
@@ -255,6 +289,35 @@ public class DailyReportService {
 			}
 		} catch (Exception e) {
 			log.warn("Error querying valve blocked/marked requests for {}: {}", dateStr, e.getMessage());
+		}
+
+		// Query authenticated requests per valve and fleet totals from client_events
+		Map<String, Long> valveAuthReqsMap = new HashMap<>();
+		Map<String, Long> valveAuthTrackedReqsMap = new HashMap<>();
+		long fleetAuthRequests = 0;
+		long fleetAuthTrackedRequests = 0;
+		try {
+			String authQuery = """
+					SELECT server_id, valve_name,
+					       COALESCE(SUM(authenticated_count), 0) AS auth_reqs,
+					       COALESCE(SUM(CASE WHEN authenticated_count IS NOT NULL THEN request_count ELSE 0 END), 0) AS auth_tracked_reqs
+					FROM client_events
+					WHERE slot_time >= ? AND slot_time < ?
+					GROUP BY server_id, valve_name
+					""";
+			List<Map<String, Object>> authRows = jdbcTemplate.queryForList(
+					authQuery, Timestamp.from(startInstant), Timestamp.from(endInstant));
+			for (Map<String, Object> r : authRows) {
+				String key = r.get("server_id") + "#" + r.get("valve_name");
+				long aReqs = ((Number) r.get("auth_reqs")).longValue();
+				long aTracked = ((Number) r.get("auth_tracked_reqs")).longValue();
+				valveAuthReqsMap.put(key, aReqs);
+				valveAuthTrackedReqsMap.put(key, aTracked);
+				fleetAuthRequests += aReqs;
+				fleetAuthTrackedRequests += aTracked;
+			}
+		} catch (Exception e) {
+			log.warn("Error querying valve authenticated requests for {}: {}", dateStr, e.getMessage());
 		}
 
 		try {
@@ -414,13 +477,19 @@ public class DailyReportService {
 				double peakUtilization = (allowedPerSlot > 0 && peakRawReq > 0)
 						? ((double) peakRawReq / allowedPerSlot) * 100.0 : 0.0;
 
+				boolean authTrackingActive = (cfg != null && cfg.authTrackingEnabled())
+						|| valveAuthTrackedReqsMap.containsKey(sId + "#" + vName);
+				long vAuthReqs = valveAuthReqsMap.getOrDefault(sId + "#" + vName, 0L);
+				long vAuthTracked = valveAuthTrackedReqsMap.getOrDefault(sId + "#" + vName, 0L);
+
 				valveAggregates.add(new ValveAggregate(
 						sId, vName, modeLabel, vReqSum, vBlockedRequests, vMarkedRequests,
 						slotCount, blockedSlotCount, markedSlotCount, slotLen, allowedPerSlot,
 						peakReqRate, peakRawReq, peakReqDuration, peakReqTime,
 						peakBlockRate, peakRawBlk, peakBlkDuration, peakBlkTime,
 						peakMarkRate, peakRawMrk, peakMrkDuration, peakMrkTime,
-						peakUtilization
+						peakUtilization,
+						authTrackingActive, vAuthReqs, vAuthTracked
 				));
 			}
 		} catch (Exception e) {
@@ -428,20 +497,6 @@ public class DailyReportService {
 		}
 
 		// 4. Polling Telemetry & Latency Distribution (from poll_event_log)
-		record PollSummary(
-				long totalPolls,
-				long successPolls,
-				long warningPolls,
-				long errorPolls,
-				long minMs,
-				double avgMs,
-				long maxMs,
-				long bucketLt50,
-				long bucket50to200,
-				long bucket200to500,
-				long bucketGte500
-		) {}
-
 		PollSummary pollSummary = new PollSummary(0, 0, 0, 0, 0, 0.0, 0, 0, 0, 0, 0);
 		try {
 			String pollSql = """
@@ -482,7 +537,6 @@ public class DailyReportService {
 		}
 
 		// Per-server polling stats
-		record ServerPollStat(String serverId, long totalPolls, long successPolls, long errorPolls, long minMs, double avgMs, long maxMs) {}
 		List<ServerPollStat> serverPollStats = new ArrayList<>();
 		try {
 			String serverPollSql = """
@@ -513,7 +567,6 @@ public class DailyReportService {
 		}
 
 		// Outages / Errors
-		record OutageLog(String serverId, Instant pollTime, int httpStatusCode, long responseTimeMs, String errorMessage) {}
 		List<OutageLog> outages = new ArrayList<>();
 		try {
 			String outagesSql = """
@@ -605,7 +658,8 @@ public class DailyReportService {
 				fleetPeakReqRate, fleetPeakReqRaw, fleetPeakReqDuration, peakReqServer, peakReqValve, fleetPeakReqTime,
 				fleetPeakBlockRate, fleetPeakBlockRaw, fleetPeakBlockDuration, peakBlockServer, peakBlockValve, fleetPeakBlockTime,
 				fleetPeakMarkRate, fleetPeakMarkRaw, fleetPeakMarkDuration, peakMarkServer, peakMarkValve, fleetPeakMarkTime,
-				valveAggregates, pollSummary, serverPollStats, outages, topClients, topAsns, topMarkedClients, noteMarkdown, numFmt
+				valveAggregates, pollSummary, serverPollStats, outages, topClients, topAsns, topMarkedClients, noteMarkdown, numFmt,
+				fleetAuthRequests, fleetAuthTrackedRequests
 		);
 
 		DailyReport report = new DailyReport(
@@ -672,15 +726,17 @@ public class DailyReportService {
 			String peakMarkServer,
 			String peakMarkValve,
 			Instant fleetPeakMarkTime,
-			List<?> rawValveAggregates,
-			Object rawPollSummary,
-			List<?> rawServerPollStats,
-			List<?> rawOutages,
+			List<ValveAggregate> valveAggregates,
+			PollSummary pollSummary,
+			List<ServerPollStat> serverPollStats,
+			List<OutageLog> outages,
 			List<TopOffenderSummary> topClients,
 			List<TopOffenderSummary> topAsns,
 			List<TopOffenderSummary> topMarkedClients,
 			String noteMarkdown,
-			NumberFormat numFmt
+			NumberFormat numFmt,
+			long fleetAuthRequests,
+			long fleetAuthTrackedRequests
 	) {
 		StringBuilder sb = new StringBuilder();
 
@@ -716,7 +772,14 @@ public class DailyReportService {
 			sb.append("| **Affected Marking Slots** | **").append(numFmt.format(fleetMarkedSlots)).append(" of ").append(numFmt.format(fleetTotalSlots))
 					.append(" (").append(String.format(Locale.US, "%.2f%%", fleetMarkedSlotRatio)).append(")** | Time slots with soft-marking or simulation threshold hits |\n");
 		}
-		sb.append("| **Active Nodes / Valves** | **").append(serverCount).append(" servers / ").append(rawValveAggregates.size()).append(" valves** | Fleet instances participating in telemetry collection |\n");
+		if (fleetAuthTrackedRequests > 0) {
+			double fleetAuthRatio = (fleetAuthRequests * 100.0) / fleetAuthTrackedRequests;
+			sb.append("| **Authenticated Requests** | **").append(numFmt.format(fleetAuthRequests)).append(" of ")
+					.append(numFmt.format(fleetAuthTrackedRequests)).append(" (")
+					.append(String.format(Locale.US, "%.2f%%", fleetAuthRatio))
+					.append(")** | Requests carrying valid authentication session cookies across auth-tracked valves |\n");
+		}
+		sb.append("| **Active Nodes / Valves** | **").append(serverCount).append(" servers / ").append(valveAggregates.size()).append(" valves** | Fleet instances participating in telemetry collection |\n");
 		sb.append("| **Blocked Clients** | **").append(numFmt.format(distinctBlockedClients)).append(" unique IPs** | Involved in hard HTTP 429 rate-limit blocks |\n");
 		if (distinctMarkedClients > 0 || totalMarkedIncidents > 0) {
 			sb.append("| **Marked Clients** | **").append(numFmt.format(distinctMarkedClients)).append(" unique IPs/subnets** | Flagged by soft-marking or simulation valves (").append(numFmt.format(totalMarkedIncidents)).append(" events) |\n");
@@ -766,62 +829,104 @@ public class DailyReportService {
 		sb.append("peak values are normalized to per-second rates (`req/s` and `blocks/s`).\n\n");
 
 		// Group valve aggregates by serverId
-		Map<String, List<Object>> serverMap = new LinkedHashMap<>();
-		for (Object agg : rawValveAggregates) {
-			try {
-				java.lang.reflect.Method m = agg.getClass().getMethod("serverId");
-				String sId = (String) m.invoke(agg);
-				serverMap.computeIfAbsent(sId, k -> new ArrayList<>()).add(agg);
-			} catch (Exception ignored) {}
+		Map<String, List<ValveAggregate>> serverMap = new LinkedHashMap<>();
+		for (ValveAggregate agg : valveAggregates) {
+			serverMap.computeIfAbsent(agg.serverId(), k -> new ArrayList<>()).add(agg);
 		}
 
 		if (serverMap.isEmpty()) {
 			sb.append("*No Valve telemetry recorded for this date.*\n\n");
 		} else {
-			for (Map.Entry<String, List<Object>> entry : serverMap.entrySet()) {
+			// Fleet Server Traffic & Authentication Share summary table
+			sb.append("### 🖥️ Fleet Server Traffic & Authentication Distribution\n\n");
+			sb.append("| Server | Total Requests | Share of Fleet | Authenticated Requests | Authenticated Ratio | Valves Monitored |\n");
+			sb.append("| :--- | :--- | :--- | :--- | :--- | :--- |\n");
+
+			for (Map.Entry<String, List<ValveAggregate>> entry : serverMap.entrySet()) {
 				String sId = entry.getKey();
-				List<Object> valves = entry.getValue();
+				List<ValveAggregate> valves = entry.getValue();
+
+				long srvTotalReq = 0;
+				long srvAuthReq = 0;
+				long srvAuthTracked = 0;
+				boolean srvAuthActive = false;
+
+				for (ValveAggregate v : valves) {
+					srvTotalReq += v.totalRequests();
+					srvAuthReq += v.authenticatedRequests();
+					srvAuthTracked += v.authenticatedTrackedRequests();
+					if (v.authTrackingActive()) {
+						srvAuthActive = true;
+					}
+				}
+
+				double fleetShare = totalRequests > 0 ? (srvTotalReq * 100.0) / totalRequests : 0.0;
+				String authStr = "–";
+				String authRatioStr = "–";
+				if (srvAuthActive || srvAuthTracked > 0) {
+					double ratio = srvAuthTracked > 0 ? (srvAuthReq * 100.0) / srvAuthTracked : 0.0;
+					authStr = numFmt.format(srvAuthReq) + " of " + numFmt.format(srvAuthTracked);
+					authRatioStr = String.format(Locale.US, "%.2f%%", ratio);
+				}
+
+				sb.append("| `").append(sId).append("` | ")
+						.append(numFmt.format(srvTotalReq)).append(" | ")
+						.append(String.format(Locale.US, "%.2f%%", fleetShare)).append(" | ")
+						.append(authStr).append(" | ")
+						.append(authRatioStr).append(" | ")
+						.append(valves.size()).append(" Valve").append(valves.size() > 1 ? "s" : "").append(" |\n");
+			}
+			sb.append("\n");
+
+			for (Map.Entry<String, List<ValveAggregate>> entry : serverMap.entrySet()) {
+				String sId = entry.getKey();
+				List<ValveAggregate> valves = entry.getValue();
 
 				sb.append("### Server `").append(sId).append("` (").append(valves.size()).append(" Valves)\n\n");
-				sb.append("| Valve | Mode | Slot Length | Total Requests | Blocked Requests | Marked Requests | Block / Mark Rate | Affected Slots (Ratio) | Peak Rate (norm.) | Peak Slot (raw) | Peak Utilization |\n");
-				sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
+				sb.append("| Valve | Mode | Slot Length | Total Requests | Blocked Requests | Marked Requests | Auth Requests (Ratio) | Block / Mark Rate | Affected Slots (Ratio) | Peak Rate (norm.) | Peak Slot (raw) | Peak Utilization |\n");
+				sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
 
-				for (Object vObj : valves) {
-					try {
-						String vName = (String) vObj.getClass().getMethod("valveName").invoke(vObj);
-						String modeLabel = (String) vObj.getClass().getMethod("modeLabel").invoke(vObj);
-						long vReq = (Long) vObj.getClass().getMethod("totalRequests").invoke(vObj);
-						long vBlkReq = (Long) vObj.getClass().getMethod("blockedRequests").invoke(vObj);
-						long vMrkReq = (Long) vObj.getClass().getMethod("markedRequests").invoke(vObj);
-						int slotCnt = (Integer) vObj.getClass().getMethod("slotCount").invoke(vObj);
-						int blkSlotCnt = (Integer) vObj.getClass().getMethod("blockedSlotCount").invoke(vObj);
-						int mrkSlotCnt = (Integer) vObj.getClass().getMethod("markedSlotCount").invoke(vObj);
-						int slotLen = (Integer) vObj.getClass().getMethod("configuredSlotLength").invoke(vObj);
-						int allowed = (Integer) vObj.getClass().getMethod("allowedRequestsPerSlot").invoke(vObj);
-						double pReqRate = (Double) vObj.getClass().getMethod("peakReqRatePerSec").invoke(vObj);
-						long pRawReq = (Long) vObj.getClass().getMethod("peakRawRequests").invoke(vObj);
-						long pReqDur = (Long) vObj.getClass().getMethod("peakReqDurationSec").invoke(vObj);
-						double pUtil = (Double) vObj.getClass().getMethod("peakUtilizationPercent").invoke(vObj);
+				for (ValveAggregate v : valves) {
+					String vName = v.valveName();
+					String modeLabel = v.modeLabel();
+					long vReq = v.totalRequests();
+					long vBlkReq = v.blockedRequests();
+					long vMrkReq = v.markedRequests();
+					int slotCnt = v.slotCount();
+					int blkSlotCnt = v.blockedSlotCount();
+					int mrkSlotCnt = v.markedSlotCount();
+					int slotLen = v.configuredSlotLength();
+					int allowed = v.allowedRequestsPerSlot();
+					double pReqRate = v.peakReqRatePerSec();
+					long pRawReq = v.peakRawRequests();
+					long pReqDur = v.peakReqDurationSec();
+					double pUtil = v.peakUtilizationPercent();
 
-						long effectiveTriggeredReqs = vBlkReq > 0 ? vBlkReq : vMrkReq;
-						int effectiveTriggeredSlots = blkSlotCnt > 0 ? blkSlotCnt : mrkSlotCnt;
-						double vQuote = vReq > 0 ? (effectiveTriggeredReqs * 100.0) / vReq : 0.0;
-						double slotRatio = slotCnt > 0 ? (effectiveTriggeredSlots * 100.0) / slotCnt : 0.0;
-						String utilStr = allowed > 0 ? String.format(Locale.US, "%.1f%% (%s max)", pUtil, numFmt.format(allowed)) : "–";
-						String slotInfo = numFmt.format(effectiveTriggeredSlots) + " / " + numFmt.format(slotCnt) + " (" + String.format(Locale.US, "%.2f%%", slotRatio) + ")";
+					long effectiveTriggeredReqs = vBlkReq > 0 ? vBlkReq : vMrkReq;
+					int effectiveTriggeredSlots = blkSlotCnt > 0 ? blkSlotCnt : mrkSlotCnt;
+					double vQuote = vReq > 0 ? (effectiveTriggeredReqs * 100.0) / vReq : 0.0;
+					double slotRatio = slotCnt > 0 ? (effectiveTriggeredSlots * 100.0) / slotCnt : 0.0;
+					String utilStr = allowed > 0 ? String.format(Locale.US, "%.1f%% (%s max)", pUtil, numFmt.format(allowed)) : "–";
+					String slotInfo = numFmt.format(effectiveTriggeredSlots) + " / " + numFmt.format(slotCnt) + " (" + String.format(Locale.US, "%.2f%%", slotRatio) + ")";
 
-						sb.append("| `").append(vName).append("` | `")
-								.append(modeLabel).append("` | ")
-								.append(slotLen).append("s | ")
-								.append(numFmt.format(vReq)).append(" | ")
-								.append(numFmt.format(vBlkReq)).append(" | ")
-								.append(numFmt.format(vMrkReq)).append(" | ")
-								.append(String.format(Locale.US, "%.2f%%", vQuote)).append(" | ")
-								.append(slotInfo).append(" | ")
-								.append("**`").append(String.format(Locale.US, "%.1f", pReqRate)).append(" req/s`** | ")
-								.append(numFmt.format(pRawReq)).append(" in ").append(pReqDur).append("s | ")
-								.append(utilStr).append(" |\n");
-					} catch (Exception ignored) {}
+					String authCol = "–";
+					if (v.authTrackingActive() || v.authenticatedTrackedRequests() > 0) {
+						double aRatio = v.authenticatedTrackedRequests() > 0 ? (v.authenticatedRequests() * 100.0) / v.authenticatedTrackedRequests() : 0.0;
+						authCol = numFmt.format(v.authenticatedRequests()) + " (" + String.format(Locale.US, "%.1f%%", aRatio) + ")";
+					}
+
+					sb.append("| `").append(vName).append("` | `")
+							.append(modeLabel).append("` | ")
+							.append(slotLen).append("s | ")
+							.append(numFmt.format(vReq)).append(" | ")
+							.append(numFmt.format(vBlkReq)).append(" | ")
+							.append(numFmt.format(vMrkReq)).append(" | ")
+							.append(authCol).append(" | ")
+							.append(String.format(Locale.US, "%.2f%%", vQuote)).append(" | ")
+							.append(slotInfo).append(" | ")
+							.append("**`").append(String.format(Locale.US, "%.1f", pReqRate)).append(" req/s`** | ")
+							.append(numFmt.format(pRawReq)).append(" in ").append(pReqDur).append("s | ")
+							.append(utilStr).append(" |\n");
 				}
 				sb.append("\n");
 			}
@@ -833,18 +938,18 @@ public class DailyReportService {
 		sb.append("## 🌐 3. Fleet Connectivity & Polling Latency Audit\n\n");
 
 		try {
-			long totPolls = (Long) rawPollSummary.getClass().getMethod("totalPolls").invoke(rawPollSummary);
-			long succPolls = (Long) rawPollSummary.getClass().getMethod("successPolls").invoke(rawPollSummary);
-			long warnPolls = (Long) rawPollSummary.getClass().getMethod("warningPolls").invoke(rawPollSummary);
-			long errPolls = (Long) rawPollSummary.getClass().getMethod("errorPolls").invoke(rawPollSummary);
-			long minMs = (Long) rawPollSummary.getClass().getMethod("minMs").invoke(rawPollSummary);
-			double avgMs = (Double) rawPollSummary.getClass().getMethod("avgMs").invoke(rawPollSummary);
-			long maxMs = (Long) rawPollSummary.getClass().getMethod("maxMs").invoke(rawPollSummary);
+			long totPolls = pollSummary.totalPolls();
+			long succPolls = pollSummary.successPolls();
+			long warnPolls = pollSummary.warningPolls();
+			long errPolls = pollSummary.errorPolls();
+			long minMs = pollSummary.minMs();
+			double avgMs = pollSummary.avgMs();
+			long maxMs = pollSummary.maxMs();
 
-			long bLt50 = (Long) rawPollSummary.getClass().getMethod("bucketLt50").invoke(rawPollSummary);
-			long b50to200 = (Long) rawPollSummary.getClass().getMethod("bucket50to200").invoke(rawPollSummary);
-			long b200to500 = (Long) rawPollSummary.getClass().getMethod("bucket200to500").invoke(rawPollSummary);
-			long bGte500 = (Long) rawPollSummary.getClass().getMethod("bucketGte500").invoke(rawPollSummary);
+			long bLt50 = pollSummary.bucketLt50();
+			long b50to200 = pollSummary.bucket50to200();
+			long b200to500 = pollSummary.bucket200to500();
+			long bGte500 = pollSummary.bucketGte500();
 
 			double avail = totPolls > 0 ? (succPolls * 100.0) / totPolls : 100.0;
 
@@ -875,29 +980,27 @@ public class DailyReportService {
 
 		// Server Outages Table
 		sb.append("### ⚠️ Connection Failures & Node Outages\n\n");
-		if (rawOutages == null || rawOutages.isEmpty()) {
+		if (outages == null || outages.isEmpty()) {
 			sb.append("✅ *No connection dropouts or node unreachable errors recorded for this date.*\n\n");
 		} else {
 			sb.append("| Server | Timestamp | HTTP Code | Latency | Error Message |\n");
 			sb.append("| :--- | :--- | :--- | :--- | :--- |\n");
-			for (Object outObj : rawOutages) {
-				try {
-					String sId = (String) outObj.getClass().getMethod("serverId").invoke(outObj);
-					Instant pTime = (Instant) outObj.getClass().getMethod("pollTime").invoke(outObj);
-					int httpCode = (Integer) outObj.getClass().getMethod("httpStatusCode").invoke(outObj);
-					long respMs = (Long) outObj.getClass().getMethod("responseTimeMs").invoke(outObj);
-					String errMsg = (String) outObj.getClass().getMethod("errorMessage").invoke(outObj);
+			for (OutageLog outObj : outages) {
+				String sId = outObj.serverId();
+				Instant pTime = outObj.pollTime();
+				int httpCode = outObj.httpStatusCode();
+				long respMs = outObj.responseTimeMs();
+				String errMsg = outObj.errorMessage();
 
-					String timeFormatted = pTime != null ? pTime.atZone(ZoneId.systemDefault()).format(DATETIME_FORMATTER) : "–";
-					String cleanErr = errMsg != null ? errMsg.replace("|", "/") : "Unknown error";
-					if (cleanErr.length() > 80) cleanErr = cleanErr.substring(0, 77) + "...";
+				String timeFormatted = pTime != null ? pTime.atZone(ZoneId.systemDefault()).format(DATETIME_FORMATTER) : "–";
+				String cleanErr = errMsg != null ? errMsg.replace("|", "/") : "Unknown error";
+				if (cleanErr.length() > 80) cleanErr = cleanErr.substring(0, 77) + "...";
 
-					sb.append("| `").append(sId).append("` | ")
-							.append(timeFormatted).append(" | ")
-							.append(httpCode > 0 ? httpCode : "–").append(" | ")
-							.append(respMs).append("ms | `")
-							.append(cleanErr).append("` |\n");
-				} catch (Exception ignored) {}
+				sb.append("| `").append(sId).append("` | ")
+						.append(timeFormatted).append(" | ")
+						.append(httpCode > 0 ? httpCode : "–").append(" | ")
+						.append(respMs).append("ms | `")
+						.append(cleanErr).append("` |\n");
 			}
 			sb.append("\n");
 		}

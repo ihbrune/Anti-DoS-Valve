@@ -168,6 +168,7 @@ The Valve maintains strictly bounded, lock-free in-memory counters for the curre
 * When `authTrackingMode="COOKIE"` is configured alongside `authCookieName` (e.g., `"AUTH_COOKIE"`) and `authLoginPaths` (e.g., `"/trust"`), the Valve passively observes `Set-Cookie` headers on login responses and registers a salted 64-bit fast hash in a lock-free primitive open-addressing session cache (`AtomicLongArray`, 16 bytes/session).
 * Subsequent requests carrying a valid, non-expired login cookie increment `authenticatedCount` in `AntiDoSCounter` and propagate across cascaded Valves in the same server.
 * The Collector automatically ingests `authenticatedCount` per client/subnet event, rolls up `authenticated_requests` and `authenticated_tracked_requests` into hourly buckets and 24h subnet profiles, and displays `🔐 X% Auth` badges across Incident Explorer (`/events`), Top Offenders (`/offenders`), and Subnet Profiles (`/profiles`).
+* **Cold-Start Awareness:** Because the Valve session cache resides strictly in memory for maximum speed and zero heap churn, an edge node restart clears its cache. Pre-existing browser sessions will show as unauthenticated until users hit an `authLoginPaths` endpoint; this is expected behavior immediately following server restarts.
 
 ### 4. Dormant Telemetry via Rolling Collector Lease (`collectorIntegration="auto"`)
 * Extended telemetry tracking (such as bitmask updates and cookie verifications) has an extremely low, but non-zero CPU and memory footprint.
@@ -196,7 +197,7 @@ The Collector acts as the long-term memory, brain, and investigative workbench f
 | **Subnet Profiling & Surge Detection** | Computes 30-day moving daily baselines and hourly curves per subnet | Detects stealthy scraping surges (e.g. 5x normal volume) and dormancy breakouts from previously silent subnets. |
 | **Forensic 2D Cluster Analysis** | Scatters subnets by Total Requests vs. Distinct IPs | Exposes residential proxy botnets (hundreds of IPs per subnet each sending only 1–3 requests to evade edge limits). |
 | **Persistent Operator Knowledge (`/notes`)** | Stores manual analyst notes and forensic verdict badges | Completely immune to data retention cleanups; preserves institutional knowledge permanently across the fleet. |
-| **Permanent Operational Reports (`/reports`)** | Compiles daily executive summaries, normalized peak rates & operator day notes | Runs automatically at 01:00 AM before nightly retention cleanups; preserves fleet statistics, dual incident metrics, and human notes in Markdown forever. |
+| **Permanent Operational Reports (`/reports`)** | Compiles daily executive summaries, server traffic & auth distribution, normalized peak rates & operator day notes | Runs automatically at 01:00 AM before nightly retention cleanups; preserves fleet statistics, dual incident metrics, and human notes in Markdown forever. |
 
 ---
 
