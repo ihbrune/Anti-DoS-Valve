@@ -420,3 +420,4 @@ If running ad-hoc analytical queries on large standalone databases, ensure the f
 * `client_subnet_rollups(client_type, blocked_requests)`: Optimizes false-positive and crawler detection.
 * `client_subnet_rollups(bucket_start, server_id, valve_name)`: Powers dashboard timeline slicing.
 * `subnet_profiles(surge_detected, surge_multiplier_24h)`: Powers the Surge Radar table.
+
