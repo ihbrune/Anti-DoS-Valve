@@ -127,7 +127,9 @@ It provides:
 
 ## Request Evaluation Pipeline
 
-When an incoming HTTP request reaches the valve, it is evaluated sequentially through the following decision pipeline:
+When an incoming HTTP request reaches the valve, it is processed in two distinct phases: **Ingress Evaluation (Pre-Processing & Access Decision)** and **Egress Inspection (Post-Processing & Session Learning)**.
+
+### Phase 1: Ingress Evaluation (Pre-Processing)
 
 0. **Internal Status Endpoint (`statusUri`)**: Does the request URI match the configured `statusUri`?
    * **Yes**: The request is intercepted **immediately** by the valve and never reaches the web application or downstream valves:
@@ -138,6 +140,10 @@ When an incoming HTTP request reaches the valve, it is evaluated sequentially th
      * Request execution finishes here (`return`).
    * **No**: The request continues down the standard pipeline below.
 
+0.1. **Visitor & Authentication Context Lookup**:
+   * **Visitor Cookie (`visitorCookieEnabled="true"`)**: If an upstream Valve hasn't already validated the visitor token, the Valve checks for the presence and validity of the visitor cookie (`_adv`). It attaches `org.henbru.antidos.RETURNING_VISITOR` and `org.henbru.antidos.VISITOR_CONTEXT` request attributes for all downstream components.
+   * **Authentication Session Tracking (`authTrackingMode="COOKIE"`)**: If an upstream Valve hasn't already checked authentication, the Valve extracts `authCookieName` from incoming `Cookie` headers and checks if its salted 64-bit hash exists in the server-wide `AntiDoSAuthSessionCache`. It attaches `org.henbru.antidos.AUTHENTICATED` (`true`/`false`) as a request attribute.
+
 1. **Static Blacklist (`alwaysForbiddenIPs`)**: Does the client IP address match the regular expression pattern? &rarr; **Block (HTTP error code)**.  
    *(Evaluated directly on the individual client IP address string; request is not counted in the dynamic rate monitor).*
 2. **Static Whitelist (`alwaysAllowedIPs`)**: Does the client IP address match the regular expression pattern? &rarr; **Allow**.  
@@ -145,10 +151,26 @@ When an incoming HTTP request reaches the valve, it is evaluated sequentially th
 3. **Path Whitelist (`nonRelevantPaths`)**: Does the request URI match `nonRelevantPaths`? &rarr; **Allow**.  
    *(Evaluated before `relevantPaths`; request is not counted; bypasses rate limiting for health-checks or static error pages even if the client IP or its subnet is currently blocked).*
 4. **Detector Match (`relevantPaths`)**: Does the request URI match `relevantPaths`?
-   * **Yes**: The client IP is resolved to a counter key — either the **individual IP address** or the **aggregated CIDR subnet** (if `ipv4SubnetMask` or `ipv6SubnetMask` is configured). The request is registered and counted in the rate limiting monitor. If the threshold for this counter key is exceeded (or already locked) &rarr; **Block**; otherwise &rarr; **Allow**.
+   * **Yes**: The client IP is resolved to a counter key — either the **individual IP address** or the **aggregated CIDR subnet** (if `ipv4SubnetMask` or `ipv6SubnetMask` is configured). The request is registered and counted in the rate limiting monitor (tracking returning-visitor and authenticated status). If the threshold for this counter key is exceeded (or already locked) &rarr; **Block**; otherwise &rarr; **Allow**.
 5. **Server-Wide Enforcement (`serverWideBlocking`)**: If the URI does *not* match `relevantPaths`, but `serverWideBlocking="true"` is enabled:
    * Is the client IP address (or its aggregated subnet) currently blocked by the monitor? &rarr; **Block** (read-only check; the request is not counted and creates no cache entries).
 6. **Default / Unmonitored**: If the URI does *not* match `relevantPaths` and the client IP address (or its subnet) is not blocked &rarr; **Allow** (neither counted nor blocked).
+
+### Phase 2: Downstream Execution & Egress Inspection (Post-Processing)
+
+If the request is allowed (or if the Valve runs in `simulationMode="true"`):
+1. **Downstream Forwarding**: The request is passed to the next component in Tomcat's pipeline via `getNext().invoke(request, response)`.
+2. **Visitor Cookie Emission**: If the visitor token was missing or nearing expiration, a refreshed `Set-Cookie` header is appended to the response.
+3. **Login Session Learning (`authLoginPaths`)**:
+   When `authTrackingMode="COOKIE"` is enabled, the Valve inspects outgoing responses from the web application:
+   * **Endpoint Filter (`authLoginPaths`)**: Does the request URI match the configured `authLoginPaths` regex (e.g. `^/trust$`)?
+   * **HTTP Status Check**: Did the application respond successfully (`200 <= status < 400`, including redirects)?
+   * **Session Registration**: If the response contains a `Set-Cookie` header matching `authCookieName` (e.g. `AUTH_COOKIE`), the Valve computes its salted 64-bit hash and registers it in `AntiDoSAuthSessionCache`. If `Max-Age` is specified, it sets the session lifetime accordingly (or purges the session if `Max-Age <= 0`).
+
+> [!NOTE]
+> **Interplay between `authLoginPaths`, `nonRelevantPaths`, and `relevantPaths`:**
+> * **When `authLoginPaths` matches `nonRelevantPaths`**: Authentication callbacks (e.g. `/trust`) bypass DoS rate-limiting counters completely, preventing legitimate SSO login roundtrips from being accidentally blocked. When the backend completes the handshake and issues the cookie, the Valve **still inspects the response and registers the session**.
+> * **When `authLoginPaths` matches `relevantPaths`**: Authentication endpoints are counted against the Valve's rate-limiting threshold (useful to protect standard password login forms against brute-force or credential stuffing attacks). If a client is blocked (HTTP 429), the request is halted before reaching the backend and no session cookie is registered.
 
 ### Scope: Individual IP Address vs. Subnet Aggregation
 
