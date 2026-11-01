@@ -161,6 +161,7 @@ public class AnalyticsService {
 			scatterPoints.add(new SubnetScatterPoint(
 					c.subnetGroup(),
 					distinctClients,
+					c.distinctUserAgents(),
 					avgReqs,
 					c.totalRequests(),
 					c.blockedRequests(),

@@ -66,6 +66,12 @@ public class SubnetRollupRepository {
 		} catch (SQLException ignored) {
 		}
 
+		int distinctUas = 0;
+		try {
+			distinctUas = rs.getInt("distinct_user_agents");
+		} catch (SQLException ignored) {
+		}
+
 		return new ClientSubnetRollup(
 				rs.getLong("id"),
 				rs.getTimestamp("bucket_start").toInstant(),
@@ -79,6 +85,7 @@ public class SubnetRollupRepository {
 				rs.getLong("blocked_requests"),
 				markedRequests,
 				rs.getInt("distinct_clients"),
+				distinctUas,
 				rs.getInt("min_requests_per_client"),
 				rs.getInt("max_requests_per_client"),
 				rs.getInt("slots_active_count"),
@@ -103,11 +110,11 @@ public class SubnetRollupRepository {
 				INSERT INTO client_subnet_rollups (
 				    bucket_start, bucket_end, bucket_minutes, server_id, valve_name, subnet_group,
 				    total_requests, active_requests, blocked_requests, marked_requests, distinct_clients,
-				    min_requests_per_client, max_requests_per_client, slots_active_count,
+				    distinct_user_agents, min_requests_per_client, max_requests_per_client, slots_active_count,
 				    asn, as_org, country_code, client_type,
 				    returning_requests, returning_tracked_requests,
 				    authenticated_requests, authenticated_tracked_requests
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (bucket_start, server_id, valve_name, subnet_group) DO UPDATE SET
 				    bucket_end = EXCLUDED.bucket_end,
 				    bucket_minutes = EXCLUDED.bucket_minutes,
@@ -116,6 +123,7 @@ public class SubnetRollupRepository {
 				    blocked_requests = EXCLUDED.blocked_requests,
 				    marked_requests = EXCLUDED.marked_requests,
 				    distinct_clients = EXCLUDED.distinct_clients,
+				    distinct_user_agents = EXCLUDED.distinct_user_agents,
 				    min_requests_per_client = EXCLUDED.min_requests_per_client,
 				    max_requests_per_client = EXCLUDED.max_requests_per_client,
 				    slots_active_count = EXCLUDED.slots_active_count,
@@ -144,22 +152,23 @@ public class SubnetRollupRepository {
 				ps.setLong(9, r.blockedRequests());
 				ps.setLong(10, r.markedRequests());
 				ps.setInt(11, r.distinctClients());
-				ps.setInt(12, r.minRequestsPerClient());
-				ps.setInt(13, r.maxRequestsPerClient());
-				ps.setInt(14, r.slotsActiveCount());
+				ps.setInt(12, r.distinctUserAgents());
+				ps.setInt(13, r.minRequestsPerClient());
+				ps.setInt(14, r.maxRequestsPerClient());
+				ps.setInt(15, r.slotsActiveCount());
 
 				if (r.asn() != null) {
-					ps.setLong(15, r.asn());
+					ps.setLong(16, r.asn());
 				} else {
-					ps.setNull(15, Types.BIGINT);
+					ps.setNull(16, Types.BIGINT);
 				}
-				ps.setString(16, r.asOrg());
-				ps.setString(17, r.countryCode());
-				ps.setString(18, r.clientType() != null ? r.clientType().name() : ClientType.UNKNOWN.name());
-				ps.setLong(19, r.returningRequests());
-				ps.setLong(20, r.returningTrackedRequests());
-				ps.setLong(21, r.authenticatedRequests());
-				ps.setLong(22, r.authenticatedTrackedRequests());
+				ps.setString(17, r.asOrg());
+				ps.setString(18, r.countryCode());
+				ps.setString(19, r.clientType() != null ? r.clientType().name() : ClientType.UNKNOWN.name());
+				ps.setLong(20, r.returningRequests());
+				ps.setLong(21, r.returningTrackedRequests());
+				ps.setLong(22, r.authenticatedRequests());
+				ps.setLong(23, r.authenticatedTrackedRequests());
 			}
 
 			@Override
@@ -342,6 +351,7 @@ public class SubnetRollupRepository {
 			long blockedRequests,
 			long markedRequests,
 			int distinctClients,
+			int distinctUserAgents,
 			Long asn,
 			String asOrg,
 			String countryCode,
@@ -361,7 +371,7 @@ public class SubnetRollupRepository {
 				ClientType clientType
 		) {
 			this(subnetGroup, totalRequests, activeRequests, blockedRequests, 0L,
-					distinctClients, asn, asOrg, countryCode, clientType, 0L, 0L);
+					distinctClients, 0, asn, asOrg, countryCode, clientType, 0L, 0L);
 		}
 
 		public Double returningRatio() {
@@ -386,6 +396,7 @@ public class SubnetRollupRepository {
 				    SUM(blocked_requests) AS blocked_reqs,
 				    SUM(COALESCE(marked_requests, 0)) AS marked_reqs,
 				    MAX(distinct_clients) AS max_distinct_clients,
+				    MAX(COALESCE(distinct_user_agents, 0)) AS max_distinct_uas,
 				    MAX(asn) AS asn,
 				    MAX(as_org) AS as_org,
 				    MAX(country_code) AS country_code,
@@ -412,6 +423,7 @@ public class SubnetRollupRepository {
 					rs.getLong("blocked_reqs"),
 					rs.getLong("marked_reqs"),
 					rs.getInt("max_distinct_clients"),
+					rs.getInt("max_distinct_uas"),
 					asnVal,
 					rs.getString("as_org"),
 					rs.getString("country_code"),

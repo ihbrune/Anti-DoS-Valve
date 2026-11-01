@@ -163,6 +163,13 @@
                         <div style="font-size: 11px; color: var(--text-muted);">
                             Avg <strong th:text="${#numbers.formatDecimal(p.averageRequestsPerClient24h(), 1, 1)}">1.8</strong> req/IP
                         </div>
+                        <div th:if="${p.last24hDistinctUserAgents() > 0}" style="font-size: 11px; margin-top: 2px;">
+                            <span class="badge" th:classappend="${p.last24hDistinctClients() >= 5 and p.last24hDistinctUserAgents() == 1 ? 'badge-danger' : 'badge-secondary'}"
+                                  style="font-size: 10px; padding: 1px 5px;"
+                                  th:title="'User-Agent Diversity: ' + ${p.last24hDistinctUserAgents()} + ' distinct UA signature' + (${p.last24hDistinctUserAgents() == 1} ? '' : 's') + ' across ' + ${p.last24hDistinctClients()} + ' IPs'">
+                                <span th:text="${p.last24hDistinctUserAgents()} + ' UA' + (${p.last24hDistinctUserAgents() == 1} ? '' : 's')"></span>
+                            </span>
+                        </div>
                     </td>
 
                     <!-- 7. Surge Multiplier & Threat Forensics -->

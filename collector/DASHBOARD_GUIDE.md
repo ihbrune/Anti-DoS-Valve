@@ -212,10 +212,13 @@ The Scatterplot solves this by mapping traffic aggregated across enclosing **Sub
 
 #### Operator Forensic Notes & Verdict Recognition:
 * **Visual Bubble Outlines:** Any cluster bubble whose Subnet or enclosing Autonomous System has an active operator note in the Forensic Memory is styled with a prominent, thickened border colored according to its verdict (e.g., 🔴 Malicious `#f43f5e`, 🟡 Suspicious `#f59e0b`, 🟢 Legitimate `#10b981`, 🔵 Internal `#38bdf8`, ⚪ Info `#94a3b8`).
-* **Enhanced Hover Popup (Tooltips):** Hovering over any cluster circle displays full note forensics directly in the Chart.js popup:
+* **Enhanced Hover Popup (Tooltips):** Hovering over any cluster circle displays full note forensics and diversity metrics directly in the Chart.js popup:
   * Title indicator displaying the effective verdict badge (e.g. `Subnet: 185.246.221.0/24 🟡 [Suspicious]`).
   * Subnet note line with verdict icon, categorization name, and excerpt (e.g. `📝 Subnet Note: 🟡 Suspicious - "Known residential proxy egress block"`).
   * ASN note line with verdict icon, categorization name, and excerpt (e.g. `📝 ASN Note (AS3320): 🟢 Legitimate - "Major German ISP"`).
+  * **Distinct IPs in Subnet (X) & Ø Requests / IP (Y):** Exact coordinate metrics reflecting cluster footprint width and individual intensity.
+  * **Distinct User-Agents:** Number of unique User-Agent signatures observed within the subnet (tracked via an allocation-free 64-bit probabilistic hash bitmask in the Valve). A wide client IP footprint with `Distinct User-Agents: 1` strongly corroborates a synchronized botnet monoculture.
+  * Total request volume, blocked count, block rate percentage, and visitor cookie retention ratio.
 
 #### Subnet Cluster Forensics Table & Quick Filters:
 Positioned directly beneath the scatter canvas, this interactive breakdown table transforms visual patterns into actionable operational data:
@@ -342,6 +345,7 @@ Operators can toggle how offending entities are prioritized and sorted:
   * IPv4 addresses are grouped into standard **`/24` subnets** (256 addresses).
   * IPv6 addresses are grouped into **`/64` subscriber blocks**.
   * **Why Subnet Rollup is essential:** Modern botnets rotate between dozens or hundreds of sequential IP addresses within the same cloud or residential subnet. Individual IP counters stay below rate-limit thresholds, but Subnet Rollup instantly reveals the cluster.
+  * **User-Agent Diversity Tracking (`X UAs`):** Displays the count of distinct User-Agent signatures observed within the subnet alongside the distinct client IP count. When $\ge 5$ distinct client IPs are active but only **1 distinct User-Agent signature** was recorded, a vivid red danger badge (`badge-danger`) highlights the cluster as a **Botnet Monoculture**, exposing distributed scraping or credential stuffing campaigns where an identical User-Agent header is shared across rotating residential IP addresses.
   * Displays real-time baseline badges (`⚡ Surge`, `💤 Dormancy Break`, `✨ New`) if historical profiles have been calculated.
 * **Subnet Baselines & Surge Radar Mode (`groupBy=PROFILES`):**
   A high-performance state table evaluating long-term subnet behavior against recent traffic:
@@ -412,7 +416,9 @@ Every record in the table presents its metrics with full mathematical transparen
   $$\text{Baseline} = \frac{\sum \text{Requests}_{\text{prior}}}{N_{\text{days}}}$$
   Where $N_{\text{days}} = \min(29.0, \max(1.0, \text{Available Prior Days}))$. On fresh installations or recently added subnets, $N_{\text{days}}$ scales dynamically with elapsed time rather than assuming a rigid 29-day lookback (see *Dynamic Baseline Calibration* below).
 * **Last 24h Activity (Cutoff: HH:mm):** Total requests, hard rate-limiting blocks, and soft-marked requests during the current 24-hour window (calculated up to the latest completed rollup hour), supplemented by the sample-size-weighted 24h returning visitor cookie badge (`🍪 X%`) and authenticated badge (`🔐 Y%`) when visitor tracking is active.
-* **24h Unique IPs & Spread:** Distinct client IP count and the average requests per IP ($\frac{\text{Requests}_{24\text{h}}}{\text{IPs}_{24\text{h}}}$).
+* **24h Unique IPs & Spread:** Distinct client IP count and the average requests per IP ($\frac{\text{Requests}_{24\text{h}}}{\text{IPs}_{24\text{h}}}$), supplemented by the **User-Agent Diversity badge**:
+  * **Diverse Mix (`X UAs`):** Displays a neutral grey badge (e.g. `14 UAs`) confirming healthy browser diversity across Chrome, Firefox, Safari, Edge, and mobile WebKit clients typical of authentic end-user subnets.
+  * **Botnet Monoculture Warning (`1 UA` in Red):** Highlighted with a vivid red danger badge (`badge-danger`) when $\ge 5$ distinct client IPs are active but only **1 distinct User-Agent signature** was detected across all 24h traffic buckets. This is a critical indicator of synchronized residential proxy swarms where hundreds of hijacked devices execute scripted HTTP requests using a static User-Agent header.
 * **Surge Multiplier & Threat Forensics:**
   * **Surge Badge:** $\text{Surge} = \frac{\text{Requests}_{24\text{h}}}{\text{Baseline}}$. Formatted with clear danger/warning colors (e.g., `⚡ 25.0x Surge` for extreme spikes $\ge 10\times$, `⚡ 6.2x Surge` for moderate surges $\ge 3\times$). Tooltips explicitly show the formula calculation: `24h volume (5000) is 25.0x above 30-day baseline average (200.0/day)`.
   * **De Minimis Threshold (Low Volume Surge):** When a subnet's relative traffic spikes $\ge 3\times$ but total 24-hour requests remain below the de minimis threshold (default: 1,000 req/24h, configurable via `collector.surge-min-requests`), a subdued grey badge (`8.5x (Low Vol)`) is displayed instead of a critical red alarm. This prevents low-traffic background noise (e.g., 5 requests today vs. 0.05 daily average = 100x surge) from overwhelming security dashboards.

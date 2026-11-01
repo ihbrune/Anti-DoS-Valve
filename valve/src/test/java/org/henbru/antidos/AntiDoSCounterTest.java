@@ -126,4 +126,37 @@ class AntiDoSCounterTest {
 		assertFalse(sample.userAgent().contains("\n"));
 		assertFalse(sample.userAgent().contains("\u0000"));
 	}
+
+	@Test
+	void testUserAgentCardinalityTracking() {
+		AntiDoSCounter counter = new AntiDoSCounter();
+		assertFalse(counter.hasUserAgentTracker());
+		assertEquals(0, counter.getDistinctUserAgents());
+		assertEquals(0L, counter.getUaCardinalityBits());
+
+		// Register single User-Agent
+		counter.registerUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+		assertTrue(counter.hasUserAgentTracker());
+		assertEquals(1, counter.getDistinctUserAgents());
+		long firstBits = counter.getUaCardinalityBits();
+		assertTrue(firstBits != 0L);
+
+		// Register same User-Agent again (idempotent, distinct count unchanged)
+		counter.registerUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+		assertEquals(1, counter.getDistinctUserAgents());
+		assertEquals(firstBits, counter.getUaCardinalityBits());
+
+		// Register multiple distinct User-Agents
+		counter.registerUserAgent("curl/7.88.1");
+		counter.registerUserAgent("python-requests/2.31.0");
+		counter.registerUserAgent("Googlebot/2.1");
+		assertTrue(counter.getDistinctUserAgents() >= 2);
+		assertTrue(counter.getDistinctUserAgents() <= 4);
+
+		// Test merging bits
+		AntiDoSCounter other = new AntiDoSCounter();
+		other.registerUserAgent("Custom-Scanner/1.0");
+		counter.mergeUaCardinalityBits(other.getUaCardinalityBits());
+		assertTrue(counter.getDistinctUserAgents() >= other.getDistinctUserAgents());
+	}
 }

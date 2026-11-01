@@ -803,6 +803,17 @@ public class DemoDataSeeder {
 				}
 			}
 		}
+		Integer distinctUserAgents = null;
+		if (distinctClients > 1) {
+			// Residential proxy botnets exhibit low UA diversity (monokultur = 1)
+			if (ip.startsWith("185.246.221.") || ip.startsWith("73.15.20.")) {
+				distinctUserAgents = 1;
+			} else {
+				// Legitimate multi-user human subnet traffic has diverse browser signatures
+				distinctUserAgents = Math.min(distinctClients, Math.max(2, distinctClients / 3));
+			}
+		}
+
 		return new ClientEvent(
 				null, serverId, valveName, slotKey, slotTime,
 				ip, net.version(), net.prefix(), net.v4Start(), net.v4End(),
@@ -813,6 +824,7 @@ public class DemoDataSeeder {
 				asn, asOrg, country, type, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED,
 				null,
 				Math.max(1, distinctClients),
+				distinctUserAgents,
 				returningCount, authenticatedCount,
 				sampleMethod, sampleUri, sampleUserAgent
 		);

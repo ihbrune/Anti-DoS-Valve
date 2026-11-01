@@ -505,6 +505,9 @@
                                     `Total Requests: ${pt.totalRequests.toLocaleString()}`,
                                     `Blocked (429): ${pt.blockedRequests.toLocaleString()} (${blkPct}%)`
                                 );
+                                if (pt.distinctUserAgents && pt.distinctUserAgents > 0) {
+                                    lines.push(`Distinct User-Agents: ${pt.distinctUserAgents}`);
+                                }
                                 if (pt.markedRequests && pt.markedRequests > 0) {
                                     lines.push(`Marked / Simulated: ${pt.markedRequests.toLocaleString()}`);
                                 }

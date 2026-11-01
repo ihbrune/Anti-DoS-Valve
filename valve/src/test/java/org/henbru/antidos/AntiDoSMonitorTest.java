@@ -364,5 +364,21 @@ class AntiDoSMonitorTest {
 		assertThrows(IllegalArgumentException.class, () ->
 				new AntiDoSMonitor("FAIL_TEST", 10, 5, 30, -1, 0f));
 	}
+
+	@Test
+	void testRegisterAndCheckRequestWithUserAgentTracking() {
+		AntiDoSMonitor mon = new AntiDoSMonitor("UA_TEST", 10, 5, 30, 10, 0f);
+		byte[] ipv4 = new byte[] { (byte) 198, 51, 100, 1 };
+
+		mon.registerAndCheckRequest("198.51.100.0/24", "198.51.100.1", ipv4, true, 24, 128, false, false, "Mozilla/5.0 Chrome/120");
+		mon.registerAndCheckRequest("198.51.100.0/24", "198.51.100.2", new byte[] { (byte) 198, 51, 100, 2 }, true, 24, 128, false, false, "curl/8.4.0");
+
+		AntiDoSCounter counter = mon.provideCurrentCounter("198.51.100.0/24");
+		assertNotNull(counter);
+		assertTrue(counter.hasCardinalityTracker());
+		assertEquals(2, counter.getDistinctClients());
+		assertTrue(counter.hasUserAgentTracker());
+		assertTrue(counter.getDistinctUserAgents() >= 1);
+	}
 }
 

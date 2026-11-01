@@ -30,6 +30,7 @@ package org.henbru.antidos.collector.model;
 public record SubnetScatterPoint(
 		String subnetGroup,
 		int distinctClients,
+		int distinctUserAgents,
 		double averageRequestsPerClient,
 		long totalRequests,
 		long blockedRequests,
@@ -60,6 +61,39 @@ public record SubnetScatterPoint(
 			double averageRequestsPerClient,
 			long totalRequests,
 			long blockedRequests,
+			long markedRequests,
+			boolean isPotentialResidentialProxy,
+			Long asn,
+			String asOrg,
+			String countryCode,
+			ClientType clientType,
+			String classification,
+			boolean hasNote,
+			String noteVerdict,
+			String noteVerdictIcon,
+			String noteVerdictDisplayName,
+			String noteVerdictColor,
+			String noteSnippet,
+			String subnetNoteVerdict,
+			String subnetNoteIcon,
+			String subnetNoteSnippet,
+			String asnNoteVerdict,
+			String asnNoteIcon,
+			String asnNoteSnippet,
+			Double returningRatio
+	) {
+		this(subnetGroup, distinctClients, 0, averageRequestsPerClient, totalRequests, blockedRequests, markedRequests,
+				isPotentialResidentialProxy, asn, asOrg, countryCode, clientType, classification,
+				hasNote, noteVerdict, noteVerdictIcon, noteVerdictDisplayName, noteVerdictColor, noteSnippet,
+				subnetNoteVerdict, subnetNoteIcon, subnetNoteSnippet, asnNoteVerdict, asnNoteIcon, asnNoteSnippet, returningRatio);
+	}
+
+	public SubnetScatterPoint(
+			String subnetGroup,
+			int distinctClients,
+			double averageRequestsPerClient,
+			long totalRequests,
+			long blockedRequests,
 			boolean isPotentialResidentialProxy,
 			Long asn,
 			String asOrg,
@@ -79,7 +113,7 @@ public record SubnetScatterPoint(
 			String asnNoteIcon,
 			String asnNoteSnippet
 	) {
-		this(subnetGroup, distinctClients, averageRequestsPerClient, totalRequests, blockedRequests, 0L,
+		this(subnetGroup, distinctClients, 0, averageRequestsPerClient, totalRequests, blockedRequests, 0L,
 				isPotentialResidentialProxy, asn, asOrg, countryCode, clientType, classification,
 				hasNote, noteVerdict, noteVerdictIcon, noteVerdictDisplayName, noteVerdictColor, noteSnippet,
 				subnetNoteVerdict, subnetNoteIcon, subnetNoteSnippet, asnNoteVerdict, asnNoteIcon, asnNoteSnippet, null);
@@ -98,7 +132,7 @@ public record SubnetScatterPoint(
 			ClientType clientType,
 			String classification
 	) {
-		this(subnetGroup, distinctClients, averageRequestsPerClient, totalRequests, blockedRequests, 0L,
+		this(subnetGroup, distinctClients, 0, averageRequestsPerClient, totalRequests, blockedRequests, 0L,
 				isPotentialResidentialProxy, asn, asOrg, countryCode, clientType, classification,
 				false, null, null, null, null, null, null, null, null, null, null, null, null);
 	}

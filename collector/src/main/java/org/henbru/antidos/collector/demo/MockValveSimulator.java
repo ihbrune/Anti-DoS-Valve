@@ -705,27 +705,29 @@ public class MockValveSimulator {
 		// Baseline aggregated /24 subnet exceeding threshold (legitimate heavy traffic with ~82% cookies and ~68% authenticated sessions)
 		int req1 = 320 + rnd.nextInt(90);
 		blocked.add(new ValveDetailsDto.BlockedClientDto(
-				"198.51.100.0/24", req1, 0, req1, true, lastUpdate, 24 + rnd.nextInt(8), (int) (req1 * 0.82), (int) (req1 * 0.68)
+				"198.51.100.0/24", req1, 0, req1, true, lastUpdate, 24 + rnd.nextInt(8), 12 + rnd.nextInt(4), (int) (req1 * 0.82), (int) (req1 * 0.68),
+				null, null, null
 		));
 		if (slotKey % 2 == 0) {
-			// Residential proxy swarm cluster: 260 reqs spread across 75-90 distinct client IPs (~3.2 reqs/IP) - 0% cookies & 0% auth!
+			// Residential proxy swarm cluster: 260 reqs spread across 75-90 distinct client IPs (~3.2 reqs/IP) - monokultur: 1 distinct UA!
 			int req2 = 260 + rnd.nextInt(70);
 			blocked.add(new ValveDetailsDto.BlockedClientDto(
-					"185.246.221.0/24", req2, 0, req2, false, lastUpdate, 82 + rnd.nextInt(8), 0, 0,
+					"185.246.221.0/24", req2, 0, req2, false, lastUpdate, 82 + rnd.nextInt(8), 1, 0, 0,
 					"POST", "/api/v1/auth/token", "python-urllib3/2.0.7"
 			));
 		}
 		if (slotKey % 3 == 0) {
-			// Comcast residential proxy swarm: 180 reqs spread across 90-100 distinct client IPs (~1.9 reqs/IP)
+			// Comcast residential proxy swarm: 180 reqs spread across 90-100 distinct client IPs (~1.9 reqs/IP) - monokultur: 1 distinct UA!
 			int reqComcast = 180 + rnd.nextInt(40);
 			blocked.add(new ValveDetailsDto.BlockedClientDto(
-					"73.15.20.0/24", reqComcast, 0, reqComcast, false, lastUpdate, 96 + rnd.nextInt(6), 0, 0
+					"73.15.20.0/24", reqComcast, 0, reqComcast, false, lastUpdate, 96 + rnd.nextInt(6), 1, 0, 0,
+					null, null, null
 			));
 		}
 		if (slotKey % 5 == 0) {
 			int req3 = 290 + rnd.nextInt(80);
 			blocked.add(new ValveDetailsDto.BlockedClientDto(
-					"45.154.255.0/24", req3, 0, req3, true, lastUpdate, 34 + rnd.nextInt(8), 0, 0,
+					"45.154.255.0/24", req3, 0, req3, true, lastUpdate, 34 + rnd.nextInt(8), 1, 0, 0,
 					"POST", "/wp-login.php", "Mozilla/5.0 (X11; Ubuntu; Linux x86_64)"
 			));
 		}

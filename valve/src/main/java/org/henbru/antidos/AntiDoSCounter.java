@@ -37,6 +37,7 @@ public class AntiDoSCounter {
 	private static final VarHandle CARDINALITY_TRACKER;
 	private static final VarHandle RETURNING_COUNT;
 	private static final VarHandle AUTHENTICATED_COUNT;
+	private static final VarHandle UA_CARDINALITY_BITS;
 	private static final VarHandle SAMPLE_REQUEST;
 
 	/**
@@ -54,6 +55,7 @@ public class AntiDoSCounter {
 			CARDINALITY_TRACKER = l.findVarHandle(AntiDoSCounter.class, "cardinalityTracker", AntiDoSCardinalityBitSet.class);
 			RETURNING_COUNT = l.findVarHandle(AntiDoSCounter.class, "returningCount", int.class);
 			AUTHENTICATED_COUNT = l.findVarHandle(AntiDoSCounter.class, "authenticatedCount", int.class);
+			UA_CARDINALITY_BITS = l.findVarHandle(AntiDoSCounter.class, "uaCardinalityBits", long.class);
 			SAMPLE_REQUEST = l.findVarHandle(AntiDoSCounter.class, "sampleRequest", SampleRequest.class);
 		} catch (ReflectiveOperationException e) {
 			throw new ExceptionInInitializerError(e);
@@ -67,6 +69,7 @@ public class AntiDoSCounter {
 	private volatile AntiDoSCardinalityBitSet cardinalityTracker = null;
 	private volatile int returningCount = 0;
 	private volatile int authenticatedCount = 0;
+	private volatile long uaCardinalityBits = 0L;
 	private volatile SampleRequest sampleRequest = null;
 
 	/**
@@ -291,6 +294,86 @@ public class AntiDoSCounter {
 	 */
 	public boolean hasCardinalityTracker() {
 		return this.cardinalityTracker != null;
+	}
+
+	/**
+	 * Computes a fast, allocation-free 64-bit hash of a User-Agent string using SplitMix64 constants.
+	 *
+	 * @param ua The User-Agent string
+	 * @return 64-bit hash
+	 */
+	public static long computeUserAgentHash(String ua) {
+		if (ua == null || ua.isEmpty()) {
+			return 0L;
+		}
+		int len = ua.length();
+		long h = 0x9E3779B97F4A7C15L ^ (len * 0xBF58476D1CE4E5B9L);
+		for (int i = 0; i < len; i++) {
+			h ^= ua.charAt(i);
+			h *= 0xBF58476D1CE4E5B9L;
+			h ^= (h >>> 31);
+		}
+		h = (h ^ (h >>> 30)) * 0xBF58476D1CE4E5B9L;
+		h = (h ^ (h >>> 27)) * 0x94D049BB133111EBL;
+		long res = h ^ (h >>> 31);
+		return res == 0L ? 1L : res;
+	}
+
+	/**
+	 * Registers a User-Agent header into the primitive 64-bit diversity bitset using the
+	 * allocation-free 64-bit hash from {@link #computeUserAgentHash(String)}.
+	 *
+	 * @param userAgent The raw User-Agent header string (may be null or empty)
+	 */
+	public void registerUserAgent(String userAgent) {
+		long hash = computeUserAgentHash(userAgent);
+		int bitIndex = (hash == 0L) ? 0 : (int) (hash & 63L);
+		long mask = 1L << bitIndex;
+		if ((this.uaCardinalityBits & mask) == 0L) {
+			UA_CARDINALITY_BITS.getAndBitwiseOr(this, mask);
+		}
+	}
+
+	/**
+	 * @return The number of distinct User-Agent signatures (1..64) observed for this counter,
+	 *         or 0 if User-Agent diversity tracking was not active.
+	 */
+	public int getDistinctUserAgents() {
+		return Long.bitCount(this.uaCardinalityBits);
+	}
+
+	/**
+	 * @return true if User-Agent diversity tracking was active and has recorded at least one bit.
+	 */
+	public boolean hasUserAgentTracker() {
+		return this.uaCardinalityBits != 0L;
+	}
+
+	/**
+	 * @return The raw 64-bit User-Agent diversity bitmask.
+	 */
+	public long getUaCardinalityBits() {
+		return this.uaCardinalityBits;
+	}
+
+	/**
+	 * Directly sets the 64-bit User-Agent diversity bitmask (e.g. for merging or testing).
+	 *
+	 * @param bits The 64-bit mask
+	 */
+	public void setUaCardinalityBits(long bits) {
+		UA_CARDINALITY_BITS.setVolatile(this, bits);
+	}
+
+	/**
+	 * Atomically bitwise-ORs the given 64-bit User-Agent diversity bitmask into this counter.
+	 *
+	 * @param bits The 64-bit mask to merge
+	 */
+	public void mergeUaCardinalityBits(long bits) {
+		if (bits != 0L && (this.uaCardinalityBits & bits) != bits) {
+			UA_CARDINALITY_BITS.getAndBitwiseOr(this, bits);
+		}
 	}
 
 	/**

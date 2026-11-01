@@ -94,6 +94,21 @@ public class ClientEventRepository {
 		} catch (SQLException ignored) {
 		}
 
+		Integer distinctUserAgents = null;
+		try {
+			int val = rs.getInt("distinct_user_agents");
+			if (!rs.wasNull()) {
+				distinctUserAgents = val;
+			}
+		} catch (SQLException ignored) {
+		}
+
+		Integer distinctUserAgents = null;
+		try {
+			distinctUserAgents = rs.getObject("distinct_user_agents") != null ? rs.getInt("distinct_user_agents") : null;
+		} catch (SQLException ignored) {
+		}
+
 		String sampleMethod = null;
 		String sampleUri = null;
 		String sampleUserAgent = null;
@@ -131,6 +146,7 @@ public class ClientEventRepository {
 				enrichmentStatus,
 				entityId,
 				getDistinctClientsFromResultSet(rs),
+				distinctUserAgents,
 				returningCount,
 				authenticatedCount,
 				sampleMethod,
@@ -228,10 +244,10 @@ public class ClientEventRepository {
 				    ip_version, cidr_prefix, ip_v4_start, ip_v4_end, ip_v6_start, ip_v6_end, subnet_group,
 				    request_count, retained_count, is_locked, status, is_completed, last_updated_at,
 				    asn, as_org, country_code, client_type, enrichment_status, entity_id, distinct_clients,
-				    returning_count, authenticated_count,
+				    distinct_user_agents, returning_count, authenticated_count,
 				    sample_method, sample_uri, sample_user_agent
 				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (server_id, valve_name, slot_key, client_key) DO UPDATE SET
 				    slot_time = EXCLUDED.slot_time,
 				    ip_version = EXCLUDED.ip_version,
@@ -248,6 +264,7 @@ public class ClientEventRepository {
 				    is_completed = EXCLUDED.is_completed,
 				    last_updated_at = EXCLUDED.last_updated_at,
 				    distinct_clients = EXCLUDED.distinct_clients,
+				    distinct_user_agents = EXCLUDED.distinct_user_agents,
 				    returning_count = EXCLUDED.returning_count,
 				    authenticated_count = EXCLUDED.authenticated_count,
 				    sample_method = COALESCE(EXCLUDED.sample_method, client_events.sample_method),
@@ -306,19 +323,24 @@ public class ClientEventRepository {
 							ps.setNull(24, Types.BIGINT);
 						}
 						ps.setInt(25, Math.max(1, e.distinctClients()));
-						if (e.returningCount() != null) {
-							ps.setInt(26, e.returningCount());
+						if (e.distinctUserAgents() != null) {
+							ps.setInt(26, e.distinctUserAgents());
 						} else {
 							ps.setNull(26, Types.INTEGER);
 						}
-						if (e.authenticatedCount() != null) {
-							ps.setInt(27, e.authenticatedCount());
+						if (e.returningCount() != null) {
+							ps.setInt(27, e.returningCount());
 						} else {
 							ps.setNull(27, Types.INTEGER);
 						}
-						ps.setString(28, e.sampleMethod());
-						ps.setString(29, e.sampleUri());
-						ps.setString(30, e.sampleUserAgent());
+						if (e.authenticatedCount() != null) {
+							ps.setInt(28, e.authenticatedCount());
+						} else {
+							ps.setNull(28, Types.INTEGER);
+						}
+						ps.setString(29, e.sampleMethod());
+						ps.setString(30, e.sampleUri());
+						ps.setString(31, e.sampleUserAgent());
 					}
 
 					@Override

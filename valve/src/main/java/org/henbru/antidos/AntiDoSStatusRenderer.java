@@ -46,23 +46,28 @@ public class AntiDoSStatusRenderer {
 	}
 
 	static record CounterEntry(String key, int count, int retained, int effective, boolean locked, int distinctClients,
-			int returningCount, int authenticatedCount, AntiDoSCounter.SampleRequest sample)
+			int distinctUserAgents, int returningCount, int authenticatedCount, AntiDoSCounter.SampleRequest sample)
 			implements Comparable<CounterEntry> {
 		public CounterEntry(String key, int count, int retained, int effective, boolean locked, int distinctClients,
+				int returningCount, int authenticatedCount, AntiDoSCounter.SampleRequest sample) {
+			this(key, count, retained, effective, locked, distinctClients, -1, returningCount, authenticatedCount, sample);
+		}
+
+		public CounterEntry(String key, int count, int retained, int effective, boolean locked, int distinctClients,
 				int returningCount, AntiDoSCounter.SampleRequest sample) {
-			this(key, count, retained, effective, locked, distinctClients, returningCount, 0, sample);
+			this(key, count, retained, effective, locked, distinctClients, -1, returningCount, 0, sample);
 		}
 
 		public CounterEntry(String key, int count, int retained, int effective, boolean locked, int distinctClients, int returningCount) {
-			this(key, count, retained, effective, locked, distinctClients, returningCount, 0, null);
+			this(key, count, retained, effective, locked, distinctClients, -1, returningCount, 0, null);
 		}
 
 		public CounterEntry(String key, int count, int retained, int effective, boolean locked, int distinctClients) {
-			this(key, count, retained, effective, locked, distinctClients, 0, 0, null);
+			this(key, count, retained, effective, locked, distinctClients, -1, 0, 0, null);
 		}
 
 		public CounterEntry(String key, int count, int retained, int effective, boolean locked) {
-			this(key, count, retained, effective, locked, 1, 0, 0, null);
+			this(key, count, retained, effective, locked, 1, -1, 0, 0, null);
 		}
 
 		@Override
@@ -213,7 +218,8 @@ public class AntiDoSStatusRenderer {
 				int rawRetained = c.getRetainedCounts();
 				int retained = rawRetained > 0 ? rawRetained : 0;
 				int distinct = c.hasCardinalityTracker() ? c.getDistinctClients() : -1;
-				list.add(new CounterEntry(entry.getKey(), count, retained, count + retained, locked, distinct,
+				int distinctUas = c.hasUserAgentTracker() ? c.getDistinctUserAgents() : -1;
+				list.add(new CounterEntry(entry.getKey(), count, retained, count + retained, locked, distinct, distinctUas,
 						c.getReturningCount(), c.getAuthenticatedCount(), c.getSample()));
 			}
 			Collections.sort(list);
@@ -233,6 +239,7 @@ public class AntiDoSStatusRenderer {
 			int retained = rawRetained > 0 ? rawRetained : 0;
 			int effective = count + retained;
 			int distinct = c.hasCardinalityTracker() ? c.getDistinctClients() : -1;
+			int distinctUas = c.hasUserAgentTracker() ? c.getDistinctUserAgents() : -1;
 
 			if (minHeap.size() == limit) {
 				CounterEntry worst = minHeap.peek();
@@ -240,14 +247,14 @@ public class AntiDoSStatusRenderer {
 					continue;
 				}
 				CounterEntry candidate = new CounterEntry(entry.getKey(), count, retained, effective, locked, distinct,
-						c.getReturningCount(), c.getAuthenticatedCount(), c.getSample());
+						distinctUas, c.getReturningCount(), c.getAuthenticatedCount(), c.getSample());
 				if (candidate.compareTo(worst) < 0) {
 					minHeap.poll();
 					minHeap.offer(candidate);
 				}
 			} else {
 				minHeap.offer(new CounterEntry(entry.getKey(), count, retained, effective, locked, distinct,
-						c.getReturningCount(), c.getAuthenticatedCount(), c.getSample()));
+						distinctUas, c.getReturningCount(), c.getAuthenticatedCount(), c.getSample()));
 			}
 		}
 
@@ -283,8 +290,9 @@ public class AntiDoSStatusRenderer {
 				int effective = count + retained;
 				if (effective >= min) {
 					int distinct = c.hasCardinalityTracker() ? c.getDistinctClients() : -1;
+					int distinctUas = c.hasUserAgentTracker() ? c.getDistinctUserAgents() : -1;
 					list.add(new CounterEntry(entry.getKey(), count, retained, effective, locked, distinct,
-							c.getReturningCount(), c.getAuthenticatedCount(), c.getSample()));
+							distinctUas, c.getReturningCount(), c.getAuthenticatedCount(), c.getSample()));
 				}
 			}
 		}
@@ -1142,7 +1150,8 @@ public class AntiDoSStatusRenderer {
 			sb.append("  <table class=\"data-table\">\n")
 					.append("    <thead><tr><th>IP / Subnet Key</th>");
 			if (showSubnetDistinct) {
-				sb.append("<th title=\"Distinct client IP addresses observed in this subnet\">Distinct IPs</th>");
+				sb.append("<th title=\"Distinct client IP addresses observed in this subnet\">Distinct IPs</th>")
+						.append("<th title=\"Distinct User-Agent signatures observed in this subnet (up to 64)\">Distinct UAs</th>");
 			}
 			sb.append("<th>Slot Requests</th><th>Retained</th><th>Effective</th>")
 					.append(showReturning ? "<th title=\"Requests carrying valid visitor cookie\">Returning</th>" : "")
@@ -1158,6 +1167,12 @@ public class AntiDoSStatusRenderer {
 								.append(e.distinctClients()).append(e.distinctClients() == 1 ? " IP" : " IPs").append("</span></td>");
 					} else {
 						sb.append("<td style=\"color:var(--muted);\" title=\"Cardinality tracking inactive (Collector integration idle or disabled)\">-</td>");
+					}
+					if (e.distinctUserAgents() > 0) {
+						sb.append("<td><span class=\"badge\" style=\"font-size:0.75rem;padding:2px 6px;border-radius:4px;background:var(--accent-subtle);color:var(--text);\" title=\"Distinct User-Agent signatures in this subnet\">")
+								.append(e.distinctUserAgents()).append(e.distinctUserAgents() == 1 ? " UA" : " UAs").append("</span></td>");
+					} else {
+						sb.append("<td style=\"color:var(--muted);\" title=\"User-Agent diversity tracking inactive\">-</td>");
 					}
 				}
 				sb.append("<td>").append(e.count()).append("</td>")
@@ -1205,7 +1220,8 @@ public class AntiDoSStatusRenderer {
 			sb.append("  <table class=\"data-table\">\n")
 					.append("    <thead><tr><th>IP / Subnet Key</th>");
 			if (showSubnetDistinct) {
-				sb.append("<th title=\"Distinct client IP addresses observed in this subnet\">Distinct IPs</th>");
+				sb.append("<th title=\"Distinct client IP addresses observed in this subnet\">Distinct IPs</th>")
+						.append("<th title=\"Distinct User-Agent signatures observed in this subnet (up to 64)\">Distinct UAs</th>");
 			}
 			sb.append("<th>Slot Requests</th><th>Retained</th><th>Effective</th>")
 					.append(showReturning ? "<th title=\"Requests carrying valid visitor cookie\">Returning</th>" : "")
@@ -1223,6 +1239,12 @@ public class AntiDoSStatusRenderer {
 								.append(e.distinctClients()).append(e.distinctClients() == 1 ? " IP" : " IPs").append("</span></td>");
 					} else {
 						sb.append("<td style=\"color:var(--muted);\" title=\"Cardinality tracking inactive (Collector integration idle or disabled)\">-</td>");
+					}
+					if (e.distinctUserAgents() > 0) {
+						sb.append("<td><span class=\"badge\" style=\"font-size:0.75rem;padding:2px 6px;border-radius:4px;background:var(--accent-subtle);color:var(--text);\" title=\"Distinct User-Agent signatures in this subnet\">")
+								.append(e.distinctUserAgents()).append(e.distinctUserAgents() == 1 ? " UA" : " UAs").append("</span></td>");
+					} else {
+						sb.append("<td style=\"color:var(--muted);\" title=\"User-Agent diversity tracking inactive\">-</td>");
 					}
 				}
 				sb.append("<td>").append(e.count()).append("</td>")
@@ -1537,6 +1559,7 @@ public class AntiDoSStatusRenderer {
 					.append("      \"effective\": ").append(e.effective()).append(",\n")
 					.append("      \"limit\": ").append(target.getAllowedRequestsPerSlot()).append(",\n")
 					.append("      \"distinctClients\": ").append(e.distinctClients() > 0 ? e.distinctClients() : 1).append(",\n")
+					.append("      \"distinctUserAgents\": ").append(e.distinctUserAgents() > 0 ? e.distinctUserAgents() : "null").append(",\n")
 					.append("      \"returningCount\": ").append(target.isVisitorTrackingActive() ? e.returningCount() : "null").append(",\n")
 					.append("      \"authenticatedCount\": ").append(target.isAuthTrackingActive() ? e.authenticatedCount() : "null").append(",\n");
 			if (e.sample() != null) {
@@ -1591,6 +1614,7 @@ public class AntiDoSStatusRenderer {
 					.append("      \"limit\": ").append(target.getAllowedRequestsPerSlot()).append(",\n")
 					.append("      \"quotaPercent\": ").append(pct).append(",\n")
 					.append("      \"distinctClients\": ").append(e.distinctClients() > 0 ? e.distinctClients() : 1).append(",\n")
+					.append("      \"distinctUserAgents\": ").append(e.distinctUserAgents() > 0 ? e.distinctUserAgents() : "null").append(",\n")
 					.append("      \"returningCount\": ").append(target.isVisitorTrackingActive() ? e.returningCount() : "null").append(",\n")
 					.append("      \"authenticatedCount\": ").append(target.isAuthTrackingActive() ? e.authenticatedCount() : "null").append("\n")
 					.append("    }");

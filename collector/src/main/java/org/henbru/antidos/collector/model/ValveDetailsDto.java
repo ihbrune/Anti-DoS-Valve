@@ -75,6 +75,7 @@ public record ValveDetailsDto(
 			boolean locked,
 			String lastUpdate,
 			Integer distinctClients,
+			Integer distinctUserAgents,
 			Integer returningCount,
 			Integer authenticatedCount,
 			String sampleMethod,
@@ -90,21 +91,38 @@ public record ValveDetailsDto(
 				String lastUpdate,
 				Integer distinctClients,
 				Integer returningCount,
+				Integer authenticatedCount,
+				String sampleMethod,
+				String sampleUri,
+				String sampleUserAgent
+		) {
+			this(key, count, retained, effective, locked, lastUpdate, distinctClients, null, returningCount, authenticatedCount, sampleMethod, sampleUri, sampleUserAgent);
+		}
+
+		public BlockedClientDto(
+				String key,
+				int count,
+				int retained,
+				int effective,
+				boolean locked,
+				String lastUpdate,
+				Integer distinctClients,
+				Integer returningCount,
 				Integer authenticatedCount
 		) {
-			this(key, count, retained, effective, locked, lastUpdate, distinctClients, returningCount, authenticatedCount, null, null, null);
+			this(key, count, retained, effective, locked, lastUpdate, distinctClients, null, returningCount, authenticatedCount, null, null, null);
 		}
 
 		public BlockedClientDto(String key, int count, int retained, int effective, boolean locked, String lastUpdate, Integer distinctClients) {
-			this(key, count, retained, effective, locked, lastUpdate, distinctClients, null, null, null, null, null);
+			this(key, count, retained, effective, locked, lastUpdate, distinctClients, null, null, null, null, null, null);
 		}
 
 		public BlockedClientDto(String key, int count, int retained, int effective, boolean locked, String lastUpdate) {
-			this(key, count, retained, effective, locked, lastUpdate, 1, null, null, null, null, null);
+			this(key, count, retained, effective, locked, lastUpdate, 1, null, null, null, null, null, null);
 		}
 
 		public BlockedClientDto(String key, int count, int retained, boolean locked, String lastUpdate) {
-			this(key, count, retained, count + retained, locked, lastUpdate, 1, null, null, null, null, null);
+			this(key, count, retained, count + retained, locked, lastUpdate, 1, null, null, null, null, null, null);
 		}
 	}
 
@@ -117,15 +135,20 @@ public record ValveDetailsDto(
 			int limit,
 			int quotaPercent,
 			Integer distinctClients,
+			Integer distinctUserAgents,
 			Integer returningCount,
 			Integer authenticatedCount
 	) {
+		public ActiveClientDto(String key, int count, int retained, int effective, int limit, int quotaPercent, Integer distinctClients, Integer returningCount, Integer authenticatedCount) {
+			this(key, count, retained, effective, limit, quotaPercent, distinctClients, null, returningCount, authenticatedCount);
+		}
+
 		public ActiveClientDto(String key, int count, int retained, int effective, int limit, int quotaPercent, Integer distinctClients) {
-			this(key, count, retained, effective, limit, quotaPercent, distinctClients, null, null);
+			this(key, count, retained, effective, limit, quotaPercent, distinctClients, null, null, null);
 		}
 
 		public ActiveClientDto(String key, int count, int retained, int effective, int limit, int quotaPercent) {
-			this(key, count, retained, effective, limit, quotaPercent, 1, null, null);
+			this(key, count, retained, effective, limit, quotaPercent, 1, null, null, null);
 		}
 	}
 }

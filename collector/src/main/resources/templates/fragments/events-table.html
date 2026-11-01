@@ -52,6 +52,12 @@
                                         th:text="${event.distinctClients + ' IPs'}"
                                         title="Observed distinct client IP addresses in this aggregated subnet">2
                                         IPs</span>
+                                    <span th:if="${event.distinctUserAgents != null and event.distinctUserAgents > 0}"
+                                        class="badge"
+                                        th:classappend="${event.distinctClients >= 5 and event.distinctUserAgents == 1 ? 'badge-danger' : 'badge-secondary'}"
+                                        style="padding: 1px 5px; font-size: 10px;"
+                                        th:text="${event.distinctUserAgents + ' UA' + (event.distinctUserAgents == 1 ? '' : 's')}"
+                                        title="Observed distinct User-Agent signatures in this subnet">1 UA</span>
                                 </div>
                                 <div style="display: flex; gap: 4px; flex-wrap: wrap;">
                                     <span th:if="${event.hasSample()}" class="badge ip-mono"

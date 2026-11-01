@@ -1671,7 +1671,8 @@ public class AntiDoSValve extends ValveBase {
 			request.setAttribute(AUTHENTICATED_ATTRIBUTE_NAME, Boolean.valueOf(isAuthenticated));
 		}
 
-		boolean allowed = isRequestAllowed(ip, path, isReturningVisitor, isAuthenticated);
+		String userAgent = request.getHeader("User-Agent");
+		boolean allowed = isRequestAllowed(ip, path, isReturningVisitor, isAuthenticated, userAgent);
 		if (!allowed) {
 			recordBlockedSampleIfAbsent(ip, request, path);
 		}
@@ -2438,6 +2439,11 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	public boolean isRequestAllowed(String ip, String requestURI, boolean returningVisitor, boolean authenticated) {
+		return isRequestAllowed(ip, requestURI, returningVisitor, authenticated, null);
+	}
+
+	public boolean isRequestAllowed(String ip, String requestURI, boolean returningVisitor, boolean authenticated,
+			String userAgent) {
 		if (isIPAddressInAlwaysForbidden(ip)) {
 			alwaysForbiddenBlockedRequests.increment();
 			if (log.isDebugEnabled())
@@ -2461,7 +2467,7 @@ public class AntiDoSValve extends ValveBase {
 		}
 
 		if (isRequestURIInRelevantPaths(requestURI)) {
-			return !isIPAddressBlocked(ip, returningVisitor, authenticated);
+			return !isIPAddressBlocked(ip, returningVisitor, authenticated, userAgent);
 		}
 
 		if (serverWideBlocking && isIPAddressCurrentlyBlocked(ip)) {
@@ -2517,6 +2523,23 @@ public class AntiDoSValve extends ValveBase {
 	 */
 	public boolean isIPAddressBlocked(String ip, boolean returningVisitor, boolean authenticated)
 			throws IllegalArgumentException {
+		return isIPAddressBlocked(ip, returningVisitor, authenticated, null);
+	}
+
+	/**
+	 * This method checks if an IP address is blocked in the internal
+	 * {@link AntiDoSMonitor} instance, registering the access, returning visitor state,
+	 * authenticated login session state, and User-Agent signature.
+	 * 
+	 * @param ip               The IP address
+	 * @param returningVisitor true if request presented a valid authenticated visitor cookie
+	 * @param authenticated    true if request presented a valid authenticated login session cookie
+	 * @param userAgent        The incoming User-Agent header (or null)
+	 * @return true if blocked, false if allowed
+	 * @throws IllegalArgumentException If the parameter is null or empty
+	 */
+	public boolean isIPAddressBlocked(String ip, boolean returningVisitor, boolean authenticated, String userAgent)
+			throws IllegalArgumentException {
 		if (ip == null || ip.isEmpty()) {
 			throw new IllegalArgumentException("IP address must not be null or empty");
 		}
@@ -2543,7 +2566,8 @@ public class AntiDoSValve extends ValveBase {
 
 		boolean trackCardinality = isExtendedMetricsActive() && !counterName.equals(ip);
 		AntiDoSMonitor monitor = provideMonitor();
-		if (monitor == null || monitor.registerAndCheckRequest(counterName, ip, rawIpv4Bytes, trackCardinality, v4Mask, v6Mask, returningVisitor, authenticated)) {
+		if (monitor == null || monitor.registerAndCheckRequest(counterName, ip, rawIpv4Bytes, trackCardinality, v4Mask,
+				v6Mask, returningVisitor, authenticated, userAgent)) {
 			if (log.isDebugEnabled())
 				if (monitor == null)
 					log.debug(name4logging + " not available");

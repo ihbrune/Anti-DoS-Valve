@@ -684,6 +684,31 @@ class AntiDoSValveTest {
 	}
 
 	@Test
+	void testSubnetUserAgentDiversityTracking() {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "SUBNET_UA_DIVERSITY_TEST");
+		valve.setAllowedRequestsPerSlot(50);
+		valve.setIpv4SubnetMask(24);
+		valve.setCollectorIntegration("true"); // force extended metrics
+		valve.setRelevantPaths(".*");
+		assertNull(valve.reloadMonitor());
+
+		// 3 requests with 2 distinct User-Agents
+		valve.isIPAddressBlocked("10.0.2.10", false, false, "Mozilla/5.0 (Windows NT 10.0)");
+		valve.isIPAddressBlocked("10.0.2.20", false, false, "Mozilla/5.0 (Windows NT 10.0)");
+		valve.isIPAddressBlocked("10.0.2.30", false, false, "curl/8.4.0");
+
+		AntiDoSMonitor monitor = valve.provideMonitor();
+		assertNotNull(monitor);
+		AntiDoSCounter counter = monitor.provideCurrentCounter("10.0.2.0/24");
+		assertNotNull(counter);
+		assertEquals(3, counter.getCount());
+		assertEquals(3, counter.getDistinctClients());
+		assertTrue(counter.hasUserAgentTracker());
+		assertEquals(2, counter.getDistinctUserAgents());
+	}
+
+	@Test
 	void testWhitelistPrecedenceWithSubnetAggregation() {
 		AntiDoSValve valve = new AntiDoSValve();
 		setValidAntiDoSMonitorconfiguration(valve, "WHITELIST_SUBNET_TEST");
