@@ -62,6 +62,24 @@ class DocumentationServiceTest {
 	}
 
 	@Test
+	void testGetDocumentationLoadsForensicsGuide() {
+		DocumentationService service = new DocumentationService();
+		DocumentationService.DocumentationPayload payload = service.getDocumentation(DocumentationService.DOC_FORENSICS);
+
+		assertNotNull(payload);
+		assertNotNull(payload.html());
+		assertFalse(payload.html().isBlank());
+		assertTrue(payload.title().contains("Forensics"));
+
+		// Verify key forensic runbook sections are present
+		assertTrue(payload.html().contains("Volume Tiers"));
+		assertTrue(payload.html().contains("Storage, Capacity &amp; Bloat") || payload.html().contains("Storage, Capacity & Bloat"));
+		assertTrue(payload.html().contains("False-Positive &amp; Rate-Limit") || payload.html().contains("False-Positive & Rate-Limit"));
+		assertTrue(payload.html().contains("Modern Telemetry Dimensions"));
+		assertTrue(payload.html().contains("Threat Hunting"));
+	}
+
+	@Test
 	void testGetSectionHtmlExtractsTargetSectionOnly() {
 		DocumentationService service = new DocumentationService();
 

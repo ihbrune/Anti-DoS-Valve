@@ -48,6 +48,7 @@ public class DocumentationService {
 	public static final String DOC_UI = "ui";
 	public static final String DOC_SETUP = "setup";
 	public static final String DOC_README = "readme";
+	public static final String DOC_FORENSICS = "forensics";
 
 	public record DocumentationTocItem(int level, String title, String anchorId) {}
 
@@ -162,6 +163,7 @@ public class DocumentationService {
 		return switch (lower) {
 			case "setup", "ops", "operations", "admin", "config" -> DOC_SETUP;
 			case "readme", "overview", "landing" -> DOC_README;
+			case "forensics", "sql", "db", "queries", "recipes" -> DOC_FORENSICS;
 			default -> DOC_UI;
 		};
 	}
@@ -232,6 +234,8 @@ public class DocumentationService {
 						link.setDestination("/help?doc=setup" + anchor);
 					} else if (cleanDest.equals("readme.md") || cleanDest.endsWith("/readme.md")) {
 						link.setDestination("/help?doc=readme" + anchor);
+					} else if (cleanDest.equals("db_forensics_guide.md") || cleanDest.endsWith("/db_forensics_guide.md")) {
+						link.setDestination("/help?doc=forensics" + anchor);
 					}
 				}
 				visitChildren(link);
@@ -259,6 +263,7 @@ public class DocumentationService {
 		return switch (key) {
 			case DOC_SETUP -> "Setup, Deployment & Operations Guide";
 			case DOC_README -> "Fleet Architecture & Management Guide";
+			case DOC_FORENSICS -> "Database Forensics & SQL Runbook";
 			default -> "Dashboard & Forensics User Guide";
 		};
 	}
@@ -267,6 +272,7 @@ public class DocumentationService {
 		String filename = switch (key) {
 			case DOC_SETUP -> "SETUP_GUIDE.md";
 			case DOC_README -> "README.md";
+			case DOC_FORENSICS -> "DB_FORENSICS_GUIDE.md";
 			default -> "DASHBOARD_GUIDE.md";
 		};
 

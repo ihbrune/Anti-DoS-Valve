@@ -72,6 +72,10 @@
                 <a href="/help" class="nav-util-btn active" title="In-App Documentation &amp; Architecture Reference" aria-label="Documentation">
                     <span>&#x1F4D6;</span>
                 </a>
+                <a href="/api/v1/fleet" target="_blank" class="nav-util-btn btn-json-api"
+                   title="Raw Fleet JSON API" aria-label="Raw Fleet JSON API">
+                    <span>{}</span>
+                </a>
                 <button type="button" class="nav-util-btn btn-theme-toggle" onclick="toggleTheme()" title="Switch Light / Dark Theme" aria-label="Toggle theme">
                     <span class="theme-icon-sun">&#x2600;&#xFE0F;</span>
                     <span class="theme-icon-moon">&#x1F319;</span>
@@ -106,6 +110,11 @@
            th:classappend="${activeDoc == 'readme' ? 'btn-primary' : ''}"
            title="Fleet architecture, dual-plane model, and edge-collector synergy">
             <span>&#x1F3D7;</span> Fleet Architecture Guide
+        </a>
+        <a th:href="@{/help(doc='forensics')}" class="btn"
+           th:classappend="${activeDoc == 'forensics' ? 'btn-primary' : ''}"
+           title="Database Schema, Telemetry, SQL Playbooks &amp; Threat Hunting Runbook">
+            <span>&#x1F50E;</span> Database Forensics &amp; SQL Runbook
         </a>
     </div>
 

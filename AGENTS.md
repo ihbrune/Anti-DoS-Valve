@@ -20,7 +20,7 @@ This document serves as an onboarding and development guide for human developers
 * **`AntiDoSLogThrottler`:** Prevents log-flooding during severe DoS incidents by rate-limiting log emission.
 
 ### Core Architectural Components in `collector/` & `benchmark/`:
-* For dedicated Collector guidelines, data models, and commands, refer to [collector/AGENTS.md](collector/AGENTS.md) and [collector/README.md](collector/README.md).
+* For dedicated Collector guidelines, data models, SQL forensics, and commands, refer to [collector/AGENTS.md](collector/AGENTS.md), [collector/DB_FORENSICS_GUIDE.md](collector/DB_FORENSICS_GUIDE.md), and [collector/README.md](collector/README.md).
 * For dedicated Benchmark guidelines, traffic profiles, and history tracking, refer to [benchmark/AGENTS.md](benchmark/AGENTS.md) and [benchmark/README.md](benchmark/README.md).
 
 ---

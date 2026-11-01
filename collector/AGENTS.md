@@ -66,3 +66,21 @@ This document serves as the architectural reference and development guide for hu
 | `mvn spring-boot:run -pl collector` | Starts the collector service locally. |
 | `mvn spring-boot:run -pl collector -Dspring-boot.run.arguments="demo"` | Starts the collector in zero-configuration Demo Mode with isolated database. |
 | `mvn spring-boot:run -pl collector -Dspring-boot.run.arguments="demo 4"` | Starts Demo Mode with fleet scaling (4 instances per type = 12 total servers A..D). |
+
+---
+
+## 4. Database Forensics, Sizing & SQL Playbooks
+
+For in-depth analytical recipes, storage capacity guidelines, false-positive troubleshooting, and threat-hunting queries, refer to the dedicated runbook:
+* **[DB_FORENSICS_GUIDE.md](DB_FORENSICS_GUIDE.md)**: Complete SQL cookbook for SREs and AI agents.
+
+### Quick AI Forensic Query Rules:
+1. **Never full-scan `client_events` without time bounds:** Always append `event_time >= datetime('now', '-24 hours')` (or PostgreSQL `NOW() - INTERVAL '24 hours'`).
+2. **Use `client_subnet_rollups` for historical analytics:** Slicing traffic trends, crawler drops, and ASN offloads should query `client_subnet_rollups` rather than joining millions of raw client events.
+3. **Inspect the 98.7% `ACTIVE` event phenomenon:** When diagnosing storage exhaustion, verify if `client_events` is bloated with `ACTIVE` events (which only need 24h retention) while `BLOCKED`/`MARKED` events are preserved.
+4. **Detect internal subnet false-positives:** If RFC 1918 traffic (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`) is blocked, compare against `monitored_valves.always_allowed_ips` and generate Tomcat regex snippets (`10\.77\.25\..*`).
+5. **Analyze modern telemetry (Schema V14 & V22):**
+   * High `distinct_user_agents` with low `distinct_clients` indicates randomized headless browser scraping.
+   * `authenticated_requests > 0` with `blocked_requests > 0` indicates critical business impact on logged-in customers.
+   * High unauthenticated traffic on auth endpoints indicates credential stuffing.
+   * High `returning_requests` indicates legitimate human audience retention vs. throwaway rotating residential proxies.
