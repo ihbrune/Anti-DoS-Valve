@@ -133,6 +133,14 @@ public class DailyReportController {
 		String renderedHtml = selected != null ? dailyReportService.renderToHtml(selected.reportMarkdown()) : "";
 		String renderedNoteHtml = (currentNote != null && currentNote.hasContent()) ? dailyReportService.renderToHtml(currentNote.noteMarkdown()) : "";
 
+		LocalDate parsedDate = null;
+		try {
+			parsedDate = LocalDate.parse(targetDate);
+		} catch (Exception ignored) {
+		}
+
+		boolean rawTelemetryAvailable = parsedDate != null && dailyReportService.hasRawTelemetry(parsedDate);
+
 		model.addAttribute("selectedReport", selected);
 		model.addAttribute("selectedDate", targetDate);
 		model.addAttribute("renderedHtml", renderedHtml);
@@ -141,6 +149,7 @@ public class DailyReportController {
 		model.addAttribute("todayDate", LocalDate.now().toString());
 		model.addAttribute("yesterdayDate", LocalDate.now().minusDays(1).toString());
 		model.addAttribute("datesWithNotes", dailyReportService.getDatesWithNotes());
+		model.addAttribute("rawTelemetryAvailable", rawTelemetryAvailable);
 	}
 
 	@GetMapping("/reports/{date}/download")
@@ -178,15 +187,29 @@ public class DailyReportController {
 			return "redirect:/reports";
 		}
 
+		// Prevent accidental erasure when raw slot telemetry is missing
+		if (!dailyReportService.hasRawTelemetry(targetDate)) {
+			Optional<DailyReport> existing = dailyReportService.getReport(targetDate.toString());
+			if (existing.isPresent() && (existing.get().totalRequests() > 0 || existing.get().serverCount() > 0)) {
+				redirectAttributes.addFlashAttribute("errorMessage",
+						"Cannot re-aggregate report for " + targetDate + ": Raw slot telemetry has been pruned by retention policy. The existing archived report was preserved.");
+				return "redirect:/reports?date=" + targetDate;
+			}
+		}
+
 		try {
 			DailyReport generated = dailyReportService.generateDailyReport(targetDate);
 			redirectAttributes.addFlashAttribute("successMessage",
 					"Report for " + targetDate + " generated successfully (" + generated.totalRequests() + " requests processed).");
 			return "redirect:/reports?date=" + targetDate;
+		} catch (IllegalStateException e) {
+			log.warn("Blocked unsafe daily report generation for {}: {}", targetDate, e.getMessage());
+			redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+			return "redirect:/reports?date=" + targetDate;
 		} catch (Exception e) {
 			log.error("Failed to generate daily report for {}: {}", targetDate, e.getMessage(), e);
 			redirectAttributes.addFlashAttribute("errorMessage", "Error generating report for " + targetDate + ": " + e.getMessage());
-			return "redirect:/reports";
+			return "redirect:/reports?date=" + targetDate;
 		}
 	}
 }

@@ -3,6 +3,12 @@ package org.henbru.antidos.collector.report;
 import java.time.LocalDate;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import java.time.Instant;
+import java.util.Optional;
+import org.henbru.antidos.collector.model.DailyReport;
 import org.henbru.antidos.collector.storage.DailyReportRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -78,7 +84,8 @@ class DailyReportControllerTest {
 
 	@Test
 	void testGenerateReportPost() throws Exception {
-		LocalDate targetDate = LocalDate.of(2026, 10, 24);
+		LocalDate targetDate = LocalDate.of(2026, 10, 28);
+		dailyReportRepository.deleteByReportDate(targetDate.toString());
 		mockMvc.perform(post("/reports/generate")
 						.param("date", targetDate.toString()))
 				.andExpect(status().is3xxRedirection())
@@ -144,5 +151,39 @@ class DailyReportControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("Today (In Progress)")))
 				.andExpect(content().string(containsString("LIVE TELEMETRY ACTIVE")));
+	}
+
+	@Test
+	void testArchivedReportLockedWhenRawTelemetryPruned() throws Exception {
+		String archiveDateStr = "2026-09-15";
+		dailyReportRepository.deleteByReportDate(archiveDateStr);
+
+		// Insert existing populated report (e.g. 50,000 requests from 1 month ago)
+		DailyReport existing = new DailyReport(
+				null, archiveDateStr, "NORMAL", 50000L, 120L, 0L,
+				25.0, 0.5, 0.0, "API-VALVE", "SRV-OLD", 1, 3,
+				"# Archived Report", Instant.now(), Instant.now()
+		);
+		dailyReportRepository.upsert(existing);
+
+		// 1. GET page: Must show Permanent Archive (Locked) and NOT show the active Re-aggregate button
+		mockMvc.perform(get("/reports?date=" + archiveDateStr))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Permanent Archive (Locked)")))
+				.andExpect(content().string(not(containsString("Re-aggregate and overwrite"))));
+
+		// 2. POST /reports/generate attempt: Must be rejected and preserve the existing report
+		mockMvc.perform(post("/reports/generate")
+						.param("date", archiveDateStr))
+				.andExpect(status().is3xxRedirection())
+				.andExpect(redirectedUrl("/reports?date=" + archiveDateStr))
+				.andExpect(flash().attributeExists("errorMessage"))
+				.andExpect(flash().attribute("errorMessage", containsString("Raw slot telemetry has been pruned by retention policy. The existing archived report was preserved.")));
+
+		// 3. Verify in DB: report was NOT overwritten with 0
+		Optional<DailyReport> fromDb = dailyReportRepository.findByReportDate(archiveDateStr);
+		assertTrue(fromDb.isPresent());
+		assertEquals(50000L, fromDb.get().totalRequests());
+		assertEquals(1, fromDb.get().serverCount());
 	}
 }

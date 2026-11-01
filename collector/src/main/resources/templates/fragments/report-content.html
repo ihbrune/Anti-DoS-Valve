@@ -62,13 +62,18 @@
                             title="Download raw Markdown report as a file">
                             <span>&#x1F4BE;</span> Download .md
                         </a>
-                        <form th:action="@{/reports/generate}" method="post" style="display: inline-block;">
+                        <form th:if="${rawTelemetryAvailable}" th:action="@{/reports/generate}" method="post" style="display: inline-block;">
                             <input type="hidden" name="date" th:value="${selectedReport.reportDate()}">
                             <button type="submit" class="btn btn-secondary"
-                                title="Re-aggregate and overwrite report for this date">
+                                title="Re-aggregate metrics from raw telemetry slots for this date">
                                 <span>&#x1F504;</span> Re-aggregate
                             </button>
                         </form>
+                        <span th:unless="${rawTelemetryAvailable}" class="badge"
+                            style="font-size: 11.5px; padding: 6px 12px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-color); color: var(--text-muted); display: inline-flex; align-items: center; gap: 5px;"
+                            title="Raw slot telemetry has been pruned by retention policy. Re-aggregation is locked to protect this permanent archive.">
+                            <span>&#x1F512;</span> Permanent Archive (Locked)
+                        </span>
                     </div>
                 </div>
             </div>
@@ -233,13 +238,18 @@
                         th:text="${currentNote != null and currentNote.hasContent() ? 'Edit Note for ' + selectedDate : 'Add Note for ' + selectedDate}">Add
                         Note for Date</span>
                 </button>
-                <form th:action="@{/reports/generate}" method="post" style="display: inline-block;">
+                <form th:if="${rawTelemetryAvailable}" th:action="@{/reports/generate}" method="post" style="display: inline-block;">
                     <input type="hidden" name="date" th:value="${selectedDate != null ? selectedDate : yesterdayDate}">
                     <button type="submit" class="btn btn-primary">
                         <span>&#x26A1;</span> Generate Report for <span
                             th:text="${selectedDate != null ? selectedDate : yesterdayDate}"></span>
                     </button>
                 </form>
+                <div th:unless="${rawTelemetryAvailable}" class="alert alert-warning"
+                    style="margin-top: 12px; font-size: 13px; display: inline-flex; align-items: center; gap: 8px;">
+                    <span>&#x2139;&#xFE0F;</span>
+                    <span>Raw slot telemetry for this date has expired or was not recorded. Report generation is not available.</span>
+                </div>
             </div>
         </div>
     </div>

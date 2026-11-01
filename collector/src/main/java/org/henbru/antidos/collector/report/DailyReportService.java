@@ -148,6 +148,40 @@ public class DailyReportService {
 		return reportRepository.findAllReportDates();
 	}
 
+	/**
+	 * Checks whether raw slot snapshot telemetry is currently available in the database for the given date.
+	 * Returns false if snapshots have been pruned by data retention cleanup jobs or were never recorded.
+	 */
+	public boolean hasRawTelemetry(LocalDate reportDate) {
+		if (reportDate == null) {
+			return false;
+		}
+		ZoneId zone = ZoneId.systemDefault();
+		ZonedDateTime startZdt = reportDate.atStartOfDay(zone);
+		Instant startInstant = startZdt.toInstant();
+		Instant endInstant = startZdt.plusDays(1).toInstant();
+		try {
+			Long count = jdbcTemplate.queryForObject(
+					"SELECT COUNT(*) FROM slot_snapshots WHERE start_time >= ? AND start_time < ?",
+					Long.class, Timestamp.from(startInstant), Timestamp.from(endInstant));
+			return count != null && count > 0;
+		} catch (Exception e) {
+			log.warn("Error checking telemetry existence for date {}: {}", reportDate, e.getMessage());
+			return false;
+		}
+	}
+
+	public boolean hasRawTelemetry(String reportDateStr) {
+		if (reportDateStr == null || reportDateStr.isBlank()) {
+			return false;
+		}
+		try {
+			return hasRawTelemetry(LocalDate.parse(reportDateStr.trim()));
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
 	public String renderToHtml(String markdown) {
 		return markdownService.renderToHtml(markdown);
 	}
@@ -243,6 +277,23 @@ public class DailyReportService {
 			serverCount = srvCnt != null ? srvCnt : 0;
 		} catch (Exception e) {
 			log.warn("Error querying slot snapshot totals for {}: {}", dateStr, e.getMessage());
+		}
+
+		// Safety Guard: Refuse to overwrite an existing populated report if raw slot telemetry has been pruned
+		if (fleetTotalSlots == 0) {
+			Optional<DailyReport> existingReportOpt = reportRepository.findByReportDate(dateStr);
+			if (existingReportOpt.isPresent()) {
+				DailyReport existing = existingReportOpt.get();
+				boolean hasExistingMetrics = existing.totalRequests() > 0 || existing.serverCount() > 0
+						|| existing.totalBlocked() > 0 || existing.totalMarked() > 0;
+				if (hasExistingMetrics) {
+					log.warn("Refusing to overwrite existing report for {} ({} requests, {} servers) because raw slot telemetry has been pruned (0 slots found).",
+							dateStr, existing.totalRequests(), existing.serverCount());
+					throw new IllegalStateException("Cannot overwrite existing report for " + dateStr
+							+ ": Raw slot telemetry has been pruned by retention policy. The existing archived report ("
+							+ numFmt.format(existing.totalRequests()) + " requests) was preserved.");
+				}
+			}
 		}
 
 		// 3. Per-Valve Summaries & Peak Calculation (Normalized to Requests / Sec)

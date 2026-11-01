@@ -19,6 +19,7 @@ import org.henbru.antidos.collector.storage.SlotSnapshotRepository;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -373,5 +374,70 @@ class DailyReportServiceTest {
 		// 3. Per-valve table checks
 		assertTrue(md.contains("Auth Requests (Ratio)"));
 		assertTrue(md.contains("750 (75.0%)"));
+	}
+
+	@Test
+	void testHasRawTelemetry() {
+		LocalDate dateWithData = LocalDate.of(2026, 10, 15);
+		LocalDate dateWithoutData = LocalDate.of(2026, 10, 16);
+		jdbcTemplate.update("DELETE FROM slot_snapshots WHERE server_id = 'SRV-TELEM-TEST'");
+
+		assertFalse(dailyReportService.hasRawTelemetry(dateWithData));
+		assertFalse(dailyReportService.hasRawTelemetry(dateWithoutData));
+
+		ZonedDateTime startDay = dateWithData.atStartOfDay(ZoneId.systemDefault());
+		Instant slotTime = startDay.plusHours(12).toInstant();
+		slotSnapshotRepository.upsert(new SlotSnapshot(
+				null, "SRV-TELEM-TEST", "DEFAULT", 12345L, slotTime, slotTime.plus(60, ChronoUnit.SECONDS),
+				100L, 10, 0, 0, true, slotTime.plus(60, ChronoUnit.SECONDS)
+		));
+
+		assertTrue(dailyReportService.hasRawTelemetry(dateWithData));
+		assertTrue(dailyReportService.hasRawTelemetry(dateWithData.toString()));
+		assertFalse(dailyReportService.hasRawTelemetry(dateWithoutData));
+	}
+
+	@Test
+	void testReaggregationRefusedWhenRawTelemetryPruned() {
+		LocalDate archiveDate = LocalDate.of(2026, 10, 17);
+		dailyReportRepository.deleteByReportDate(archiveDate.toString());
+		jdbcTemplate.update("DELETE FROM slot_snapshots WHERE server_id = 'SRV-PRUNE-TEST'");
+		jdbcTemplate.update("DELETE FROM monitored_valves WHERE server_id = 'SRV-PRUNE-TEST'");
+
+		ZonedDateTime startDay = archiveDate.atStartOfDay(ZoneId.systemDefault());
+		Instant slotTime = startDay.plusHours(9).toInstant();
+
+		monitoredValveRepository.upsert(new MonitoredValve(
+				"SRV-PRUNE-TEST", "PROTECTED-APP", "App Valve", 1, "BLOCKING", false, false,
+				429, 500, 60, 5, 0.5f, 24, 64, 10000, 5000, "", "", "", "", "/status", "*", "auto",
+				false, "_adv", Instant.now(), 5555, true
+		));
+
+		slotSnapshotRepository.upsert(new SlotSnapshot(
+				null, "SRV-PRUNE-TEST", "PROTECTED-APP", 77777L, slotTime, slotTime.plus(60, ChronoUnit.SECONDS),
+				3500L, 50, 5, 0, true, slotTime.plus(60, ChronoUnit.SECONDS)
+		));
+
+		// 1. Initial report generation while raw slots exist
+		DailyReport originalReport = dailyReportService.generateDailyReport(archiveDate);
+		assertNotNull(originalReport);
+		assertEquals(3500L, originalReport.totalRequests());
+
+		// 2. Simulate raw telemetry eviction / data retention cleanup
+		jdbcTemplate.update("DELETE FROM slot_snapshots WHERE server_id = 'SRV-PRUNE-TEST'");
+		assertFalse(dailyReportService.hasRawTelemetry(archiveDate));
+
+		// 3. Re-aggregation attempt MUST throw IllegalStateException to protect archived data
+		IllegalStateException ex = assertThrows(IllegalStateException.class, () ->
+				dailyReportService.generateDailyReport(archiveDate)
+		);
+		assertTrue(ex.getMessage().contains("Raw slot telemetry has been pruned by retention policy"));
+		assertTrue(ex.getMessage().contains("The existing archived report (3,500 requests) was preserved"));
+
+		// 4. Verify original report in DB is completely intact with original 3,500 requests
+		Optional<DailyReport> preservedReport = dailyReportRepository.findByReportDate(archiveDate.toString());
+		assertTrue(preservedReport.isPresent());
+		assertEquals(3500L, preservedReport.get().totalRequests());
+		assertEquals(1, preservedReport.get().serverCount());
 	}
 }
