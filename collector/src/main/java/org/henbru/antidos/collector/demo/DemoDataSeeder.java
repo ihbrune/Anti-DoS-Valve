@@ -875,6 +875,7 @@ public class DemoDataSeeder {
 								v.authLoginPaths(),
 								v.authSessionTtlSeconds() > 0 ? v.authSessionTtlSeconds() : 900,
 								v.maxAuthCacheSize() > 0 ? v.maxAuthCacheSize() : 50000,
+								v.relevantAuthScopeOrDefault(),
 								now,
 								v.configHashCode(),
 								true

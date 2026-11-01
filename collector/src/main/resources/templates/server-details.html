@@ -185,6 +185,13 @@
                                             th:title="'Auth session tracking: ' + ${runtimeValvesMap[v.valveName].authTrackingLabel()}"
                                             th:text="'AUTH: ' + ${runtimeValvesMap[v.valveName].authTrackingLabel()}">AUTH:
                                             OFF</span>
+                                        <span class="badge"
+                                            th:if="${runtimeValvesMap[v.valveName].relevantAuthScope() != 'ALL'}"
+                                            th:classappend="${runtimeValvesMap[v.valveName].relevantAuthScopeBadgeClass()}"
+                                            style="font-size: 9.5px; padding: 1px 5px;"
+                                            th:title="'Relevant auth scope: ' + ${runtimeValvesMap[v.valveName].relevantAuthScope()}"
+                                            th:text="'SCOPE: ' + ${runtimeValvesMap[v.valveName].relevantAuthScope()}">SCOPE:
+                                            AUTHENTICATED_ONLY</span>
                                         <span style="font-size: 11px; color: var(--text-muted);"
                                             th:text="${runtimeValvesMap[v.valveName].allowedRequestsPerSlot == 0 ? '0 req (Zero Tolerance) / ' + runtimeValvesMap[v.valveName].slotLength + 's' : runtimeValvesMap[v.valveName].allowedRequestsPerSlot + ' req / ' + runtimeValvesMap[v.valveName].slotLength + 's'}">50
                                             req / 60s</span>
@@ -315,6 +322,10 @@
                             <span class="badge" th:classappend="${rv.authTrackingBadgeClass()}"
                                 th:title="'Authentication session tracking: ' + ${rv.authTrackingLabel()}"
                                 th:text="'AUTH: ' + ${rv.authTrackingLabel()}">AUTH: OFF</span>
+                            <span class="badge" th:if="${rv.relevantAuthScope() != 'ALL'}"
+                                th:classappend="${rv.relevantAuthScopeBadgeClass()}"
+                                th:title="'Relevant auth scope: ' + ${rv.relevantAuthScope()}"
+                                th:text="'SCOPE: ' + ${rv.relevantAuthScope()}">SCOPE: AUTHENTICATED_ONLY</span>
                         </div>
                         <div style="font-size: 11px; color: var(--text-muted);">
                             Last Synced: <span style="font-weight: 600; color: var(--text-secondary);"
@@ -429,9 +440,9 @@
 
                         <div
                             style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
-                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Auth Session Tracking</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Auth Session Tracking &amp; Scope</div>
                             <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);"
-                                th:text="${rv.authTrackingEnabled ? 'ACTIVE (' + rv.authTrackingMode() + ')' : 'DISABLED'}">DISABLED</div>
+                                th:text="${rv.authTrackingEnabled ? 'ACTIVE (' + rv.authTrackingMode() + ')' : (rv.relevantAuthScope() != 'ALL' ? 'DECOUPLED SCOPE' : 'DISABLED')}">DISABLED</div>
                             <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;"
                                 th:if="${rv.authTrackingEnabled}">
                                 Cookie: <code style="font-weight: 600; color: var(--color-primary);"
@@ -439,10 +450,18 @@
                                 <span th:if="${rv.authLoginPaths != null and !rv.authLoginPaths.isBlank()}">
                                     &bull; Login: <code style="color: var(--text-primary);" th:text="${rv.authLoginPaths}">/trust</code>
                                 </span>
+                                <span th:if="${rv.relevantAuthScope() != 'ALL'}">
+                                    &bull; Scope: <code style="font-weight: 600; color: var(--text-primary);" th:text="${rv.relevantAuthScope()}">AUTHENTICATED_ONLY</code>
+                                </span>
                             </div>
                             <div style="font-size: 11px; color: var(--text-muted); margin-top: 3px;"
                                 th:unless="${rv.authTrackingEnabled}">
-                                Disabled &bull; No login session tracking
+                                <span th:if="${rv.relevantAuthScope() != 'ALL'}">
+                                    Tracking off &bull; Scope: <code style="font-weight: 600; color: var(--text-primary);" th:text="${rv.relevantAuthScope()}">AUTHENTICATED_ONLY</code>
+                                </span>
+                                <span th:unless="${rv.relevantAuthScope() != 'ALL'}">
+                                    Disabled &bull; No login session tracking
+                                </span>
                             </div>
                         </div>
 

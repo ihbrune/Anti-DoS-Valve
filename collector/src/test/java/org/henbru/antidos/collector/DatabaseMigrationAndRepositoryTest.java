@@ -788,6 +788,8 @@ class DatabaseMigrationAndRepositoryTest {
 		assertEquals("OFF", found.authTrackingMode());
 		assertEquals("OFF", found.authTrackingLabel());
 		assertEquals("badge-secondary", found.authTrackingBadgeClass());
+		assertEquals("ALL", found.relevantAuthScope());
+		assertEquals("badge-secondary", found.relevantAuthScopeBadgeClass());
 		assertEquals(12345, found.configHash());
 		assertTrue(found.hasPathFilters());
 		assertTrue(found.hasIpLists());
@@ -825,6 +827,7 @@ class DatabaseMigrationAndRepositoryTest {
 				"/trust",
 				900,
 				50000,
+				"AUTHENTICATED_ONLY",
 				now.plusSeconds(10),
 				99999,
 				true
@@ -853,6 +856,8 @@ class DatabaseMigrationAndRepositoryTest {
 		assertEquals(50000, afterUpdate.get().maxAuthCacheSize());
 		assertEquals("COOKIE (AUTH_COOKIE)", afterUpdate.get().authTrackingLabel());
 		assertEquals("badge-success", afterUpdate.get().authTrackingBadgeClass());
+		assertEquals("AUTHENTICATED_ONLY", afterUpdate.get().relevantAuthScope());
+		assertEquals("badge-success", afterUpdate.get().relevantAuthScopeBadgeClass());
 		assertEquals(99999, afterUpdate.get().configHash());
 
 		List<org.henbru.antidos.collector.model.MonitoredValve> serverValves =

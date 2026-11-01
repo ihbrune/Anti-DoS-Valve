@@ -477,6 +477,8 @@ public class MockValveSimulator {
 
 		long offset = (nodeId != null) ? Math.abs(nodeId.hashCode() % 25_000L) : 0L;
 		long cumulative = 1_850_000L + offset + (currentKey % 50_000L) * 5200L;
+		long totalAuth = (long) (cumulative * 0.95);
+		long prevAuth = (long) (prev.totalRequests() * 0.95);
 		return new ValveOverviewDto.ValveSummaryDto(
 				"API-DoS-Shield",
 				"Strict API gateway rate limiter enforcing tight quotas on backend REST endpoints.",
@@ -499,13 +501,26 @@ public class MockValveSimulator {
 				"198.51.100.99",
 				"/antidos-status",
 				"127.0.0.1",
+				"auto",
+				false,
+				"_adv",
+				true,
+				"COOKIE",
+				"AUTH_COOKIE",
+				"/trust",
+				900,
+				50000,
+				68,
+				"AUTHENTICATED_ONLY",
 				0L,
 				cur.activeCounters(),
 				cur.blockedCounters(),
 				currentKey,
 				lastCompletedKey,
 				cumulative,
+				totalAuth,
 				prev.totalRequests(),
+				prevAuth,
 				prev.activeCounters(),
 				prev.blockedCounters(),
 				NUMBER_OF_SLOTS,

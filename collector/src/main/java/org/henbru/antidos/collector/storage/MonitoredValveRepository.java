@@ -62,6 +62,7 @@ public class MonitoredValveRepository {
 			rs.getString("auth_login_paths"),
 			rs.getInt("auth_session_ttl_seconds"),
 			rs.getInt("max_auth_cache_size"),
+			rs.getString("relevant_auth_scope") != null ? rs.getString("relevant_auth_scope") : "ALL",
 			toInstant(rs.getTimestamp("last_updated_at")),
 			rs.getInt("config_hash"),
 			rs.getBoolean("is_active")
@@ -83,9 +84,10 @@ public class MonitoredValveRepository {
 				    visitor_cookie_enabled, visitor_cookie_name,
 				    auth_tracking_enabled, auth_tracking_mode, auth_cookie_name, auth_login_paths,
 				    auth_session_ttl_seconds, max_auth_cache_size,
+				    relevant_auth_scope,
 				    last_updated_at, config_hash, is_active
 				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (server_id, valve_name) DO UPDATE SET
 				    description = EXCLUDED.description,
 				    pipeline_order = EXCLUDED.pipeline_order,
@@ -116,6 +118,7 @@ public class MonitoredValveRepository {
 				    auth_login_paths = EXCLUDED.auth_login_paths,
 				    auth_session_ttl_seconds = EXCLUDED.auth_session_ttl_seconds,
 				    max_auth_cache_size = EXCLUDED.max_auth_cache_size,
+				    relevant_auth_scope = EXCLUDED.relevant_auth_scope,
 				    last_updated_at = EXCLUDED.last_updated_at,
 				    config_hash = EXCLUDED.config_hash,
 				    is_active = EXCLUDED.is_active
@@ -153,6 +156,7 @@ public class MonitoredValveRepository {
 				v.authLoginPaths(),
 				v.authSessionTtlSeconds() > 0 ? v.authSessionTtlSeconds() : 900,
 				v.maxAuthCacheSize() > 0 ? v.maxAuthCacheSize() : 50000,
+				v.relevantAuthScope(),
 				v.lastUpdatedAt() != null ? Timestamp.from(v.lastUpdatedAt()) : Timestamp.from(Instant.now()),
 				v.configHash(),
 				v.isActive()

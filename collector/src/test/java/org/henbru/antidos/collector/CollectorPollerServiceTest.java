@@ -701,6 +701,126 @@ class CollectorPollerServiceTest {
 		assertEquals(0, log.activeEventsIngested());
 		assertTrue(log.details().contains("3 marked"));
 	}
+
+	@Test
+	void testPollEndpointRelevantAuthScope() throws Exception {
+		EndpointConfig endpoint = new EndpointConfig("SCOPE-TEST-NODE", "http://localhost:8080/antidos-status", "tok", false, true);
+
+		ValveOverviewDto.ValveSummaryDto v1 = new ValveOverviewDto.ValveSummaryDto(
+				"SCOPE_VALVE",
+				"Scope Limiter Test",
+				1,
+				"BLOCKING",
+				false,
+				false,
+				429,
+				50,
+				60,
+				5,
+				0.8f,
+				32,
+				64,
+				10000,
+				10000,
+				"/api/*",
+				"*.css",
+				"127.0.0.1",
+				null,
+				"/antidos-status",
+				"127.0.0.1",
+				"auto",
+				false,
+				"_adv",
+				true,
+				"COOKIE",
+				"AUTH_COOKIE",
+				"/trust",
+				900,
+				50000,
+				25,
+				"AUTHENTICATED_ONLY",
+				0L,
+				10,
+				0,
+				500L,
+				499L,
+				1000L,
+				800L,
+				950L,
+				750L,
+				10,
+				0,
+				5,
+				true,
+				true
+		);
+		when(statusClient.fetchOverview(any())).thenReturn(new ValveOverviewDto("2026-10-18T10:00:00Z", List.of(v1), null));
+
+		pollerService.pollEndpoint(endpoint);
+
+		var valveOpt = monitoredValveRepository.findByServerIdAndValveName("SCOPE-TEST-NODE", "SCOPE_VALVE");
+		assertTrue(valveOpt.isPresent());
+		assertEquals("AUTHENTICATED_ONLY", valveOpt.get().relevantAuthScope());
+		assertEquals("badge-success", valveOpt.get().relevantAuthScopeBadgeClass());
+
+		// Second poll with scope changed to UNAUTHENTICATED_ONLY
+		ValveOverviewDto.ValveSummaryDto v2 = new ValveOverviewDto.ValveSummaryDto(
+				"SCOPE_VALVE",
+				"Scope Limiter Test",
+				1,
+				"BLOCKING",
+				false,
+				false,
+				429,
+				50,
+				60,
+				5,
+				0.8f,
+				32,
+				64,
+				10000,
+				10000,
+				"/api/*",
+				"*.css",
+				"127.0.0.1",
+				null,
+				"/antidos-status",
+				"127.0.0.1",
+				"auto",
+				false,
+				"_adv",
+				true,
+				"COOKIE",
+				"AUTH_COOKIE",
+				"/trust",
+				900,
+				50000,
+				25,
+				"UNAUTHENTICATED_ONLY",
+				0L,
+				10,
+				0,
+				500L,
+				499L,
+				1050L,
+				820L,
+				950L,
+				750L,
+				10,
+				0,
+				5,
+				true,
+				true
+		);
+		when(statusClient.fetchOverview(any())).thenReturn(new ValveOverviewDto("2026-10-18T10:01:00Z", List.of(v2), null));
+
+		pollerService.pollEndpoint(endpoint);
+
+		var updatedOpt = monitoredValveRepository.findByServerIdAndValveName("SCOPE-TEST-NODE", "SCOPE_VALVE");
+		assertTrue(updatedOpt.isPresent());
+		assertEquals("UNAUTHENTICATED_ONLY", updatedOpt.get().relevantAuthScope());
+		assertEquals("badge-warning", updatedOpt.get().relevantAuthScopeBadgeClass());
+	}
 }
 
 

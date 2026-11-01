@@ -38,10 +38,61 @@ public record MonitoredValve(
 		String authLoginPaths,
 		int authSessionTtlSeconds,
 		int maxAuthCacheSize,
+		String relevantAuthScope,
 		Instant lastUpdatedAt,
 		int configHash,
 		boolean isActive
 ) {
+	/**
+	 * Backwards-compatible constructor without relevantAuthScope.
+	 */
+	public MonitoredValve(
+			String serverId,
+			String valveName,
+			String description,
+			int pipelineOrder,
+			String monitorMode,
+			boolean simulationMode,
+			boolean serverWideBlocking,
+			int httpStatusCode,
+			int allowedRequestsPerSlot,
+			int slotLength,
+			int numberOfSlots,
+			float shareOfRetainedFormerRequests,
+			int ipv4SubnetMask,
+			int ipv6SubnetMask,
+			int maxIPCacheSize,
+			int maxBlockedIPCacheSize,
+			String relevantPaths,
+			String nonRelevantPaths,
+			String alwaysAllowedIPs,
+			String alwaysForbiddenIPs,
+			String statusUri,
+			String statusAllowedIPs,
+			String collectorIntegration,
+			boolean visitorCookieEnabled,
+			String visitorCookieName,
+			boolean authTrackingEnabled,
+			String authTrackingMode,
+			String authCookieName,
+			String authLoginPaths,
+			int authSessionTtlSeconds,
+			int maxAuthCacheSize,
+			Instant lastUpdatedAt,
+			int configHash,
+			boolean isActive
+	) {
+		this(serverId, valveName, description, pipelineOrder, monitorMode, simulationMode,
+				serverWideBlocking, httpStatusCode, allowedRequestsPerSlot, slotLength, numberOfSlots,
+				shareOfRetainedFormerRequests, ipv4SubnetMask, ipv6SubnetMask, maxIPCacheSize,
+				maxBlockedIPCacheSize, relevantPaths, nonRelevantPaths, alwaysAllowedIPs,
+				alwaysForbiddenIPs, statusUri, statusAllowedIPs, collectorIntegration,
+				visitorCookieEnabled, visitorCookieName,
+				authTrackingEnabled, authTrackingMode, authCookieName, authLoginPaths,
+				authSessionTtlSeconds, maxAuthCacheSize, "ALL",
+				lastUpdatedAt, configHash, isActive);
+	}
+
 	/**
 	 * Backwards-compatible constructor without authTracking fields.
 	 */
@@ -266,6 +317,19 @@ public record MonitoredValve(
 			return authTrackingMode() + " (" + authCookieName + ")";
 		}
 		return authTrackingMode();
+	}
+
+	public String relevantAuthScope() {
+		return relevantAuthScope != null && !relevantAuthScope.isBlank() ? relevantAuthScope : "ALL";
+	}
+
+	public String relevantAuthScopeBadgeClass() {
+		String scope = relevantAuthScope().toUpperCase();
+		return switch (scope) {
+			case "AUTHENTICATED_ONLY" -> "badge-success";
+			case "UNAUTHENTICATED_ONLY" -> "badge-warning";
+			default -> "badge-secondary";
+		};
 	}
 
 	public boolean hasPathFilters() {

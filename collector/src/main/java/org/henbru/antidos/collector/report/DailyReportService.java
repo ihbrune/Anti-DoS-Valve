@@ -368,6 +368,9 @@ public class DailyReportService {
 					} else if (cfg.simulationMode()) {
 						modeLabel = "SIMULATION";
 					}
+					if (!"ALL".equalsIgnoreCase(cfg.relevantAuthScope())) {
+						modeLabel += " [" + (cfg.relevantAuthScope().equalsIgnoreCase("AUTHENTICATED_ONLY") ? "AUTH-ONLY" : "ANON-ONLY") + "]";
+					}
 				} else if (vMarkedRequests > 0 && vBlockedRequests == 0) {
 					modeLabel = "MARKING";
 				}

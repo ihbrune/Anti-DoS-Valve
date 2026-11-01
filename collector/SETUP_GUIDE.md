@@ -393,7 +393,7 @@ The database separates real-time transient telemetry, persistent subnet aggregat
 
 ### Key Tables Overview
 1. **`endpoint_heartbeats`:** Real-time health, latency, online/offline status, and valve discovery per monitored server node.
-2. **`monitored_valves`:** Persisted runtime configurations for each discovered Valve (`monitor_mode`, `simulation_mode`, rate-limit thresholds, slot duration, `visitor_cookie_enabled`, and `auth_tracking_enabled`).
+2. **`monitored_valves`:** Persisted runtime configurations for each discovered Valve (`monitor_mode`, `simulation_mode`, rate-limit thresholds, slot duration, `visitor_cookie_enabled`, `auth_tracking_enabled`, and `relevant_auth_scope`).
 3. **`slot_snapshots`:** Completed and active time slots per server and valve instance with total request counts, active counters, hard-blocked counters (`blocked_counters`, HTTP 429), and soft-marked/simulated counters (`marked_counters`).
 4. **`client_events`:** Granular rate-limit events distinguishing hard blocks (`status = 'BLOCKED'`), soft-marking/simulation threshold hits (`status = 'MARKED'`), and tracked active clients (`status = 'ACTIVE'`). Stores numeric IPv4/IPv6 boundaries (`ip_v4_start`, `ip_v4_end`) for sub-millisecond range lookups, visitor cookie and authentication counters (`returning_count`, `authenticated_count`), and first-trigger request samples (`sample_method`, `sample_uri`, `sample_user_agent`).
 5. **`client_subnet_rollups`:** Persistent time-bucket aggregations per `/24` (IPv4) or `/64` (IPv6) subnet partition tracking `total_requests`, `active_requests`, `blocked_requests`, `marked_requests`, returning visitor / authenticated ratios, distinct client counts, and botnet heuristic metrics.
