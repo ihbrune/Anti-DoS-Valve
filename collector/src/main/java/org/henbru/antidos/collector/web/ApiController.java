@@ -277,6 +277,15 @@ public class ApiController {
 		return analyticsService.getDashboardAnalytics(hours, servers, valves).scatterPoints();
 	}
 
+	@GetMapping("/analytics/advisor")
+	public org.henbru.antidos.collector.advisor.AdvisorReport analyticsAdvisor(
+			@RequestParam(name = "hours", defaultValue = "24") int hours,
+			@RequestParam(name = "servers", required = false) List<String> servers,
+			@RequestParam(name = "valves", required = false) List<String> valves) {
+		org.henbru.antidos.collector.model.AnalyticsDashboardDto dto = analyticsService.getDashboardAnalytics(hours, servers, valves);
+		return dto != null ? dto.advisorReport() : null;
+	}
+
 	@GetMapping("/valves")
 	public List<org.henbru.antidos.collector.model.MonitoredValve> listValves(
 			@RequestParam(name = "serverId", required = false) String serverId,

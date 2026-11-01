@@ -26,23 +26,34 @@ public class AnalyticsService {
 	private final SubnetRollupRepository subnetRollupRepository;
 	private final RollupAggregationService rollupAggregationService;
 	private final NetworkAnnotationService networkAnnotationService;
+	private final org.henbru.antidos.collector.advisor.AdvisorService advisorService;
 
 	@Autowired
 	public AnalyticsService(
 			SubnetRollupRepository subnetRollupRepository,
 			RollupAggregationService rollupAggregationService,
-			@Autowired(required = false) NetworkAnnotationService networkAnnotationService
+			@Autowired(required = false) NetworkAnnotationService networkAnnotationService,
+			@Autowired(required = false) org.henbru.antidos.collector.advisor.AdvisorService advisorService
 	) {
 		this.subnetRollupRepository = subnetRollupRepository;
 		this.rollupAggregationService = rollupAggregationService;
 		this.networkAnnotationService = networkAnnotationService;
+		this.advisorService = advisorService;
 	}
 
 	public AnalyticsService(
 			SubnetRollupRepository subnetRollupRepository,
 			RollupAggregationService rollupAggregationService
 	) {
-		this(subnetRollupRepository, rollupAggregationService, null);
+		this(subnetRollupRepository, rollupAggregationService, null, null);
+	}
+
+	public AnalyticsService(
+			SubnetRollupRepository subnetRollupRepository,
+			RollupAggregationService rollupAggregationService,
+			NetworkAnnotationService networkAnnotationService
+	) {
+		this(subnetRollupRepository, rollupAggregationService, networkAnnotationService, null);
 	}
 
 	public AnalyticsDashboardDto getDashboardAnalytics(
@@ -195,6 +206,9 @@ public class AnalyticsService {
 				? Math.round(((double) totalMarked / totalRequests) * 1000.0) / 10.0
 				: 0.0;
 
+		org.henbru.antidos.collector.advisor.AdvisorReport advisorReport = advisorService != null
+				? advisorService.generateReport(safeHours, servers, valves) : null;
+
 		return new AnalyticsDashboardDto(
 				from,
 				to,
@@ -207,7 +221,8 @@ public class AnalyticsService {
 				totalBlocked,
 				totalMarked,
 				blockedRatio,
-				markedRatio
+				markedRatio,
+				advisorReport
 		);
 	}
 

@@ -113,6 +113,7 @@ To provide an uncluttered forensic workflow, controls are logically partitioned 
   * **Focus Mode Tabs:**
     * `Timeline & Bot-Mix`: Dual view featuring the stacked Traffic & Attack Timeline alongside the Bot-Mix Donut.
     * `Subnet Scatterplot`: 2D cluster forensic map identifying distributed residential proxy networks.
+    * `Config Advisor`: Automated operational diagnostic engine detecting search engine crawler drops, blocked internal/RFC 1918 subnets, shared NAT risks, and edge offload opportunities.
   * **Time Horizon Selector (`1h`, `6h`, `24h`, `7d`):**
     * `1h`: High-resolution real-time monitoring of active incidents and sudden traffic surges.
     * `6h`: Shift-level analysis covering recent peak or off-peak business cycles.
@@ -235,7 +236,36 @@ Positioned directly beneath the scatter canvas, this interactive breakdown table
 
 ---
 
-### 5. Practical Investigation Workflows
+### 5. Configuration & False-Positive Advisor (`tab=advisor`)
+
+The **Config Advisor** is an automated diagnostic engine evaluating historical telemetry against rate-limiting heuristics to safeguard legitimate business traffic, prevent SEO damage, and optimize Valve configurations across the fleet.
+
+#### Diagnostic Rule Categories:
+1. **Search Engine Collateral (CRITICAL):**
+   * Detects verified crawlers (`Googlebot`, `Bingbot`, `Applebot`) receiving HTTP 429 rejections due to aggressive indexing bursts exceeding human-calibrated rate limits.
+   * Recommends adding crawler IP subnets to the Valve's `alwaysAllowedIPs` attribute or adjusting crawl path exclusions in `nonRelevantPaths`.
+2. **Internal & Private Infrastructure Blocked (CRITICAL / WARNING):**
+   * Identifies internal RFC 1918 traffic (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`) being throttled on public or internal-facing valves.
+   * Distinguishes between trusted intranet subnets that need whitelisting in `alwaysAllowedIPs` and unforwarded reverse proxy/load balancer traffic requiring Tomcat's `RemoteIpValve`.
+3. **Residential & NAT False-Positive Risk (WARNING):**
+   * Evaluates residential subnets with high returning cookie ratios ($\ge 75\%$) and multiple clients sharing an external IP.
+   * Recommends enabling visitor cookie tracking (`visitorCookieEnabled="true"`) to provide headroom for authenticated returning visitors without loosening the per-IP cap for new clients.
+4. **Cloud & Datacenter Attack Offloading (INFO):**
+   * Highlights massive cloud scraper waves (e.g. Microsoft Azure ASN 8075 or Google Cloud ASN 396982) safely mitigated by AntiDoSValve.
+   * Suggests edge firewall offloading (e.g., iptables / AWS WAF / Cloudflare) to conserve Tomcat thread resources during sustained volumetric attacks.
+
+#### Consolidated Directives & One-Click Snippets:
+* The Advisor aggregates all detected internal and crawler subnets into a single, clean regular expression pattern and provides a copy-ready XML snippet for Tomcat's `server.xml`:
+  ```xml
+  <Valve className="org.henbru.antidos.AntiDoSValve"
+         monitorName="PRIMARY-LIMITER"
+         alwaysAllowedIPs="10\.77\.25\..*|40\.77\.167\..*|52\.167\.144\..*|66\.249\.79\..*" />
+  ```
+* Programmatic access is available via REST at `/api/v1/analytics/advisor`.
+
+---
+
+### 6. Practical Investigation Workflows
 
 #### Workflow A: Unmasking a Stealth Residential Scraping Wave
 1. Navigate to `/analytics` and select the **24 Hours** or **7 Days** time horizon.

@@ -1,0 +1,596 @@
+package org.henbru.antidos.collector.advisor;
+
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.regex.Pattern;
+import org.henbru.antidos.collector.model.ClientType;
+import org.henbru.antidos.collector.model.MonitoredValve;
+import org.henbru.antidos.collector.storage.MonitoredValveRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+
+/**
+ * Service evaluating fleet telemetry and incident data against expert operational rules
+ * to detect rate-limiting false positives, search engine collateral damage, unwhitelisted
+ * internal subnets, and opportunities for edge defense offloading.
+ */
+@Service
+public class AdvisorService {
+
+	private static final Logger log = LoggerFactory.getLogger(AdvisorService.class);
+
+	private final JdbcTemplate jdbcTemplate;
+	private final MonitoredValveRepository monitoredValveRepository;
+
+	@Autowired
+	public AdvisorService(
+			JdbcTemplate jdbcTemplate,
+			@Autowired(required = false) MonitoredValveRepository monitoredValveRepository) {
+		this.jdbcTemplate = jdbcTemplate;
+		this.monitoredValveRepository = monitoredValveRepository;
+	}
+
+	public AdvisorReport generateReport(int hours, List<String> servers, List<String> valves) {
+		int safeHours = hours > 0 ? hours : 24;
+		Instant cutoff = Instant.now().minus(safeHours, ChronoUnit.HOURS);
+		Timestamp cutoffTs = Timestamp.from(cutoff);
+
+		List<AdvisorFinding> findings = new ArrayList<>();
+		Set<String> recommendedSubnets = new LinkedHashSet<>();
+
+		try {
+			// 1. Evaluate Search Engine Collateral Blocks (Googlebot, Bingbot, Applebot)
+			evaluateSearchEngineCollateral(cutoffTs, servers, valves, findings, recommendedSubnets);
+
+			// 2. Evaluate Internal / Private Infrastructure Blocks (RFC 1918)
+			evaluateInternalInfrastructure(cutoffTs, servers, valves, findings, recommendedSubnets);
+
+			// 3. Evaluate High-Returning Residential / NAT Clusters (Potential False Positives)
+			evaluateResidentialNatRisks(cutoffTs, servers, valves, findings);
+
+			// 4. Evaluate Massive Datacenter Scraping Waves (Offloading Candidates)
+			evaluateDatacenterScraping(cutoffTs, servers, valves, findings);
+		} catch (Exception e) {
+			log.error("Error evaluating advisor diagnostics: {}", e.getMessage(), e);
+		}
+
+		// Sort findings by severity: CRITICAL first, then WARNING, then INFO, then by blockedRequests DESC
+		findings.sort((a, b) -> {
+			int sevComp = a.severity().compareTo(b.severity());
+			if (sevComp != 0) {
+				return sevComp;
+			}
+			return Long.compare(b.blockedRequests(), a.blockedRequests());
+		});
+
+		int criticalCount = 0;
+		int warningCount = 0;
+		int infoCount = 0;
+		for (AdvisorFinding f : findings) {
+			switch (f.severity()) {
+				case CRITICAL -> criticalCount++;
+				case WARNING -> warningCount++;
+				case INFO -> infoCount++;
+			}
+		}
+
+		String consolidatedRegex = buildConsolidatedRegex(recommendedSubnets);
+		String consolidatedSnippet = buildConsolidatedServerXmlSnippet(consolidatedRegex);
+
+		return new AdvisorReport(
+				Instant.now(),
+				safeHours,
+				findings,
+				criticalCount,
+				warningCount,
+				infoCount,
+				recommendedSubnets,
+				consolidatedRegex,
+				consolidatedSnippet
+		);
+	}
+
+	private void evaluateSearchEngineCollateral(
+			Timestamp cutoff,
+			List<String> servers,
+			List<String> valves,
+			List<AdvisorFinding> findings,
+			Set<String> recommendedSubnets) {
+
+		StringBuilder sql = new StringBuilder("""
+				SELECT 
+				    r.server_id,
+				    r.valve_name,
+				    r.subnet_group,
+				    COALESCE(r.as_org, 'Search Engine Crawler') AS entity_name,
+				    r.client_type,
+				    SUM(r.total_requests) AS total_req,
+				    SUM(r.blocked_requests) AS blocked_req,
+				    MAX(r.max_requests_per_client) AS peak_req
+				FROM client_subnet_rollups r
+				WHERE r.client_type = 'SEARCH_ENGINE'
+				  AND r.blocked_requests > 0
+				  AND r.bucket_start >= ?
+				""");
+
+		List<Object> params = new ArrayList<>();
+		params.add(cutoff);
+		appendFilterClauses(sql, params, servers, valves);
+		sql.append(" GROUP BY r.server_id, r.valve_name, r.subnet_group, r.as_org, r.client_type ORDER BY blocked_req DESC LIMIT 20");
+
+		jdbcTemplate.query(sql.toString(), rs -> {
+			String serverId = rs.getString("server_id");
+			String valveName = rs.getString("valve_name");
+			String subnetGroup = rs.getString("subnet_group");
+			String entityName = rs.getString("entity_name");
+			ClientType clientType = ClientType.valueOf(rs.getString("client_type"));
+			long totalReq = rs.getLong("total_req");
+			long blockedReq = rs.getLong("blocked_req");
+			int peakReq = rs.getInt("peak_req");
+
+			double blockPct = totalReq > 0 ? (double) blockedReq / totalReq * 100.0 : 100.0;
+			blockPct = Math.round(blockPct * 10.0) / 10.0;
+
+			ValveConfigInfo valveInfo = resolveValveConfig(serverId, valveName);
+			String subnetRegex = cidrToRegex(subnetGroup);
+			recommendedSubnets.add(subnetGroup);
+
+			String suggestedRegex = mergeWithExistingRegex(valveInfo.alwaysAllowedIps, subnetRegex);
+			String suggestedXml = String.format("""
+					<!-- Update Valve '%s' in server.xml on %s to exempt verified search engine crawlers: -->
+					<Valve className="org.henbru.antidos.AntiDoSValve"
+					       monitorName="%s"
+					       alwaysAllowedIPs="%s" />""",
+					valveName, serverId, valveName, suggestedRegex);
+
+			String explanation = String.format(
+					"Verified search engine crawler '%s' in subnet %s was blocked %d times (%.1f%% of %d requests) by valve '%s' on node '%s'. " +
+					"The crawler generated up to %d requests per client in a single slot, exceeding the configured limit of %s req / %ss.",
+					entityName, subnetGroup, blockedReq, blockPct, totalReq, valveName, serverId,
+					peakReq, formatLimit(valveInfo.allowedRequestsPerSlot), formatSlotLength(valveInfo.slotLength));
+
+			String recommendation = String.format(
+					"Search engine crawlers should not be rate-limited by strict human-oriented thresholds, as dropped requests result in HTTP 429 and indexing dropouts. " +
+					"Whitelist subnet '%s' by updating 'alwaysAllowedIPs=\"%s\"' on valve '%s', or grant crawler paths higher limits.",
+					subnetGroup, suggestedRegex, valveName);
+
+			String id = "se-" + sanitizeId(serverId + "-" + valveName + "-" + subnetGroup);
+			String title = String.format("%s Crawlers Blocked by '%s' on %s", entityName, valveName, serverId);
+
+			findings.add(new AdvisorFinding(
+					id,
+					AdvisorCategory.SEARCH_ENGINE_COLLATERAL,
+					AdvisorSeverity.CRITICAL,
+					title,
+					serverId,
+					valveName,
+					subnetGroup,
+					entityName,
+					clientType,
+					totalReq,
+					blockedReq,
+					blockPct,
+					peakReq,
+					valveInfo.allowedRequestsPerSlot,
+					valveInfo.slotLength,
+					valveInfo.alwaysAllowedIps,
+					explanation,
+					recommendation,
+					suggestedXml,
+					suggestedRegex
+			));
+		}, params.toArray());
+	}
+
+	private void evaluateInternalInfrastructure(
+			Timestamp cutoff,
+			List<String> servers,
+			List<String> valves,
+			List<AdvisorFinding> findings,
+			Set<String> recommendedSubnets) {
+
+		StringBuilder sql = new StringBuilder("""
+				SELECT 
+				    r.server_id,
+				    r.valve_name,
+				    r.subnet_group,
+				    COALESCE(r.as_org, 'Private Network (RFC 1918)') AS entity_name,
+				    r.client_type,
+				    SUM(r.total_requests) AS total_req,
+				    SUM(r.blocked_requests) AS blocked_req,
+				    MAX(r.max_requests_per_client) AS peak_req
+				FROM client_subnet_rollups r
+				WHERE r.client_type = 'PRIVATE_NETWORK'
+				  AND r.blocked_requests > 0
+				  AND r.bucket_start >= ?
+				""");
+
+		List<Object> params = new ArrayList<>();
+		params.add(cutoff);
+		appendFilterClauses(sql, params, servers, valves);
+		sql.append(" GROUP BY r.server_id, r.valve_name, r.subnet_group, r.as_org, r.client_type ORDER BY blocked_req DESC LIMIT 20");
+
+		jdbcTemplate.query(sql.toString(), rs -> {
+			String serverId = rs.getString("server_id");
+			String valveName = rs.getString("valve_name");
+			String subnetGroup = rs.getString("subnet_group");
+			String entityName = rs.getString("entity_name");
+			ClientType clientType = ClientType.valueOf(rs.getString("client_type"));
+			long totalReq = rs.getLong("total_req");
+			long blockedReq = rs.getLong("blocked_req");
+			int peakReq = rs.getInt("peak_req");
+
+			double blockPct = totalReq > 0 ? (double) blockedReq / totalReq * 100.0 : 100.0;
+			blockPct = Math.round(blockPct * 10.0) / 10.0;
+
+			ValveConfigInfo valveInfo = resolveValveConfig(serverId, valveName);
+			String subnetRegex = cidrToRegex(subnetGroup);
+			recommendedSubnets.add(subnetGroup);
+
+			AdvisorSeverity severity = (blockedReq >= 500 || blockPct >= 50.0) ? AdvisorSeverity.CRITICAL : AdvisorSeverity.WARNING;
+			String suggestedRegex = mergeWithExistingRegex(valveInfo.alwaysAllowedIps, subnetRegex);
+			String suggestedXml = String.format("""
+					<!-- Whitelist internal subnet '%s' on Valve '%s' in server.xml on %s: -->
+					<Valve className="org.henbru.antidos.AntiDoSValve"
+					       monitorName="%s"
+					       alwaysAllowedIPs="%s" />""",
+					subnetGroup, valveName, serverId, valveName, suggestedRegex);
+
+			String explanation = String.format(
+					"Internal infrastructure or intranet clients in subnet %s were blocked %d times (%.1f%%) by valve '%s' on node '%s' (peak %d req/client vs. limit %s). " +
+					"This typically happens when internal services/users access public endpoints without whitelisting, or when a reverse proxy / ingress controller IP is evaluated because RemoteIpValve is missing.",
+					subnetGroup, blockedReq, blockPct, valveName, serverId, peakReq, formatLimit(valveInfo.allowedRequestsPerSlot));
+
+			String recommendation = String.format(
+					"1) If this subnet represents trusted corporate, campus, or service networks: Whitelist the subnet in 'alwaysAllowedIPs=\"%s\"' on valve '%s'.\n" +
+					"2) If traffic passes through an internal reverse proxy (Nginx, HAProxy, AWS ALB): Ensure Tomcat's RemoteIpValve is placed before AntiDoSValve with remoteIpHeader=\"x-forwarded-for\" so actual client IPs are seen.",
+					suggestedRegex, valveName);
+
+			String id = "priv-" + sanitizeId(serverId + "-" + valveName + "-" + subnetGroup);
+			String title = String.format("Internal RFC 1918 Network (%s) Blocked by '%s' on %s", subnetGroup, valveName, serverId);
+
+			findings.add(new AdvisorFinding(
+					id,
+					AdvisorCategory.INTERNAL_INFRASTRUCTURE,
+					severity,
+					title,
+					serverId,
+					valveName,
+					subnetGroup,
+					entityName,
+					clientType,
+					totalReq,
+					blockedReq,
+					blockPct,
+					peakReq,
+					valveInfo.allowedRequestsPerSlot,
+					valveInfo.slotLength,
+					valveInfo.alwaysAllowedIps,
+					explanation,
+					recommendation,
+					suggestedXml,
+					suggestedRegex
+			));
+		}, params.toArray());
+	}
+
+	private void evaluateResidentialNatRisks(
+			Timestamp cutoff,
+			List<String> servers,
+			List<String> valves,
+			List<AdvisorFinding> findings) {
+
+		StringBuilder sql = new StringBuilder("""
+				SELECT 
+				    r.server_id,
+				    r.valve_name,
+				    r.subnet_group,
+				    COALESCE(r.as_org, 'Residential ISP') AS entity_name,
+				    COALESCE(r.country_code, 'XX') AS country_code,
+				    r.client_type,
+				    SUM(r.total_requests) AS total_req,
+				    SUM(r.blocked_requests) AS blocked_req,
+				    MAX(r.distinct_clients) AS max_clients,
+				    MAX(r.max_requests_per_client) AS peak_req,
+				    ROUND(SUM(r.returning_requests) * 100.0 / NULLIF(SUM(r.returning_tracked_requests), 0), 1) AS ret_pct
+				FROM client_subnet_rollups r
+				WHERE r.client_type IN ('RESIDENTIAL', 'UNKNOWN')
+				  AND r.blocked_requests >= 50
+				  AND r.bucket_start >= ?
+				""");
+
+		List<Object> params = new ArrayList<>();
+		params.add(cutoff);
+		appendFilterClauses(sql, params, servers, valves);
+		sql.append(" GROUP BY r.server_id, r.valve_name, r.subnet_group, r.as_org, r.country_code, r.client_type " +
+				" HAVING ret_pct >= 75.0 ORDER BY blocked_req DESC LIMIT 10");
+
+		jdbcTemplate.query(sql.toString(), rs -> {
+			String serverId = rs.getString("server_id");
+			String valveName = rs.getString("valve_name");
+			String subnetGroup = rs.getString("subnet_group");
+			String entityName = rs.getString("entity_name");
+			String country = rs.getString("country_code");
+			ClientType clientType = ClientType.valueOf(rs.getString("client_type"));
+			long totalReq = rs.getLong("total_req");
+			long blockedReq = rs.getLong("blocked_req");
+			int maxClients = rs.getInt("max_clients");
+			int peakReq = rs.getInt("peak_req");
+			double retPct = rs.getDouble("ret_pct");
+
+			double blockPct = totalReq > 0 ? (double) blockedReq / totalReq * 100.0 : 100.0;
+			blockPct = Math.round(blockPct * 10.0) / 10.0;
+
+			ValveConfigInfo valveInfo = resolveValveConfig(serverId, valveName);
+
+			String explanation = String.format(
+					"Subnet %s (%s, %s) had %d blocked requests (%.1f%%) on valve '%s', despite having a very high returning visitor ratio (%.1f%% returning cookies) and %d distinct client(s). " +
+					"This indicates legitimate returning users or a shared Carrier-Grade NAT (CGNAT) / university / corporate network where multiple users share an external IP.",
+					subnetGroup, entityName, country, blockedReq, blockPct, valveName, retPct, maxClients);
+
+			String recommendation = String.format(
+					"To avoid false-positive lockouts for legitimate returning users:\n" +
+					"1) Enable visitor cookie tracking: set visitorCookieEnabled=\"true\" on valve '%s' so returning users receive higher request headroom.\n" +
+					"2) If this is an IP-level valve (/32) and users share an IP, consider switching to subnet aggregation (ipv4SubnetMask=\"24\") with increased allowedRequestsPerSlot.",
+					valveName);
+
+			String suggestedXml = String.format("""
+					<!-- Enable visitor cookie tracking on Valve '%s' in server.xml: -->
+					<Valve className="org.henbru.antidos.AntiDoSValve"
+					       monitorName="%s"
+					       visitorCookieEnabled="true"
+					       visitorCookieName="_adv" />""",
+					valveName, valveName);
+
+			String id = "nat-" + sanitizeId(serverId + "-" + valveName + "-" + subnetGroup);
+			String title = String.format("Potential NAT / Returning User False-Positive (%s, %s)", subnetGroup, entityName);
+
+			findings.add(new AdvisorFinding(
+					id,
+					AdvisorCategory.RESIDENTIAL_TUNING,
+					AdvisorSeverity.WARNING,
+					title,
+					serverId,
+					valveName,
+					subnetGroup,
+					entityName + " (" + country + ")",
+					clientType,
+					totalReq,
+					blockedReq,
+					blockPct,
+					peakReq,
+					valveInfo.allowedRequestsPerSlot,
+					valveInfo.slotLength,
+					valveInfo.alwaysAllowedIps,
+					explanation,
+					recommendation,
+					suggestedXml,
+					null
+			));
+		}, params.toArray());
+	}
+
+	private void evaluateDatacenterScraping(
+			Timestamp cutoff,
+			List<String> servers,
+			List<String> valves,
+			List<AdvisorFinding> findings) {
+
+		StringBuilder sql = new StringBuilder("""
+				SELECT 
+				    r.server_id,
+				    r.valve_name,
+				    COALESCE(r.asn, 0) AS asn,
+				    COALESCE(r.as_org, 'Datacenter / Cloud') AS entity_name,
+				    COUNT(DISTINCT r.subnet_group) AS subnets,
+				    SUM(r.total_requests) AS total_req,
+				    SUM(r.blocked_requests) AS blocked_req
+				FROM client_subnet_rollups r
+				WHERE r.client_type = 'DATACENTER'
+				  AND r.blocked_requests >= 5000
+				  AND r.bucket_start >= ?
+				""");
+
+		List<Object> params = new ArrayList<>();
+		params.add(cutoff);
+		appendFilterClauses(sql, params, servers, valves);
+		sql.append(" GROUP BY r.server_id, r.valve_name, r.asn, r.as_org ORDER BY blocked_req DESC LIMIT 5");
+
+		jdbcTemplate.query(sql.toString(), rs -> {
+			String serverId = rs.getString("server_id");
+			String valveName = rs.getString("valve_name");
+			long asn = rs.getLong("asn");
+			String entityName = rs.getString("entity_name");
+			int subnets = rs.getInt("subnets");
+			long totalReq = rs.getLong("total_req");
+			long blockedReq = rs.getLong("blocked_req");
+
+			double blockPct = totalReq > 0 ? (double) blockedReq / totalReq * 100.0 : 100.0;
+			blockPct = Math.round(blockPct * 10.0) / 10.0;
+
+			ValveConfigInfo valveInfo = resolveValveConfig(serverId, valveName);
+
+			String explanation = String.format(
+					"AntiDoSValve successfully blocked %d requests (%.1f%%) originating from %d distinct subnets in %s (ASN %d) on valve '%s'. " +
+					"The Valve is actively mitigating this cloud scraping/scanning wave.",
+					blockedReq, blockPct, subnets, entityName, asn, valveName);
+
+			String recommendation = String.format(
+					"The Anti-DoS Valve is working as intended. However, processing tens of thousands of malicious requests in Tomcat threads consumes CPU and socket resources. " +
+					"Consider offloading ASN %d or its primary CIDR blocks to an upstream firewall (iptables, nftables, AWS WAF, or Cloudflare edge rule) during sustained attacks.",
+					asn);
+
+			String iptablesRule = asn > 0 ? "# Block ASN " + asn + " (" + entityName + ") at edge or via iptables" : "";
+
+			String id = "dc-" + sanitizeId(serverId + "-" + valveName + "-asn" + asn);
+			String title = String.format("High-Volume Cloud Scraping from %s (ASN %d, %d subnets)", entityName, asn, subnets);
+
+			findings.add(new AdvisorFinding(
+					id,
+					AdvisorCategory.DATACENTER_OFFLOAD,
+					AdvisorSeverity.INFO,
+					title,
+					serverId,
+					valveName,
+					"ASN " + asn + " (" + subnets + " subnets)",
+					entityName,
+					ClientType.DATACENTER,
+					totalReq,
+					blockedReq,
+					blockPct,
+					0,
+					valveInfo.allowedRequestsPerSlot,
+					valveInfo.slotLength,
+					valveInfo.alwaysAllowedIps,
+					explanation,
+					recommendation,
+					null,
+					iptablesRule
+			));
+		}, params.toArray());
+	}
+
+	private void appendFilterClauses(StringBuilder sql, List<Object> params, List<String> servers, List<String> valves) {
+		if (servers != null && !servers.isEmpty()) {
+			sql.append(" AND r.server_id IN (");
+			for (int i = 0; i < servers.size(); i++) {
+				if (i > 0) sql.append(", ");
+				sql.append("?");
+				params.add(servers.get(i));
+			}
+			sql.append(")");
+		}
+		if (valves != null && !valves.isEmpty()) {
+			sql.append(" AND r.valve_name IN (");
+			for (int i = 0; i < valves.size(); i++) {
+				if (i > 0) sql.append(", ");
+				sql.append("?");
+				params.add(valves.get(i));
+			}
+			sql.append(")");
+		}
+	}
+
+	public static String cidrToRegex(String cidr) {
+		if (cidr == null || cidr.isBlank()) {
+			return "";
+		}
+		cidr = cidr.trim();
+		if (!cidr.contains("/")) {
+			return cidr.replace(".", "\\.");
+		}
+		String[] parts = cidr.split("/");
+		String ip = parts[0];
+		int prefix;
+		try {
+			prefix = Integer.parseInt(parts[1]);
+		} catch (NumberFormatException e) {
+			prefix = 24;
+		}
+
+		if (ip.contains(".")) {
+			String[] octets = ip.split("\\.");
+			if (prefix <= 8 && octets.length >= 1) {
+				return octets[0] + "\\..*";
+			} else if (prefix <= 16 && octets.length >= 2) {
+				return octets[0] + "\\." + octets[1] + "\\..*";
+			} else if (prefix <= 24 && octets.length >= 3) {
+				return octets[0] + "\\." + octets[1] + "\\." + octets[2] + "\\..*";
+			} else if (octets.length >= 4) {
+				return octets[0] + "\\." + octets[1] + "\\." + octets[2] + "\\." + octets[3];
+			}
+		} else if (ip.contains(":")) {
+			int colonCount = prefix / 16;
+			String[] hextets = ip.split(":");
+			StringBuilder sb = new StringBuilder();
+			for (int i = 0; i < Math.min(colonCount, hextets.length); i++) {
+				if (!hextets[i].isEmpty()) {
+					if (sb.length() > 0) sb.append(":");
+					sb.append(hextets[i]);
+				}
+			}
+			return sb.length() > 0 ? sb.append(":.*").toString() : ip + ".*";
+		}
+		return Pattern.quote(ip) + ".*";
+	}
+
+	public static String mergeWithExistingRegex(String existing, String newSubnetRegex) {
+		if (existing == null || existing.isBlank()) {
+			return newSubnetRegex;
+		}
+		existing = existing.trim();
+		if (existing.contains(newSubnetRegex)) {
+			return existing;
+		}
+		return existing + "|" + newSubnetRegex;
+	}
+
+	private String buildConsolidatedRegex(Set<String> subnets) {
+		if (subnets == null || subnets.isEmpty()) {
+			return "";
+		}
+		List<String> regexes = new ArrayList<>();
+		for (String s : subnets) {
+			String r = cidrToRegex(s);
+			if (!r.isBlank() && !regexes.contains(r)) {
+				regexes.add(r);
+			}
+		}
+		return String.join("|", regexes);
+	}
+
+	private String buildConsolidatedServerXmlSnippet(String consolidatedRegex) {
+		if (consolidatedRegex == null || consolidatedRegex.isBlank()) {
+			return "<!-- No unwhitelisted internal subnets or blocked search engines detected. -->";
+		}
+		return String.format("""
+				<!-- Consolidated AntiDoSValve alwaysAllowedIPs configuration: -->
+				<Valve className="org.henbru.antidos.AntiDoSValve"
+				       monitorName="PRIMARY-LIMITER"
+				       alwaysAllowedIPs="%s" />""",
+				consolidatedRegex);
+	}
+
+	private ValveConfigInfo resolveValveConfig(String serverId, String valveName) {
+		if (monitoredValveRepository != null) {
+			try {
+				Optional<MonitoredValve> opt = monitoredValveRepository.findByServerIdAndValveName(serverId, valveName);
+				if (opt.isPresent()) {
+					MonitoredValve v = opt.get();
+					return new ValveConfigInfo(
+							v.allowedRequestsPerSlot() >= 0 ? v.allowedRequestsPerSlot() : null,
+							v.slotLength() > 0 ? v.slotLength() : null,
+							v.alwaysAllowedIPs()
+					);
+				}
+			} catch (Exception e) {
+				log.debug("Could not resolve valve config for {}/{}: {}", serverId, valveName, e.getMessage());
+			}
+		}
+		return new ValveConfigInfo(null, null, null);
+	}
+
+	private static String sanitizeId(String s) {
+		return s.replaceAll("[^a-zA-Z0-9_-]", "-").toLowerCase();
+	}
+
+	private static String formatLimit(Integer limit) {
+		return limit != null ? String.valueOf(limit) : "N/A";
+	}
+
+	private static String formatSlotLength(Integer slotLength) {
+		return slotLength != null ? String.valueOf(slotLength) : "N/A";
+	}
+
+	private record ValveConfigInfo(Integer allowedRequestsPerSlot, Integer slotLength, String alwaysAllowedIps) {}
+}

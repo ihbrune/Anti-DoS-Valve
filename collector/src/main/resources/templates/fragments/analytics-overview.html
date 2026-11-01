@@ -42,6 +42,20 @@
                         style="padding: 5px 12px; font-size: 12px;">
                     <span>&#x1F3AF;</span> Subnet Scatterplot
                 </button>
+                <button type="button"
+                        class="btn"
+                        th:classappend="${activeTab == 'advisor' ? 'btn-primary' : ''}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='advisor',servers=${selectedServers},valves=${selectedValves})}"
+                        hx-target="#analytics-container"
+                        hx-swap="outerHTML"
+                        style="padding: 5px 12px; font-size: 12px; position: relative;">
+                    <span>&#x1F4A1;</span> Config Advisor
+                    <span th:if="${analytics != null and analytics.advisorReport != null and !analytics.advisorReport.findings.isEmpty()}"
+                          class="badge"
+                          th:classappend="${analytics.advisorReport.criticalCount > 0 ? 'badge-danger' : 'badge-warning'}"
+                          style="font-size: 10px; padding: 1px 6px; margin-left: 4px;"
+                          th:text="${analytics.advisorReport.findings.size()}">2</span>
+                </button>
             </div>
 
             <!-- Time Window Selector -->
@@ -74,8 +88,30 @@
         </div>
     </div>
 
+    <!-- Advisor Warning Banner (shown when configuration risks are detected and operator is on another tab) -->
+    <div th:if="${analytics != null and analytics.advisorReport != null and (analytics.advisorReport.criticalCount > 0 or analytics.advisorReport.warningCount > 0) and activeTab != 'advisor'}"
+         class="alert alert-warning"
+         style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 16px; border-radius: var(--radius-md); animation: fadeIn 0.3s ease-in-out;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 18px;">&#x26A0;&#xFE0F;</span>
+            <div style="font-size: 12.5px; line-height: 1.4;">
+                <strong>Configuration &amp; False-Positive Advisor:</strong>
+                Detected <span th:text="${analytics.advisorReport.criticalCount}" style="font-weight: 700;">1</span> critical and
+                <span th:text="${analytics.advisorReport.warningCount}" style="font-weight: 700;">1</span> warning issue(s)
+                (e.g. verified search engines or internal RFC 1918 traffic being blocked).
+            </div>
+        </div>
+        <button type="button" class="btn btn-primary"
+                th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='advisor',servers=${selectedServers},valves=${selectedValves})}"
+                hx-target="#analytics-container"
+                hx-swap="outerHTML"
+                style="padding: 5px 12px; font-size: 11.5px; white-space: nowrap;">
+            <span>&#x1F4A1;</span> Review Recommendations &rarr;
+        </button>
+    </div>
+
     <!-- Empty State -->
-    <div th:if="${analytics == null or (analytics.timeline.empty and analytics.composition.empty and analytics.scatterPoints.empty)}"
+    <div th:if="${analytics == null or (analytics.timeline.empty and analytics.composition.empty and analytics.scatterPoints.empty and (analytics.advisorReport == null or analytics.advisorReport.findings.empty))}"
          style="text-align: center; padding: 40px 20px; color: var(--text-muted);">
         <div style="font-size: 32px; margin-bottom: 8px;">&#x1F4BE;</div>
         <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">No Aggregated Rollups Yet</div>
@@ -91,7 +127,7 @@
     </div>
 
     <!-- View A: Timeline & Bot-Mix Charts (Step 1) -->
-    <div th:if="${analytics != null and (!analytics.timeline.empty or !analytics.composition.empty) and activeTab != 'scatter'}"
+    <div th:if="${analytics != null and (!analytics.timeline.empty or !analytics.composition.empty) and activeTab != 'scatter' and activeTab != 'advisor'}"
          style="display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr); gap: 20px; align-items: stretch;">
 
         <!-- Left Column: Traffic & Attack Timeline -->
@@ -346,6 +382,156 @@
         </div>
     </div>
 
+    <!-- View C: Configuration & False-Positive Advisor (Step 3) -->
+    <div th:if="${analytics != null and activeTab == 'advisor'}" style="display: flex; flex-direction: column; gap: 20px;">
+
+        <!-- Summary KPI Row -->
+        <div class="stats-grid" style="margin-bottom: 0;">
+            <div class="stat-card">
+                <div class="stat-label">Critical Alerts</div>
+                <div class="stat-value danger" th:text="${analytics.advisorReport != null ? analytics.advisorReport.criticalCount : 0}">
+                    0
+                </div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
+                    Search engines or core infrastructure blocked
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Warnings &amp; NAT Risks</div>
+                <div class="stat-value warning" th:text="${analytics.advisorReport != null ? analytics.advisorReport.warningCount : 0}">
+                    0
+                </div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
+                    Shared IP / returning user throttling
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Edge Offload Candidates</div>
+                <div class="stat-value info" th:text="${analytics.advisorReport != null ? analytics.advisorReport.infoCount : 0}">
+                    0
+                </div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
+                    High-volume cloud bot scraping waves
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Recommended Whitelist Subnets</div>
+                <div class="stat-value success" th:text="${analytics.advisorReport != null ? analytics.advisorReport.recommendedAlwaysAllowedSubnets.size() : 0}">
+                    0
+                </div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
+                    Subnets suggested for alwaysAllowedIPs
+                </div>
+            </div>
+        </div>
+
+        <!-- Consolidated Quick-Fix Box if recommended subnets exist -->
+        <div th:if="${analytics.advisorReport != null and !analytics.advisorReport.recommendedAlwaysAllowedSubnets.isEmpty()}"
+             style="background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: var(--radius-md); padding: 18px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 12px; flex-wrap: wrap;">
+                <div>
+                    <div style="font-size: 14px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                        <span>&#x1F6E1;&#xFE0F;</span> Consolidated Whitelist Directives (Tomcat server.xml)
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                        The advisor detected internal networks or verified crawlers hitting strict limits. Add these to <code>alwaysAllowedIPs</code> on the relevant valve(s):
+                    </div>
+                </div>
+                <button type="button" class="btn btn-primary"
+                        onclick="copyAdvisorCode('consolidated-server-xml', this)"
+                        style="padding: 6px 14px; font-size: 12px;">
+                    <span>&#x1F4CB;</span> Copy XML Snippet
+                </button>
+            </div>
+
+            <!-- Display suggested subnets pills -->
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+                <span th:each="sub : ${analytics.advisorReport.recommendedAlwaysAllowedSubnets}"
+                      class="badge badge-info" style="font-size: 11.5px; padding: 4px 8px; font-family: ui-monospace, monospace;"
+                      th:text="${sub}">10.77.25.0/24</span>
+            </div>
+
+            <pre id="consolidated-server-xml" style="background: rgba(0,0,0,0.35); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; font-size: 11.5px; overflow-x: auto; color: var(--text-primary); margin: 0; line-height: 1.45;"><code th:text="${analytics.advisorReport.consolidatedServerXmlSnippet}"></code></pre>
+        </div>
+
+        <!-- Empty State if no findings -->
+        <div th:if="${analytics.advisorReport == null or analytics.advisorReport.findings.isEmpty()}"
+             style="text-align: center; padding: 50px 20px; color: var(--text-muted); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+            <div style="font-size: 36px; margin-bottom: 10px;">&#x2705;</div>
+            <div style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px;">
+                Optimal Configuration &mdash; No False Positives Detected
+            </div>
+            <div style="font-size: 12.5px; max-width: 520px; margin: 0 auto; line-height: 1.4;">
+                No verified search engine crawlers or internal private network addresses were blocked in this time window.
+                Rate limits are well-tuned for your observed traffic profile.
+            </div>
+        </div>
+
+        <!-- Findings List -->
+        <div th:if="${analytics.advisorReport != null and !analytics.advisorReport.findings.isEmpty()}"
+             style="display: flex; flex-direction: column; gap: 16px;">
+            <div th:each="f : ${analytics.advisorReport.findings}"
+                 class="sys-card" style="padding: 18px; margin: 0; border-left: 4px solid var(--border-color);"
+                 th:styleappend="${f.severity.name() == 'CRITICAL' ? 'border-left-color: var(--color-danger);' : (f.severity.name() == 'WARNING' ? 'border-left-color: var(--color-warning);' : 'border-left-color: var(--color-info);')}">
+
+                <!-- Finding Header -->
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; flex-wrap: wrap;">
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
+                            <span th:if="${f.severity.name() == 'CRITICAL'}" class="badge badge-danger">CRITICAL</span>
+                            <span th:if="${f.severity.name() == 'WARNING'}" class="badge badge-warning">WARNING</span>
+                            <span th:if="${f.severity.name() == 'INFO'}" class="badge badge-info">INFO</span>
+                            <span class="badge badge-secondary" th:text="${f.category.label}">Internal Infrastructure</span>
+                            <span style="font-size: 12px; color: var(--text-muted);" th:text="'Node: ' + ${f.serverId} + ' &bull; Valve: ' + ${f.valveName}">Node: Pub03</span>
+                        </div>
+                        <div style="font-size: 14.5px; font-weight: 700; color: var(--text-primary);" th:text="${f.title}">
+                            Internal RFC 1918 Network (10.77.25.0/24) Blocked by 'FUER ALLE' on Pub04
+                        </div>
+                    </div>
+
+                    <!-- Metrics Badges -->
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <div style="text-align: right;">
+                            <div style="font-size: 13px; font-weight: 700; color: var(--color-danger);"
+                                 th:text="${#numbers.formatInteger(f.blockedRequests, 1, 'COMMA')} + ' Blocked'">4,547 Blocked</div>
+                            <div style="font-size: 11px; color: var(--text-muted);"
+                                 th:text="${f.blockPercentage} + '% block rate (' + ${#numbers.formatInteger(f.totalRequests, 1, 'COMMA')} + ' reqs)'">100% block rate</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Explanation Paragraph -->
+                <div style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.45; margin-bottom: 12px;"
+                     th:text="${f.explanation}">
+                    Explanation text...
+                </div>
+
+                <!-- Recommendation & Action Box -->
+                <div style="background: rgba(0,0,0,0.22); border-radius: var(--radius-sm); border: 1px solid var(--border-color); padding: 12px 14px; margin-bottom: 12px;">
+                    <div style="font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                        <span>&#x1F4A1;</span> Recommended Action:
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.45; white-space: pre-line;"
+                         th:text="${f.recommendation}">
+                        Recommendation text...
+                    </div>
+                </div>
+
+                <!-- Suggested Configuration XML Snippet if available -->
+                <div th:if="${f.suggestedConfigXml != null}">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <span style="font-size: 11px; font-weight: 600; color: var(--text-muted);">Suggested Tomcat server.xml Configuration:</span>
+                        <button type="button" class="btn" style="padding: 2px 8px; font-size: 11px;"
+                                th:attr="onclick='copyAdvisorCode(\'code-' + ${f.id} + '\', this)'">
+                            Copy Directive
+                        </button>
+                    </div>
+                    <pre th:id="'code-' + ${f.id}" style="background: rgba(0,0,0,0.35); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 11px; overflow-x: auto; color: var(--text-primary); margin: 0; line-height: 1.4;"><code th:text="${f.suggestedConfigXml}"></code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Hidden Raw JSON container for safe chart initialization (must use th:utext to avoid HTML entity encoding &quot; in script tags) -->
     <script type="application/json" class="analytics-data-payload" id="analytics-data-payload" th:utext="${analyticsJson != null ? analyticsJson : '{}'}"></script>
 
@@ -489,6 +675,26 @@
                 });
 
                 rows.forEach(r => tbody.appendChild(r));
+            };
+
+            window.copyAdvisorCode = function(elementId, btn) {
+                let text = '';
+                const el = document.getElementById(elementId);
+                if (el) {
+                    text = el.innerText || el.textContent;
+                }
+                if (!text && btn && btn.nextElementSibling) {
+                    text = btn.nextElementSibling.innerText || btn.nextElementSibling.textContent;
+                }
+                if (text) {
+                    navigator.clipboard.writeText(text.trim()).then(() => {
+                        const orig = btn.innerHTML;
+                        btn.innerHTML = '<span>&#x2705;</span> Copied!';
+                        setTimeout(() => { btn.innerHTML = orig; }, 2000);
+                    }).catch(err => {
+                        console.error('Copy failed:', err);
+                    });
+                }
             };
 
             scheduleInit();

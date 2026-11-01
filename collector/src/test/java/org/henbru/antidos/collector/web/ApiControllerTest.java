@@ -131,4 +131,18 @@ class ApiControllerTest {
 		mockMvc.perform(get("/api/v1/valves/Non-Existent?serverId=SERVER-ALPHA"))
 				.andExpect(status().isNotFound());
 	}
+
+	@Test
+	void testGetAnalyticsAdvisorApi() throws Exception {
+		mockMvc.perform(get("/api/v1/analytics/advisor")
+						.param("hours", "24"))
+				.andExpect(status().isOk())
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+				.andExpect(jsonPath("$.findings").isArray())
+				.andExpect(jsonPath("$.criticalCount").isNumber())
+				.andExpect(jsonPath("$.warningCount").isNumber())
+				.andExpect(jsonPath("$.infoCount").isNumber())
+				.andExpect(jsonPath("$.consolidatedAlwaysAllowedRegex").exists())
+				.andExpect(jsonPath("$.consolidatedServerXmlSnippet").exists());
+	}
 }
