@@ -145,7 +145,7 @@ When an incoming HTTP request reaches the valve, it is processed in two distinct
    * **Authentication Session Tracking (`authTrackingMode="COOKIE"`)**: If an upstream Valve hasn't already checked authentication, the Valve extracts `authCookieName` from incoming `Cookie` headers and checks if its salted 64-bit hash exists in the server-wide `AntiDoSAuthSessionCache`. It attaches `org.henbru.antidos.AUTHENTICATED` (`true`/`false`) as a request attribute.
 
 1. **Static Blacklist (`alwaysForbiddenIPs`)**: Does the client IP address match the regular expression pattern? &rarr; **Block (HTTP error code)**.  
-   *(Evaluated directly on the individual client IP address string; request is not counted in the dynamic rate monitor).*
+   *(Evaluated directly on the individual client IP address string; by default not counted in the dynamic rate monitor, or registered as BLOCKED with limit 0 when `trackAlwaysForbiddenInMonitor="true"`).*
 2. **Static Whitelist (`alwaysAllowedIPs`)**: Does the client IP address match the regular expression pattern? &rarr; **Allow**.  
    *(Evaluated directly on the individual client IP address string; request is not counted in the dynamic rate monitor).*
 3. **Path Whitelist (`nonRelevantPaths`)**: Does the request URI match `nonRelevantPaths`? &rarr; **Allow**.  
@@ -202,6 +202,13 @@ An optional regular expression defining IP addresses that are always blocked. Th
 *Tip:* You can use [RegexPlanet](http://www.regexplanet.com/advanced/java/index.html) to test Java regular expressions.
 
 *Tip 2:* If you only need this static blocking feature, you can use Tomcat's built-in [Remote Address Valve](https://tomcat.apache.org/tomcat-10.0-doc/config/valve.html#Remote_Address_Valve).
+
+## trackAlwaysForbiddenInMonitor (optional)
+
+Available since version 1.8.0 (default: `false`): Controls whether requests blocked by `alwaysForbiddenIPs` are also registered inside the dynamic `AntiDoSMonitor` and exposed in the `BLOCKED` category on the internal status dashboard and Collector API.
+
+* **Default (`trackAlwaysForbiddenInMonitor="false"`)**: Matches are rejected immediately on the high-performance fast path without allocating monitor slot counters. Only the aggregated lifetime counter `alwaysForbiddenBlockedRequests` is incremented.
+* **Enabled (`trackAlwaysForbiddenInMonitor="true"`)**: Requests from forbidden IPs are immediately locked and registered in the current slot's `blockedClients` cache with an effective limit of 0 (Honeypot-like zero tolerance). This captures individual attacking IP addresses, per-slot hit counts, and forensic sample metadata (HTTP method, request URI, and User-Agent) for full visibility in the Collector monitoring dashboard.
 
 ## alwaysAllowedIPs
 

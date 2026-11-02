@@ -2351,6 +2351,115 @@ class AntiDoSValveTest {
 		}
 	}
 
+	@Test
+	void testTrackAlwaysForbiddenInMonitorConfiguration() {
+		AntiDoSValve valve = new AntiDoSValve();
+		assertFalse(valve.isTrackAlwaysForbiddenInMonitor(), "Default must be false");
+
+		valve.setTrackAlwaysForbiddenInMonitor(true);
+		assertTrue(valve.isTrackAlwaysForbiddenInMonitor());
+
+		valve.setTrackAlwaysForbiddenInMonitor("false");
+		assertFalse(valve.isTrackAlwaysForbiddenInMonitor());
+
+		valve.setTrackAlwaysForbiddenInMonitor("true");
+		assertTrue(valve.isTrackAlwaysForbiddenInMonitor());
+
+		valve.setTrackAlwaysForbiddenInMonitor(null);
+		assertTrue(valve.isTrackAlwaysForbiddenInMonitor(), "null string setter should not mutate state");
+	}
+
+	@Test
+	void testTrackAlwaysForbiddenInMonitorBehavior() {
+		AntiDoSValve valve = new AntiDoSValve();
+		valve.setMonitorName("ALWAYS_FORBIDDEN_BEHAVIOR_TEST");
+		setValidAntiDoSMonitorconfiguration(valve, "ALWAYS_FORBIDDEN_BEHAVIOR_TEST");
+		valve.setAlwaysForbiddenIPs("198\\.51\\.100\\..*");
+		valve.setRelevantPaths(".*");
+
+		// Case A: trackAlwaysForbiddenInMonitor = false (default)
+		assertFalse(valve.isTrackAlwaysForbiddenInMonitor());
+		assertFalse(valve.isRequestAllowed("198.51.100.1", "/api/test"));
+		assertEquals(1, valve.getAlwaysForbiddenBlockedRequests());
+		assertFalse(valve.isIPAddressCurrentlyBlocked("198.51.100.1"), "Should not be tracked in monitor");
+		assertNull(valve.provideMonitor().provideCurrentCounter("198.51.100.1"));
+
+		// Case B: trackAlwaysForbiddenInMonitor = true
+		valve.setTrackAlwaysForbiddenInMonitor(true);
+		assertFalse(valve.isRequestAllowed("198.51.100.1", "/api/test"));
+		assertEquals(2, valve.getAlwaysForbiddenBlockedRequests());
+		assertTrue(valve.isIPAddressCurrentlyBlocked("198.51.100.1"), "Must now be tracked and blocked in monitor");
+
+		AntiDoSCounter counter = valve.provideMonitor().provideCurrentCounter("198.51.100.1");
+		assertNotNull(counter);
+		assertTrue(counter.isLocked());
+		assertEquals(1, counter.getCount());
+		assertEquals(0, counter.getRetainedCounts());
+
+		// Second request increments counter in monitor
+		assertFalse(valve.isRequestAllowed("198.51.100.1", "/api/test"));
+		assertEquals(3, valve.getAlwaysForbiddenBlockedRequests());
+		assertEquals(2, counter.getCount());
+
+		// Innocent IP not matching alwaysForbiddenIPs is allowed and not blocked
+		assertTrue(valve.isRequestAllowed("192.168.1.1", "/api/test"));
+		assertFalse(valve.isIPAddressCurrentlyBlocked("192.168.1.1"));
+	}
+
+	@Test
+	void testTrackAlwaysForbiddenInMonitorInvokeAndSampleRecording() throws Exception {
+		AntiDoSValve valve = new AntiDoSValve();
+		valve.setContainer(new org.apache.catalina.core.StandardEngine());
+		valve.setMonitorName("INVOKE_ALWAYS_FORBIDDEN_TEST");
+		valve.setAlwaysForbiddenIPs("198\\.51\\.100\\..*");
+		valve.setTrackAlwaysForbiddenInMonitor(true);
+		valve.setRelevantPaths(".*");
+		valve.setAllowedRequestsPerSlot(50);
+		valve.setNumberOfSlots(5);
+		valve.setSlotLength(60);
+		valve.setMaxIPCacheSize(50);
+
+		valve.start();
+		try {
+			TestRequest req = new TestRequest("/secret/attack", "198.51.100.5");
+			req.setMethod("POST");
+			req.headers.put("User-Agent", "AttackBot/1.0");
+			TestResponse resp = new TestResponse();
+
+			valve.invoke(req, resp);
+			assertEquals(429, resp.getErrorCode(), "Request from alwaysForbiddenIP must be blocked with HTTP 429");
+
+			// Check monitor status
+			assertTrue(valve.isIPAddressCurrentlyBlocked("198.51.100.5"));
+			AntiDoSCounter c = valve.provideMonitor().provideCurrentCounter("198.51.100.5");
+			assertNotNull(c);
+			assertEquals(1, c.getCount());
+			assertNotNull(c.getSample());
+			assertEquals("POST", c.getSample().method());
+			assertEquals("/secret/attack", c.getSample().uri());
+			assertEquals("AttackBot/1.0", c.getSample().userAgent());
+
+			// Check status JSON details
+			String detailsJson = valve.getStatusRenderer().buildStatusJsonDetails("INVOKE_ALWAYS_FORBIDDEN_TEST");
+			assertTrue(detailsJson.contains("\"alwaysForbiddenIPs\": \"198\\\\.51\\\\.100\\\\..*\""));
+			assertTrue(detailsJson.contains("\"trackAlwaysForbiddenInMonitor\": true"));
+			assertTrue(detailsJson.contains("\"key\": \"198.51.100.5\""));
+			assertTrue(detailsJson.contains("\"sampleUri\": \"/secret/attack\""));
+			assertTrue(detailsJson.contains("\"sampleMethod\": \"POST\""));
+			assertTrue(detailsJson.contains("\"sampleUserAgent\": \"AttackBot/1.0\""));
+			// Effective limit for always-forbidden IP must be 0
+			assertTrue(detailsJson.contains("\"limit\": 0"));
+
+			// Check status HTML details
+			String detailsHtml = valve.getStatusRenderer().buildStatusHtmlDetails("INVOKE_ALWAYS_FORBIDDEN_TEST", null);
+			assertTrue(detailsHtml.contains("Track Always Forbidden in Monitor"));
+			assertTrue(detailsHtml.contains("ENABLED"));
+			assertTrue(detailsHtml.contains("0 (Always Forbidden)"));
+		} finally {
+			valve.stop();
+		}
+	}
+
 	private static class TestRequest extends Request {
 		private final String testUri;
 		private final String testRemoteAddr;

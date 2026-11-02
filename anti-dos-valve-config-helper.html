@@ -1382,6 +1382,27 @@
                 placeholder="e.g. 192\.168\.1\.10|10\.0\.0\..*">
             </div>
 
+            <!-- 2b. trackAlwaysForbiddenInMonitor -->
+            <div class="field-group">
+              <div class="field-header">
+                <label for="trackAlwaysForbiddenInMonitor" class="field-label">trackAlwaysForbiddenInMonitor</label>
+                <span class="badge badge-optional">Optional</span>
+              </div>
+              <div class="field-desc">When enabled (<code>trackAlwaysForbiddenInMonitor="true"</code>), requests blocked
+                by
+                <code>alwaysForbiddenIPs</code> are registered in the internal monitor and appear in the BLOCKED
+                category with
+                an effective limit of 0. This enables per-client visibility, hit rates, and forensic request samples in
+                the Collector dashboard. Default is <code>false</code> to prevent generating large amounts of monitoring
+                data for blacklisted clients.
+              </div>
+              <label class="checkbox-label">
+                <input type="checkbox" id="trackAlwaysForbiddenInMonitor" name="trackAlwaysForbiddenInMonitor">
+                <span>Track always-forbidden requests in monitor
+                  (<code>trackAlwaysForbiddenInMonitor="true"</code>)</span>
+              </label>
+            </div>
+
             <!-- 3. alwaysAllowedIPs -->
             <div class="field-group">
               <div class="field-header">
@@ -1620,7 +1641,8 @@
                 </div>
                 <div class="field-desc">URI path under which the status dashboard is served (must start with
                   <code>/</code>, e.g. <code>/antidos-status</code>). Leave empty to completely disable the status
-                  endpoint.</div>
+                  endpoint.
+                </div>
                 <input type="text" id="statusUri" name="statusUri" pattern="^/.*"
                   placeholder="e.g. /antidos-status (Default: disabled)">
                 <div id="hintStatusUri" class="status-field-hint neutral"></div>
@@ -1634,7 +1656,8 @@
                 </div>
                 <div class="field-desc">Regular expression matching client IPs allowed to query the dashboard (e.g.
                   <code>127\.0\.0\.1|::1|10\..*</code>). Requests from unauthorized IPs receive
-                  <code>404 Not Found</code>.</div>
+                  <code>404 Not Found</code>.
+                </div>
                 <input type="text" id="statusAllowedIPs" name="statusAllowedIPs"
                   placeholder="e.g. 127\.0\.0\.1|::1 (Default: any IP)">
                 <div id="hintStatusAllowedIPs" class="status-field-hint neutral"></div>
@@ -1745,7 +1768,8 @@
                     <span class="badge badge-optional">Optional</span>
                   </div>
                   <div class="field-desc">Validity lifetime of the visitor cookie in seconds (&ge; 1). Default:
-                    <code>900</code> (15 minutes).</div>
+                    <code>900</code> (15 minutes).
+                  </div>
                   <input type="number" id="visitorCookieTtlSeconds" name="visitorCookieTtlSeconds" min="1" step="1"
                     placeholder="900 (Default: 900s / 15m)">
                 </div>
@@ -1771,7 +1795,8 @@
                     <span class="badge badge-optional">Optional</span>
                   </div>
                   <div class="field-desc">IPv4 prefix length for cryptographic subnet binding (0 &ndash; 32). Default:
-                    <code>24</code> (/24 subnet binding).</div>
+                    <code>24</code> (/24 subnet binding).
+                  </div>
                   <input type="number" id="visitorCookieSubnetMaskV4" name="visitorCookieSubnetMaskV4" min="0" max="32"
                     step="1" placeholder="24 (Default: /24)">
                 </div>
@@ -1783,7 +1808,8 @@
                     <span class="badge badge-optional">Optional</span>
                   </div>
                   <div class="field-desc">IPv6 prefix length for cryptographic subnet binding (0 &ndash; 128). Default:
-                    <code>64</code> (/64 subnet binding).</div>
+                    <code>64</code> (/64 subnet binding).
+                  </div>
                   <input type="number" id="visitorCookieSubnetMaskV6" name="visitorCookieSubnetMaskV6" min="0" max="128"
                     step="1" placeholder="64 (Default: /64)">
                 </div>
@@ -1807,7 +1833,8 @@
                   <div class="field-desc">Cookie Domain attribute for sharing reputation across subdomains (e.g.
                     <code>example.com</code> allows sharing between <code>auth.example.com</code> and
                     <code>app.example.com</code>). <strong>Leave empty for host-only cookies</strong> (recommended for
-                    single-domain sites).</div>
+                    single-domain sites).
+                  </div>
                   <input type="text" id="visitorCookieDomain" name="visitorCookieDomain"
                     placeholder="e.g. example.com (Default: host-only)">
                   <div id="hintVisitorCookieDomain" class="status-field-hint neutral"></div>
@@ -1820,7 +1847,8 @@
                     <span class="badge badge-optional">Optional</span>
                   </div>
                   <div class="field-desc">SameSite attribute for the cookie (<code>Lax</code>, <code>Strict</code>,
-                    <code>None</code>). Default: <code>Lax</code>.</div>
+                    <code>None</code>). Default: <code>Lax</code>.
+                  </div>
                   <select id="visitorCookieSameSite" name="visitorCookieSameSite">
                     <option value="" selected>Lax (Default)</option>
                     <option value="Strict">Strict</option>
@@ -1893,7 +1921,8 @@
                   </div>
                   <div class="field-desc">Regular expression matching the application login / SSO callback path(s) where
                     <code>Set-Cookie</code> is issued (e.g. <code>/trust</code> or <code>^/trust$</code>). Observed on
-                    successful responses (HTTP 200&ndash;399), independent of <code>relevantPaths</code>.</div>
+                    successful responses (HTTP 200&ndash;399), independent of <code>relevantPaths</code>.
+                  </div>
                   <input type="text" id="authLoginPaths" name="authLoginPaths" placeholder="e.g. /trust or ^/trust$">
                   <div id="hintAuthLoginPaths" class="status-field-hint neutral"></div>
                 </div>
@@ -2538,6 +2567,7 @@
       { key: 'monitorName', isRequired: false, defaultVal: '' },
       { key: 'description', isRequired: false, defaultVal: '' },
       { key: 'alwaysForbiddenIPs', isRequired: false, defaultVal: '' },
+      { key: 'trackAlwaysForbiddenInMonitor', isRequired: false, defaultVal: false, isBoolean: true },
       { key: 'alwaysAllowedIPs', isRequired: false, defaultVal: '' },
       { key: 'relevantPaths', isRequired: false, defaultVal: '' },
       { key: 'nonRelevantPaths', isRequired: false, defaultVal: '' },

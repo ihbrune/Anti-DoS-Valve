@@ -301,6 +301,82 @@ public class AntiDoSMonitor {
 	}
 
 	/**
+	 * Registers a request from an IP address that is permanently forbidden via
+	 * {@code alwaysForbiddenIPs}.
+	 * <p>
+	 * The counter is immediately locked and placed in the current slot's blocked counters
+	 * cache, with an effective limit of 0, so that it is visible in the status dashboard
+	 * and collected by monitoring aggregators (e.g. Collector).
+	 *
+	 * @param ip The forbidden client IP address
+	 * @throws IllegalArgumentException If ip is null or empty
+	 */
+	public void registerAlwaysForbiddenRequest(String ip) throws IllegalArgumentException {
+		registerAlwaysForbiddenRequest(ip, false, false, null);
+	}
+
+	public void registerAlwaysForbiddenRequest(String ip, boolean returningVisitor) throws IllegalArgumentException {
+		registerAlwaysForbiddenRequest(ip, returningVisitor, false, null);
+	}
+
+	public void registerAlwaysForbiddenRequest(String ip, boolean returningVisitor, boolean authenticated)
+			throws IllegalArgumentException {
+		registerAlwaysForbiddenRequest(ip, returningVisitor, authenticated, null);
+	}
+
+	public void registerAlwaysForbiddenRequest(String ip, boolean returningVisitor, boolean authenticated,
+			String userAgent) throws IllegalArgumentException {
+
+		if (ip == null || ip.isEmpty()) {
+			throw new IllegalArgumentException("IP address must not be null or empty");
+		}
+
+		totalrequests.increment();
+		if (authenticated) {
+			totalAuthenticatedRequests.increment();
+		}
+
+		// Step 1: Provide current slot, create it if necessary:
+		AntiDoSSlot slot = provideCurrentSlot();
+		slot.incrementTotalRequests();
+		if (authenticated) {
+			slot.incrementAuthenticatedRequests();
+		}
+
+		// Step 2: Get and increment counter
+		AntiDoSCounter counter = slot.getCounter(ip);
+		counter.incrementCount();
+		if (returningVisitor) {
+			counter.incrementReturningCount();
+		}
+		if (authenticated) {
+			counter.incrementAuthenticatedCount();
+		}
+		if (userAgent != null && !userAgent.isEmpty()) {
+			counter.registerUserAgent(userAgent);
+		}
+
+		// Step 3: Ensure counter is locked and promoted to blocked counters
+		if (!counter.isLocked()) {
+			counter.setRetainedCounts(0);
+			counter.lock();
+			slot.blockCounter(ip, counter);
+
+			if (log.isInfoEnabled()) {
+				boolean canLog = blockLogThrottler.shouldLog(getTimeInMillis(), suppressed -> {
+					log.info(name4logging + " - [LogThrottler] Suppressed " + suppressed
+							+ " block log events in the previous interval");
+				});
+				if (canLog) {
+					log.info(name4logging + " - AlwaysForbidden Counter for '" + ip + "': " + counter.toString());
+				}
+			}
+		} else {
+			slot.blockCounter(ip, counter);
+		}
+	}
+
+	/**
 	 * This method fetches the desired counter from the current slot. Does not
 	 * modify the status of the counter
 	 * 

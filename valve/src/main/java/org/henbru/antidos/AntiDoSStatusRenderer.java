@@ -724,6 +724,7 @@ public class AntiDoSStatusRenderer {
 			if (v.getAlwaysForbiddenIPsConfigValue() != null) {
 				sb.append("    <tr><th>Always Forbidden IPs</th><td><code>").append(escapeHtml(v.getAlwaysForbiddenIPsConfigValue())).append("</code></td></tr>\n");
 				sb.append("    <tr><th>Always Forbidden Blocks</th><td><strong>").append(v.getAlwaysForbiddenBlockedRequests()).append("</strong> requests rejected</td></tr>\n");
+				sb.append("    <tr><th>Track Always Forbidden in Monitor</th><td>").append(v.isTrackAlwaysForbiddenInMonitor() ? "<span class=\"badge badge-success\">ENABLED</span>" : "<span class=\"badge badge-muted\">DISABLED</span>").append("</td></tr>\n");
 			}
 
 			// Rate limit parameters
@@ -983,6 +984,7 @@ public class AntiDoSStatusRenderer {
 		if (target.getAlwaysForbiddenIPsConfigValue() != null) {
 			sb.append("    <tr><th>Always Forbidden IPs</th><td><code>").append(escapeHtml(target.getAlwaysForbiddenIPsConfigValue())).append("</code></td></tr>\n");
 			sb.append("    <tr><th>Always Forbidden Blocks</th><td><strong>").append(target.getAlwaysForbiddenBlockedRequests()).append("</strong> requests rejected</td></tr>\n");
+			sb.append("    <tr><th>Track Always Forbidden in Monitor</th><td>").append(target.isTrackAlwaysForbiddenInMonitor() ? "<span class=\"badge badge-success\">ENABLED</span>" : "<span class=\"badge badge-muted\">DISABLED</span>").append("</td></tr>\n");
 		}
 
 		int retentionPct = Math.round(target.getShareOfRetainedFormerRequests() * 100);
@@ -1190,7 +1192,8 @@ public class AntiDoSStatusRenderer {
 				if (showAuthenticated) {
 					sb.append("<td>").append(e.authenticatedCount()).append("</td>");
 				}
-				sb.append("<td>").append(allowedReqs).append("</td>");
+				String clientLimitStr = target.isIPAddressInAlwaysForbidden(e.key()) ? "0 (Always Forbidden)" : String.valueOf(allowedReqs);
+				sb.append("<td>").append(clientLimitStr).append("</td>");
 				if (e.sample() != null && e.sample().uri() != null) {
 					String sampleTitle = e.sample().userAgent() != null ? "User-Agent: " + escapeHtml(e.sample().userAgent()) : "";
 					sb.append("<td><code title=\"").append(sampleTitle).append("\">")
@@ -1322,6 +1325,7 @@ public class AntiDoSStatusRenderer {
 					.append("      \"nonRelevantPaths\": ").append(v.getNonRelevantPathsConfigValue() != null ? "\"" + escapeJson(v.getNonRelevantPathsConfigValue()) + "\"" : "null").append(",\n")
 					.append("      \"alwaysAllowedIPs\": ").append(v.getAlwaysAllowedIPsConfigValue() != null ? "\"" + escapeJson(v.getAlwaysAllowedIPsConfigValue()) + "\"" : "null").append(",\n")
 					.append("      \"alwaysForbiddenIPs\": ").append(v.getAlwaysForbiddenIPsConfigValue() != null ? "\"" + escapeJson(v.getAlwaysForbiddenIPsConfigValue()) + "\"" : "null").append(",\n")
+					.append("      \"trackAlwaysForbiddenInMonitor\": ").append(v.isTrackAlwaysForbiddenInMonitor()).append(",\n")
 					.append("      \"allowedRequestsPerSlot\": ").append(v.getAllowedRequestsPerSlot()).append(",\n")
 					.append("      \"slotLength\": ").append(v.getSlotLength()).append(",\n")
 					.append("      \"numberOfSlots\": ").append(v.getNumberOfSlots()).append(",\n")
@@ -1435,6 +1439,7 @@ public class AntiDoSStatusRenderer {
 				.append("    \"nonRelevantPaths\": ").append(target.getNonRelevantPathsConfigValue() != null ? "\"" + escapeJson(target.getNonRelevantPathsConfigValue()) + "\"" : "null").append(",\n")
 				.append("    \"alwaysAllowedIPs\": ").append(target.getAlwaysAllowedIPsConfigValue() != null ? "\"" + escapeJson(target.getAlwaysAllowedIPsConfigValue()) + "\"" : "null").append(",\n")
 				.append("    \"alwaysForbiddenIPs\": ").append(target.getAlwaysForbiddenIPsConfigValue() != null ? "\"" + escapeJson(target.getAlwaysForbiddenIPsConfigValue()) + "\"" : "null").append(",\n")
+				.append("    \"trackAlwaysForbiddenInMonitor\": ").append(target.isTrackAlwaysForbiddenInMonitor()).append(",\n")
 				.append("    \"allowedRequestsPerSlot\": ").append(target.getAllowedRequestsPerSlot()).append(",\n")
 				.append("    \"slotLength\": ").append(target.getSlotLength()).append(",\n")
 				.append("    \"numberOfSlots\": ").append(target.getNumberOfSlots()).append(",\n")
@@ -1560,12 +1565,13 @@ public class AntiDoSStatusRenderer {
 		for (int i = 0; i < blockedList.size(); i++) {
 			if (i > 0) sb.append(",\n");
 			CounterEntry e = blockedList.get(i);
+			int clientLimit = target.isIPAddressInAlwaysForbidden(e.key()) ? 0 : target.getAllowedRequestsPerSlot();
 			sb.append("    {\n")
 					.append("      \"key\": \"").append(escapeJson(e.key())).append("\",\n")
 					.append("      \"count\": ").append(e.count()).append(",\n")
 					.append("      \"retained\": ").append(e.retained()).append(",\n")
 					.append("      \"effective\": ").append(e.effective()).append(",\n")
-					.append("      \"limit\": ").append(target.getAllowedRequestsPerSlot()).append(",\n")
+					.append("      \"limit\": ").append(clientLimit).append(",\n")
 					.append("      \"distinctClients\": ").append(e.distinctClients() > 0 ? e.distinctClients() : 1).append(",\n")
 					.append("      \"distinctUserAgents\": ").append(e.distinctUserAgents() > 0 ? e.distinctUserAgents() : "null").append(",\n")
 					.append("      \"returningCount\": ").append(target.isVisitorTrackingActive() ? e.returningCount() : "null").append(",\n")
@@ -1614,12 +1620,13 @@ public class AntiDoSStatusRenderer {
 			int pct = target.getAllowedRequestsPerSlot() > 0
 					? (int) Math.min(100, Math.round((double) e.effective() / target.getAllowedRequestsPerSlot() * 100))
 					: 0;
+			int clientLimit = target.isIPAddressInAlwaysForbidden(e.key()) ? 0 : target.getAllowedRequestsPerSlot();
 			sb.append("    {\n")
 					.append("      \"key\": \"").append(escapeJson(e.key())).append("\",\n")
 					.append("      \"count\": ").append(e.count()).append(",\n")
 					.append("      \"retained\": ").append(e.retained()).append(",\n")
 					.append("      \"effective\": ").append(e.effective()).append(",\n")
-					.append("      \"limit\": ").append(target.getAllowedRequestsPerSlot()).append(",\n")
+					.append("      \"limit\": ").append(clientLimit).append(",\n")
 					.append("      \"quotaPercent\": ").append(pct).append(",\n")
 					.append("      \"distinctClients\": ").append(e.distinctClients() > 0 ? e.distinctClients() : 1).append(",\n")
 					.append("      \"distinctUserAgents\": ").append(e.distinctUserAgents() > 0 ? e.distinctUserAgents() : "null").append(",\n")

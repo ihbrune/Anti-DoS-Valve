@@ -192,14 +192,23 @@ class AntiDoSStatusRendererTest {
 		String htmlDetails = renderer.buildStatusHtmlDetails("RENDERER_TEST", null);
 		assertTrue(htmlDetails.contains("<th>Always Forbidden IPs</th>"));
 		assertTrue(htmlDetails.contains("<th>Always Forbidden Blocks</th><td><strong>3</strong> requests rejected</td>"));
+		assertTrue(htmlDetails.contains("<th>Track Always Forbidden in Monitor</th><td><span class=\"badge badge-muted\">DISABLED</span></td>"));
 
 		String jsonOverview = renderer.buildStatusJson(null);
 		assertTrue(jsonOverview.contains("\"alwaysForbiddenBlockedRequests\": 3"));
 		assertTrue(jsonOverview.contains("\"alwaysForbiddenIPs\": \"10\\\\.0\\\\.0\\\\..*\""));
+		assertTrue(jsonOverview.contains("\"trackAlwaysForbiddenInMonitor\": false"));
 
 		String jsonDetails = renderer.buildStatusJsonDetails("RENDERER_TEST");
 		assertTrue(jsonDetails.contains("\"alwaysForbiddenBlockedRequests\": 3"));
 		assertTrue(jsonDetails.contains("\"alwaysForbiddenIPs\": \"10\\\\.0\\\\.0\\\\..*\""));
+		assertTrue(jsonDetails.contains("\"trackAlwaysForbiddenInMonitor\": false"));
+
+		valve.setTrackAlwaysForbiddenInMonitor(true);
+		String jsonDetailsTracked = renderer.buildStatusJsonDetails("RENDERER_TEST");
+		assertTrue(jsonDetailsTracked.contains("\"trackAlwaysForbiddenInMonitor\": true"));
+		String htmlDetailsTracked = renderer.buildStatusHtmlDetails("RENDERER_TEST", null);
+		assertTrue(htmlDetailsTracked.contains("<th>Track Always Forbidden in Monitor</th><td><span class=\"badge badge-success\">ENABLED</span></td>"));
 
 		valve.setAlwaysAllowedIPs("192\\.168\\..*");
 		String jsonWithAllowed = renderer.buildStatusJson(null);

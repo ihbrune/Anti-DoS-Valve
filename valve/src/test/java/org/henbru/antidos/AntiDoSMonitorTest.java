@@ -380,5 +380,40 @@ class AntiDoSMonitorTest {
 		assertTrue(counter.hasUserAgentTracker());
 		assertTrue(counter.getDistinctUserAgents() >= 1);
 	}
+
+	@Test
+	void testRegisterAlwaysForbiddenRequest() {
+		AntiDoSMonitor mon = new AntiDoSMonitor("ALWAYS_FORBIDDEN_TEST", 100, 50, 30, 10, 0.5f);
+
+		// Initially not blocked
+		assertFalse(mon.isCounterBlocked("198.51.100.99"));
+
+		// Register first request
+		mon.registerAlwaysForbiddenRequest("198.51.100.99");
+		assertTrue(mon.isCounterBlocked("198.51.100.99"));
+
+		AntiDoSCounter counter = mon.provideCurrentCounter("198.51.100.99");
+		assertNotNull(counter);
+		assertTrue(counter.isLocked());
+		assertEquals(1, counter.getCount());
+		assertEquals(0, counter.getRetainedCounts());
+		assertEquals(1, counter.getCountCombined());
+
+		// Second request with returning visitor, auth, and user agent
+		mon.registerAlwaysForbiddenRequest("198.51.100.99", true, true, "curl/8.7.1");
+		assertEquals(2, counter.getCount());
+		assertEquals(1, counter.getReturningCount());
+		assertEquals(1, counter.getAuthenticatedCount());
+		assertTrue(counter.hasUserAgentTracker());
+		assertTrue(counter.isLocked());
+		assertTrue(mon.isCounterBlocked("198.51.100.99"));
+
+		// Unrelated IP is not blocked
+		assertFalse(mon.isCounterBlocked("198.51.100.100"));
+
+		// Null or empty IP throws
+		assertThrows(IllegalArgumentException.class, () -> mon.registerAlwaysForbiddenRequest(null));
+		assertThrows(IllegalArgumentException.class, () -> mon.registerAlwaysForbiddenRequest(""));
+	}
 }
 

@@ -139,6 +139,22 @@
                          httpStatusCode="429"
                     />
 
+                    <!-- AntiDoSValve Hard Blacklist with Collector Forensics demo configuration:
+                         Permanently blocks hostile CIDRs / attacker IPs on first contact and
+                         registers them into the monitor's BLOCKED category (limit 0) for Collector forensics. -->
+                    <!--
+                    <Valve className="org.henbru.antidos.AntiDoSValve"
+                         monitorName="BLACKLIST-FORENSIC-VALVE"
+                         description="Static blacklist tracking blocked requests in monitor for Collector observability"
+                         alwaysForbiddenIPs="198\.51\.100\..*"
+                         trackAlwaysForbiddenInMonitor="true"
+                         maxIPCacheSize="500"
+                         maxBlockedIPCacheSize="1000"
+                         numberOfSlots="6"
+                         slotLength="60"
+                    />
+                    -->
+
                </Host>
           </Engine>
      </Service>

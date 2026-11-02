@@ -316,6 +316,13 @@ public class AntiDoSValve extends ValveBase {
 	private final LongAdder alwaysForbiddenBlockedRequests = new LongAdder();
 
 	/**
+	 * Controls whether requests blocked by {@link #alwaysForbiddenIPs} are also
+	 * tracked inside the dynamic {@link AntiDoSMonitor} slot caches as blocked clients
+	 * (with an effective limit of 0).
+	 */
+	private volatile boolean trackAlwaysForbiddenInMonitor = false;
+
+	/**
 	 * Regular expression with IP addresses that are never blocked
 	 */
 	private volatile Pattern alwaysAllowedIPs = null;
@@ -532,6 +539,34 @@ public class AntiDoSValve extends ValveBase {
 	 */
 	public long getAlwaysForbiddenBlockedRequests() {
 		return alwaysForbiddenBlockedRequests.sum();
+	}
+
+	/**
+	 * @return <code>true</code> if requests blocked by alwaysForbiddenIPs are tracked in the monitor
+	 */
+	public boolean isTrackAlwaysForbiddenInMonitor() {
+		return trackAlwaysForbiddenInMonitor;
+	}
+
+	/**
+	 * Controls whether requests blocked by {@link #setAlwaysForbiddenIPs(String)} are
+	 * tracked inside the dynamic monitor slots as blocked clients with an effective limit of 0.
+	 *
+	 * @param trackAlwaysForbiddenInMonitor <code>true</code> to track in monitor, <code>false</code> to bypass monitor
+	 */
+	public void setTrackAlwaysForbiddenInMonitor(boolean trackAlwaysForbiddenInMonitor) {
+		this.trackAlwaysForbiddenInMonitor = trackAlwaysForbiddenInMonitor;
+	}
+
+	/**
+	 * String setter for {@link #setTrackAlwaysForbiddenInMonitor(boolean)}.
+	 *
+	 * @param trackAlwaysForbiddenInMonitor "true" or "false"
+	 */
+	public void setTrackAlwaysForbiddenInMonitor(String trackAlwaysForbiddenInMonitor) {
+		if (trackAlwaysForbiddenInMonitor != null) {
+			this.trackAlwaysForbiddenInMonitor = Boolean.parseBoolean(trackAlwaysForbiddenInMonitor.trim());
+		}
 	}
 
 	/**
@@ -1788,10 +1823,25 @@ public class AntiDoSValve extends ValveBase {
 		}
 		String counterName = resolveCounterName(ip);
 		AntiDoSCounter counter = monitor.provideCurrentCounter(counterName);
+		if (counter == null && !counterName.equals(ip)) {
+			counter = monitor.provideCurrentCounter(ip);
+		}
 		if (counter != null && counter.getSample() == null) {
 			String method = request.getMethod();
 			String ua = request.getHeader("User-Agent");
 			counter.recordSampleIfAbsent(method, path, ua);
+		}
+	}
+
+	private void registerAlwaysForbiddenInMonitor(String ip, boolean returningVisitor, boolean authenticated,
+			String userAgent) {
+		AntiDoSMonitor monitor = provideMonitor();
+		if (monitor != null) {
+			try {
+				monitor.registerAlwaysForbiddenRequest(ip, returningVisitor, authenticated, userAgent);
+			} catch (Exception e) {
+				log.warn(name4logging + " Failed to register always-forbidden IP in monitor: " + ip, e);
+			}
 		}
 	}
 
@@ -2470,6 +2520,10 @@ public class AntiDoSValve extends ValveBase {
 			if (log.isDebugEnabled())
 				log.debug(name4logging + " In alwaysForbidden: " + ip);
 
+			if (trackAlwaysForbiddenInMonitor) {
+				registerAlwaysForbiddenInMonitor(ip, returningVisitor, authenticated, userAgent);
+			}
+
 			return false;
 		}
 
@@ -2638,7 +2692,13 @@ public class AntiDoSValve extends ValveBase {
 		if (monitor == null) {
 			return false;
 		}
-		return monitor.isCounterBlocked(counterName);
+		if (monitor.isCounterBlocked(counterName)) {
+			return true;
+		}
+		if (!counterName.equals(ip)) {
+			return monitor.isCounterBlocked(ip);
+		}
+		return false;
 	}
 
 	/**
@@ -2658,6 +2718,9 @@ public class AntiDoSValve extends ValveBase {
 		AntiDoSMonitor monitor = provideMonitor();
 
 		AntiDoSCounter ipCounter = monitor != null ? monitor.provideCurrentCounter(counterName) : null;
+		if (ipCounter == null && monitor != null && !counterName.equals(ip)) {
+			ipCounter = monitor.provideCurrentCounter(ip);
+		}
 
 		return ipCounter != null ? ipCounter.toString() : "-";
 	}
