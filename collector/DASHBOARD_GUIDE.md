@@ -205,6 +205,21 @@ The Scatterplot solves this by mapping traffic aggregated across enclosing **Sub
 * **Quadrant 1 (Top-Left - Traditional Single-Source Floods):** Low distinct IPs ($X \le 2$), very high requests per IP ($Y > 500$). Handled effectively by standard Anti-DoS Valve client IP limits.
 * **Quadrant 4 (Bottom-Right - Distributed Botnets & Rotating Proxies):** High distinct IPs ($X \ge 10$), low requests per IP ($Y < 50$). **This is the smoking gun of residential proxy attacks.** Even though no single IP exceeded rate limits, the subnet as a whole executed a synchronized distributed campaign!
 
+#### Forensic Controls Toolbar (Dimension, Traffic & Auth Triage):
+Located directly above the 2D scatter canvas, the forensic toolbar enables surgical filtering and aggregation:
+* **Aggregation Dimension (`Dimension`):**
+  * `🌐 Subnets (/24)`: Standard CIDR subnet partitioning (`/24` for IPv4, `/64` for IPv6). Excellent for spotting localized proxy egress blocks.
+  * `🏛️ ASN Rollup`: Aggregates all disjoint subnets across an entire Autonomous System into a single cluster point. Critical for diagnosing massive night-time attacks or distributed proxy swarms spanning thousands of residential IPs across consumer ISPs (e.g. AS12345, AS9009) where per-subnet metrics would otherwise be diluted.
+* **Traffic Category Filtering (`Traffic`):**
+  * `All`: Displays all clusters without traffic classification restrictions.
+  * `🛡️ Exclude Bots`: Filters out verified search engines (Googlebot, Bingbot) and AI crawlers so legitimate web crawlers do not dominate the top cluster slots and obscure stealth residential proxy swarms.
+  * `🏠 Residential Only`: Filters strictly for consumer broadband and fiber ISP subnets.
+  * `🏢 Datacenter Only`: Filters for cloud hosting and VPS provider IP ranges.
+* **Authentication & Login State Filtering (`Authentication`):**
+  * `All`: Shows clusters regardless of user authentication status.
+  * `🚨 No Logins (0 Auth)`: Filters for clusters where **zero authenticated requests** were observed (`authenticatedRequests == 0`). In applications with user authentication enabled (`authTrackingMode="COOKIE"`), distributed scraping swarms and botnets almost never possess legitimate login sessions.
+  * `🔐 With Logins`: Isolates clusters containing authenticated user activity. Prevents collateral damage by verifying real human customer presence (e.g. corporate NATs, university networks, CGNAT pools).
+
 #### Cluster Risk Ratings & Color Legend:
 * 🔴 **Crimson Red (`CRITICAL` / `HIGH`):** Heuristically flagged **Residential Proxy Evasion**. High distinct IP count in consumer ISP subnets with low average requests per IP.
 * 🟠 **Amber Orange (`MEDIUM`):** Datacenter / Cloud scraper cluster. Subnets originating from hosting ASNs.
@@ -226,14 +241,15 @@ The Scatterplot solves this by mapping traffic aggregated across enclosing **Sub
 Positioned directly beneath the scatter canvas, this interactive breakdown table transforms visual patterns into actionable operational data:
 * **Quick Filter Chips:**
   * `All`: Displays all analyzed subnet clusters.
+  * `🚨 0 Logins`: Instantly filters for clusters with zero authenticated login requests—surfacing anonymous scraping campaigns and botnets.
   * `⚠️ 0% Blocked (Bypass)`: Instantly isolates clusters that completely evaded rate limiting—the prime indicator for distributed residential proxy campaigns.
   * `📝 With Notes`: Filters for clusters that have existing operator annotations or triage verdicts.
-* **Click-to-Sort Columns:** Sort by Subnet, ASN/ISP, Distinct IPs ($X$), Ø Reqs/IP ($Y$), Total Volume, Blocked Count, or Block Rate %.
+* **Click-to-Sort Columns:** Sort by Subnet/ASN, Provider & Country, Distinct IPs ($X$), Ø Reqs/IP ($Y$), Total Volume, Blocked Count, Block Rate %, or Authenticated Logins.
 * **Bidirectional Hover & Click Synchronization:**
   * Hovering over any table row programmatically highlights and opens the tooltip for the corresponding bubble in the scatterplot.
   * Clicking any bubble in the scatterplot smoothly scrolls to and illuminates the corresponding record in the table.
 * **Inline Note Triage:** Subnet and ASN notes can be viewed or assigned directly from the table using the `+📝` and verdict badges.
-* **Deep-Dive Drilldown:** Each row provides an `Inspect →` link navigating directly to `/offenders?clientQuery=...&groupBy=SUBNET` to audit the underlying individual client IPs.
+* **Deep-Dive Drilldown:** Each row provides an `Inspect →` link navigating directly to `/offenders` (grouped by `SUBNET` or `ASN`) to audit the underlying individual client IPs.
 
 ---
 

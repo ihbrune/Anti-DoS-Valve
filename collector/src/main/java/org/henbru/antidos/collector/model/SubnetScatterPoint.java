@@ -26,6 +26,10 @@ package org.henbru.antidos.collector.model;
  * @param asnNoteVerdict Verdict of ASN-specific note (if present)
  * @param asnNoteIcon Emoji icon of ASN note
  * @param asnNoteSnippet Excerpt of ASN note
+ * @param returningRatio Ratio of returning cookie requests (if tracked)
+ * @param authenticatedRequests Number of requests carrying valid authenticated login sessions
+ * @param authenticatedTrackedRequests Number of requests inspected for authentication
+ * @param groupBy Aggregation dimension (SUBNET or ASN)
  */
 public record SubnetScatterPoint(
 		String subnetGroup,
@@ -53,8 +57,46 @@ public record SubnetScatterPoint(
 		String asnNoteVerdict,
 		String asnNoteIcon,
 		String asnNoteSnippet,
-		Double returningRatio
+		Double returningRatio,
+		long authenticatedRequests,
+		long authenticatedTrackedRequests,
+		String groupBy
 ) {
+	public SubnetScatterPoint(
+			String subnetGroup,
+			int distinctClients,
+			int distinctUserAgents,
+			double averageRequestsPerClient,
+			long totalRequests,
+			long blockedRequests,
+			long markedRequests,
+			boolean isPotentialResidentialProxy,
+			Long asn,
+			String asOrg,
+			String countryCode,
+			ClientType clientType,
+			String classification,
+			boolean hasNote,
+			String noteVerdict,
+			String noteVerdictIcon,
+			String noteVerdictDisplayName,
+			String noteVerdictColor,
+			String noteSnippet,
+			String subnetNoteVerdict,
+			String subnetNoteIcon,
+			String subnetNoteSnippet,
+			String asnNoteVerdict,
+			String asnNoteIcon,
+			String asnNoteSnippet,
+			Double returningRatio
+	) {
+		this(subnetGroup, distinctClients, distinctUserAgents, averageRequestsPerClient, totalRequests, blockedRequests, markedRequests,
+				isPotentialResidentialProxy, asn, asOrg, countryCode, clientType, classification,
+				hasNote, noteVerdict, noteVerdictIcon, noteVerdictDisplayName, noteVerdictColor, noteSnippet,
+				subnetNoteVerdict, subnetNoteIcon, subnetNoteSnippet, asnNoteVerdict, asnNoteIcon, asnNoteSnippet, returningRatio,
+				0L, 0L, "SUBNET");
+	}
+
 	public SubnetScatterPoint(
 			String subnetGroup,
 			int distinctClients,
@@ -85,7 +127,8 @@ public record SubnetScatterPoint(
 		this(subnetGroup, distinctClients, 0, averageRequestsPerClient, totalRequests, blockedRequests, markedRequests,
 				isPotentialResidentialProxy, asn, asOrg, countryCode, clientType, classification,
 				hasNote, noteVerdict, noteVerdictIcon, noteVerdictDisplayName, noteVerdictColor, noteSnippet,
-				subnetNoteVerdict, subnetNoteIcon, subnetNoteSnippet, asnNoteVerdict, asnNoteIcon, asnNoteSnippet, returningRatio);
+				subnetNoteVerdict, subnetNoteIcon, subnetNoteSnippet, asnNoteVerdict, asnNoteIcon, asnNoteSnippet, returningRatio,
+				0L, 0L, "SUBNET");
 	}
 
 	public SubnetScatterPoint(
@@ -149,6 +192,17 @@ public record SubnetScatterPoint(
 			return 0.0;
 		}
 		return Math.round(((double) markedRequests / totalRequests) * 1000.0) / 10.0;
+	}
+
+	public Double authenticatedRatioPercent() {
+		if (authenticatedTrackedRequests <= 0) {
+			return null;
+		}
+		return Math.round(((double) authenticatedRequests / authenticatedTrackedRequests) * 1000.0) / 10.0;
+	}
+
+	public boolean hasLogins() {
+		return authenticatedRequests > 0;
 	}
 
 	public double bubbleRadius() {

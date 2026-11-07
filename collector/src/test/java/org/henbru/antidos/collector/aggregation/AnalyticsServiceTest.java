@@ -138,4 +138,64 @@ class AnalyticsServiceTest {
 		assertEquals("Malicious", pt2.asnNoteVerdict());
 		assertEquals("Bulletproof scanner hoster", pt2.asnNoteSnippet());
 	}
+
+	@Test
+	void testGetDashboardAnalyticsAsnRollup() {
+		List<SubnetRollupRepository.RawScatterCluster> mockAsnClusters = List.of(
+				new SubnetRollupRepository.RawScatterCluster("AS3320", 50000, 48000, 2000, 0L,
+						450, 8, 3320L, "Deutsche Telekom AG", "DE", ClientType.RESIDENTIAL, 500L, 2000L, 120L, 800L),
+				new SubnetRollupRepository.RawScatterCluster("AS9009", 15000, 5000, 10000, 0L,
+						120, 1, 9009L, "M247 Europe", "RO", ClientType.DATACENTER, 0L, 0L, 0L, 5000L)
+		);
+		when(rollupRepository.findTimeline(any(), any(), any(), any())).thenReturn(List.of());
+		when(rollupRepository.findTrafficComposition(any(), any(), any(), any())).thenReturn(List.of());
+		when(rollupRepository.findScatterClusters(any(), any(), any(), any(), eq("ASN"), eq("ALL"), eq("ALL"), anyInt()))
+				.thenReturn(mockAsnClusters);
+
+		AnalyticsDashboardDto dto = analyticsService.getDashboardAnalytics(24, null, null, "ASN", "ALL", "ALL");
+
+		assertNotNull(dto);
+		assertEquals("ASN", dto.scatterGroupBy());
+		assertEquals(2, dto.scatterPoints().size());
+
+		SubnetScatterPoint pt1 = dto.scatterPoints().get(0);
+		assertEquals("AS3320", pt1.subnetGroup());
+		assertEquals(3320L, pt1.asn());
+		assertEquals("ASN", pt1.groupBy());
+		assertEquals(450, pt1.distinctClients());
+		assertEquals(120L, pt1.authenticatedRequests());
+		assertTrue(pt1.hasLogins());
+		assertEquals(15.0, pt1.authenticatedRatioPercent()); // 120 / 800 * 100 = 15.0
+
+		SubnetScatterPoint pt2 = dto.scatterPoints().get(1);
+		assertEquals("AS9009", pt2.subnetGroup());
+		assertEquals(9009L, pt2.asn());
+		assertEquals(0L, pt2.authenticatedRequests());
+		assertFalse(pt2.hasLogins());
+		assertEquals(0.0, pt2.authenticatedRatioPercent());
+	}
+
+	@Test
+	void testGetDashboardAnalyticsWithTrafficAndAuthFilters() {
+		List<SubnetRollupRepository.RawScatterCluster> filteredClusters = List.of(
+				new SubnetRollupRepository.RawScatterCluster("185.246.221.0/24", 800, 200, 600, 0L,
+						35, 1, 3320L, "Deutsche Telekom AG", "DE", ClientType.RESIDENTIAL, 0L, 0L, 0L, 800L)
+		);
+		when(rollupRepository.findTimeline(any(), any(), any(), any())).thenReturn(List.of());
+		when(rollupRepository.findTrafficComposition(any(), any(), any(), any())).thenReturn(List.of());
+		when(rollupRepository.findScatterClusters(any(), any(), any(), any(), eq("SUBNET"), eq("EXCLUDE_BOTS"), eq("NO_LOGINS"), anyInt()))
+				.thenReturn(filteredClusters);
+
+		AnalyticsDashboardDto dto = analyticsService.getDashboardAnalytics(6, null, null, "SUBNET", "EXCLUDE_BOTS", "NO_LOGINS");
+
+		assertNotNull(dto);
+		assertEquals("SUBNET", dto.scatterGroupBy());
+		assertEquals("EXCLUDE_BOTS", dto.scatterTrafficFilter());
+		assertEquals("NO_LOGINS", dto.scatterAuthFilter());
+		assertEquals(1, dto.scatterPoints().size());
+		SubnetScatterPoint pt = dto.scatterPoints().get(0);
+		assertEquals("185.246.221.0/24", pt.subnetGroup());
+		assertEquals(0L, pt.authenticatedRequests());
+		assertFalse(pt.hasLogins());
+	}
 }

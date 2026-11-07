@@ -1271,6 +1271,85 @@ class DatabaseMigrationAndRepositoryTest {
 		assertTrue(profileOpt.get().totalMarkedRequests() >= 45L);
 		assertTrue(profileOpt.get().last24hMarkedRequests() >= 45L);
 	}
+
+	@Test
+	void testFindScatterClustersWithAsnAndFilterCriteria() {
+		Instant now = Instant.now();
+		Instant bucketStart = now.minus(30, ChronoUnit.MINUTES);
+		Instant bucketEnd = now;
+
+		try {
+			// Subnet 1: AS3320, Residential, 50 distinct clients, 15 authenticated requests
+			var rollup1 = new org.henbru.antidos.collector.model.ClientSubnetRollup(
+					null, bucketStart, bucketEnd, 30, "SCATTER-NODE", "PRIMARY", "185.246.221.0/24",
+					500L, 450L, 50L, 0L, 50, 10, 15, 1, 3320L, "Deutsche Telekom AG", "DE",
+					ClientType.RESIDENTIAL, bucketEnd, 20L, 100L, 15L, 100L
+			);
+			// Subnet 2: AS3320, Residential, 30 distinct clients, 0 authenticated requests
+			var rollup2 = new org.henbru.antidos.collector.model.ClientSubnetRollup(
+					null, bucketStart, bucketEnd, 30, "SCATTER-NODE", "PRIMARY", "185.246.222.0/24",
+					300L, 200L, 100L, 0L, 30, 8, 12, 1, 3320L, "Deutsche Telekom AG", "DE",
+					ClientType.RESIDENTIAL, bucketEnd, 0L, 50L, 0L, 50L
+			);
+			// Subnet 3: AS15169, Search Engine, 40 distinct clients, 0 authenticated requests
+			var rollup3 = new org.henbru.antidos.collector.model.ClientSubnetRollup(
+					null, bucketStart, bucketEnd, 30, "SCATTER-NODE", "PRIMARY", "66.249.66.0/24",
+					1200L, 1200L, 0L, 0L, 40, 20, 35, 1, 15169L, "Google LLC", "US",
+					ClientType.SEARCH_ENGINE, bucketEnd, 0L, 0L, 0L, 0L
+			);
+
+			subnetRollupRepository.batchUpsert(List.of(rollup1, rollup2, rollup3));
+
+			// 1. Default Subnet Grouping with ALL
+			var allSubnets = subnetRollupRepository.findScatterClusters(
+					List.of("SCATTER-NODE"), null, bucketStart.minus(1, ChronoUnit.MINUTES), bucketEnd.plus(1, ChronoUnit.MINUTES),
+					"SUBNET", "ALL", "ALL", 10
+			);
+			assertEquals(3, allSubnets.size(), "Should return all 3 clusters in default mode");
+
+			// 2. EXCLUDE_BOTS traffic filter
+			var noBots = subnetRollupRepository.findScatterClusters(
+					List.of("SCATTER-NODE"), null, bucketStart.minus(1, ChronoUnit.MINUTES), bucketEnd.plus(1, ChronoUnit.MINUTES),
+					"SUBNET", "EXCLUDE_BOTS", "ALL", 10
+			);
+			assertEquals(2, noBots.size(), "EXCLUDE_BOTS should filter out Googlebot SEARCH_ENGINE");
+			assertTrue(noBots.stream().noneMatch(c -> c.clientType() == ClientType.SEARCH_ENGINE));
+
+			// 3. NO_LOGINS auth filter
+			var noLogins = subnetRollupRepository.findScatterClusters(
+					List.of("SCATTER-NODE"), null, bucketStart.minus(1, ChronoUnit.MINUTES), bucketEnd.plus(1, ChronoUnit.MINUTES),
+					"SUBNET", "ALL", "NO_LOGINS", 10
+			);
+			assertEquals(2, noLogins.size(), "NO_LOGINS should exclude subnet 1 which had 15 authenticated requests");
+			assertTrue(noLogins.stream().noneMatch(c -> "185.246.221.0/24".equals(c.subnetGroup())));
+
+			// 4. WITH_LOGINS auth filter
+			var withLogins = subnetRollupRepository.findScatterClusters(
+					List.of("SCATTER-NODE"), null, bucketStart.minus(1, ChronoUnit.MINUTES), bucketEnd.plus(1, ChronoUnit.MINUTES),
+					"SUBNET", "ALL", "WITH_LOGINS", 10
+			);
+			assertEquals(1, withLogins.size(), "WITH_LOGINS should only return subnet 1");
+			assertEquals("185.246.221.0/24", withLogins.getFirst().subnetGroup());
+			assertEquals(15L, withLogins.getFirst().authenticatedRequests());
+
+			// 5. ASN Grouping
+			var asnRollup = subnetRollupRepository.findScatterClusters(
+					List.of("SCATTER-NODE"), null, bucketStart.minus(1, ChronoUnit.MINUTES), bucketEnd.plus(1, ChronoUnit.MINUTES),
+					"ASN", "ALL", "ALL", 10
+			);
+			assertEquals(2, asnRollup.size(), "Should aggregate into 2 distinct ASNs (AS3320 and AS15169)");
+
+			var telekomAsn = asnRollup.stream().filter(c -> Long.valueOf(3320L).equals(c.asn())).findFirst();
+			assertTrue(telekomAsn.isPresent());
+			assertEquals("AS3320", telekomAsn.get().subnetGroup());
+			assertEquals(800L, telekomAsn.get().totalRequests(), "Total requests should sum across subnets (500 + 300)");
+			assertEquals(150L, telekomAsn.get().blockedRequests(), "Blocked requests should sum across subnets (50 + 100)");
+			assertEquals(80, telekomAsn.get().distinctClients(), "Distinct clients should sum across disjoint subnets (50 + 30)");
+			assertEquals(15L, telekomAsn.get().authenticatedRequests(), "Authenticated requests should sum across subnets (15 + 0)");
+		} finally {
+			jdbcTemplate.update("DELETE FROM client_subnet_rollups WHERE server_id = 'SCATTER-NODE'");
+		}
+	}
 }
 
 

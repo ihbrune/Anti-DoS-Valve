@@ -613,6 +613,28 @@ class DashboardControllerTest {
 				.andExpect(jsonPath("$.timeline").isArray())
 				.andExpect(jsonPath("$.composition").isArray())
 				.andExpect(jsonPath("$.scatterPoints").isArray());
+
+		mockMvc.perform(get("/fragments/analytics-overview")
+						.param("hours", "24")
+						.param("tab", "scatter")
+						.param("scatterGroupBy", "ASN")
+						.param("scatterTrafficFilter", "EXCLUDE_BOTS")
+						.param("scatterAuthFilter", "NO_LOGINS"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("data-scatter-group-by=\"ASN\"")))
+				.andExpect(content().string(containsString("data-scatter-traffic=\"EXCLUDE_BOTS\"")))
+				.andExpect(content().string(containsString("data-scatter-auth=\"NO_LOGINS\"")))
+				.andExpect(content().string(containsString("Autonomous System (ASN) Cluster &amp; Botnet Analysis")));
+
+		mockMvc.perform(get("/api/v1/analytics/overview")
+						.param("hours", "24")
+						.param("groupBy", "ASN")
+						.param("trafficFilter", "EXCLUDE_BOTS")
+						.param("authFilter", "NO_LOGINS"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.scatterGroupBy").value("ASN"))
+				.andExpect(jsonPath("$.scatterTrafficFilter").value("EXCLUDE_BOTS"))
+				.andExpect(jsonPath("$.scatterAuthFilter").value("NO_LOGINS"));
 	}
 
 	@Test

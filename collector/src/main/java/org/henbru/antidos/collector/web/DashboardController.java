@@ -189,9 +189,14 @@ public class DashboardController {
 			@RequestParam(name = "servers", required = false) List<String> servers,
 			@RequestParam(name = "valves", required = false) List<String> valves,
 			@RequestParam(name = "hours", defaultValue = "24") int hours,
+			@RequestParam(name = "fromTime", required = false) String fromTime,
+			@RequestParam(name = "toTime", required = false) String toTime,
 			@RequestParam(name = "tab", defaultValue = "charts") String tab,
+			@RequestParam(name = "scatterGroupBy", defaultValue = "SUBNET") String scatterGroupBy,
+			@RequestParam(name = "scatterTrafficFilter", defaultValue = "ALL") String scatterTrafficFilter,
+			@RequestParam(name = "scatterAuthFilter", defaultValue = "ALL") String scatterAuthFilter,
 			Model model) {
-		populateAnalyticsModel(servers, valves, hours, tab, model);
+		populateAnalyticsModel(servers, valves, hours, fromTime, toTime, tab, scatterGroupBy, scatterTrafficFilter, scatterAuthFilter, model);
 		return "analytics";
 	}
 
@@ -200,9 +205,14 @@ public class DashboardController {
 			@RequestParam(name = "hours", defaultValue = "24") int hours,
 			@RequestParam(name = "servers", required = false) List<String> servers,
 			@RequestParam(name = "valves", required = false) List<String> valves,
+			@RequestParam(name = "fromTime", required = false) String fromTime,
+			@RequestParam(name = "toTime", required = false) String toTime,
 			@RequestParam(name = "tab", defaultValue = "charts") String tab,
+			@RequestParam(name = "scatterGroupBy", defaultValue = "SUBNET") String scatterGroupBy,
+			@RequestParam(name = "scatterTrafficFilter", defaultValue = "ALL") String scatterTrafficFilter,
+			@RequestParam(name = "scatterAuthFilter", defaultValue = "ALL") String scatterAuthFilter,
 			Model model) {
-		populateAnalyticsModel(servers, valves, hours, tab, model);
+		populateAnalyticsModel(servers, valves, hours, fromTime, toTime, tab, scatterGroupBy, scatterTrafficFilter, scatterAuthFilter, model);
 		return "fragments/analytics-overview :: analyticsCard";
 	}
 
@@ -210,16 +220,30 @@ public class DashboardController {
 			List<String> servers,
 			List<String> valves,
 			int hours,
+			String fromStr,
+			String toStr,
 			String tab,
+			String scatterGroupBy,
+			String scatterTrafficFilter,
+			String scatterAuthFilter,
 			Model model) {
+		Instant fromTime = parseDateTime(fromStr);
+		Instant toTime = parseDateTime(toStr);
+		String effectiveGroupBy = ("ASN".equalsIgnoreCase(scatterGroupBy)) ? "ASN" : "SUBNET";
+		String effectiveTraffic = (scatterTrafficFilter != null && !scatterTrafficFilter.isBlank()) ? scatterTrafficFilter.trim().toUpperCase() : "ALL";
+		String effectiveAuth = (scatterAuthFilter != null && !scatterAuthFilter.isBlank()) ? scatterAuthFilter.trim().toUpperCase() : "ALL";
+
 		if (analyticsService != null) {
 			org.henbru.antidos.collector.model.AnalyticsDashboardDto analytics =
-					analyticsService.getDashboardAnalytics(hours, servers, valves);
+					analyticsService.getDashboardAnalytics(hours, fromTime, toTime, servers, valves, effectiveGroupBy, effectiveTraffic, effectiveAuth);
 			model.addAttribute("analytics", analytics);
 			model.addAttribute("analyticsJson", toJson(analytics));
 		}
 		model.addAttribute("selectedHours", hours);
 		model.addAttribute("activeTab", tab != null ? tab : "charts");
+		model.addAttribute("scatterGroupBy", effectiveGroupBy);
+		model.addAttribute("scatterTrafficFilter", effectiveTraffic);
+		model.addAttribute("scatterAuthFilter", effectiveAuth);
 		model.addAttribute("availableServers", getAvailableServerIds());
 		model.addAttribute("availableValves", getAvailableValveNames(servers));
 		model.addAttribute("selectedServers", servers != null ? servers : List.of());

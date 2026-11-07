@@ -433,6 +433,8 @@
             }
         };
 
+        const isAsnMode = points.length > 0 && points[0].groupBy === 'ASN';
+
         const chart = new Chart(canvas, {
             type: 'bubble',
             data: { datasets: datasets },
@@ -445,11 +447,15 @@
                     if (elements.length > 0) {
                         const el = elements[0];
                         const pt = datasets[el.datasetIndex].data[el.index].raw;
-                        if (pt && pt.subnetGroup) {
-                            if (window.highlightScatterTableRow && window.highlightScatterTableRow(pt.subnetGroup)) {
+                        if (pt) {
+                            if (pt.subnetGroup && window.highlightScatterTableRow && window.highlightScatterTableRow(pt.subnetGroup)) {
                                 return;
                             }
-                            window.location.href = '/offenders?clientQuery=' + encodeURIComponent(pt.subnetGroup) + '&groupBy=SUBNET';
+                            if (pt.groupBy === 'ASN' && pt.asn) {
+                                window.location.href = '/offenders?asn=' + encodeURIComponent(pt.asn) + '&groupBy=ASN';
+                            } else if (pt.subnetGroup) {
+                                window.location.href = '/offenders?clientQuery=' + encodeURIComponent(pt.subnetGroup) + '&groupBy=SUBNET';
+                            }
                         }
                     }
                 },
@@ -474,7 +480,8 @@
                             title: function(items) {
                                 if (items.length > 0) {
                                     const pt = items[0].raw.raw;
-                                    let title = `Subnet: ${pt.subnetGroup}`;
+                                    const isAsn = pt.groupBy === 'ASN';
+                                    let title = isAsn ? `Autonomous System: ${pt.subnetGroup} (${pt.asOrg || 'Unknown Provider'})` : `Subnet: ${pt.subnetGroup}`;
                                     if (pt.hasNote && pt.noteVerdictIcon) {
                                         title += `  ${pt.noteVerdictIcon} [${pt.noteVerdictDisplayName || 'Note'}]`;
                                     }
@@ -485,6 +492,7 @@
                             label: function(context) {
                                 const pt = context.raw.raw;
                                 const blkPct = pt.totalRequests > 0 ? ((pt.blockedRequests / pt.totalRequests) * 100).toFixed(1) : '0.0';
+                                const isAsn = pt.groupBy === 'ASN';
                                 const lines = [
                                     `ISP: ${pt.asOrg} (${pt.asn ? 'AS' + pt.asn : '--'}) [${pt.countryCode}]`,
                                     `Classification: ${pt.clientType}`
@@ -506,12 +514,21 @@
                                     }
                                 }
 
+                                const ipSpreadLabel = isAsn ? 'Distinct IPs across ASN (X)' : 'Distinct IPs in Subnet (X)';
                                 lines.push(
-                                    `Distinct IPs in Subnet (X): ${pt.distinctClients}`,
+                                    `${ipSpreadLabel}: ${pt.distinctClients}`,
                                     `Ø Requests / IP (Y): ${pt.averageRequestsPerClient}`,
                                     `Total Requests: ${pt.totalRequests.toLocaleString()}`,
                                     `Blocked (429): ${pt.blockedRequests.toLocaleString()} (${blkPct}%)`
                                 );
+                                if (pt.authenticatedRequests !== undefined && pt.authenticatedRequests !== null) {
+                                    if (pt.authenticatedRequests > 0) {
+                                        const authPct = pt.authenticatedTrackedRequests > 0 ? ((pt.authenticatedRequests / pt.authenticatedTrackedRequests) * 100).toFixed(1) + '%' : '';
+                                        lines.push(`🔐 Authenticated: ${pt.authenticatedRequests.toLocaleString()} (${authPct})`);
+                                    } else {
+                                        lines.push(`🚨 Authenticated: 0 (No Logins Detected)`);
+                                    }
+                                }
                                 if (pt.distinctUserAgents && pt.distinctUserAgents > 0) {
                                     lines.push(`Distinct User-Agents: ${pt.distinctUserAgents}`);
                                 }
@@ -532,7 +549,7 @@
                         type: 'logarithmic',
                         title: {
                             display: true,
-                            text: 'Unique Client IPs in Subnet (Logarithmic)',
+                            text: isAsnMode ? 'Unique Client IPs across Autonomous System (Logarithmic)' : 'Unique Client IPs in Subnet (Logarithmic)',
                             color: theme.textColor,
                             font: { weight: '600', size: 11 }
                         },

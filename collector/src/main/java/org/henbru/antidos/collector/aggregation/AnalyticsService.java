@@ -61,13 +61,40 @@ public class AnalyticsService {
 			List<String> servers,
 			List<String> valves
 	) {
+		return getDashboardAnalytics(hours, null, null, servers, valves, "SUBNET", "ALL", "ALL");
+	}
+
+	public AnalyticsDashboardDto getDashboardAnalytics(
+			int hours,
+			List<String> servers,
+			List<String> valves,
+			String groupBy,
+			String trafficFilter,
+			String authFilter
+	) {
+		return getDashboardAnalytics(hours, null, null, servers, valves, groupBy, trafficFilter, authFilter);
+	}
+
+	public AnalyticsDashboardDto getDashboardAnalytics(
+			int hours,
+			Instant fromTime,
+			Instant toTime,
+			List<String> servers,
+			List<String> valves,
+			String groupBy,
+			String trafficFilter,
+			String authFilter
+	) {
 		int safeHours = hours > 0 ? hours : 24;
-		Instant to = Instant.now();
-		Instant from = to.minus(safeHours, ChronoUnit.HOURS);
+		Instant to = toTime != null ? toTime : Instant.now();
+		Instant from = fromTime != null ? fromTime : to.minus(safeHours, ChronoUnit.HOURS);
+		String effectiveGroupBy = "ASN".equalsIgnoreCase(groupBy) ? "ASN" : "SUBNET";
+		String effectiveTraffic = trafficFilter != null && !trafficFilter.isBlank() ? trafficFilter.trim().toUpperCase() : "ALL";
+		String effectiveAuth = authFilter != null && !authFilter.isBlank() ? authFilter.trim().toUpperCase() : "ALL";
 
 		// 1. Timeline Points
 		List<TimelinePoint> timeline = subnetRollupRepository.findTimeline(servers, valves, from, to);
-		if (timeline.isEmpty() && safeHours <= 24) {
+		if (timeline.isEmpty() && safeHours <= 24 && fromTime == null && toTime == null) {
 			// Trigger on-demand rollup catch-up if tables are fresh or pending
 			rollupAggregationService.aggregateCatchUp(Math.min(safeHours, 24));
 			timeline = subnetRollupRepository.findTimeline(servers, valves, from, to);
@@ -112,7 +139,9 @@ public class AnalyticsService {
 
 		// 3. Residential Proxy & Subnet Scatterplot Points (Top 150 clusters)
 		List<SubnetRollupRepository.RawScatterCluster> rawClusters =
-				subnetRollupRepository.findScatterClusters(servers, valves, from, to, 150);
+				("SUBNET".equals(effectiveGroupBy) && "ALL".equals(effectiveTraffic) && "ALL".equals(effectiveAuth))
+						? subnetRollupRepository.findScatterClusters(servers, valves, from, to, 150)
+						: subnetRollupRepository.findScatterClusters(servers, valves, from, to, effectiveGroupBy, effectiveTraffic, effectiveAuth, 150);
 
 		Map<String, NetworkAnnotation> subnetNotes = (networkAnnotationService != null)
 				? networkAnnotationService.getSubnetAnnotationMap()
@@ -197,7 +226,10 @@ public class AnalyticsService {
 					asnNoteVerdict,
 					asnNoteIcon,
 					asnNoteSnippet,
-					retRatio
+					retRatio,
+					c.authenticatedRequests(),
+					c.authenticatedTrackedRequests(),
+					effectiveGroupBy
 			));
 		}
 
@@ -224,7 +256,10 @@ public class AnalyticsService {
 				totalMarked,
 				blockedRatio,
 				markedRatio,
-				advisorReport
+				advisorReport,
+				effectiveGroupBy,
+				effectiveTraffic,
+				effectiveAuth
 		);
 	}
 

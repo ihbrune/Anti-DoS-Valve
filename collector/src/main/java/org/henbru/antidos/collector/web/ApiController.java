@@ -249,8 +249,11 @@ public class ApiController {
 	public org.henbru.antidos.collector.model.AnalyticsDashboardDto analyticsOverview(
 			@RequestParam(name = "hours", defaultValue = "24") int hours,
 			@RequestParam(name = "servers", required = false) List<String> servers,
-			@RequestParam(name = "valves", required = false) List<String> valves) {
-		return analyticsService.getDashboardAnalytics(hours, servers, valves);
+			@RequestParam(name = "valves", required = false) List<String> valves,
+			@RequestParam(name = "groupBy", defaultValue = "SUBNET") String groupBy,
+			@RequestParam(name = "trafficFilter", defaultValue = "ALL") String trafficFilter,
+			@RequestParam(name = "authFilter", defaultValue = "ALL") String authFilter) {
+		return analyticsService.getDashboardAnalytics(hours, servers, valves, groupBy, trafficFilter, authFilter);
 	}
 
 	@GetMapping("/analytics/timeline")
@@ -273,8 +276,11 @@ public class ApiController {
 	public List<org.henbru.antidos.collector.model.SubnetScatterPoint> analyticsScatter(
 			@RequestParam(name = "hours", defaultValue = "24") int hours,
 			@RequestParam(name = "servers", required = false) List<String> servers,
-			@RequestParam(name = "valves", required = false) List<String> valves) {
-		return analyticsService.getDashboardAnalytics(hours, servers, valves).scatterPoints();
+			@RequestParam(name = "valves", required = false) List<String> valves,
+			@RequestParam(name = "groupBy", defaultValue = "SUBNET") String groupBy,
+			@RequestParam(name = "trafficFilter", defaultValue = "ALL") String trafficFilter,
+			@RequestParam(name = "authFilter", defaultValue = "ALL") String authFilter) {
+		return analyticsService.getDashboardAnalytics(hours, servers, valves, groupBy, trafficFilter, authFilter).scatterPoints();
 	}
 
 	@GetMapping("/analytics/advisor")

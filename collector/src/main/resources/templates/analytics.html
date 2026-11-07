@@ -116,6 +116,9 @@
             <input type="hidden" name="hours" id="filter-hours"
                 th:value="${selectedHours != null ? selectedHours : 24}">
             <input type="hidden" name="tab" id="filter-tab" th:value="${activeTab != null ? activeTab : 'charts'}">
+            <input type="hidden" name="scatterGroupBy" id="filter-scatter-group-by" th:value="${scatterGroupBy != null ? scatterGroupBy : 'SUBNET'}">
+            <input type="hidden" name="scatterTrafficFilter" id="filter-scatter-traffic" th:value="${scatterTrafficFilter != null ? scatterTrafficFilter : 'ALL'}">
+            <input type="hidden" name="scatterAuthFilter" id="filter-scatter-auth" th:value="${scatterAuthFilter != null ? scatterAuthFilter : 'ALL'}">
 
             <div class="filter-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">
                 <!-- 1. Target Servers -->

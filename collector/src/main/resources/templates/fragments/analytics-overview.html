@@ -4,7 +4,7 @@
 
 <!-- Telemetry Analytics Fragment -->
 <div th:fragment="analyticsCard" id="analytics-container" class="table-card" style="padding: 20px; margin-bottom: 28px;"
-     th:attr="data-selected-hours=${selectedHours},data-active-tab=${activeTab}">
+     th:attr="data-selected-hours=${selectedHours},data-active-tab=${activeTab},data-scatter-group-by=${scatterGroupBy},data-scatter-traffic=${scatterTrafficFilter},data-scatter-auth=${scatterAuthFilter}">
     <!-- Analytics Header & Control Bar -->
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 20px;">
         <div>
@@ -27,7 +27,7 @@
                 <button type="button"
                         class="btn"
                         th:classappend="${activeTab == 'charts' ? 'btn-primary' : ''}"
-                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='charts',servers=${selectedServers},valves=${selectedValves})}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='charts',servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter})}"
                         hx-target="#analytics-container"
                         hx-swap="outerHTML"
                         style="padding: 5px 12px; font-size: 12px;">
@@ -36,16 +36,16 @@
                 <button type="button"
                         class="btn"
                         th:classappend="${activeTab == 'scatter' ? 'btn-primary' : ''}"
-                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',servers=${selectedServers},valves=${selectedValves})}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter})}"
                         hx-target="#analytics-container"
                         hx-swap="outerHTML"
                         style="padding: 5px 12px; font-size: 12px;">
-                    <span>&#x1F3AF;</span> Subnet Scatterplot
+                    <span>&#x1F3AF;</span> Cluster Scatterplot
                 </button>
                 <button type="button"
                         class="btn"
                         th:classappend="${activeTab == 'advisor' ? 'btn-primary' : ''}"
-                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='advisor',servers=${selectedServers},valves=${selectedValves})}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='advisor',servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter})}"
                         hx-target="#analytics-container"
                         hx-swap="outerHTML"
                         style="padding: 5px 12px; font-size: 12px; position: relative;">
@@ -62,25 +62,25 @@
             <div style="display: flex; align-items: center; gap: 6px;">
                 <button type="button" class="btn"
                         th:classappend="${selectedHours == 1 ? 'btn-primary' : ''}"
-                        th:attr="hx-get=@{/fragments/analytics-overview(hours=1,tab=${activeTab},servers=${selectedServers},valves=${selectedValves})}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=1,tab=${activeTab},servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter})}"
                         hx-target="#analytics-container"
                         hx-swap="outerHTML"
                         style="padding: 4px 10px; font-size: 11px;">1h</button>
                 <button type="button" class="btn"
                         th:classappend="${selectedHours == 6 ? 'btn-primary' : ''}"
-                        th:attr="hx-get=@{/fragments/analytics-overview(hours=6,tab=${activeTab},servers=${selectedServers},valves=${selectedValves})}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=6,tab=${activeTab},servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter})}"
                         hx-target="#analytics-container"
                         hx-swap="outerHTML"
                         style="padding: 4px 10px; font-size: 11px;">6h</button>
                 <button type="button" class="btn"
                         th:classappend="${selectedHours == 24 ? 'btn-primary' : ''}"
-                        th:attr="hx-get=@{/fragments/analytics-overview(hours=24,tab=${activeTab},servers=${selectedServers},valves=${selectedValves})}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=24,tab=${activeTab},servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter})}"
                         hx-target="#analytics-container"
                         hx-swap="outerHTML"
                         style="padding: 4px 10px; font-size: 11px;">24h</button>
                 <button type="button" class="btn"
                         th:classappend="${selectedHours == 168 ? 'btn-primary' : ''}"
-                        th:attr="hx-get=@{/fragments/analytics-overview(hours=168,tab=${activeTab},servers=${selectedServers},valves=${selectedValves})}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=168,tab=${activeTab},servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter})}"
                         hx-target="#analytics-container"
                         hx-swap="outerHTML"
                         style="padding: 4px 10px; font-size: 11px;">7d</button>
@@ -168,14 +168,110 @@
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px;">
             <div>
                 <div style="font-weight: 600; font-size: 13px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
-                    <span>&#x1F3AF;</span> Residential Proxy &amp; Distributed Botnet Cluster Analysis
+                    <span>&#x1F3AF;</span>
+                    <span th:text="${scatterGroupBy == 'ASN' ? 'Autonomous System (ASN) Cluster &amp; Botnet Analysis' : 'Residential Proxy &amp; Distributed Botnet Cluster Analysis'}">Residential Proxy &amp; Distributed Botnet Cluster Analysis</span>
                 </div>
                 <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-                    Identifies distributed attacks where hundreds of residential IPs send low-frequency requests to bypass traditional single-IP rate limits.
+                    <span th:if="${scatterGroupBy == 'ASN'}">Aggregates distributed rotating residential proxy swarms across entire Autonomous Systems (ASNs) to isolate synchronized network-wide campaigns.</span>
+                    <span th:unless="${scatterGroupBy == 'ASN'}">Identifies distributed attacks where hundreds of residential IPs send low-frequency requests to bypass traditional single-IP rate limits.</span>
                 </div>
             </div>
             <div class="badge" style="background: rgba(56, 189, 248, 0.12); color: var(--color-primary); font-size: 11px;">
-                <span th:text="${analytics.scatterPoints.size()} + ' Subnet Clusters Analyzed'">0 Clusters</span>
+                <span th:text="${analytics.scatterPoints.size()} + (${scatterGroupBy == 'ASN'} ? ' ASN Clusters Analyzed' : ' Subnet Clusters Analyzed')">0 Clusters</span>
+            </div>
+        </div>
+
+        <!-- Forensic Controls Bar: Grouping, Traffic Filter, and Authentication State -->
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 12px;">
+            <!-- Group 1: Aggregation Dimension (Subnet vs ASN) -->
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Dimension:</span>
+                <div class="filter-btn-group">
+                    <button type="button" class="filter-btn"
+                            th:classappend="${scatterGroupBy != 'ASN' ? 'active' : ''}"
+                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy='SUBNET',scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter},servers=${selectedServers},valves=${selectedValves})}"
+                            hx-target="#analytics-container"
+                            hx-swap="outerHTML"
+                            title="Group cluster telemetry by CIDR subnets (/24 for IPv4, /64 for IPv6)">
+                        <span>🌐</span> Subnets (/24)
+                    </button>
+                    <button type="button" class="filter-btn"
+                            th:classappend="${scatterGroupBy == 'ASN' ? 'active' : ''}"
+                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy='ASN',scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter},servers=${selectedServers},valves=${selectedValves})}"
+                            hx-target="#analytics-container"
+                            hx-swap="outerHTML"
+                            title="Aggregate rotating proxy botnets across entire Autonomous Systems (ASNs)">
+                        <span>🏛️</span> ASN Rollup
+                    </button>
+                </div>
+            </div>
+
+            <!-- Group 2: Traffic Filter (e.g. Exclude Search & AI Bots) -->
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Traffic:</span>
+                <div class="filter-btn-group">
+                    <button type="button" class="filter-btn"
+                            th:classappend="${scatterTrafficFilter == null or scatterTrafficFilter == 'ALL' ? 'active' : ''}"
+                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy=${scatterGroupBy},scatterTrafficFilter='ALL',scatterAuthFilter=${scatterAuthFilter},servers=${selectedServers},valves=${selectedValves})}"
+                            hx-target="#analytics-container"
+                            hx-swap="outerHTML">
+                        All
+                    </button>
+                    <button type="button" class="filter-btn"
+                            th:classappend="${scatterTrafficFilter == 'EXCLUDE_BOTS' ? 'active' : ''}"
+                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy=${scatterGroupBy},scatterTrafficFilter='EXCLUDE_BOTS',scatterAuthFilter=${scatterAuthFilter},servers=${selectedServers},valves=${selectedValves})}"
+                            hx-target="#analytics-container"
+                            hx-swap="outerHTML"
+                            title="Filter out verified search engines and AI crawlers so stealth residential proxy swarms stand out">
+                        <span>🛡️</span> Exclude Bots
+                    </button>
+                    <button type="button" class="filter-btn"
+                            th:classappend="${scatterTrafficFilter == 'RESIDENTIAL_ONLY' ? 'active' : ''}"
+                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy=${scatterGroupBy},scatterTrafficFilter='RESIDENTIAL_ONLY',scatterAuthFilter=${scatterAuthFilter},servers=${selectedServers},valves=${selectedValves})}"
+                            hx-target="#analytics-container"
+                            hx-swap="outerHTML"
+                            title="Isolate consumer residential broadband pools">
+                        <span>🏠</span> Residential
+                    </button>
+                    <button type="button" class="filter-btn"
+                            th:classappend="${scatterTrafficFilter == 'DATACENTER_ONLY' ? 'active' : ''}"
+                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy=${scatterGroupBy},scatterTrafficFilter='DATACENTER_ONLY',scatterAuthFilter=${scatterAuthFilter},servers=${selectedServers},valves=${selectedValves})}"
+                            hx-target="#analytics-container"
+                            hx-swap="outerHTML"
+                            title="Isolate datacenter and cloud hosting ranges">
+                        <span>🏢</span> Datacenter
+                    </button>
+                </div>
+            </div>
+
+            <!-- Group 3: Login / Authenticated Session Filter -->
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Authentication:</span>
+                <div class="filter-btn-group">
+                    <button type="button" class="filter-btn"
+                            th:classappend="${scatterAuthFilter == null or scatterAuthFilter == 'ALL' ? 'active' : ''}"
+                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter='ALL',servers=${selectedServers},valves=${selectedValves})}"
+                            hx-target="#analytics-container"
+                            hx-swap="outerHTML">
+                        All
+                    </button>
+                    <button type="button" class="filter-btn"
+                            th:classappend="${scatterAuthFilter == 'NO_LOGINS' ? 'active' : ''}"
+                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter='NO_LOGINS',servers=${selectedServers},valves=${selectedValves})}"
+                            hx-target="#analytics-container"
+                            hx-swap="outerHTML"
+                            title="Show only clusters with 0 authenticated logins (pure anonymous scrapers and botnet swarms)">
+                        <span>🚨</span> 0 Logins
+                    </button>
+                    <button type="button" class="filter-btn"
+                            th:classappend="${scatterAuthFilter == 'WITH_LOGINS' ? 'active' : ''}"
+                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter='WITH_LOGINS',servers=${selectedServers},valves=${selectedValves})}"
+                            hx-target="#analytics-container"
+                            hx-swap="outerHTML"
+                            title="Show clusters carrying authenticated user sessions (avoids collateral damage on real users)">
+                        <span>🔐</span> With Logins
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -211,9 +307,11 @@
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
                 <div>
                     <div style="font-weight: 600; font-size: 13px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
-                        <span>&#x1F4CB;</span> Subnet Cluster Forensics Breakdown
+                        <span>&#x1F4CB;</span>
+                        <span th:text="${scatterGroupBy == 'ASN' ? 'Autonomous System Forensics Breakdown' : 'Subnet Cluster Forensics Breakdown'}">Subnet Cluster Forensics Breakdown</span>
                         <span id="scatter-table-count" class="badge" style="background: rgba(56, 189, 248, 0.12); color: var(--color-primary); font-size: 10px;">
-                            <span th:text="${analytics.scatterPoints.size()}">0</span> Subnets
+                            <span th:text="${analytics.scatterPoints.size()}">0</span>
+                            <span th:text="${scatterGroupBy == 'ASN' ? ' ASNs' : ' Subnets'}"> Subnets</span>
                         </span>
                     </div>
                     <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
@@ -226,12 +324,16 @@
                     <button type="button" class="filter-btn scatter-filter-btn active" data-filter="all" onclick="filterScatterTable('all')">
                         All (<span th:text="${analytics.scatterPoints.size()}">0</span>)
                     </button>
+                    <button type="button" class="filter-btn scatter-filter-btn" data-filter="nologins" onclick="filterScatterTable('nologins')"
+                            title="Filter clusters with 0 authenticated user logins (potential botnet/scraper swarms)">
+                        <span>🚨</span> 0 Logins
+                    </button>
                     <button type="button" class="filter-btn scatter-filter-btn" data-filter="bypass" onclick="filterScatterTable('bypass')"
-                            title="Filter subnets with 0% blocked requests (potential evasion botnets)">
+                            title="Filter clusters with 0% blocked requests (potential evasion botnets)">
                         <span>⚠️</span> 0% Blocked (Bypass)
                     </button>
                     <button type="button" class="filter-btn scatter-filter-btn" data-filter="annotated" onclick="filterScatterTable('annotated')"
-                            title="Filter subnets with existing operator notes or verdicts">
+                            title="Filter clusters with existing operator notes or verdicts">
                         <span>📝</span> With Notes
                     </button>
                 </div>
@@ -242,13 +344,16 @@
                 <table class="data-table" id="scatter-clusters-table" style="margin-bottom: 0;">
                     <thead>
                         <tr>
-                            <th onclick="sortScatterTable(0, 'string')" style="cursor: pointer;" title="Sort by Subnet">Subnet &amp; Notes &#x21C5;</th>
-                            <th onclick="sortScatterTable(1, 'string')" style="cursor: pointer;" title="Sort by Autonomous System / ISP">ASN / ISP &#x21C5;</th>
+                            <th onclick="sortScatterTable(0, 'string')" style="cursor: pointer;"
+                                th:text="${scatterGroupBy == 'ASN' ? 'ASN & Notes ⇅' : 'Subnet & Notes ⇅'}">Subnet &amp; Notes &#x21C5;</th>
+                            <th onclick="sortScatterTable(1, 'string')" style="cursor: pointer;"
+                                th:text="${scatterGroupBy == 'ASN' ? 'Provider & Country ⇅' : 'ASN / ISP ⇅'}">ASN / ISP &#x21C5;</th>
                             <th onclick="sortScatterTable(2, 'number')" style="cursor: pointer; text-align: right;" title="Sort by Unique Client IPs (X)">Distinct IPs (X) &#x21C5;</th>
                             <th onclick="sortScatterTable(3, 'number')" style="cursor: pointer; text-align: right;" title="Sort by Average Requests per IP (Y)">Ø Reqs / IP (Y) &#x21C5;</th>
                             <th onclick="sortScatterTable(4, 'number')" style="cursor: pointer; text-align: right;" title="Sort by Total Request Volume">Total Reqs &#x21C5;</th>
                             <th onclick="sortScatterTable(5, 'number')" style="cursor: pointer; text-align: right;" title="Sort by Blocked 429 Count">Blocked &#x21C5;</th>
                             <th onclick="sortScatterTable(6, 'number')" style="cursor: pointer; text-align: right;" title="Sort by Block Rate %">Block Rate &#x21C5;</th>
+                            <th onclick="sortScatterTable(7, 'number')" style="cursor: pointer; text-align: center;" title="Sort by Authenticated Requests">Logins (Auth) &#x21C5;</th>
                             <th style="text-align: center;">Classification</th>
                             <th style="text-align: right;">Action</th>
                         </tr>
@@ -260,19 +365,30 @@
                                      data-blocked=${pt.blockedRequests},
                                      data-total=${pt.totalRequests},
                                      data-hasnote=${pt.hasNote},
+                                     data-auth=${pt.authenticatedRequests},
+                                     data-clienttype=${pt.clientType},
                                      onmouseenter=|if(window.AntiDoSCharts) AntiDoSCharts.highlightScatterPoint('scatterChart', '${pt.subnetGroup}')|,
                                      onmouseleave=|if(window.AntiDoSCharts) AntiDoSCharts.clearScatterHighlight('scatterChart')|">
-                            <!-- Subnet & Notes -->
+                            <!-- Subnet / ASN & Notes -->
                             <td>
                                 <div style="display: flex; align-items: center; gap: 6px;">
-                                    <a th:href="@{/offenders(clientQuery=${pt.subnetGroup},groupBy='SUBNET')}"
+                                    <!-- ASN link if ASN mode -->
+                                    <a th:if="${scatterGroupBy == 'ASN' and pt.asn != null}"
+                                       th:href="@{/offenders(asn=${pt.asn},groupBy='ASN')}"
+                                       class="ip-mono"
+                                       style="font-size: 12px; text-decoration: underline; color: inherit; font-weight: 600;"
+                                       title="Filter offenders view for this Autonomous System"
+                                       th:text="${pt.subnetGroup}">AS24940</a>
+                                    <!-- Subnet link if Subnet mode -->
+                                    <a th:unless="${scatterGroupBy == 'ASN' and pt.asn != null}"
+                                       th:href="@{/offenders(clientQuery=${pt.subnetGroup},groupBy='SUBNET')}"
                                        class="ip-mono"
                                        style="font-size: 12px; text-decoration: underline; color: inherit; font-weight: 600;"
                                        title="Filter offenders view for this subnet"
                                        th:text="${pt.subnetGroup}">185.246.221.0/24</a>
 
-                                    <!-- Subnet Note Badge or Add Button -->
-                                    <th:block th:if="${pt.subnetNoteVerdict != null}">
+                                    <!-- Subnet Note Badge or Add Button (Subnet Mode) -->
+                                    <th:block th:if="${scatterGroupBy != 'ASN' and pt.subnetNoteVerdict != null}">
                                         <span class="badge-note"
                                               th:classappend="${#strings.toLowerCase(pt.subnetNoteVerdict) == 'suspicious' ? 'badge-warning' : (#strings.toLowerCase(pt.subnetNoteVerdict) == 'malicious' ? 'badge-danger' : (#strings.toLowerCase(pt.subnetNoteVerdict) == 'legitimate' ? 'badge-success' : 'badge-info'))}"
                                               th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${pt.subnetGroup}, context='table')}"
@@ -280,20 +396,36 @@
                                               th:title="'Subnet Note: ' + ${pt.subnetNoteVerdict} + (${pt.subnetNoteSnippet != null} ? ' - &quot;' + ${pt.subnetNoteSnippet} + '&quot;' : '')"
                                               th:text="${pt.subnetNoteIcon != null ? pt.subnetNoteIcon : '📝'}">🟢</span>
                                     </th:block>
-                                    <th:block th:if="${pt.subnetNoteVerdict == null and pt.subnetGroup != null}">
+                                    <th:block th:if="${scatterGroupBy != 'ASN' and pt.subnetNoteVerdict == null and pt.subnetGroup != null}">
                                         <span class="btn-add-note"
                                               th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${pt.subnetGroup}, context='table')}"
                                               hx-target="#note-modal-container"
                                               title="Add note for this subnet">+📝</span>
                                     </th:block>
+
+                                    <!-- ASN Note Badge or Add Button (ASN Mode) -->
+                                    <th:block th:if="${scatterGroupBy == 'ASN' and pt.asn != null and pt.asnNoteVerdict != null}">
+                                        <span class="badge-note"
+                                              th:classappend="${#strings.toLowerCase(pt.asnNoteVerdict) == 'suspicious' ? 'badge-warning' : (#strings.toLowerCase(pt.asnNoteVerdict) == 'malicious' ? 'badge-danger' : (#strings.toLowerCase(pt.asnNoteVerdict) == 'legitimate' ? 'badge-success' : 'badge-info'))}"
+                                              th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${pt.asn}, context='table')}"
+                                              hx-target="#note-modal-container"
+                                              th:title="'ASN Note: ' + ${pt.asnNoteVerdict} + (${pt.asnNoteSnippet != null} ? ' - &quot;' + ${pt.asnNoteSnippet} + '&quot;' : '')"
+                                              th:text="${pt.asnNoteIcon != null ? pt.asnNoteIcon : '📝'}">🟢</span>
+                                    </th:block>
+                                    <th:block th:if="${scatterGroupBy == 'ASN' and pt.asn != null and pt.asnNoteVerdict == null}">
+                                        <span class="btn-add-note"
+                                              th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${pt.asn}, context='table')}"
+                                              hx-target="#note-modal-container"
+                                              title="Add note for this ASN">+📝</span>
+                                    </th:block>
                                 </div>
                             </td>
 
-                            <!-- ASN & ISP -->
+                            <!-- ASN & ISP / Provider Details -->
                             <td>
                                 <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
                                     <span th:if="${pt.countryCode != null and pt.countryCode != '--'}" class="badge badge-secondary" style="padding: 1px 4px; font-size: 9px;" th:text="${pt.countryCode}">DE</span>
-                                    <span th:if="${pt.asn != null}" style="display: inline-flex; align-items: center; gap: 3px;">
+                                    <span th:if="${pt.asn != null and scatterGroupBy != 'ASN'}" style="display: inline-flex; align-items: center; gap: 3px;">
                                         <a th:href="@{/events(asn=${pt.asn})}" class="badge badge-info" style="padding: 1px 5px; font-size: 9px; text-decoration: none;" th:title="${pt.asOrg + ' - Click to filter incidents'}" th:text="'AS' + ${pt.asn}">AS24940</a>
                                         <th:block th:if="${pt.asnNoteVerdict != null}">
                                             <span class="badge-note"
@@ -358,6 +490,23 @@
                                 </div>
                             </td>
 
+                            <!-- Logins (Auth) -->
+                            <td style="text-align: center;">
+                                <span th:if="${pt.authenticatedRequests == 0}"
+                                      class="badge"
+                                      style="background: rgba(244, 63, 94, 0.12); color: #f43f5e; font-size: 10px; border: 1px solid rgba(244, 63, 94, 0.3);"
+                                      title="0 authenticated requests observed - pure anonymous / scraper traffic">🚨 0 Logins</span>
+                                <span th:if="${pt.authenticatedRequests > 0}"
+                                      class="badge badge-success"
+                                      style="font-size: 10px;"
+                                      th:title="${pt.authenticatedRequests} + ' authenticated of ' + ${pt.authenticatedTrackedRequests} + ' tracked requests'">
+                                    🔐 <span th:text="${pt.authenticatedRequests}">12</span>
+                                    <th:block th:if="${pt.authenticatedRatioPercent != null}">
+                                        (<span th:text="${pt.authenticatedRatioPercent} + '%'">15.4%</span>)
+                                    </th:block>
+                                </span>
+                            </td>
+
                             <!-- Classification -->
                             <td style="text-align: center;">
                                 <span th:if="${pt.classification == 'HIGH_RISK_RESIDENTIAL'}" class="badge" style="background: rgba(244,63,94,0.15); color: #f43f5e; border: 1px solid #f43f5e; font-size: 10px;">🚨 Residential Evasion</span>
@@ -370,10 +519,16 @@
 
                             <!-- Action -->
                             <td style="text-align: right;">
-                                <a th:href="@{/offenders(clientQuery=${pt.subnetGroup},groupBy='SUBNET')}"
+                                <a th:if="${scatterGroupBy == 'ASN' and pt.asn != null}"
+                                   th:href="@{/offenders(asn=${pt.asn},groupBy='ASN')}"
                                    class="btn"
                                    style="padding: 2px 8px; font-size: 11px;"
-                                   title="Inspect in Top Offenders Forensics">Inspect &rarr;</a>
+                                   title="Inspect Autonomous System in Top Offenders Forensics">Inspect &rarr;</a>
+                                <a th:unless="${scatterGroupBy == 'ASN' and pt.asn != null}"
+                                   th:href="@{/offenders(clientQuery=${pt.subnetGroup},groupBy='SUBNET')}"
+                                   class="btn"
+                                   style="padding: 2px 8px; font-size: 11px;"
+                                   title="Inspect Subnet in Top Offenders Forensics">Inspect &rarr;</a>
                             </td>
                         </tr>
                     </tbody>
@@ -630,12 +785,20 @@
                 rows.forEach(r => {
                     const blocked = parseInt(r.getAttribute('data-blocked') || '0', 10);
                     const hasNote = r.getAttribute('data-hasnote') === 'true';
+                    const auth = parseInt(r.getAttribute('data-auth') || '0', 10);
+                    const clientType = r.getAttribute('data-clienttype') || '';
 
                     let show = true;
                     if (filter === 'bypass') {
                         show = (blocked === 0);
                     } else if (filter === 'annotated') {
                         show = hasNote;
+                    } else if (filter === 'nologins') {
+                        show = (auth === 0);
+                    } else if (filter === 'logins') {
+                        show = (auth > 0);
+                    } else if (filter === 'nobots') {
+                        show = (clientType !== 'SEARCH_ENGINE' && clientType !== 'AI_CRAWLER');
                     }
 
                     if (show) {
@@ -648,7 +811,7 @@
 
                 const countEl = document.getElementById('scatter-table-count');
                 if (countEl) {
-                    countEl.textContent = visible + ' Subnets';
+                    countEl.textContent = visible + ' Clusters';
                 }
             };
 

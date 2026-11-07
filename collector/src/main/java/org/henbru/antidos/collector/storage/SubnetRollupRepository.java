@@ -357,8 +357,30 @@ public class SubnetRollupRepository {
 			String countryCode,
 			ClientType clientType,
 			long returningRequests,
-			long returningTrackedRequests
+			long returningTrackedRequests,
+			long authenticatedRequests,
+			long authenticatedTrackedRequests
 	) {
+		public RawScatterCluster(
+				String subnetGroup,
+				long totalRequests,
+				long activeRequests,
+				long blockedRequests,
+				long markedRequests,
+				int distinctClients,
+				int distinctUserAgents,
+				Long asn,
+				String asOrg,
+				String countryCode,
+				ClientType clientType,
+				long returningRequests,
+				long returningTrackedRequests
+		) {
+			this(subnetGroup, totalRequests, activeRequests, blockedRequests, markedRequests,
+					distinctClients, distinctUserAgents, asn, asOrg, countryCode, clientType,
+					returningRequests, returningTrackedRequests, 0L, 0L);
+		}
+
 		public RawScatterCluster(
 				String subnetGroup,
 				long totalRequests,
@@ -371,12 +393,18 @@ public class SubnetRollupRepository {
 				ClientType clientType
 		) {
 			this(subnetGroup, totalRequests, activeRequests, blockedRequests, 0L,
-					distinctClients, 0, asn, asOrg, countryCode, clientType, 0L, 0L);
+					distinctClients, 0, asn, asOrg, countryCode, clientType, 0L, 0L, 0L, 0L);
 		}
 
 		public Double returningRatio() {
 			return returningTrackedRequests > 0
 					? Math.round((returningRequests * 1000.0) / returningTrackedRequests) / 10.0
+					: null;
+		}
+
+		public Double authenticatedRatio() {
+			return authenticatedTrackedRequests > 0
+					? Math.round((authenticatedRequests * 1000.0) / authenticatedTrackedRequests) / 10.0
 					: null;
 		}
 	}
@@ -388,29 +416,100 @@ public class SubnetRollupRepository {
 			Instant to,
 			int limit
 	) {
-		StringBuilder sql = new StringBuilder("""
-				SELECT
-				    subnet_group,
-				    SUM(total_requests) AS total_reqs,
-				    SUM(active_requests) AS active_reqs,
-				    SUM(blocked_requests) AS blocked_reqs,
-				    SUM(COALESCE(marked_requests, 0)) AS marked_reqs,
-				    MAX(distinct_clients) AS max_distinct_clients,
-				    MAX(COALESCE(distinct_user_agents, 0)) AS max_distinct_uas,
-				    MAX(asn) AS asn,
-				    MAX(as_org) AS as_org,
-				    MAX(country_code) AS country_code,
-				    MAX(client_type) AS client_type,
-				    SUM(COALESCE(returning_requests, 0)) AS returning_reqs,
-				    SUM(COALESCE(returning_tracked_requests, 0)) AS returning_tracked_reqs
-				FROM client_subnet_rollups
-				WHERE 1=1
-				""");
+		return findScatterClusters(servers, valves, from, to, "SUBNET", "ALL", "ALL", limit);
+	}
+
+	public List<RawScatterCluster> findScatterClusters(
+			List<String> servers,
+			List<String> valves,
+			Instant from,
+			Instant to,
+			String groupBy,
+			String trafficFilter,
+			String authFilter,
+			int limit
+	) {
+		boolean isAsn = "ASN".equalsIgnoreCase(groupBy);
+		StringBuilder sql = new StringBuilder();
 		List<Object> params = new ArrayList<>();
-		appendFilterConditions(sql, params, servers, valves, from, to, null, null, null);
-		sql.append(" GROUP BY subnet_group HAVING SUM(total_requests) > 0");
-		sql.append(" ORDER BY SUM(blocked_requests) DESC, SUM(COALESCE(marked_requests, 0)) DESC, SUM(total_requests) DESC LIMIT ?");
-		params.add(limit);
+
+		if (isAsn) {
+			sql.append("""
+					SELECT
+					    COALESCE('AS' || asn, 'AS-UNKNOWN') AS subnet_group,
+					    SUM(total_requests) AS total_reqs,
+					    SUM(active_requests) AS active_reqs,
+					    SUM(blocked_requests) AS blocked_reqs,
+					    SUM(COALESCE(marked_requests, 0)) AS marked_reqs,
+					    SUM(distinct_clients) AS max_distinct_clients,
+					    MAX(COALESCE(distinct_user_agents, 0)) AS max_distinct_uas,
+					    asn,
+					    MAX(as_org) AS as_org,
+					    MAX(country_code) AS country_code,
+					    MAX(client_type) AS client_type,
+					    SUM(COALESCE(returning_requests, 0)) AS returning_reqs,
+					    SUM(COALESCE(returning_tracked_requests, 0)) AS returning_tracked_reqs,
+					    SUM(COALESCE(authenticated_requests, 0)) AS authenticated_reqs,
+					    SUM(COALESCE(authenticated_tracked_requests, 0)) AS authenticated_tracked_reqs
+					FROM (
+					    SELECT
+					        subnet_group,
+					        asn,
+					        MAX(as_org) AS as_org,
+					        MAX(country_code) AS country_code,
+					        MAX(client_type) AS client_type,
+					        SUM(total_requests) AS total_requests,
+					        SUM(active_requests) AS active_requests,
+					        SUM(blocked_requests) AS blocked_requests,
+					        SUM(COALESCE(marked_requests, 0)) AS marked_requests,
+					        MAX(distinct_clients) AS distinct_clients,
+					        MAX(COALESCE(distinct_user_agents, 0)) AS distinct_user_agents,
+					        SUM(COALESCE(returning_requests, 0)) AS returning_requests,
+					        SUM(COALESCE(returning_tracked_requests, 0)) AS returning_tracked_requests,
+					        SUM(COALESCE(authenticated_requests, 0)) AS authenticated_requests,
+					        SUM(COALESCE(authenticated_tracked_requests, 0)) AS authenticated_tracked_requests
+					    FROM client_subnet_rollups
+					    WHERE 1=1 AND asn IS NOT NULL AND asn > 0
+					""");
+			appendFilterConditions(sql, params, servers, valves, from, to, null, null, null);
+			appendTrafficFilterCondition(sql, trafficFilter);
+			sql.append("""
+					    GROUP BY subnet_group, asn
+					) sub
+					GROUP BY asn
+					HAVING SUM(total_requests) > 0
+					""");
+			appendAuthFilterHaving(sql, authFilter);
+			sql.append(" ORDER BY SUM(blocked_requests) DESC, SUM(COALESCE(marked_requests, 0)) DESC, SUM(total_requests) DESC LIMIT ?");
+			params.add(limit);
+		} else {
+			sql.append("""
+					SELECT
+					    subnet_group,
+					    SUM(total_requests) AS total_reqs,
+					    SUM(active_requests) AS active_reqs,
+					    SUM(blocked_requests) AS blocked_reqs,
+					    SUM(COALESCE(marked_requests, 0)) AS marked_reqs,
+					    MAX(distinct_clients) AS max_distinct_clients,
+					    MAX(COALESCE(distinct_user_agents, 0)) AS max_distinct_uas,
+					    MAX(asn) AS asn,
+					    MAX(as_org) AS as_org,
+					    MAX(country_code) AS country_code,
+					    MAX(client_type) AS client_type,
+					    SUM(COALESCE(returning_requests, 0)) AS returning_reqs,
+					    SUM(COALESCE(returning_tracked_requests, 0)) AS returning_tracked_reqs,
+					    SUM(COALESCE(authenticated_requests, 0)) AS authenticated_reqs,
+					    SUM(COALESCE(authenticated_tracked_requests, 0)) AS authenticated_tracked_reqs
+					FROM client_subnet_rollups
+					WHERE 1=1
+					""");
+			appendFilterConditions(sql, params, servers, valves, from, to, null, null, null);
+			appendTrafficFilterCondition(sql, trafficFilter);
+			sql.append(" GROUP BY subnet_group HAVING SUM(total_requests) > 0");
+			appendAuthFilterHaving(sql, authFilter);
+			sql.append(" ORDER BY SUM(blocked_requests) DESC, SUM(COALESCE(marked_requests, 0)) DESC, SUM(total_requests) DESC LIMIT ?");
+			params.add(limit);
+		}
 
 		return jdbcTemplate.query(Objects.requireNonNull(sql.toString()), (rs, rowNum) -> {
 			Long asnVal = rs.getObject("asn") != null ? rs.getLong("asn") : null;
@@ -429,7 +528,9 @@ public class SubnetRollupRepository {
 					rs.getString("country_code"),
 					type,
 					rs.getLong("returning_reqs"),
-					rs.getLong("returning_tracked_reqs")
+					rs.getLong("returning_tracked_reqs"),
+					rs.getLong("authenticated_reqs"),
+					rs.getLong("authenticated_tracked_reqs")
 			);
 		}, params.toArray());
 	}
@@ -516,6 +617,31 @@ public class SubnetRollupRepository {
 					.append(String.join(",", Collections.nCopies(clientTypes.size(), "?")))
 					.append(")");
 			params.addAll(clientTypes);
+		}
+	}
+
+	private void appendTrafficFilterCondition(StringBuilder sql, String trafficFilter) {
+		if (trafficFilter == null || trafficFilter.isBlank() || "ALL".equalsIgnoreCase(trafficFilter.trim())) {
+			return;
+		}
+		String normalized = trafficFilter.trim().toUpperCase();
+		switch (normalized) {
+			case "EXCLUDE_BOTS" -> sql.append(" AND client_type NOT IN ('SEARCH_ENGINE', 'AI_CRAWLER')");
+			case "RESIDENTIAL_ONLY" -> sql.append(" AND client_type = 'RESIDENTIAL'");
+			case "DATACENTER_ONLY" -> sql.append(" AND client_type = 'DATACENTER'");
+			case "VERIFIED_BOTS_ONLY" -> sql.append(" AND client_type IN ('SEARCH_ENGINE', 'AI_CRAWLER')");
+		}
+	}
+
+	private void appendAuthFilterHaving(StringBuilder sql, String authFilter) {
+		if (authFilter == null || authFilter.isBlank() || "ALL".equalsIgnoreCase(authFilter.trim())) {
+			return;
+		}
+		String normalized = authFilter.trim().toUpperCase();
+		if ("NO_LOGINS".equals(normalized) || "NO_LOGINS_ONLY".equals(normalized) || "ZERO_LOGINS".equals(normalized)) {
+			sql.append(" AND SUM(COALESCE(authenticated_requests, 0)) = 0");
+		} else if ("WITH_LOGINS".equals(normalized) || "LOGINS_ONLY".equals(normalized)) {
+			sql.append(" AND SUM(COALESCE(authenticated_requests, 0)) > 0");
 		}
 	}
 }
