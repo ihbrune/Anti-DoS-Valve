@@ -563,4 +563,121 @@ class DailyReportServiceTest {
 		assertTrue(md.contains("Cloudflare, Inc."));
 		assertTrue(md.contains("150 (100.00%)"));
 	}
+
+	@Test
+	void testValveCapacityAuditNominalAndSaturated() {
+		LocalDate capDate = LocalDate.of(2026, 10, 30);
+		dailyReportRepository.deleteByReportDate(capDate.toString());
+		jdbcTemplate.update("DELETE FROM slot_snapshots WHERE server_id = 'SRV-CAP-TEST'");
+		jdbcTemplate.update("DELETE FROM monitored_valves WHERE server_id = 'SRV-CAP-TEST'");
+
+		ZonedDateTime startDay = capDate.atStartOfDay(ZoneId.systemDefault());
+		Instant slotTime = startDay.plusHours(8).toInstant();
+
+		// Configure valve with max_ip_cache_size = 500
+		monitoredValveRepository.upsert(new MonitoredValve(
+				"SRV-CAP-TEST", "CAP-VALVE", "Cap Test Valve", 1, "BLOCKING", false, false,
+				429, 100, 60, 5, 0.5f, 32, 64, 500, 200, "", "", "", "", "/status", "*", "auto",
+				false, "_adv", Instant.now(), 3333, true
+		));
+
+		// 1. Nominal case: active_counters = 150 < 500
+		slotSnapshotRepository.upsert(new SlotSnapshot(
+				null, "SRV-CAP-TEST", "CAP-VALVE", 88001L, slotTime, slotTime.plus(60, ChronoUnit.SECONDS),
+				1000L, 150, 0, 0, true, slotTime.plus(60, ChronoUnit.SECONDS)
+		));
+
+		DailyReport reportNominal = dailyReportService.generateDailyReport(capDate);
+		assertNotNull(reportNominal);
+		String mdNominal = reportNominal.reportMarkdown();
+		assertTrue(mdNominal.contains("0 Saturated Slots (Nominal)"));
+		assertTrue(mdNominal.contains("Nominal Memory Operations (0 Dropped Counters)"));
+
+		// 2. Saturated case: active_counters = 550 >= 500
+		dailyReportRepository.deleteByReportDate(capDate.toString());
+		slotSnapshotRepository.upsert(new SlotSnapshot(
+				null, "SRV-CAP-TEST", "CAP-VALVE", 88002L, slotTime.plus(60, ChronoUnit.SECONDS), slotTime.plus(120, ChronoUnit.SECONDS),
+				2000L, 550, 10, 0, true, slotTime.plus(120, ChronoUnit.SECONDS)
+		));
+
+		DailyReport reportSaturated = dailyReportService.generateDailyReport(capDate);
+		assertNotNull(reportSaturated);
+		String mdSaturated = reportSaturated.reportMarkdown();
+		assertTrue(mdSaturated.contains("Saturated Slots"));
+		assertTrue(mdSaturated.contains("Counter Cache Capacity Warning"));
+		assertTrue(mdSaturated.contains("CAP-VALVE"));
+		assertTrue(mdSaturated.contains("550 / 500"));
+		assertTrue(mdSaturated.contains("Increase `maxCountersPerSlot` in server.xml"));
+	}
+
+	@Test
+	void testFingerprintAnomaliesAndBaselineSurgeRadar() {
+		LocalDate anomDate = LocalDate.of(2026, 10, 31);
+		dailyReportRepository.deleteByReportDate(anomDate.toString());
+		jdbcTemplate.update("DELETE FROM client_subnet_rollups WHERE server_id = 'SRV-ANOM-TEST'");
+		jdbcTemplate.update("DELETE FROM slot_snapshots WHERE server_id = 'SRV-ANOM-TEST'");
+		jdbcTemplate.update("DELETE FROM monitored_valves WHERE server_id = 'SRV-ANOM-TEST'");
+
+		ZonedDateTime startDay = anomDate.atStartOfDay(ZoneId.systemDefault());
+		Instant h10 = startDay.plusHours(10).toInstant();
+		Instant prior5Days = startDay.minusDays(5).toInstant();
+
+		monitoredValveRepository.upsert(new MonitoredValve(
+				"SRV-ANOM-TEST", "PRIMARY", "Primary Valve", 1, "BLOCKING", false, false,
+				429, 200, 60, 5, 0.5f, 24, 64, 10000, 5000, "", "", "", "", "/status", "*", "auto",
+				false, "_adv", Instant.now(), 4444, true
+		));
+
+		slotSnapshotRepository.upsert(new SlotSnapshot(
+				null, "SRV-ANOM-TEST", "PRIMARY", 77001L, h10, h10.plus(60, ChronoUnit.SECONDS),
+				25000L, 100, 50, 0, true, h10.plus(60, ChronoUnit.SECONDS)
+		));
+
+		// 1. UA Rotation / Spoofing rollup (1 client, 25 UAs)
+		jdbcTemplate.update("""
+				INSERT INTO client_subnet_rollups (
+					bucket_start, bucket_end, bucket_minutes, server_id, valve_name, subnet_group,
+					total_requests, active_requests, blocked_requests, distinct_clients, distinct_user_agents,
+					asn, as_org, country_code, client_type, created_at
+				) VALUES (?, ?, 60, 'SRV-ANOM-TEST', 'PRIMARY', '198.51.100.0/24',
+					5000, 4800, 200, 1, 25, 64496, 'Scraper Hosting AS', 'US', 'DATACENTER', ?)
+				""", java.sql.Timestamp.from(h10), java.sql.Timestamp.from(h10.plus(1, ChronoUnit.HOURS)), java.sql.Timestamp.from(h10));
+
+		// 2. Prior rollup for Baseline Surge: 500 requests over 5 days (~100 req/day)
+		jdbcTemplate.update("""
+				INSERT INTO client_subnet_rollups (
+					bucket_start, bucket_end, bucket_minutes, server_id, valve_name, subnet_group,
+					total_requests, active_requests, blocked_requests, distinct_clients, distinct_user_agents,
+					asn, as_org, country_code, client_type, created_at
+				) VALUES (?, ?, 60, 'SRV-ANOM-TEST', 'PRIMARY', '203.0.113.0/24',
+					500, 500, 0, 5, 2, 64497, 'Surging Partner AS', 'DE', 'RESIDENTIAL', ?)
+				""", java.sql.Timestamp.from(prior5Days), java.sql.Timestamp.from(prior5Days.plus(1, ChronoUnit.HOURS)), java.sql.Timestamp.from(prior5Days));
+
+		// 3. Current day rollup for Baseline Surge: 2,500 requests today (25x surge!)
+		jdbcTemplate.update("""
+				INSERT INTO client_subnet_rollups (
+					bucket_start, bucket_end, bucket_minutes, server_id, valve_name, subnet_group,
+					total_requests, active_requests, blocked_requests, distinct_clients, distinct_user_agents,
+					asn, as_org, country_code, client_type, created_at
+				) VALUES (?, ?, 60, 'SRV-ANOM-TEST', 'PRIMARY', '203.0.113.0/24',
+					2500, 2400, 100, 20, 5, 64497, 'Surging Partner AS', 'DE', 'RESIDENTIAL', ?)
+				""", java.sql.Timestamp.from(h10), java.sql.Timestamp.from(h10.plus(1, ChronoUnit.HOURS)), java.sql.Timestamp.from(h10));
+
+		DailyReport report = dailyReportService.generateDailyReport(anomDate);
+		assertNotNull(report);
+		String md = report.reportMarkdown();
+		assertNotNull(md);
+
+		// Verify Fingerprint Anomalies Section
+		assertTrue(md.contains("Scraping & Behavioral Fingerprint Anomalies"));
+		assertTrue(md.contains("198.51.100.0/24"));
+		assertTrue(md.contains("UA Rotation / Spoofing"));
+		assertTrue(md.contains("Scraper Hosting AS"));
+
+		// Verify Baseline Surge Radar Section
+		assertTrue(md.contains("Baseline Surge Radar"));
+		assertTrue(md.contains("203.0.113.0/24"));
+		assertTrue(md.contains("Surging Partner AS"));
+		assertTrue(md.contains("2,500"));
+	}
 }

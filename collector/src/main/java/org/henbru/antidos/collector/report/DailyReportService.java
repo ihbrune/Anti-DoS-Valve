@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -129,6 +130,58 @@ public class DailyReportService {
 			return totalRequests > 0 ? (markedRequests * 100.0) / totalRequests : 0.0;
 		}
 	}
+
+	public record ValveCapacityAudit(
+			String serverId,
+			String valveName,
+			int totalSlots,
+			int saturatedActiveSlots,
+			int saturatedBlockedSlots,
+			int peakActiveCounters,
+			int configuredActiveCapacity,
+			int peakBlockedCounters,
+			int configuredBlockedCapacity
+	) {
+		public boolean hasSaturation() {
+			return saturatedActiveSlots > 0 || saturatedBlockedSlots > 0;
+		}
+
+		public double activeUtilization() {
+			return configuredActiveCapacity > 0 ? (peakActiveCounters * 100.0) / configuredActiveCapacity : 0.0;
+		}
+
+		public double blockedUtilization() {
+			return configuredBlockedCapacity > 0 ? (peakBlockedCounters * 100.0) / configuredBlockedCapacity : 0.0;
+		}
+	}
+
+	public record FingerprintAnomaly(
+			String subnetGroup,
+			String asOrg,
+			long asn,
+			String countryCode,
+			String clientType,
+			long totalRequests,
+			long blockedRequests,
+			int distinctClients,
+			int distinctUserAgents,
+			String anomalyType,
+			String description
+	) {}
+
+	public record BaselineSurgeEntry(
+			String subnetGroup,
+			String asOrg,
+			long asn,
+			String countryCode,
+			String clientType,
+			long dayRequests,
+			long dayBlocked,
+			long dayMarked,
+			double baselineDailyAvg,
+			double surgeMultiplier,
+			boolean isNewOrReactivated
+	) {}
 
 	public DailyReportService(
 			JdbcTemplate jdbcTemplate,
@@ -760,7 +813,178 @@ public class DailyReportService {
 			log.warn("Error querying top offenders and ASNs for {}: {}", dateStr, e.getMessage());
 		}
 
-		// 6. Overall Status Classification (strictly based on hard HTTP 429 blocks, never soft marking/simulation)
+		// 6. Valve Capacity & Dropped Counters Audit (from slot_snapshots and monitored_valves)
+		List<ValveCapacityAudit> valveCapacityAudits = new ArrayList<>();
+		try {
+			String capSql = """
+					SELECT s.server_id, s.valve_name,
+					       COUNT(*) AS total_slots,
+					       COALESCE(SUM(CASE WHEN s.active_counters >= COALESCE(v.max_ip_cache_size, 10000) THEN 1 ELSE 0 END), 0) AS sat_active,
+					       COALESCE(SUM(CASE WHEN s.blocked_counters >= COALESCE(v.max_blocked_ip_cache_size, 10000) THEN 1 ELSE 0 END), 0) AS sat_blocked,
+					       COALESCE(MAX(s.active_counters), 0) AS peak_active,
+					       COALESCE(MAX(COALESCE(v.max_ip_cache_size, 10000)), 10000) AS cap_active,
+					       COALESCE(MAX(s.blocked_counters), 0) AS peak_blocked,
+					       COALESCE(MAX(COALESCE(v.max_blocked_ip_cache_size, 10000)), 10000) AS cap_blocked
+					FROM slot_snapshots s
+					LEFT JOIN monitored_valves v ON s.server_id = v.server_id AND s.valve_name = v.valve_name
+					WHERE s.start_time >= ? AND s.start_time < ?
+					GROUP BY s.server_id, s.valve_name
+					""";
+			jdbcTemplate.query(capSql, rs -> {
+				valveCapacityAudits.add(new ValveCapacityAudit(
+						rs.getString("server_id"),
+						rs.getString("valve_name"),
+						rs.getInt("total_slots"),
+						rs.getInt("sat_active"),
+						rs.getInt("sat_blocked"),
+						rs.getInt("peak_active"),
+						rs.getInt("cap_active"),
+						rs.getInt("peak_blocked"),
+						rs.getInt("cap_blocked")
+				));
+			}, Timestamp.from(startInstant), Timestamp.from(endInstant));
+		} catch (Exception e) {
+			log.warn("Error querying valve capacity telemetry for {}: {}", dateStr, e.getMessage());
+		}
+
+		// 7. Scraping & Fingerprint Anomalies (from client_subnet_rollups)
+		List<FingerprintAnomaly> fingerprintAnomalies = new ArrayList<>();
+		try {
+			String fpSql = """
+					SELECT 
+					    subnet_group,
+					    COALESCE(as_org, 'Unknown Network') AS as_org,
+					    COALESCE(asn, 0) AS asn,
+					    COALESCE(country_code, 'XX') AS country_code,
+					    client_type,
+					    SUM(total_requests) AS total_req,
+					    SUM(blocked_requests) AS blocked_req,
+					    MAX(distinct_clients) AS max_clients,
+					    MAX(COALESCE(distinct_user_agents, 0)) AS max_uas
+					FROM client_subnet_rollups
+					WHERE bucket_start >= ? AND bucket_start < ?
+					GROUP BY subnet_group, as_org, asn, country_code, client_type
+					HAVING (max_clients > 0 AND max_uas >= max_clients * 2 AND max_uas >= 8)
+					    OR (max_clients >= 10 AND max_uas = 1 AND total_req >= 500)
+					    OR (client_type = 'RESIDENTIAL' AND max_clients >= 10 AND (total_req * 1.0 / max_clients) <= 5.0 AND total_req >= 100)
+					ORDER BY total_req DESC
+					LIMIT 15
+					""";
+			jdbcTemplate.query(fpSql, rs -> {
+				String subnet = rs.getString("subnet_group");
+				String asOrg = rs.getString("as_org");
+				long asn = rs.getLong("asn");
+				String country = rs.getString("country_code");
+				String clientType = rs.getString("client_type");
+				long totalReq = rs.getLong("total_req");
+				long blkReq = rs.getLong("blocked_req");
+				int maxClients = rs.getInt("max_clients");
+				int maxUas = rs.getInt("max_uas");
+
+				String anType;
+				String desc;
+				if (maxClients > 0 && maxUas >= maxClients * 2 && maxUas >= 8) {
+					anType = "UA Rotation / Spoofing";
+					desc = String.format("Elevated User-Agent churn (%d distinct UAs across %d client IPs); typical browser fingerprint randomization.", maxUas, maxClients);
+				} else if (maxClients >= 10 && maxUas == 1) {
+					anType = "Single-UA Bot Fleet";
+					desc = String.format("Uniform User-Agent string shared across %d distinct IPs; distributed crawler or tool fleet signature.", maxClients);
+				} else {
+					anType = "Low-and-Slow Proxy Pool";
+					double avgReq = maxClients > 0 ? (double) totalReq / maxClients : 0.0;
+					desc = String.format("High residential client churn (%d distinct IPs) with only %.1f req/IP; rotating proxy scraping signature.", maxClients, avgReq);
+				}
+
+				fingerprintAnomalies.add(new FingerprintAnomaly(
+						subnet, asOrg, asn, country, clientType, totalReq, blkReq, maxClients, maxUas, anType, desc
+				));
+			}, Timestamp.from(startInstant), Timestamp.from(endInstant));
+		} catch (Exception e) {
+			log.warn("Error querying fingerprint anomalies for {}: {}", dateStr, e.getMessage());
+		}
+
+		// 8. Baseline Surge Radar (from client_subnet_rollups comparing day against 30-day baseline)
+		List<BaselineSurgeEntry> baselineSurges = new ArrayList<>();
+		try {
+			Instant cutoff30d = startInstant.minus(30, ChronoUnit.DAYS);
+
+			String sqlEarliest = "SELECT MIN(bucket_start) FROM client_subnet_rollups WHERE bucket_start >= ? AND bucket_start < ?";
+			Timestamp tsEarliest = jdbcTemplate.queryForObject(sqlEarliest, Timestamp.class, Timestamp.from(cutoff30d), Timestamp.from(startInstant));
+			double availablePriorDays = 0.0;
+			if (tsEarliest != null && tsEarliest.toInstant().isBefore(startInstant)) {
+				long priorHours = ChronoUnit.HOURS.between(tsEarliest.toInstant(), startInstant);
+				availablePriorDays = Math.max(1.0, Math.min(29.0, priorHours / 24.0));
+			}
+			final double effectiveDivisor = availablePriorDays;
+
+			String surgeSql = """
+					SELECT 
+					    subnet_group,
+					    COALESCE(as_org, 'Unknown Network') AS as_org,
+					    COALESCE(asn, 0) AS asn,
+					    COALESCE(country_code, 'XX') AS country_code,
+					    client_type,
+					    SUM(CASE WHEN bucket_start >= ? AND bucket_start < ? THEN total_requests ELSE 0 END) AS day_req,
+					    SUM(CASE WHEN bucket_start >= ? AND bucket_start < ? THEN blocked_requests ELSE 0 END) AS day_blk,
+					    SUM(CASE WHEN bucket_start >= ? AND bucket_start < ? THEN COALESCE(marked_requests, 0) ELSE 0 END) AS day_mrk,
+					    SUM(CASE WHEN bucket_start >= ? AND bucket_start < ? THEN total_requests ELSE 0 END) AS prior_req
+					FROM client_subnet_rollups
+					WHERE bucket_start >= ? AND bucket_start < ?
+					GROUP BY subnet_group, as_org, asn, country_code, client_type
+					HAVING day_req >= 500
+					""";
+
+			List<BaselineSurgeEntry> candidateSurges = new ArrayList<>();
+			jdbcTemplate.query(surgeSql, rs -> {
+				long dayReq = rs.getLong("day_req");
+				long dayBlk = rs.getLong("day_blk");
+				long dayMrk = rs.getLong("day_mrk");
+				long priorReq = rs.getLong("prior_req");
+
+				double baselineDailyAvg = (effectiveDivisor > 0.0 && priorReq > 0)
+						? (double) priorReq / effectiveDivisor
+						: 0.0;
+
+				double surgeMultiplier;
+				boolean isNewOrReactivated = false;
+				if (baselineDailyAvg > 0.0) {
+					surgeMultiplier = Math.round((dayReq / baselineDailyAvg) * 10.0) / 10.0;
+				} else if (priorReq == 0) {
+					surgeMultiplier = 99.9;
+					isNewOrReactivated = true;
+				} else {
+					surgeMultiplier = 1.0;
+				}
+
+				if (surgeMultiplier >= 3.0 || (isNewOrReactivated && dayReq >= 1000)) {
+					candidateSurges.add(new BaselineSurgeEntry(
+							rs.getString("subnet_group"),
+							rs.getString("as_org"),
+							rs.getLong("asn"),
+							rs.getString("country_code"),
+							rs.getString("client_type"),
+							dayReq,
+							dayBlk,
+							dayMrk,
+							baselineDailyAvg,
+							surgeMultiplier,
+							isNewOrReactivated
+					));
+				}
+			},
+			Timestamp.from(startInstant), Timestamp.from(endInstant),
+			Timestamp.from(startInstant), Timestamp.from(endInstant),
+			Timestamp.from(startInstant), Timestamp.from(endInstant),
+			Timestamp.from(cutoff30d), Timestamp.from(startInstant),
+			Timestamp.from(cutoff30d), Timestamp.from(endInstant));
+
+			candidateSurges.sort((a, b) -> Long.compare(b.dayRequests(), a.dayRequests()));
+			baselineSurges = candidateSurges.stream().limit(10).toList();
+		} catch (Exception e) {
+			log.warn("Error querying baseline surges for {}: {}", dateStr, e.getMessage());
+		}
+
+		// 9. Overall Status Classification (strictly based on hard HTTP 429 blocks, never soft marking/simulation)
 		String status;
 		double blockRateFleet = totalRequests > 0 ? (totalBlocked * 100.0) / totalRequests : 0.0;
 		double markRateFleet = totalRequests > 0 ? (totalMarked * 100.0) / totalRequests : 0.0;
@@ -776,7 +1000,7 @@ public class DailyReportService {
 			status = "NORMAL";
 		}
 
-		// 7. Render Markdown Content
+		// 10. Render Markdown Content
 		Optional<DailyReportNote> dayNote = noteRepository.findByReportDate(dateStr);
 		String noteMarkdown = dayNote.map(DailyReportNote::noteMarkdown).orElse(null);
 
@@ -787,7 +1011,9 @@ public class DailyReportService {
 				fleetPeakReqRate, fleetPeakReqRaw, fleetPeakReqDuration, peakReqServer, peakReqValve, fleetPeakReqTime,
 				fleetPeakBlockRate, fleetPeakBlockRaw, fleetPeakBlockDuration, peakBlockServer, peakBlockValve, fleetPeakBlockTime,
 				fleetPeakMarkRate, fleetPeakMarkRaw, fleetPeakMarkDuration, peakMarkServer, peakMarkValve, fleetPeakMarkTime,
-				valveAggregates, hourlyBuckets, pollSummary, serverPollStats, outages, topTrafficAsns, topClients, topAsns, topMarkedClients, noteMarkdown, numFmt,
+				valveAggregates, hourlyBuckets, pollSummary, serverPollStats, outages, topTrafficAsns, topClients, topAsns, topMarkedClients,
+				valveCapacityAudits, fingerprintAnomalies, baselineSurges,
+				noteMarkdown, numFmt,
 				fleetAuthRequests, fleetAuthTrackedRequests
 		);
 
@@ -864,6 +1090,9 @@ public class DailyReportService {
 			List<TopOffenderSummary> topClients,
 			List<TopOffenderSummary> topAsns,
 			List<TopOffenderSummary> topMarkedClients,
+			List<ValveCapacityAudit> valveCapacityAudits,
+			List<FingerprintAnomaly> fingerprintAnomalies,
+			List<BaselineSurgeEntry> baselineSurges,
 			String noteMarkdown,
 			NumberFormat numFmt,
 			long fleetAuthRequests,
@@ -902,6 +1131,16 @@ public class DailyReportService {
 		if (fleetMarkedSlots > 0 || totalMarked > 0) {
 			sb.append("| **Affected Marking Slots** | **").append(numFmt.format(fleetMarkedSlots)).append(" of ").append(numFmt.format(fleetTotalSlots))
 					.append(" (").append(String.format(Locale.US, "%.2f%%", fleetMarkedSlotRatio)).append(")** | Time slots with soft-marking or simulation threshold hits |\n");
+		}
+
+		long totalSaturatedSlots = valveCapacityAudits != null
+				? valveCapacityAudits.stream().mapToLong(a -> a.saturatedActiveSlots() + a.saturatedBlockedSlots()).sum()
+				: 0L;
+		if (totalSaturatedSlots == 0) {
+			sb.append("| **Valve Cache Saturation / Drops** | **0 Saturated Slots (Nominal)** | ✅ All client IP counters retained without cache capacity pressure or eviction drops |\n");
+		} else {
+			sb.append("| **Valve Cache Saturation / Drops** | **⚠️ ").append(numFmt.format(totalSaturatedSlots))
+					.append(" Saturated Slots** | ⚠️ Slot counter cache reached capacity (`maxCountersPerSlot`). Some client IPs were evaluated transiently to protect JVM memory |\n");
 		}
 		if (fleetAuthTrackedRequests > 0) {
 			double fleetAuthRatio = (fleetAuthRequests * 100.0) / fleetAuthTrackedRequests;
@@ -1061,6 +1300,42 @@ public class DailyReportService {
 				}
 				sb.append("\n");
 			}
+		}
+
+		// Counter Cache Capacity & Slot Saturation Audit
+		sb.append("### 🩺 Counter Cache Capacity & Slot Saturation Audit\n\n");
+		sb.append("> ℹ️ **Cache Capacity & Sizing Guide:** The Anti-DoS Valve maintains strictly bounded in-memory counter caches (`maxCountersPerSlot`, default 10,000) ");
+		sb.append("to maintain predictable performance and prevent thread exhaustion. If a slot's distinct client count exceeds capacity under high-cardinality distributed floods, ");
+		sb.append("subsequent IP counters are evaluated transiently or oldest entries are pruned.\n\n");
+
+		boolean anySaturated = valveCapacityAudits != null && valveCapacityAudits.stream().anyMatch(ValveCapacityAudit::hasSaturation);
+		if (!anySaturated) {
+			sb.append("✅ **Nominal Memory Operations (0 Dropped Counters):** Across all monitored Valves and nodes, 0 slots reached capacity limits on this date. ");
+			sb.append("All client IP counters were retained and tracked within configured memory ceilings (`maxCountersPerSlot` / `maxBlockedCountersPerSlot`).\n\n");
+		} else {
+			sb.append("⚠️ **Counter Cache Capacity Warning:** The following Valves reached slot capacity limits during high-cardinality traffic waves:\n\n");
+			sb.append("| Server | Valve | Total Slots | Saturated Active Slots | Peak Active Counters (Cap) | Saturated Blocked Slots | Peak Blocked Counters (Cap) | Operational Recommendation |\n");
+			sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
+
+			for (ValveCapacityAudit audit : valveCapacityAudits) {
+				if (audit.hasSaturation()) {
+					String actCap = numFmt.format(audit.peakActiveCounters()) + " / " + numFmt.format(audit.configuredActiveCapacity()) +
+							" (" + String.format(Locale.US, "%.1f%%", audit.activeUtilization()) + ")";
+					String blkCap = numFmt.format(audit.peakBlockedCounters()) + " / " + numFmt.format(audit.configuredBlockedCapacity()) +
+							" (" + String.format(Locale.US, "%.1f%%", audit.blockedUtilization()) + ")";
+					String rec = "Increase `maxCountersPerSlot` in server.xml (currently " + numFmt.format(audit.configuredActiveCapacity()) + ") to avoid transient tracking bypass";
+
+					sb.append("| `").append(audit.serverId()).append("` | `")
+							.append(audit.valveName()).append("` | ")
+							.append(numFmt.format(audit.totalSlots())).append(" | **")
+							.append(numFmt.format(audit.saturatedActiveSlots())).append("** | ")
+							.append(actCap).append(" | **")
+							.append(numFmt.format(audit.saturatedBlockedSlots())).append("** | ")
+							.append(blkCap).append(" | ")
+							.append(rec).append(" |\n");
+				}
+			}
+			sb.append("\n");
 		}
 
 		sb.append("---\n\n");
@@ -1242,6 +1517,79 @@ public class DailyReportService {
 						.append(asnStr).append(" | ")
 						.append(country).append(" | `")
 						.append(clientType).append("` |\n");
+			}
+			sb.append("\n");
+		}
+
+		// Scraping & Fingerprint Anomalies
+		sb.append("### 🕵️ Scraping & Behavioral Fingerprint Anomalies\n\n");
+		sb.append("> ℹ️ **Fingerprint Intelligence:** Correlates User-Agent diversity (`distinct_user_agents`) and client IP dispersion (`distinct_clients`) ");
+		sb.append("to detect automated scrapers rotating browser headers, single-fingerprint botnet waves, and distributed low-and-slow residential proxy pools.\n\n");
+
+		if (fingerprintAnomalies == null || fingerprintAnomalies.isEmpty()) {
+			sb.append("✅ *No suspicious User-Agent rotation, single-fingerprint botnet probes, or distributed residential proxy scraping clusters detected on this date.*\n\n");
+		} else {
+			sb.append("| Subnet / IP Pool | Operator / ASN | Country | Type | Distinct IPs | Distinct UAs | Total Requests | Blocked (HTTP 429) | Anomaly Pattern & Behavior |\n");
+			sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
+
+			for (FingerprintAnomaly fp : fingerprintAnomalies) {
+				String asnStr = fp.asn() > 0 ? "AS" + fp.asn() + (!fp.asOrg().isBlank() ? " (" + fp.asOrg() + ")" : "") : fp.asOrg();
+				String country = !fp.countryCode().isBlank() ? fp.countryCode() : "–";
+				String type = fp.clientType() != null ? fp.clientType() : "UNKNOWN";
+				String blkStr = fp.blockedRequests() > 0 ? "**" + numFmt.format(fp.blockedRequests()) + "**" : "0 (0.00%)";
+
+				sb.append("| `").append(fp.subnetGroup()).append("` | ")
+						.append(asnStr).append(" | ")
+						.append(country).append(" | `")
+						.append(type).append("` | ")
+						.append(numFmt.format(fp.distinctClients())).append(" | ")
+						.append(numFmt.format(fp.distinctUserAgents())).append(" | ")
+						.append(numFmt.format(fp.totalRequests())).append(" | ")
+						.append(blkStr).append(" | **")
+						.append(fp.anomalyType()).append(":** ").append(fp.description()).append(" |\n");
+			}
+			sb.append("\n");
+		}
+
+		// Baseline Surge Radar
+		sb.append("### 📈 Baseline Surge Radar (30-Day Subnet Traffic Deviations)\n\n");
+		sb.append("> ℹ️ **Baseline Surge Detection:** Compares the daily request volume of each subnet group against its established 30-day historical daily average (`baselineDailyAvg`). ");
+		sb.append("Flags subnets surging by 3.0× or more above normal operations, or high-volume new/reactivated networks.\n\n");
+
+		if (baselineSurges == null || baselineSurges.isEmpty()) {
+			sb.append("✅ *No abnormal traffic surges detected across active subnets. All observed traffic operated within established 30-day baseline distributions.*\n\n");
+		} else {
+			sb.append("| Subnet | Operator / ASN | Country | Client Type | Day Requests | 30d Daily Baseline | Surge Factor | Blocked (HTTP 429) | Threat Assessment |\n");
+			sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
+
+			for (BaselineSurgeEntry surge : baselineSurges) {
+				String asnStr = surge.asn() > 0 ? "AS" + surge.asn() + (!surge.asOrg().isBlank() ? " (" + surge.asOrg() + ")" : "") : surge.asOrg();
+				String country = !surge.countryCode().isBlank() ? surge.countryCode() : "–";
+				String type = surge.clientType() != null ? surge.clientType() : "UNKNOWN";
+				String baselineStr = surge.baselineDailyAvg() > 0 ? String.format(Locale.US, "%.1f req/day", surge.baselineDailyAvg()) : "None (New/Dormant)";
+				String surgeStr = surge.isNewOrReactivated() ? "⚡ **New / Reactivated**" : "**" + String.format(Locale.US, "%.1fx", surge.surgeMultiplier()) + "**";
+
+				double blkPct = surge.dayRequests() > 0 ? (surge.dayBlocked() * 100.0) / surge.dayRequests() : 0.0;
+				String blkStr = surge.dayBlocked() > 0 ? "**" + numFmt.format(surge.dayBlocked()) + " (" + String.format(Locale.US, "%.1f%%", blkPct) + ")**" : "0 (0.00%)";
+
+				String assessment;
+				if (surge.dayBlocked() > 0) {
+					assessment = "🚨 Abusive Surge (Actively Mitigated)";
+				} else if (surge.surgeMultiplier() >= 10.0 || surge.isNewOrReactivated()) {
+					assessment = "⚠️ High Anomaly (Investigate Origin)";
+				} else {
+					assessment = "ℹ️ Moderate Traffic Surge";
+				}
+
+				sb.append("| `").append(surge.subnetGroup()).append("` | ")
+						.append(asnStr).append(" | ")
+						.append(country).append(" | `")
+						.append(type).append("` | ")
+						.append(numFmt.format(surge.dayRequests())).append(" | ")
+						.append(baselineStr).append(" | ")
+						.append(surgeStr).append(" | ")
+						.append(blkStr).append(" | ")
+						.append(assessment).append(" |\n");
 			}
 			sb.append("\n");
 		}

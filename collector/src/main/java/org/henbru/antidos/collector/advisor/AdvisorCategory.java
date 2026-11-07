@@ -6,6 +6,7 @@ package org.henbru.antidos.collector.advisor;
 public enum AdvisorCategory {
 	SEARCH_ENGINE_COLLATERAL("Search Engine Collateral", "Verified search engine crawlers blocked from indexing content"),
 	INTERNAL_INFRASTRUCTURE("Internal / RFC 1918 Blocked", "Internal intranet, campus networks, health checks, or unforwarded reverse proxies blocked"),
+	AUTHENTICATED_COLLATERAL("Authenticated User Collateral", "Legitimate authenticated users or active login sessions blocked by rate limits"),
 	RESIDENTIAL_TUNING("Legitimate User / NAT Risk", "High-returning residential users or shared NAT gateways hitting strict rate caps"),
 	DATACENTER_OFFLOAD("Datacenter Scraping Offload", "Massive cloud and bot scraping waves mitigated by Valve; edge offload candidate");
 

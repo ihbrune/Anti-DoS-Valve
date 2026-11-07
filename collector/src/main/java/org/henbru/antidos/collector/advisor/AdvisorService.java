@@ -49,16 +49,19 @@ public class AdvisorService {
 		Set<String> recommendedSubnets = new LinkedHashSet<>();
 
 		try {
-			// 1. Evaluate Search Engine Collateral Blocks (Googlebot, Bingbot, Applebot)
+			// 1. Evaluate Authenticated User Collateral Blocks (Critical False Positives)
+			evaluateBlockedAuthenticatedUsers(cutoffTs, servers, valves, findings);
+
+			// 2. Evaluate Search Engine Collateral Blocks (Googlebot, Bingbot, Applebot)
 			evaluateSearchEngineCollateral(cutoffTs, servers, valves, findings, recommendedSubnets);
 
-			// 2. Evaluate Internal / Private Infrastructure Blocks (RFC 1918)
+			// 3. Evaluate Internal / Private Infrastructure Blocks (RFC 1918)
 			evaluateInternalInfrastructure(cutoffTs, servers, valves, findings, recommendedSubnets);
 
-			// 3. Evaluate High-Returning Residential / NAT Clusters (Potential False Positives)
+			// 4. Evaluate High-Returning Residential / NAT Clusters (Potential False Positives)
 			evaluateResidentialNatRisks(cutoffTs, servers, valves, findings);
 
-			// 4. Evaluate Massive Datacenter Scraping Waves (Offloading Candidates)
+			// 5. Evaluate Massive Datacenter Scraping Waves (Offloading Candidates)
 			evaluateDatacenterScraping(cutoffTs, servers, valves, findings);
 		} catch (Exception e) {
 			log.error("Error evaluating advisor diagnostics: {}", e.getMessage(), e);
@@ -98,6 +101,93 @@ public class AdvisorService {
 				consolidatedRegex,
 				consolidatedSnippet
 		);
+	}
+
+	private void evaluateBlockedAuthenticatedUsers(
+			Timestamp cutoff,
+			List<String> servers,
+			List<String> valves,
+			List<AdvisorFinding> findings) {
+
+		StringBuilder sql = new StringBuilder("""
+				SELECT 
+				    r.server_id,
+				    r.valve_name,
+				    r.subnet_group,
+				    COALESCE(r.as_org, 'Authenticated Clients') AS entity_name,
+				    COALESCE(r.country_code, 'XX') AS country_code,
+				    r.client_type,
+				    SUM(r.total_requests) AS total_req,
+				    SUM(r.blocked_requests) AS blocked_req,
+				    SUM(r.authenticated_requests) AS auth_req,
+				    MAX(r.max_requests_per_client) AS peak_req
+				FROM client_subnet_rollups r
+				WHERE r.authenticated_requests > 0
+				  AND r.blocked_requests > 0
+				  AND r.bucket_start >= ?
+				""");
+
+		List<Object> params = new ArrayList<>();
+		params.add(cutoff);
+		appendFilterClauses(sql, params, servers, valves);
+		sql.append(" GROUP BY r.server_id, r.valve_name, r.subnet_group, r.as_org, r.country_code, r.client_type ORDER BY blocked_req DESC LIMIT 10");
+
+		jdbcTemplate.query(sql.toString(), rs -> {
+			String serverId = rs.getString("server_id");
+			String valveName = rs.getString("valve_name");
+			String subnetGroup = rs.getString("subnet_group");
+			String entityName = rs.getString("entity_name");
+			String country = rs.getString("country_code");
+			ClientType clientType = ClientType.valueOf(rs.getString("client_type"));
+			long totalReq = rs.getLong("total_req");
+			long blockedReq = rs.getLong("blocked_req");
+			long authReq = rs.getLong("auth_req");
+			int peakReq = rs.getInt("peak_req");
+
+			double blockPct = totalReq > 0 ? (double) blockedReq / totalReq * 100.0 : 100.0;
+			blockPct = Math.round(blockPct * 10.0) / 10.0;
+
+			ValveConfigInfo valveInfo = resolveValveConfig(serverId, valveName);
+
+			String explanation = String.format(
+					"Subnet %s (%s, %s) experienced %d blocked requests (%.1f%% of %d total requests) on valve '%s' on node '%s', " +
+					"despite carrying valid authentication credentials (%d authenticated requests recorded). " +
+					"Blocking verified authenticated users represents a critical false-positive that disrupts legitimate operations or customers.",
+					subnetGroup, entityName, country, blockedReq, blockPct, totalReq, valveName, serverId, authReq);
+
+			String recommendation = String.format(
+					"To protect authenticated users from aggressive rate limiting:\n" +
+					"1) Verify that 'authCookieName' or 'relevantAuthScope' is configured on valve '%s' to grant authenticated requests higher capacity headroom or separate limits.\n" +
+					"2) If this subnet belongs to a trusted corporate office, partner API, or VPN gateway, consider whitelisting it in 'alwaysAllowedIPs=\"%s\"'.\n" +
+					"3) Increase 'allowedRequestsPerSlot' if users legitimately execute high-frequency automated batch operations.",
+					valveName, mergeWithExistingRegex(valveInfo.alwaysAllowedIps, cidrToRegex(subnetGroup)));
+
+			String id = "auth-" + sanitizeId(serverId + "-" + valveName + "-" + subnetGroup);
+			String title = String.format("Authenticated Users Blocked in %s (%s)", subnetGroup, entityName);
+
+			findings.add(new AdvisorFinding(
+					id,
+					AdvisorCategory.AUTHENTICATED_COLLATERAL,
+					AdvisorSeverity.CRITICAL,
+					title,
+					serverId,
+					valveName,
+					subnetGroup,
+					entityName + " (" + country + ")",
+					clientType,
+					totalReq,
+					blockedReq,
+					blockPct,
+					peakReq,
+					valveInfo.allowedRequestsPerSlot,
+					valveInfo.slotLength,
+					valveInfo.alwaysAllowedIps,
+					explanation,
+					recommendation,
+					null,
+					null
+			));
+		}, params.toArray());
 	}
 
 	private void evaluateSearchEngineCollateral(

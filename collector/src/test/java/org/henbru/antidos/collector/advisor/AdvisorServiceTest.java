@@ -88,11 +88,18 @@ class AdvisorServiceTest {
 				0, 0, 0, 0
 		);
 
-		subnetRollupRepository.batchUpsert(List.of(seRollup, privRollup, resRollup, dcRollup));
+		// 5. Authenticated Users Blocked
+		ClientSubnetRollup authRollup = new ClientSubnetRollup(
+				null, twoHoursAgo, hourAgo, 60, "test-server-01", "FUER-EXTERNE", "195.201.55.0/24",
+				3000, 2500, 500, 0, 2, 1, 1, 80, 1, 24940L, "Hetzner Online GmbH", "DE", ClientType.DATACENTER,
+				0, 0, 1200, 3000
+		);
+
+		subnetRollupRepository.batchUpsert(List.of(seRollup, privRollup, resRollup, dcRollup, authRollup));
 
 		AdvisorReport report = advisorService.generateReport(24, List.of("test-server-01"), List.of("FUER-EXTERNE"));
 		assertNotNull(report);
-		assertTrue(report.criticalCount() >= 2, "Should detect at least 2 critical findings (Search Engine + RFC1918)");
+		assertTrue(report.criticalCount() >= 3, "Should detect at least 3 critical findings (Search Engine + RFC1918 + Authenticated)");
 		assertTrue(report.warningCount() >= 1, "Should detect at least 1 warning finding (Residential NAT)");
 		assertTrue(report.infoCount() >= 1, "Should detect at least 1 info finding (Datacenter Offload)");
 
@@ -102,6 +109,16 @@ class AdvisorServiceTest {
 		assertTrue(report.consolidatedAlwaysAllowedRegex().contains("10\\.77\\.25\\..*"));
 		assertTrue(report.consolidatedAlwaysAllowedRegex().contains("40\\.77\\.167\\..*"));
 		assertTrue(report.consolidatedServerXmlSnippet().contains("<Valve className=\"org.henbru.antidos.AntiDoSValve\""));
+
+		// Verify findings structure
+		AdvisorFinding authFinding = report.findings().stream()
+				.filter(f -> f.category() == AdvisorCategory.AUTHENTICATED_COLLATERAL)
+				.findFirst()
+				.orElseThrow();
+		assertEquals(AdvisorSeverity.CRITICAL, authFinding.severity());
+		assertEquals("195.201.55.0/24", authFinding.targetSubnet());
+		assertEquals(500L, authFinding.blockedRequests());
+		assertTrue(authFinding.explanation().contains("carrying valid authentication credentials"));
 
 		// Verify findings structure
 		AdvisorFinding seFinding = report.findings().stream()
