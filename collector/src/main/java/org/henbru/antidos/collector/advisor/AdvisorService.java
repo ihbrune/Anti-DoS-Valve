@@ -4,12 +4,12 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
+
 import org.henbru.antidos.collector.model.ClientType;
 import org.henbru.antidos.collector.model.MonitoredValve;
 import org.henbru.antidos.collector.storage.MonitoredValveRepository;
