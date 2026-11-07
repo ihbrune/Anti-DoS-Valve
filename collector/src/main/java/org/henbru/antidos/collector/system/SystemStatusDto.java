@@ -32,6 +32,8 @@ public record SystemStatusDto(
 			boolean rollupEnabled,
 			int rollupWindowMinutes,
 			int rollupRetentionDays,
+			int lowActivityRollupRetentionDays,
+			long lowActivityRollupMaxRequests,
 			int enrichmentTtlDays,
 			boolean autoVacuumEnabled,
 			long vacuumThresholdBytes,

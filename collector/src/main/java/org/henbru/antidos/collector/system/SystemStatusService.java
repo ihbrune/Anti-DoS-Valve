@@ -145,6 +145,8 @@ public class SystemStatusService {
 				properties.isRollupEnabled(),
 				properties.getRollupWindowMinutes(),
 				properties.getRollupRetentionDays(),
+				properties.getLowActivityRollupRetentionDays(),
+				properties.getLowActivityRollupMaxRequests(),
 				ttlDays,
 				properties.isAutoVacuumEnabled(),
 				properties.getVacuumThresholdBytes(),

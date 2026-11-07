@@ -33,8 +33,12 @@
             <span class="sys-prop-val" th:text="${status.config.entityRetentionDays} + ' days'">60 days</span>
         </div>
         <div class="sys-prop-row">
-            <span class="sys-prop-key">Subnet Rollup Retention</span>
+            <span class="sys-prop-key">Subnet Rollup Retention (Full)</span>
             <span class="sys-prop-val" th:text="${status.config.rollupRetentionDays} + ' days'">30 days</span>
+        </div>
+        <div class="sys-prop-row">
+            <span class="sys-prop-key">Benign Rollup Compaction (Tier 1)</span>
+            <span class="sys-prop-val" th:text="${status.config.lowActivityRollupRetentionDays} + ' days (&le; ' + ${status.config.lowActivityRollupMaxRequests} + ' reqs, 0 blocks)'">7 days (&le; 5 reqs, 0 blocks)</span>
         </div>
         <div class="sys-prop-row">
             <span class="sys-prop-key">Threat Intel Enrichment TTL</span>
