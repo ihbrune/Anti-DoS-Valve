@@ -75,8 +75,8 @@ class DocumentationServiceTest {
 		assertTrue(payload.html().contains("Volume Tiers"));
 		assertTrue(payload.html().contains("Storage, Capacity &amp; Bloat") || payload.html().contains("Storage, Capacity & Bloat"));
 		assertTrue(payload.html().contains("False-Positive &amp; Rate-Limit") || payload.html().contains("False-Positive & Rate-Limit"));
-		assertTrue(payload.html().contains("Modern Telemetry Dimensions"));
-		assertTrue(payload.html().contains("Threat Hunting"));
+		assertTrue(payload.html().contains("Botnet Forensics") || payload.html().contains("Modern Telemetry Dimensions"));
+		assertTrue(payload.html().contains("Valve Configuration") || payload.html().contains("Threat Hunting"));
 	}
 
 	@Test
