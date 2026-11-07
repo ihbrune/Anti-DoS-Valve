@@ -281,8 +281,75 @@ Automated background schedules execute hourly and nightly at **03:00 AM** and **
 2. **Raw High-Water Snapshots (`retention-days: 30`):** Prunes completed `slot_snapshots` older than 30 days.
 3. **Audit Diagnostics (`poll-log-retention-days: 1`):** Purges diagnostic polling event logs older than 24 hours.
 4. **Orphan Entity Cleanup (`entity-retention-days: 60`):** Deletes inactive `network_entity` records with zero remaining associated events.
-5. **Persistent Subnet Rollups (`rollup-retention-days: 30`):** Retains aggregated `/24` and `/64` subnet traffic buckets for 30 days (reducing long-term table footprint while preserving 30-day baseline analytics).
+5. **Tiered Subnet Rollup Compaction (`low-activity-rollup-retention-days: 7`, `low-activity-rollup-max-requests: 5`):**
+   - **Tier 1 (Benign Long-Tail):** Rollups with zero security incidents (`blocked_requests = 0 AND marked_requests = 0`) and minimal request volume (`total_requests <= 5`) are purged after 7 days. This eliminates ~83% of storage bloat in `client_subnet_rollups`.
+   - **Tier 2 (Security Incidents & Significant Traffic, `rollup-retention-days: 30`):** All rollups with blocked requests, marked requests, or significant volume are retained for the full 30 days (or 180 days in production) for rolling baselines and forensic investigation.
 6. **SQLite Storage Compaction (`auto-vacuum-enabled: true`, `vacuum-threshold-bytes: 52428800`):** Automatically compacts SQLite standalone database files (`VACUUM`) during nightly retention cleanup if reclaimable freelist space exceeds 50 MB. Can also be triggered on demand via the System Status UI.
+
+---
+
+## Configuration Reference (`application.yaml` & `collector-config.yaml`)
+
+All parameters can be configured via `collector-config.yaml` or overridden via environment variables:
+
+### Core Polling & Retention Settings
+
+| YAML Property (`collector.*`) | Environment Variable | Default | Description |
+|---|---|---|---|
+| `config-file` | `COLLECTOR_CONFIG_FILE` | `collector-config.yaml` | Name or path of the endpoint configuration file. |
+| `poll-interval-seconds` | `COLLECTOR_POLL_INTERVAL_SECONDS` | `15` | Default polling interval in seconds across all monitored endpoints. |
+| `parallel-fleet-polling` | `COLLECTOR_PARALLEL_FLEET_POLLING` | `true` | Concurrently poll fleet endpoints in parallel using Java 21 Virtual Threads. |
+| `slow-poll-threshold-ms` | `COLLECTOR_SLOW_POLL_THRESHOLD_MS` | `1000` | Endpoint response time threshold in ms before triggering a `WARNING` poll log entry. |
+| `retention-days` | `COLLECTOR_RETENTION_DAYS` | `30` | Retention horizon (in days) for security incidents (`BLOCKED`/`MARKED` events) and completed slot snapshots. |
+| `active-event-retention-hours` | `COLLECTOR_ACTIVE_EVENT_RETENTION_HOURS` | `24` | Short-term retention (in hours) for high-volume benign `ACTIVE` client events. |
+| `active-event-cleanup-cron` | `COLLECTOR_ACTIVE_EVENT_CLEANUP_CRON` | `0 15 * * * *` | Cron schedule for the hourly purge of expired `ACTIVE` events. |
+| `poll-log-retention-days` | `COLLECTOR_POLL_LOG_RETENTION_DAYS` | `1` | Retention period (in days) for the polling audit trail (`poll_event_log`). |
+| `entity-retention-days` | `COLLECTOR_ENTITY_RETENTION_DAYS` | `60` | Retention period (in days) for unreferenced/orphan network entities. |
+
+### Subnet Rollup & Tiered Compaction Settings
+
+| YAML Property (`collector.*`) | Environment Variable | Default | Description |
+|---|---|---|---|
+| `rollup-enabled` | `COLLECTOR_ROLLUP_ENABLED` | `true` | Enables scheduled aggregation of client events into subnet time buckets. |
+| `rollup-window-minutes` | `COLLECTOR_ROLLUP_WINDOW_MINUTES` | `60` | Duration of each rollup bucket in minutes (typically 15 or 60). |
+| `rollup-cron` | `COLLECTOR_ROLLUP_CRON` | `0 */15 * * * *` | Cron schedule triggering the rollup aggregation catch-up job. |
+| `rollup-retention-days` | `COLLECTOR_ROLLUP_RETENTION_DAYS` | `30` | Full retention horizon (in days) for security incident rollups and substantial traffic. |
+| `low-activity-rollup-retention-days` | `COLLECTOR_LOW_ACTIVITY_ROLLUP_RETENTION_DAYS` | `7` | Retention horizon (in days) for benign long-tail rollups with zero blocks and minimal requests. |
+| `low-activity-rollup-max-requests` | `COLLECTOR_LOW_ACTIVITY_ROLLUP_MAX_REQUESTS` | `5` | Request count threshold (inclusive) below which incident-free rollups qualify for Tier 1 7-day compaction. |
+
+### Baseline Surge & Anomaly Detection
+
+| YAML Property (`collector.*`) | Environment Variable | Default | Description |
+|---|---|---|---|
+| `surge-min-requests` | `COLLECTOR_SURGE_MIN_REQUESTS` | `1000` | De minimis 24-hour volume threshold (requests) required before a subnet can trigger a High Surge alert. |
+| `surge-multiplier-alert` | `COLLECTOR_SURGE_MULTIPLIER_ALERT` | `5.0` | Multiplier above 30-day historical baseline required to trigger High Surge categorization. |
+
+### SQLite Storage Maintenance & Compaction
+
+| YAML Property (`collector.*`) | Environment Variable | Default | Description |
+|---|---|---|---|
+| `auto-vacuum-enabled` | `COLLECTOR_AUTO_VACUUM_ENABLED` | `true` | Automatically executes SQLite `VACUUM` during nightly maintenance if threshold is exceeded. |
+| `vacuum-threshold-bytes` | `COLLECTOR_VACUUM_THRESHOLD_BYTES` | `52428800` (50 MB) | Reclaimable freelist space threshold in bytes before automatic vacuum is performed. |
+
+### Operational Reporting
+
+| YAML Property (`collector.*`) | Environment Variable | Default | Description |
+|---|---|---|---|
+| `report-enabled` | `COLLECTOR_REPORT_ENABLED` | `true` | Enables automatic nightly aggregation of operational reports into `daily_reports`. |
+| `report-cron` | `COLLECTOR_REPORT_CRON` | `0 0 1 * * *` | Cron schedule (daily at 01:00 AM) compiling the operational markdown report. |
+
+### IP Enrichment & Threat Intelligence (`collector.enrichment.*`)
+
+| YAML Property | Environment Variable | Default | Description |
+|---|---|---|---|
+| `enabled` | `COLLECTOR_ENRICHMENT_ENABLED` | `true` | Enables asynchronous IP metadata enrichment (GeoIP, ASN, threat classification). |
+| `ttl-days` | `COLLECTOR_ENRICHMENT_TTL_DAYS` | `30` | Metadata validity TTL in days; expired records are queued for re-resolution. |
+| `asn-database-path` | - | `null` | Path to offline MMDB binary database for ASN lookups (DB-IP Lite or MaxMind). |
+| `country-database-path` | - | `null` | Path to offline MMDB binary database for country lookups. |
+| `custom-datacenter-asns-file` | - | `custom-datacenter-asns.txt` | Path to custom ASN classification overlay file. |
+| `crawler-sync-enabled` | `COLLECTOR_CRAWLER_SYNC_ENABLED` | `true` | Enables automatic synchronization of official search engine and AI crawler IP ranges. |
+| `crawler-sync-cron` | - | `0 0 4 * * *` | Daily sync cron schedule (04:00 AM). |
+| `crawler-retry-cron` | - | `0 15 * * * *` | Hourly retry cron schedule for transient feed failures. |
 
 ---
 

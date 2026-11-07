@@ -46,6 +46,13 @@ collector:
   # Subnet rollup aggregation retention horizon (default: 30 days, provides 30-day baseline analytics)
   rollup-retention-days: 30
 
+  # Tiered Subnet Rollup Compaction (default: 7 days for benign low-activity traffic):
+  # Rollups with zero security incidents (blocked_requests = 0 AND marked_requests = 0) and minimal request volume
+  # (total_requests <= low-activity-rollup-max-requests) are purged after 7 days.
+  # This eliminates up to 83% of long-tail storage bloat while keeping all significant traffic and attacks for the full rollup-retention-days.
+  low-activity-rollup-retention-days: 7
+  low-activity-rollup-max-requests: 5
+
   # Automatic database storage compaction (VACUUM) for SQLite deployments (default: true)
   auto-vacuum-enabled: true
 
