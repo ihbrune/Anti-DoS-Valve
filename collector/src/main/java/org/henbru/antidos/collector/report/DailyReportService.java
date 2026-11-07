@@ -115,6 +115,21 @@ public class DailyReportService {
 			String errorMessage
 	) {}
 
+	public record HourlyTrafficBucket(
+			int hour,
+			long totalRequests,
+			long blockedRequests,
+			long markedRequests
+	) {
+		public double blockedPercentage() {
+			return totalRequests > 0 ? (blockedRequests * 100.0) / totalRequests : 0.0;
+		}
+
+		public double markedPercentage() {
+			return totalRequests > 0 ? (markedRequests * 100.0) / totalRequests : 0.0;
+		}
+	}
+
 	public DailyReportService(
 			JdbcTemplate jdbcTemplate,
 			DailyReportRepository reportRepository,
@@ -550,7 +565,64 @@ public class DailyReportService {
 			log.warn("Error querying per-valve aggregates for {}: {}", dateStr, e.getMessage());
 		}
 
-		// 4. Polling Telemetry & Latency Distribution (from poll_event_log)
+		// 4. Hourly Traffic & Threat Distribution (24-hour chronological breakdown)
+		List<HourlyTrafficBucket> hourlyBuckets = new ArrayList<>(24);
+		long[] hourlyRequests = new long[24];
+		long[] hourlyBlockedCounters = new long[24];
+		long[] hourlyMarkedCounters = new long[24];
+		long[] hourlyBlockedEvents = new long[24];
+		long[] hourlyMarkedEvents = new long[24];
+		try {
+			String slotHourlySql = """
+					SELECT start_time, total_requests, blocked_counters, COALESCE(marked_counters, 0) AS marked_counters
+					FROM slot_snapshots
+					WHERE start_time >= ? AND start_time < ?
+					""";
+			jdbcTemplate.query(slotHourlySql, rs -> {
+				Timestamp ts = rs.getTimestamp("start_time");
+				if (ts != null) {
+					int h = ts.toInstant().atZone(zone).getHour();
+					if (h >= 0 && h < 24) {
+						hourlyRequests[h] += rs.getLong("total_requests");
+						hourlyBlockedCounters[h] += rs.getInt("blocked_counters");
+						hourlyMarkedCounters[h] += rs.getInt("marked_counters");
+					}
+				}
+			}, Timestamp.from(startInstant), Timestamp.from(endInstant));
+
+			String eventHourlySql = """
+					SELECT slot_time, status, SUM(request_count) AS req_count
+					FROM client_events
+					WHERE status IN ('BLOCKED', 'MARKED') AND slot_time >= ? AND slot_time < ?
+					GROUP BY slot_time, status
+					""";
+			jdbcTemplate.query(eventHourlySql, rs -> {
+				Timestamp ts = rs.getTimestamp("slot_time");
+				if (ts != null) {
+					int h = ts.toInstant().atZone(zone).getHour();
+					if (h >= 0 && h < 24) {
+						String st = rs.getString("status");
+						long count = rs.getLong("req_count");
+						if ("BLOCKED".equalsIgnoreCase(st)) {
+							hourlyBlockedEvents[h] += count;
+						} else if ("MARKED".equalsIgnoreCase(st)) {
+							hourlyMarkedEvents[h] += count;
+						}
+					}
+				}
+			}, Timestamp.from(startInstant), Timestamp.from(endInstant));
+		} catch (Exception e) {
+			log.warn("Error querying hourly telemetry for {}: {}", dateStr, e.getMessage());
+		}
+
+		for (int h = 0; h < 24; h++) {
+			long req = hourlyRequests[h];
+			long blk = hourlyBlockedEvents[h] > 0 ? hourlyBlockedEvents[h] : hourlyBlockedCounters[h];
+			long mrk = hourlyMarkedEvents[h] > 0 ? hourlyMarkedEvents[h] : hourlyMarkedCounters[h];
+			hourlyBuckets.add(new HourlyTrafficBucket(h, req, blk, mrk));
+		}
+
+		// 5. Polling Telemetry & Latency Distribution (from poll_event_log)
 		PollSummary pollSummary = new PollSummary(0, 0, 0, 0, 0, 0.0, 0, 0, 0, 0, 0);
 		try {
 			String pollSql = """
@@ -674,6 +746,7 @@ public class DailyReportService {
 		List<TopOffenderSummary> topClients = Collections.emptyList();
 		List<TopOffenderSummary> topAsns = Collections.emptyList();
 		List<TopOffenderSummary> topMarkedClients = Collections.emptyList();
+		List<TopOffenderSummary> topTrafficAsns = Collections.emptyList();
 		try {
 			topClients = clientEventRepository.findTopOffendersFiltered(
 					null, null, startInstant, endInstant, null, null, null, null, "BLOCKED", "client_key", 10);
@@ -681,8 +754,10 @@ public class DailyReportService {
 					null, null, startInstant, endInstant, null, null, null, null, "BLOCKED", "ASN", 5);
 			topMarkedClients = clientEventRepository.findTopOffendersFiltered(
 					null, null, startInstant, endInstant, null, null, null, null, "MARKED", "client_key", "MARKED", 5);
+			topTrafficAsns = clientEventRepository.findTopOffendersFiltered(
+					null, null, startInstant, endInstant, null, null, null, null, null, "ASN", "VOLUME", 10);
 		} catch (Exception e) {
-			log.warn("Error querying top offenders for {}: {}", dateStr, e.getMessage());
+			log.warn("Error querying top offenders and ASNs for {}: {}", dateStr, e.getMessage());
 		}
 
 		// 6. Overall Status Classification (strictly based on hard HTTP 429 blocks, never soft marking/simulation)
@@ -712,7 +787,7 @@ public class DailyReportService {
 				fleetPeakReqRate, fleetPeakReqRaw, fleetPeakReqDuration, peakReqServer, peakReqValve, fleetPeakReqTime,
 				fleetPeakBlockRate, fleetPeakBlockRaw, fleetPeakBlockDuration, peakBlockServer, peakBlockValve, fleetPeakBlockTime,
 				fleetPeakMarkRate, fleetPeakMarkRaw, fleetPeakMarkDuration, peakMarkServer, peakMarkValve, fleetPeakMarkTime,
-				valveAggregates, pollSummary, serverPollStats, outages, topClients, topAsns, topMarkedClients, noteMarkdown, numFmt,
+				valveAggregates, hourlyBuckets, pollSummary, serverPollStats, outages, topTrafficAsns, topClients, topAsns, topMarkedClients, noteMarkdown, numFmt,
 				fleetAuthRequests, fleetAuthTrackedRequests
 		);
 
@@ -781,9 +856,11 @@ public class DailyReportService {
 			String peakMarkValve,
 			Instant fleetPeakMarkTime,
 			List<ValveAggregate> valveAggregates,
+			List<HourlyTrafficBucket> hourlyBuckets,
 			PollSummary pollSummary,
 			List<ServerPollStat> serverPollStats,
 			List<OutageLog> outages,
+			List<TopOffenderSummary> topTrafficAsns,
 			List<TopOffenderSummary> topClients,
 			List<TopOffenderSummary> topAsns,
 			List<TopOffenderSummary> topMarkedClients,
@@ -988,8 +1065,11 @@ public class DailyReportService {
 
 		sb.append("---\n\n");
 
-		// Polling Connectivity & Latency Distribution
-		sb.append("## 🌐 3. Fleet Connectivity & Polling Latency Audit\n\n");
+		// 3. Hourly Traffic & Threat Distribution
+		sb.append(buildHourlyDistributionMarkdown(hourlyBuckets, totalRequests, numFmt));
+
+		// 4. Polling Connectivity & Latency Distribution
+		sb.append("## 🌐 4. Fleet Connectivity & Polling Latency Audit\n\n");
 
 		try {
 			long totPolls = pollSummary.totalPolls();
@@ -1061,8 +1141,52 @@ public class DailyReportService {
 
 		sb.append("---\n\n");
 
-		// Threat Highlights
-		sb.append("## 🚨 4. Threat Intelligence & Security Highlights\n\n");
+		// 5. Threat Intelligence & Traffic Origin Analysis
+		sb.append("## 🚨 5. Threat Intelligence & Traffic Origin Analysis\n\n");
+
+		if (topTrafficAsns != null && !topTrafficAsns.isEmpty()) {
+			sb.append("### 🌐 Top Autonomous Systems by Traffic Volume (Fleet Traffic Share)\n\n");
+			sb.append("> ℹ️ **Volume Analysis:** Ranks network operators (ASNs) generating the highest aggregate volume. ");
+			sb.append("Useful for identifying high-frequency crawlers, scraping clusters, or enterprise clients operating just below rate-limiting thresholds.\n\n");
+
+			sb.append("| ASN | Operator / Organization | Country | Category | Total Requests | Share | Blocked (HTTP 429) | Marked (Simulation) |\n");
+			sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
+
+			for (TopOffenderSummary asnTop : topTrafficAsns) {
+				String asnLabel = asnTop.asn() != null ? "AS" + asnTop.asn() : asnTop.clientKey();
+				String org = asnTop.asOrg() != null && !asnTop.asOrg().isBlank() ? asnTop.asOrg() : (asnTop.asn() == null ? "Private / Unresolved Network" : "–");
+				String country = asnTop.countryCode() != null && !asnTop.countryCode().isBlank() ? asnTop.countryCode() : "–";
+				String clientType = asnTop.clientType() != null ? asnTop.clientType().name() : "UNKNOWN";
+				double share = totalRequests > 0 ? (asnTop.totalRequests() * 100.0) / totalRequests : 0.0;
+				String shareStr = (share < 0.1 && asnTop.totalRequests() > 0) ? "< 0.1%" : String.format(Locale.US, "%.1f%%", share);
+
+				String blockedStr;
+				if (asnTop.totalBlockedRequests() > 0) {
+					double blkPct = asnTop.totalRequests() > 0 ? (asnTop.totalBlockedRequests() * 100.0) / asnTop.totalRequests() : 0.0;
+					blockedStr = "**" + numFmt.format(asnTop.totalBlockedRequests()) + " (" + String.format(Locale.US, "%.2f%%", blkPct) + ")**";
+				} else {
+					blockedStr = "0 (0.00%)";
+				}
+
+				String markedStr;
+				if (asnTop.totalMarkedRequests() > 0) {
+					double mrkPct = asnTop.totalRequests() > 0 ? (asnTop.totalMarkedRequests() * 100.0) / asnTop.totalRequests() : 0.0;
+					markedStr = "**" + numFmt.format(asnTop.totalMarkedRequests()) + " (" + String.format(Locale.US, "%.2f%%", mrkPct) + ")**";
+				} else {
+					markedStr = "0 (0.00%)";
+				}
+
+				sb.append("| `").append(asnLabel).append("` | ")
+						.append(org).append(" | ")
+						.append(country).append(" | `")
+						.append(clientType).append("` | ")
+						.append(numFmt.format(asnTop.totalRequests())).append(" | ")
+						.append(shareStr).append(" | ")
+						.append(blockedStr).append(" | ")
+						.append(markedStr).append(" |\n");
+			}
+			sb.append("\n");
+		}
 
 		if (topClients.isEmpty()) {
 			sb.append("✅ *No blocked clients recorded for this date. The fleet operated unhindered.*\n\n");
@@ -1168,6 +1292,86 @@ public class DailyReportService {
 			sb.append("---\n\n");
 		}
 		sb.append("<!-- DAILY_NOTE_END -->\n\n");
+		return sb.toString();
+	}
+
+	private String buildHourlyDistributionMarkdown(
+			List<HourlyTrafficBucket> buckets,
+			long totalRequests,
+			NumberFormat numFmt
+	) {
+		StringBuilder sb = new StringBuilder();
+		sb.append("## 🕒 3. Hourly Traffic & Threat Distribution\n\n");
+
+		if (buckets == null || buckets.isEmpty() || totalRequests <= 0) {
+			sb.append("*No hourly traffic telemetry recorded for this date.*\n\n---\n\n");
+			return sb.toString();
+		}
+
+		HourlyTrafficBucket peakHourBucket = null;
+		long maxHourReq = 0;
+		for (HourlyTrafficBucket b : buckets) {
+			if (b.totalRequests() > maxHourReq) {
+				maxHourReq = b.totalRequests();
+				peakHourBucket = b;
+			}
+		}
+
+		if (peakHourBucket != null && maxHourReq > 0) {
+			String peakHourLabel = String.format("%02d:00 – %02d:59", peakHourBucket.hour(), peakHourBucket.hour());
+			sb.append("> ℹ️ **Hourly Activity Profile:** Visual representation normalized to the daily peak hour (**`")
+					.append(peakHourLabel).append("`** with ").append(numFmt.format(maxHourReq))
+					.append(" requests; `█` = active volume, `░` = headroom relative to peak).\n\n");
+		} else {
+			sb.append("> ℹ️ **Hourly Activity Profile:** Visual representation normalized to the daily peak hour (`█` = active volume, `░` = headroom relative to peak).\n\n");
+		}
+
+		sb.append("| Hour | Total Requests | Share | Blocked (HTTP 429) | Marked (Simulation) | Activity Profile |\n");
+		sb.append("| :--- | :--- | :--- | :--- | :--- | :--- |\n");
+
+		final int barWidth = 16;
+		for (HourlyTrafficBucket b : buckets) {
+			String hourRange = String.format("%02d:00 – %02d:59", b.hour(), b.hour());
+			double share = totalRequests > 0 ? (b.totalRequests() * 100.0) / totalRequests : 0.0;
+			String shareStr = (share < 0.1 && b.totalRequests() > 0) ? "< 0.1%" : String.format(Locale.US, "%.1f%%", share);
+
+			String blockedStr;
+			if (b.blockedRequests() > 0) {
+				blockedStr = "**" + numFmt.format(b.blockedRequests()) + " (" + String.format(Locale.US, "%.2f%%", b.blockedPercentage()) + ")**";
+			} else {
+				blockedStr = "0 (0.00%)";
+			}
+
+			String markedStr;
+			if (b.markedRequests() > 0) {
+				markedStr = "**" + numFmt.format(b.markedRequests()) + " (" + String.format(Locale.US, "%.2f%%", b.markedPercentage()) + ")**";
+			} else {
+				markedStr = "0 (0.00%)";
+			}
+
+			String bar;
+			if (maxHourReq > 0 && b.totalRequests() > 0) {
+				int filled = (int) Math.round(((double) b.totalRequests() / maxHourReq) * barWidth);
+				if (filled == 0) {
+					filled = 1;
+				}
+				if (filled > barWidth) {
+					filled = barWidth;
+				}
+				int empty = barWidth - filled;
+				bar = "`" + "█".repeat(filled) + "░".repeat(empty) + "`";
+			} else {
+				bar = "`" + "░".repeat(barWidth) + "`";
+			}
+
+			sb.append("| `").append(hourRange).append("` | ")
+					.append(numFmt.format(b.totalRequests())).append(" | ")
+					.append(shareStr).append(" | ")
+					.append(blockedStr).append(" | ")
+					.append(markedStr).append(" | ")
+					.append(bar).append(" |\n");
+		}
+		sb.append("\n---\n\n");
 		return sb.toString();
 	}
 

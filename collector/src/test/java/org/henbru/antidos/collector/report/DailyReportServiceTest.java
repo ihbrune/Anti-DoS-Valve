@@ -440,4 +440,127 @@ class DailyReportServiceTest {
 		assertEquals(3500L, preservedReport.get().totalRequests());
 		assertEquals(1, preservedReport.get().serverCount());
 	}
+
+	@Test
+	void testHourlyTrafficDistributionAndVisualProfile() {
+		LocalDate hourlyDate = LocalDate.of(2026, 10, 27);
+		dailyReportRepository.deleteByReportDate(hourlyDate.toString());
+		jdbcTemplate.update("DELETE FROM slot_snapshots WHERE server_id = 'SRV-HOURLY'");
+		jdbcTemplate.update("DELETE FROM client_events WHERE server_id = 'SRV-HOURLY'");
+		jdbcTemplate.update("DELETE FROM monitored_valves WHERE server_id = 'SRV-HOURLY'");
+
+		ZonedDateTime startDay = hourlyDate.atStartOfDay(ZoneId.systemDefault());
+		Instant h10 = startDay.plusHours(10).toInstant();
+		Instant h14 = startDay.plusHours(14).toInstant();
+
+		monitoredValveRepository.upsert(new MonitoredValve(
+				"SRV-HOURLY", "HOURLY-VALVE", "Hourly Test Valve", 1, "BLOCKING", false, false,
+				429, 1000, 60, 5, 0.5f, 24, 64, 10000, 5000, "", "", "", "", "/status", "*", "auto",
+				false, "_adv", Instant.now(), 1111, true
+		));
+
+		// Hour 10: Moderate traffic (2,000 requests, 0 blocked, 0 marked)
+		slotSnapshotRepository.upsert(new SlotSnapshot(
+				null, "SRV-HOURLY", "HOURLY-VALVE", 10001L, h10, h10.plus(60, ChronoUnit.SECONDS),
+				2000L, 50, 0, 0, true, h10.plus(60, ChronoUnit.SECONDS)
+		));
+
+		// Hour 14: Peak traffic (10,000 requests, 200 blocked, 50 marked)
+		slotSnapshotRepository.upsert(new SlotSnapshot(
+				null, "SRV-HOURLY", "HOURLY-VALVE", 14001L, h14, h14.plus(60, ChronoUnit.SECONDS),
+				10000L, 100, 20, 5, true, h14.plus(60, ChronoUnit.SECONDS)
+		));
+
+		// Ingest client events for hour 14
+		jdbcTemplate.update("""
+				INSERT INTO client_events (
+					server_id, valve_name, slot_key, slot_time, client_key, request_count, status, client_type, enrichment_status, last_updated_at
+				) VALUES (?, ?, ?, ?, ?, ?, 'BLOCKED', 'DATACENTER', 'ENRICHED', ?)
+				""", "SRV-HOURLY", "HOURLY-VALVE", 14001L, java.sql.Timestamp.from(h14), "198.51.100.42", 200L, java.sql.Timestamp.from(h14));
+
+		jdbcTemplate.update("""
+				INSERT INTO client_events (
+					server_id, valve_name, slot_key, slot_time, client_key, request_count, status, client_type, enrichment_status, last_updated_at
+				) VALUES (?, ?, ?, ?, ?, ?, 'MARKED', 'SEARCH_ENGINE', 'ENRICHED', ?)
+				""", "SRV-HOURLY", "HOURLY-VALVE", 14001L, java.sql.Timestamp.from(h14), "66.249.66.1", 50L, java.sql.Timestamp.from(h14));
+
+		DailyReport report = dailyReportService.generateDailyReport(hourlyDate);
+		assertNotNull(report);
+		assertEquals(12000L, report.totalRequests());
+		assertEquals(200L, report.totalBlocked());
+		assertEquals(50L, report.totalMarked());
+
+		String md = report.reportMarkdown();
+		assertNotNull(md);
+
+		// Check Section 3 Hourly Traffic & Threat Distribution
+		assertTrue(md.contains("## 🕒 3. Hourly Traffic & Threat Distribution"));
+		assertTrue(md.contains("Hourly Activity Profile"));
+		assertTrue(md.contains("14:00 – 14:59"));
+		assertTrue(md.contains("10,000"));
+		assertTrue(md.contains("200 (2.00%)"));
+		assertTrue(md.contains("50 (0.50%)"));
+
+		// Peak hour (14:00) should have full bar
+		assertTrue(md.contains("`████████████████`"), "Peak hour must have full block bar");
+
+		// Hour 10 should have roughly 20% (3-4 blocks)
+		assertTrue(md.contains("10:00 – 10:59"));
+		assertTrue(md.contains("2,000"));
+		assertTrue(md.contains("`███░░░░░░░░░░░░░`"), "Hour 10 must have proportional block bar");
+	}
+
+	@Test
+	void testTopTrafficAsnsVolumeAnalysis() {
+		LocalDate asnDate = LocalDate.of(2026, 10, 29);
+		dailyReportRepository.deleteByReportDate(asnDate.toString());
+		jdbcTemplate.update("DELETE FROM slot_snapshots WHERE server_id = 'SRV-ASN-TEST'");
+		jdbcTemplate.update("DELETE FROM client_events WHERE server_id = 'SRV-ASN-TEST'");
+		jdbcTemplate.update("DELETE FROM monitored_valves WHERE server_id = 'SRV-ASN-TEST'");
+
+		ZonedDateTime startDay = asnDate.atStartOfDay(ZoneId.systemDefault());
+		Instant slotTime = startDay.plusHours(11).toInstant();
+
+		monitoredValveRepository.upsert(new MonitoredValve(
+				"SRV-ASN-TEST", "DEFAULT", "Default Valve", 1, "BLOCKING", false, false,
+				429, 1000, 60, 5, 0.5f, 24, 64, 10000, 5000, "", "", "", "", "/status", "*", "auto",
+				false, "_adv", Instant.now(), 2222, true
+		));
+
+		slotSnapshotRepository.upsert(new SlotSnapshot(
+				null, "SRV-ASN-TEST", "DEFAULT", 99001L, slotTime, slotTime.plus(60, ChronoUnit.SECONDS),
+				15000L, 50, 10, 0, true, slotTime.plus(60, ChronoUnit.SECONDS)
+		));
+
+		// 1. Google (AS15169): 8,000 requests, completely staying under the threshold (0 blocked!)
+		jdbcTemplate.update("""
+				INSERT INTO client_events (
+					server_id, valve_name, slot_key, slot_time, client_key, request_count, status, client_type, asn, as_org, country_code, enrichment_status, last_updated_at
+				) VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE', 'SEARCH_ENGINE', 15169, 'Google LLC', 'US', 'ENRICHED', ?)
+				""", "SRV-ASN-TEST", "DEFAULT", 99001L, java.sql.Timestamp.from(slotTime), "66.249.64.1", 8000L, java.sql.Timestamp.from(slotTime));
+
+		// 2. Cloudflare (AS13335): 4,000 requests, 150 blocked
+		jdbcTemplate.update("""
+				INSERT INTO client_events (
+					server_id, valve_name, slot_key, slot_time, client_key, request_count, status, client_type, asn, as_org, country_code, enrichment_status, last_updated_at
+				) VALUES (?, ?, ?, ?, ?, ?, 'BLOCKED', 'DATACENTER', 13335, 'Cloudflare, Inc.', 'US', 'ENRICHED', ?)
+				""", "SRV-ASN-TEST", "DEFAULT", 99001L, java.sql.Timestamp.from(slotTime), "172.64.0.1", 150L, java.sql.Timestamp.from(slotTime));
+
+		DailyReport report = dailyReportService.generateDailyReport(asnDate);
+		assertNotNull(report);
+
+		String md = report.reportMarkdown();
+		assertNotNull(md);
+
+		// Top Autonomous Systems by Traffic Volume must be present
+		assertTrue(md.contains("Top Autonomous Systems by Traffic Volume (Fleet Traffic Share)"));
+		assertTrue(md.contains("AS15169"));
+		assertTrue(md.contains("Google LLC"));
+		assertTrue(md.contains("8,000"));
+		assertTrue(md.contains("0 (0.00%)"), "Google should show 0 blocked requests (under threshold)");
+
+		assertTrue(md.contains("AS13335"));
+		assertTrue(md.contains("Cloudflare, Inc."));
+		assertTrue(md.contains("150 (100.00%)"));
+	}
 }
