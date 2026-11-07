@@ -439,6 +439,20 @@ public class SubnetRollupRepository {
 		return jdbcTemplate.update(sql, Timestamp.from(cutoff));
 	}
 
+	/**
+	 * Deletes low-activity, benign subnet rollups older than the specified cutoff.
+	 * Only purges records that have zero security incidents (blocked = 0 and marked = 0)
+	 * and total request counts <= maxRequests.
+	 *
+	 * @param cutoff      Threshold timestamp before which eligible rollups are deleted
+	 * @param maxRequests Maximum total_requests threshold (inclusive, e.g. 5)
+	 * @return Number of deleted rollup rows
+	 */
+	public int deleteLowActivityOlderThan(Instant cutoff, long maxRequests) {
+		String sql = "DELETE FROM client_subnet_rollups WHERE bucket_start < ? AND blocked_requests = 0 AND COALESCE(marked_requests, 0) = 0 AND total_requests <= ?";
+		return jdbcTemplate.update(sql, Timestamp.from(cutoff), maxRequests);
+	}
+
 	private void appendFilterConditions(
 			StringBuilder sql,
 			List<Object> params,

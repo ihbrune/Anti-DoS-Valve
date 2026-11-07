@@ -326,6 +326,13 @@ Controls whether extended telemetry (such as distinct client IP tracking in aggr
 * `true`: Permanently enables extended telemetry from the moment Tomcat boots.
 * `false`: Permanently disables extended telemetry.
 
+## activeSampleThreshold (optional)
+
+Available since version 1.8.0 (default: `0` = disabled): Sets the per-slot request count threshold above which an active (allowed) client or subnet counter captures a sample request snapshot (HTTP method, request URI, and User-Agent) for forensic telemetry.
+
+* **Default (`activeSampleThreshold="0"`)**: Request snapshots are captured exclusively when a counter is blocked or marked (`allowed == false`).
+* **Active Sampling (`activeSampleThreshold > 0`)**: Once an active counter's combined request count reaches or exceeds this threshold, the first subsequent request captures a sample snapshot without allocating additional memory on following requests. This is especially valuable on wide subnet monitoring valves (e.g. `ipv4SubnetMask="24"` with `activeSampleThreshold="50"`) to diagnose distributed stealth scrapers or horizontal botnet carpet waves that stay below the blocking threshold.
+
 ## visitorCookieEnabled (optional)
 
 Available since version 1.7.5, enables cryptographic first-party visitor tracking (*Proof-of-Prior-Visit*) using standard **AES-256-GCM (AEAD)** with zero runtime dependencies. Default: `false`.

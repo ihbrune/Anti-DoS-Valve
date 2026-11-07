@@ -512,7 +512,10 @@ public class CollectorPollerService {
 							distinct,
 							distinctUas,
 							returning,
-							authenticated
+							authenticated,
+							c.sampleMethod(),
+							c.sampleUri(),
+							c.sampleUserAgent()
 					).withEntityId(entityId));
 				}
 			}

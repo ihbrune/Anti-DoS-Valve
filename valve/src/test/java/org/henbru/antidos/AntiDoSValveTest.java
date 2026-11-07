@@ -2616,5 +2616,60 @@ class AntiDoSValveTest {
 			return errorCode;
 		}
 	}
+
+	@Test
+	void testActiveSampleThresholdConfigurationAndSampling() throws Exception {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "ACTIVE_SAMPLE_TEST");
+		valve.setRelevantPaths("/api/.*");
+		valve.setAllowedRequestsPerSlot(100);
+		valve.setActiveSampleThreshold(3);
+		valve.setCollectorIntegration("true");
+		valve.reloadMonitor();
+
+		assertEquals(3, valve.getActiveSampleThreshold());
+		assertTrue(valve.isExtendedMetricsActive());
+
+		// 1st request -> below threshold (count = 1)
+		TestRequest req1 = new TestRequest("/api/data", "198.51.100.10");
+		req1.setMethod("GET");
+		req1.setHeader("User-Agent", "TestBot/1.0");
+		TestResponse resp1 = new TestResponse();
+		valve.invoke(req1, resp1);
+
+		AntiDoSCounter counter = valve.provideMonitor().provideCurrentCounter("198.51.100.10");
+		assertNotNull(counter);
+		assertEquals(1, counter.getCount());
+		assertNull(counter.getSample(), "Sample should not be recorded below active threshold");
+
+		// 2nd request -> below threshold (count = 2)
+		TestRequest req2 = new TestRequest("/api/data", "198.51.100.10");
+		req2.setMethod("GET");
+		req2.setHeader("User-Agent", "TestBot/1.0");
+		TestResponse resp2 = new TestResponse();
+		valve.invoke(req2, resp2);
+		assertEquals(2, counter.getCount());
+		assertNull(counter.getSample());
+
+		// 3rd request -> hits threshold (count = 3)
+		TestRequest req3 = new TestRequest("/api/data?id=123", "198.51.100.10");
+		req3.setMethod("POST");
+		req3.setHeader("User-Agent", "TestBot/2.0");
+		TestResponse resp3 = new TestResponse();
+		valve.invoke(req3, resp3);
+		assertEquals(3, counter.getCount());
+		assertNotNull(counter.getSample(), "Sample should be captured when active threshold is reached");
+		assertEquals("POST", counter.getSample().method());
+		assertEquals("/api/data", counter.getSample().uri());
+		assertEquals("TestBot/2.0", counter.getSample().userAgent());
+
+		// Render details JSON and verify sample is present in topActiveClients
+		AntiDoSStatusRenderer renderer = new AntiDoSStatusRenderer(valve);
+		String json = renderer.buildStatusJsonDetails("ACTIVE_SAMPLE_TEST");
+		assertTrue(json.contains("\"activeSampleThreshold\": 3"));
+		assertTrue(json.contains("\"sampleMethod\": \"POST\""));
+		assertTrue(json.contains("\"sampleUri\": \"/api/data\""));
+		assertTrue(json.contains("\"sampleUserAgent\": \"TestBot/2.0\""));
+	}
 }
 

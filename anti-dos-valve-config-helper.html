@@ -1533,6 +1533,20 @@
               </select>
             </div>
 
+            <!-- 9c. activeSampleThreshold -->
+            <div class="field-group">
+              <div class="field-header">
+                <label for="activeSampleThreshold" class="field-label">activeSampleThreshold</label>
+                <span class="badge badge-optional">Optional</span>
+              </div>
+              <div class="field-desc">Request count threshold per slot above which an active (allowed) client or subnet
+                counter captures a sample request (method, URI, User-Agent) for forensic analysis.
+                <code>0</code> (default) disables active request sampling (samples captured only on block/mark).
+                Recommended for subnet monitoring valves (e.g. <code>50</code>) to diagnose distributed stealth waves.
+              </div>
+              <input type="number" id="activeSampleThreshold" name="activeSampleThreshold" min="0" step="1" value="0" placeholder="0 (Default: disabled)">
+            </div>
+
             <!-- 10. slotLength -->
             <div class="field-group">
               <div class="field-header">
@@ -2577,6 +2591,7 @@
       { key: 'ipv4SubnetMask', isRequired: false, defaultVal: '' },
       { key: 'ipv6SubnetMask', isRequired: false, defaultVal: '' },
       { key: 'collectorIntegration', isRequired: false, defaultVal: 'auto' },
+      { key: 'activeSampleThreshold', isRequired: false, defaultVal: 0 },
       { key: 'slotLength', isRequired: true, defaultVal: 30 },
       { key: 'allowedRequestsPerSlot', isRequired: true, defaultVal: 5 },
       { key: 'numberOfSlots', isRequired: true, defaultVal: 10 },
@@ -2733,6 +2748,7 @@
             if (param.key === 'ipv4SubnetMask' && (val === '32' || val === '-1')) return;
             if (param.key === 'ipv6SubnetMask' && (val === '128' || val === '-1')) return;
             if (param.key === 'collectorIntegration' && (val === 'auto' || val === '')) return;
+            if (param.key === 'activeSampleThreshold' && (val === '0' || val === 0 || val === '')) return;
             if ((param.key === 'statusAllowedIPs' || param.key === 'statusPassword') && !document.getElementById('statusUri').value.trim()) return;
             if (param.key === 'visitorCookieName' && val === '_adv') return;
             if (param.key === 'visitorCookieSecret' && val === '') return;

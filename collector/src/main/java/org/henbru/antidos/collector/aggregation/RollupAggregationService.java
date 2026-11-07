@@ -247,6 +247,10 @@ public class RollupAggregationService {
 
 	/**
 	 * Scheduled retention cleanup for subnet rollups running daily at 03:30 AM.
+	 * Executes tiered compaction:
+	 * 1. Low-activity benign rollups (blocked=0, marked=0, total_requests <= lowActivityRollupMaxRequests)
+	 *    are purged after lowActivityRollupRetentionDays (e.g. 7 days).
+	 * 2. Remaining rollups (including all security events and significant volume) are purged after rollupRetentionDays.
 	 */
 	@Scheduled(cron = "${collector.rollup.cleanup-cron:0 30 3 * * *}")
 	public void cleanupOldRollups() {
@@ -255,6 +259,15 @@ public class RollupAggregationService {
 		}
 
 		try {
+			int lowActivityDays = properties.getLowActivityRollupRetentionDays() > 0 ? properties.getLowActivityRollupRetentionDays() : 7;
+			long maxRequests = properties.getLowActivityRollupMaxRequests() >= 0 ? properties.getLowActivityRollupMaxRequests() : 5L;
+			Instant lowActivityCutoff = Instant.now().minus(lowActivityDays, ChronoUnit.DAYS);
+			int deletedLowActivity = rollupRepository.deleteLowActivityOlderThan(lowActivityCutoff, maxRequests);
+			if (deletedLowActivity > 0) {
+				log.info("Tiered cleanup purged {} low-activity benign subnet rollups (requests <= {}) older than {} days (cutoff: {})",
+						deletedLowActivity, maxRequests, lowActivityDays, lowActivityCutoff);
+			}
+
 			Instant cutoff = Instant.now().minus(properties.getRollupRetentionDays(), ChronoUnit.DAYS);
 			int deleted = rollupRepository.deleteOlderThan(cutoff);
 			if (deleted > 0) {

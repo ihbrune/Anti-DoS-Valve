@@ -248,6 +248,7 @@ public class AntiDoSValve extends ValveBase {
 	private volatile int httpStatusCode = DEFAULT_HTTP_STATUS_CODE;
 	private volatile Boolean asyncEviction = null;
 	private volatile int maxBlockLogsPerSecond = AntiDoSLogThrottler.DEFAULT_MAX_LOGS_PER_SECOND;
+	private volatile int activeSampleThreshold = 0;
 
 	private volatile boolean visitorCookieEnabled = false;
 	private volatile String visitorCookieName = "_adv";
@@ -1502,6 +1503,42 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
+	 * @return The request count threshold above which active requests are sampled for method/URI/UA,
+	 *         or 0 if active request sampling is disabled (default).
+	 */
+	public int getActiveSampleThreshold() {
+		return activeSampleThreshold;
+	}
+
+	/**
+	 * Sets the request count threshold per slot above which an active (allowed) client/subnet counter
+	 * captures a sample request (method, URI, User-Agent) for forensic analysis.
+	 * Set to 0 to disable active request sampling (default).
+	 *
+	 * @param activeSampleThreshold Request count threshold (>= 0)
+	 */
+	public void setActiveSampleThreshold(int activeSampleThreshold) {
+		this.activeSampleThreshold = Math.max(0, activeSampleThreshold);
+	}
+
+	/**
+	 * Sets the active sample threshold from a string.
+	 *
+	 * @param activeSampleThreshold The threshold as string (>= 0)
+	 */
+	public void setActiveSampleThreshold(String activeSampleThreshold) {
+		if (activeSampleThreshold == null || activeSampleThreshold.trim().isEmpty()) {
+			this.activeSampleThreshold = 0;
+		} else {
+			try {
+				this.activeSampleThreshold = Math.max(0, Integer.parseInt(activeSampleThreshold.trim()));
+			} catch (NumberFormatException e) {
+				this.activeSampleThreshold = 0;
+			}
+		}
+	}
+
+	/**
 	 * Sets the HTTP response status code used when blocking requests in
 	 * {@link #DEFAULT_MONITOR_MODE}. Defaults to {@link #DEFAULT_HTTP_STATUS_CODE} (429).
 	 * To restore the legacy behavior of previous versions, set this to
@@ -1765,6 +1802,8 @@ public class AntiDoSValve extends ValveBase {
 		boolean allowed = isRequestAllowed(ip, path, isReturningVisitor, isAuthenticated, userAgent);
 		if (!allowed) {
 			recordBlockedSampleIfAbsent(ip, request, path);
+		} else if (activeSampleThreshold > 0 && isExtendedMetricsActive()) {
+			recordActiveSampleIfEligible(ip, request, path);
 		}
 		if (allowed || simulationMode) {
 			if (visitorCookieEnabled && visitorTokenService != null && issueNewCookie && clientSubnetBytes != null) {
@@ -1827,6 +1866,23 @@ public class AntiDoSValve extends ValveBase {
 			counter = monitor.provideCurrentCounter(ip);
 		}
 		if (counter != null && counter.getSample() == null) {
+			String method = request.getMethod();
+			String ua = request.getHeader("User-Agent");
+			counter.recordSampleIfAbsent(method, path, ua);
+		}
+	}
+
+	void recordActiveSampleIfEligible(String ip, Request request, String path) {
+		AntiDoSMonitor monitor = provideMonitor();
+		if (monitor == null || request == null) {
+			return;
+		}
+		String counterName = resolveCounterName(ip);
+		AntiDoSCounter counter = monitor.provideCurrentCounter(counterName);
+		if (counter == null && !counterName.equals(ip)) {
+			counter = monitor.provideCurrentCounter(ip);
+		}
+		if (counter != null && counter.getSample() == null && counter.getCountCombined() >= activeSampleThreshold) {
 			String method = request.getMethod();
 			String ua = request.getHeader("User-Agent");
 			counter.recordSampleIfAbsent(method, path, ua);

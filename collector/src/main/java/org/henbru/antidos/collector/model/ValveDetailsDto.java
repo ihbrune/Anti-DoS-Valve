@@ -137,18 +137,36 @@ public record ValveDetailsDto(
 			Integer distinctClients,
 			Integer distinctUserAgents,
 			Integer returningCount,
-			Integer authenticatedCount
+			Integer authenticatedCount,
+			String sampleMethod,
+			String sampleUri,
+			String sampleUserAgent
 	) {
+		public ActiveClientDto(
+				String key,
+				int count,
+				int retained,
+				int effective,
+				int limit,
+				int quotaPercent,
+				Integer distinctClients,
+				Integer distinctUserAgents,
+				Integer returningCount,
+				Integer authenticatedCount
+		) {
+			this(key, count, retained, effective, limit, quotaPercent, distinctClients, distinctUserAgents, returningCount, authenticatedCount, null, null, null);
+		}
+
 		public ActiveClientDto(String key, int count, int retained, int effective, int limit, int quotaPercent, Integer distinctClients, Integer returningCount, Integer authenticatedCount) {
-			this(key, count, retained, effective, limit, quotaPercent, distinctClients, null, returningCount, authenticatedCount);
+			this(key, count, retained, effective, limit, quotaPercent, distinctClients, null, returningCount, authenticatedCount, null, null, null);
 		}
 
 		public ActiveClientDto(String key, int count, int retained, int effective, int limit, int quotaPercent, Integer distinctClients) {
-			this(key, count, retained, effective, limit, quotaPercent, distinctClients, null, null, null);
+			this(key, count, retained, effective, limit, quotaPercent, distinctClients, null, null, null, null, null, null);
 		}
 
 		public ActiveClientDto(String key, int count, int retained, int effective, int limit, int quotaPercent) {
-			this(key, count, retained, effective, limit, quotaPercent, 1, null, null, null);
+			this(key, count, retained, effective, limit, quotaPercent, 1, null, null, null, null, null, null);
 		}
 	}
 }

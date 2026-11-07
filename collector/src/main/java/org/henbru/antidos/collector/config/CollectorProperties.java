@@ -24,6 +24,8 @@ public class CollectorProperties {
 	private boolean parallelFleetPolling = true;
 	private int rollupWindowMinutes = 60;
 	private int rollupRetentionDays = 30;
+	private int lowActivityRollupRetentionDays = 7;
+	private long lowActivityRollupMaxRequests = 5L;
 	private boolean autoVacuumEnabled = true;
 	private long vacuumThresholdBytes = 50L * 1024L * 1024L; // 50 MB freespace threshold for auto-vacuum
 	private boolean rollupEnabled = true;
@@ -188,6 +190,22 @@ public class CollectorProperties {
 
 	public void setRollupRetentionDays(int rollupRetentionDays) {
 		this.rollupRetentionDays = Math.max(1, rollupRetentionDays);
+	}
+
+	public int getLowActivityRollupRetentionDays() {
+		return lowActivityRollupRetentionDays;
+	}
+
+	public void setLowActivityRollupRetentionDays(int lowActivityRollupRetentionDays) {
+		this.lowActivityRollupRetentionDays = Math.max(1, lowActivityRollupRetentionDays);
+	}
+
+	public long getLowActivityRollupMaxRequests() {
+		return lowActivityRollupMaxRequests;
+	}
+
+	public void setLowActivityRollupMaxRequests(long lowActivityRollupMaxRequests) {
+		this.lowActivityRollupMaxRequests = Math.max(0L, lowActivityRollupMaxRequests);
 	}
 
 	public boolean isRollupEnabled() {

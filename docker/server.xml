@@ -106,6 +106,7 @@
                          ipv4SubnetMask="/24"
                          ipv6SubnetMask="/64"
                          collectorIntegration="true"
+                         activeSampleThreshold="50"
                          slotLength="900"
                          allowedRequestsPerSlot="30000"
                          numberOfSlots="8"

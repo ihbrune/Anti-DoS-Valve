@@ -751,7 +751,11 @@ public class AntiDoSStatusRenderer {
 					? "<span style=\"color:var(--muted);\">never</span>"
 					: sdf.format(new Date(lastScrape)) + " (" + formatDuration(Math.max(0, (getTimeInMillis() - lastScrape) / 1000)) + " ago)";
 			sb.append("    <tr><th>Collector Integration</th><td><code>").append(escapeHtml(cMode)).append("</code>").append(cBadge)
-					.append(" &bull; Last Access: ").append(lastScrapeHtml).append("</td></tr>\n");
+					.append(" &bull; Last Access: ").append(lastScrapeHtml);
+			if (v.getActiveSampleThreshold() > 0) {
+				sb.append(" &bull; Active Sampling: &ge; <code>").append(v.getActiveSampleThreshold()).append("</code> req");
+			}
+			sb.append("</td></tr>\n");
 
 			// Cache usage & slots
 			sb.append("    <tr><th>Active IP Cache</th><td>").append(activeCounters).append(" / ").append(maxActive)
@@ -1008,7 +1012,11 @@ public class AntiDoSStatusRenderer {
 				? "<span style=\"color:var(--muted);\">never</span>"
 				: sdf.format(new Date(lastScrapeTarget)) + " (" + formatDuration(Math.max(0, (getTimeInMillis() - lastScrapeTarget) / 1000)) + " ago)";
 		sb.append("    <tr><th>Collector Integration</th><td><code>").append(escapeHtml(cModeTarget)).append("</code>").append(cBadgeTarget)
-				.append(" &bull; Last Access: ").append(lastScrapeTargetHtml).append("</td></tr>\n");
+				.append(" &bull; Last Access: ").append(lastScrapeTargetHtml);
+		if (target.getActiveSampleThreshold() > 0) {
+			sb.append(" &bull; Active Sampling: &ge; <code>").append(target.getActiveSampleThreshold()).append("</code> req");
+		}
+		sb.append("</td></tr>\n");
 
 		sb.append("    <tr><th>Active IP Cache</th><td>").append(activeCounters).append(" / ").append(maxActive)
 				.append(" <div class=\"metric-bar\"><div class=\"metric-fill ").append(activeFillClass)
@@ -1363,6 +1371,7 @@ public class AntiDoSStatusRenderer {
 					.append("      \"activeSlots\": ").append(activeSlots).append(",\n")
 					.append("      \"statusUri\": ").append(v.getStatusUri() != null ? "\"" + escapeJson(v.getStatusUri()) + "\"" : "null").append(",\n")
 					.append("      \"statusAllowedIPs\": ").append(v.getStatusAllowedIPs() != null ? "\"" + escapeJson(v.getStatusAllowedIPs()) + "\"" : "null").append(",\n")
+					.append("      \"activeSampleThreshold\": ").append(v.getActiveSampleThreshold()).append(",\n")
 					.append("      \"isStatusHost\": ").append(v.getStatusUri() != null).append(",\n")
 					.append("      \"isCurrentHost\": ").append(v == valve).append(",\n")
 					.append("      \"alwaysForbiddenBlockedRequests\": ").append(v.getAlwaysForbiddenBlockedRequests()).append(",\n")
@@ -1473,6 +1482,7 @@ public class AntiDoSStatusRenderer {
 				.append("    \"activeSlots\": ").append(activeSlots).append(",\n")
 				.append("    \"statusUri\": ").append(target.getStatusUri() != null ? "\"" + escapeJson(target.getStatusUri()) + "\"" : "null").append(",\n")
 				.append("    \"statusAllowedIPs\": ").append(target.getStatusAllowedIPs() != null ? "\"" + escapeJson(target.getStatusAllowedIPs()) + "\"" : "null").append(",\n")
+				.append("    \"activeSampleThreshold\": ").append(target.getActiveSampleThreshold()).append(",\n")
 				.append("    \"isStatusHost\": ").append(target.getStatusUri() != null).append(",\n")
 				.append("    \"isCurrentHost\": ").append(target == valve).append(",\n")
 				.append("    \"alwaysForbiddenBlockedRequests\": ").append(target.getAlwaysForbiddenBlockedRequests()).append(",\n")
@@ -1631,8 +1641,16 @@ public class AntiDoSStatusRenderer {
 					.append("      \"distinctClients\": ").append(e.distinctClients() > 0 ? e.distinctClients() : 1).append(",\n")
 					.append("      \"distinctUserAgents\": ").append(e.distinctUserAgents() > 0 ? e.distinctUserAgents() : "null").append(",\n")
 					.append("      \"returningCount\": ").append(target.isVisitorTrackingActive() ? e.returningCount() : "null").append(",\n")
-					.append("      \"authenticatedCount\": ").append(target.isAuthTrackingActive() ? e.authenticatedCount() : "null").append("\n")
-					.append("    }");
+					.append("      \"authenticatedCount\": ").append(target.isAuthTrackingActive() ? e.authenticatedCount() : "null");
+			if (e.sample() != null) {
+				sb.append(",\n")
+						.append("      \"sampleMethod\": ").append(e.sample().method() != null ? "\"" + escapeJson(e.sample().method()) + "\"" : "null").append(",\n")
+						.append("      \"sampleUri\": ").append(e.sample().uri() != null ? "\"" + escapeJson(e.sample().uri()) + "\"" : "null").append(",\n")
+						.append("      \"sampleUserAgent\": ").append(e.sample().userAgent() != null ? "\"" + escapeJson(e.sample().userAgent()) + "\"" : "null").append("\n");
+			} else {
+				sb.append("\n");
+			}
+			sb.append("    }");
 		}
 		sb.append("\n  ]\n}\n");
 		return sb.toString();

@@ -48,6 +48,8 @@ collector:
   rollup-enabled: ${COLLECTOR_ROLLUP_ENABLED:true}
   rollup-window-minutes: ${COLLECTOR_ROLLUP_WINDOW_MINUTES:60}
   rollup-retention-days: ${COLLECTOR_ROLLUP_RETENTION_DAYS:30}
+  low-activity-rollup-retention-days: ${COLLECTOR_LOW_ACTIVITY_ROLLUP_RETENTION_DAYS:7}
+  low-activity-rollup-max-requests: ${COLLECTOR_LOW_ACTIVITY_ROLLUP_MAX_REQUESTS:5}
   auto-vacuum-enabled: ${COLLECTOR_AUTO_VACUUM_ENABLED:true}
   vacuum-threshold-bytes: ${COLLECTOR_VACUUM_THRESHOLD_BYTES:52428800}
   active-event-cleanup-cron: ${COLLECTOR_ACTIVE_EVENT_CLEANUP_CRON:0 15 * * * *}
