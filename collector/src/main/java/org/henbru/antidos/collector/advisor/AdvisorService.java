@@ -63,17 +63,30 @@ public class AdvisorService {
 
 			// 5. Evaluate Massive Datacenter Scraping Waves (Offloading Candidates)
 			evaluateDatacenterScraping(cutoffTs, servers, valves, findings);
+
+			// 6. Evaluate Horizontal Stealth Carpet Attacks (Unblocked Distributed Waves)
+			evaluateStealthCarpetAttacks(cutoffTs, servers, valves, findings);
+
+			// 7. Evaluate Chameleon User-Agent Rotating Scrapers / Bots
+			evaluateChameleonScrapers(cutoffTs, servers, valves, findings);
+
+			// 8. Evaluate Missing Forensic Active Sampling Configuration
+			evaluateMissingActiveSampling(servers, valves, findings);
 		} catch (Exception e) {
 			log.error("Error evaluating advisor diagnostics: {}", e.getMessage(), e);
 		}
 
-		// Sort findings by severity: CRITICAL first, then WARNING, then INFO, then by blockedRequests DESC
+		// Sort findings by severity: CRITICAL first, then WARNING, then INFO, then by blockedRequests DESC, then totalRequests DESC
 		findings.sort((a, b) -> {
 			int sevComp = a.severity().compareTo(b.severity());
 			if (sevComp != 0) {
 				return sevComp;
 			}
-			return Long.compare(b.blockedRequests(), a.blockedRequests());
+			int blkComp = Long.compare(b.blockedRequests(), a.blockedRequests());
+			if (blkComp != 0) {
+				return blkComp;
+			}
+			return Long.compare(b.totalRequests(), a.totalRequests());
 		});
 
 		int criticalCount = 0;
@@ -548,6 +561,283 @@ public class AdvisorService {
 					iptablesRule
 			));
 		}, params.toArray());
+	}
+
+	private void evaluateStealthCarpetAttacks(
+			Timestamp cutoff,
+			List<String> servers,
+			List<String> valves,
+			List<AdvisorFinding> findings) {
+
+		StringBuilder sql = new StringBuilder("""
+				SELECT 
+				    r.server_id,
+				    r.valve_name,
+				    COALESCE(r.asn, 0) AS asn,
+				    COALESCE(r.as_org, 'Unknown ASN') AS entity_name,
+				    COALESCE(r.country_code, 'XX') AS country_code,
+				    COUNT(DISTINCT r.subnet_group) AS subnets,
+				    SUM(r.distinct_clients) AS estimated_bots,
+				    SUM(r.total_requests) AS total_req,
+				    SUM(r.blocked_requests) AS blocked_req,
+				    SUM(r.authenticated_requests) AS auth_req,
+				    SUM(r.returning_requests) AS ret_req,
+				    SUM(r.returning_tracked_requests) AS ret_tracked
+				FROM client_subnet_rollups r
+				WHERE r.client_type NOT IN ('SEARCH_ENGINE', 'PRIVATE_NETWORK')
+				  AND r.asn IS NOT NULL AND r.asn > 0
+				  AND r.bucket_start >= ?
+				""");
+
+		List<Object> params = new ArrayList<>();
+		params.add(cutoff);
+		appendFilterClauses(sql, params, servers, valves);
+		sql.append(" GROUP BY r.server_id, r.valve_name, r.asn, r.as_org, r.country_code " +
+				" HAVING SUM(r.total_requests) >= 5000 " +
+				"    AND COUNT(DISTINCT r.subnet_group) >= 3 " +
+				"    AND (SUM(r.blocked_requests) * 100.0 / SUM(r.total_requests)) < 2.0 " +
+				"    AND (SUM(r.authenticated_requests) * 100.0 / SUM(r.total_requests)) < 1.0 " +
+				" ORDER BY total_req DESC LIMIT 10");
+
+		jdbcTemplate.query(sql.toString(), rs -> {
+			String serverId = rs.getString("server_id");
+			String valveName = rs.getString("valve_name");
+			long asn = rs.getLong("asn");
+			String entityName = rs.getString("entity_name");
+			String country = rs.getString("country_code");
+			int subnets = rs.getInt("subnets");
+			long totalReq = rs.getLong("total_req");
+			long blockedReq = rs.getLong("blocked_req");
+			long retReq = rs.getLong("ret_req");
+			long retTracked = rs.getLong("ret_tracked");
+
+			double retPct = retTracked > 0 ? (double) retReq / retTracked * 100.0 : 0.0;
+			if (retPct >= 20.0) {
+				return; // Skip if legitimate returning traffic
+			}
+
+			double blockPct = totalReq > 0 ? (double) blockedReq / totalReq * 100.0 : 0.0;
+			blockPct = Math.round(blockPct * 10.0) / 10.0;
+
+			ValveConfigInfo valveInfo = resolveValveConfig(serverId, valveName);
+			AdvisorSeverity severity = (totalReq >= 50000) ? AdvisorSeverity.CRITICAL : AdvisorSeverity.WARNING;
+
+			String explanation = String.format(
+					"Autonomous System %s (ASN %d, %s) generated %s requests across %d distinct /24 subnets on valve '%s' on node '%s', " +
+					"yet only %d requests (%.1f%%) were blocked. " +
+					"Traffic had virtually 0%% authenticated sessions and %.1f%% returning visitors. " +
+					"The source is horizontally distributing traffic across multiple IP blocks to evade individual rate-limit thresholds.",
+					entityName, asn, country, String.format("%,d", totalReq), subnets, valveName, serverId, blockedReq, blockPct, retPct);
+
+			String recommendation = String.format(
+					"This horizontal carpet attack evades local single-client rate limits. Recommended actions:\n" +
+					"1) Block or challenge ASN %d (%s) or its primary CIDR blocks upstream at your edge firewall (iptables, AWS WAF, Cloudflare WAF).\n" +
+					"2) If this valve uses IP-level tracking (/32), configure a subnet-level valve (ipv4SubnetMask=\"24\") or tighten 'allowedRequestsPerSlot'.\n" +
+					"3) Set 'activeSampleThreshold=\"50\"' on valve '%s' to automatically capture forensic URI and User-Agent samples of active unblocked subnets.",
+					asn, entityName, valveName);
+
+			String iptablesRule = asn > 0 ? String.format("# Drop ASN %d (%s) at edge or firewall:\n# iptables -I INPUT -m set --match-set asn_%d src -j DROP\n# Distinct /24 subnets observed: %d", asn, entityName, asn, subnets) : "";
+			String id = "carpet-" + sanitizeId(serverId + "-" + valveName + "-asn" + asn);
+			String title = String.format("Unblocked Stealth Carpet Attack from %s (ASN %d, %d subnets)", entityName, asn, subnets);
+
+			findings.add(new AdvisorFinding(
+					id,
+					AdvisorCategory.STEALTH_CARPET_ATTACK,
+					severity,
+					title,
+					serverId,
+					valveName,
+					"ASN " + asn + " (" + subnets + " subnets)",
+					entityName + " (" + country + ")",
+					ClientType.DATACENTER,
+					totalReq,
+					blockedReq,
+					blockPct,
+					0,
+					valveInfo.allowedRequestsPerSlot,
+					valveInfo.slotLength,
+					valveInfo.alwaysAllowedIps,
+					explanation,
+					recommendation,
+					null,
+					iptablesRule
+			));
+		}, params.toArray());
+	}
+
+	private void evaluateChameleonScrapers(
+			Timestamp cutoff,
+			List<String> servers,
+			List<String> valves,
+			List<AdvisorFinding> findings) {
+
+		StringBuilder sql = new StringBuilder("""
+				SELECT 
+				    r.server_id,
+				    r.valve_name,
+				    r.subnet_group,
+				    COALESCE(r.as_org, 'Unknown Org') AS entity_name,
+				    COALESCE(r.country_code, 'XX') AS country_code,
+				    r.client_type,
+				    SUM(r.total_requests) AS total_req,
+				    SUM(r.blocked_requests) AS blocked_req,
+				    MAX(r.distinct_clients) AS max_clients,
+				    MAX(r.distinct_user_agents) AS max_uas,
+				    SUM(r.authenticated_requests) AS auth_req,
+				    SUM(r.returning_requests) AS ret_req,
+				    SUM(r.returning_tracked_requests) AS ret_tracked
+				FROM client_subnet_rollups r
+				WHERE r.client_type NOT IN ('SEARCH_ENGINE', 'PRIVATE_NETWORK')
+				  AND r.distinct_user_agents >= 5
+				  AND r.bucket_start >= ?
+				""");
+
+		List<Object> params = new ArrayList<>();
+		params.add(cutoff);
+		appendFilterClauses(sql, params, servers, valves);
+		sql.append(" GROUP BY r.server_id, r.valve_name, r.subnet_group, r.as_org, r.country_code, r.client_type " +
+				" HAVING SUM(r.total_requests) >= 300 " +
+				"    AND (SUM(r.authenticated_requests) * 100.0 / SUM(r.total_requests)) < 5.0 " +
+				" ORDER BY max_uas DESC, total_req DESC LIMIT 10");
+
+		jdbcTemplate.query(sql.toString(), rs -> {
+			String serverId = rs.getString("server_id");
+			String valveName = rs.getString("valve_name");
+			String subnetGroup = rs.getString("subnet_group");
+			String entityName = rs.getString("entity_name");
+			String country = rs.getString("country_code");
+			ClientType clientType = ClientType.valueOf(rs.getString("client_type"));
+			long totalReq = rs.getLong("total_req");
+			long blockedReq = rs.getLong("blocked_req");
+			int maxClients = rs.getInt("max_clients");
+			int maxUas = rs.getInt("max_uas");
+			long retReq = rs.getLong("ret_req");
+			long retTracked = rs.getLong("ret_tracked");
+
+			double retPct = retTracked > 0 ? (double) retReq / retTracked * 100.0 : 0.0;
+			if (retPct >= 20.0) {
+				return; // Legitimate returning user / NAT pool
+			}
+			double uaRatio = maxClients > 0 ? (double) maxUas / maxClients : maxUas;
+			if (uaRatio < 2.0 && maxUas < 8) {
+				return; // Normal 1:1 client-to-UA ratio
+			}
+
+			double blockPct = totalReq > 0 ? (double) blockedReq / totalReq * 100.0 : 0.0;
+			blockPct = Math.round(blockPct * 10.0) / 10.0;
+
+			ValveConfigInfo valveInfo = resolveValveConfig(serverId, valveName);
+
+			String explanation = String.format(
+					"Subnet %s (%s, %s) generated %s requests on valve '%s' on node '%s' using at least %d distinct User-Agent signatures across %d client IP(s), " +
+					"with 0%% authenticated sessions and %.1f%% returning visitors. " +
+					"Unlike legitimate corporate NAT gateways, rotating User-Agent strings without session continuity strongly indicates an automated crawler or vulnerability scanner masking its identity.",
+					subnetGroup, entityName, country, String.format("%,d", totalReq), valveName, serverId, maxUas, maxClients, retPct);
+
+			String recommendation = String.format(
+					"Do NOT whitelist this subnet. Recommended actions:\n" +
+					"1) Inspect captured sample URIs and User-Agents in Client Events for subnet '%s' to identify targeted endpoints.\n" +
+					"2) If requests target login or sensitive forms, enforce CAPTCHA or WAF managed bot challenge.\n" +
+					"3) Consider temporarily blocking subnet '%s' via 'alwaysForbiddenIPs=\"%s\"' on valve '%s'.",
+					subnetGroup, subnetGroup, cidrToRegex(subnetGroup), valveName);
+
+			String id = "cham-" + sanitizeId(serverId + "-" + valveName + "-" + subnetGroup);
+			String title = String.format("User-Agent Rotating Scraper / Chameleon in %s (%s)", subnetGroup, entityName);
+
+			findings.add(new AdvisorFinding(
+					id,
+					AdvisorCategory.CHAMELEON_BOT,
+					AdvisorSeverity.WARNING,
+					title,
+					serverId,
+					valveName,
+					subnetGroup,
+					entityName + " (" + country + ")",
+					clientType,
+					totalReq,
+					blockedReq,
+					blockPct,
+					0,
+					valveInfo.allowedRequestsPerSlot,
+					valveInfo.slotLength,
+					valveInfo.alwaysAllowedIps,
+					explanation,
+					recommendation,
+					null,
+					null
+			));
+		}, params.toArray());
+	}
+
+	private void evaluateMissingActiveSampling(
+			List<String> servers,
+			List<String> valves,
+			List<AdvisorFinding> findings) {
+
+		if (monitoredValveRepository == null) {
+			return;
+		}
+
+		List<MonitoredValve> allValves = monitoredValveRepository.findAll();
+		for (MonitoredValve v : allValves) {
+			if (!v.isActive()) {
+				continue;
+			}
+			if (servers != null && !servers.isEmpty() && !servers.contains(v.serverId())) {
+				continue;
+			}
+			if (valves != null && !valves.isEmpty() && !valves.contains(v.valveName())) {
+				continue;
+			}
+			if ("OFF".equalsIgnoreCase(v.collectorIntegration())) {
+				continue;
+			}
+
+			// Subnet-aggregated valves lacking active forensic sampling
+			if (v.ipv4SubnetMask() <= 24 && v.activeSampleThreshold() <= 0) {
+				String id = "samp-" + sanitizeId(v.serverId() + "-" + v.valveName());
+				String title = String.format("Forensic Active Sampling Inactive on '%s' (%s)", v.valveName(), v.serverId());
+				String explanation = String.format(
+						"Valve '%s' on node '%s' operates with subnet aggregation (/%d) but 'activeSampleThreshold' is set to 0. " +
+						"When distributed or horizontal scraping attacks stay below the blocking limit (%s req / %ss), no request URI, HTTP method, or User-Agent forensic samples are captured for incident response.",
+						v.valveName(), v.serverId(), v.ipv4SubnetMask(), formatLimit(v.allowedRequestsPerSlot()), formatSlotLength(v.slotLength()));
+
+				String recommendation = String.format(
+						"Configure 'activeSampleThreshold=\"50\"' on valve '%s' in server.xml. " +
+						"The Valve will then record a single forensic sample (URI, method, User-Agent) when an active subnet hits 50 requests per slot, providing immediate visibility into targeted endpoints during stealth incidents.",
+						v.valveName());
+
+				String suggestedXml = String.format("""
+						<!-- Enable active forensic sampling on Valve '%s' in server.xml: -->
+						<Valve className="org.henbru.antidos.AntiDoSValve"
+						       monitorName="%s"
+						       activeSampleThreshold="50" />""",
+						v.valveName(), v.valveName());
+
+				findings.add(new AdvisorFinding(
+						id,
+						AdvisorCategory.SAMPLING_TUNING,
+						AdvisorSeverity.INFO,
+						title,
+						v.serverId(),
+						v.valveName(),
+						"Subnet Mask /" + v.ipv4SubnetMask(),
+						"Valve Configuration",
+						ClientType.UNKNOWN,
+						0,
+						0,
+						0.0,
+						0,
+						v.allowedRequestsPerSlot(),
+						v.slotLength(),
+						v.alwaysAllowedIPs(),
+						explanation,
+						recommendation,
+						suggestedXml,
+						null
+				));
+			}
+		}
 	}
 
 	private void appendFilterClauses(StringBuilder sql, List<Object> params, List<String> servers, List<String> valves) {

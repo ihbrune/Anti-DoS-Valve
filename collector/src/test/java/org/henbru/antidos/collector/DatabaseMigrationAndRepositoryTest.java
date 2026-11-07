@@ -790,6 +790,7 @@ class DatabaseMigrationAndRepositoryTest {
 		assertEquals("badge-secondary", found.authTrackingBadgeClass());
 		assertEquals("ALL", found.relevantAuthScope());
 		assertEquals("badge-secondary", found.relevantAuthScopeBadgeClass());
+		assertEquals(0, found.activeSampleThreshold());
 		assertEquals(12345, found.configHash());
 		assertTrue(found.hasPathFilters());
 		assertTrue(found.hasIpLists());

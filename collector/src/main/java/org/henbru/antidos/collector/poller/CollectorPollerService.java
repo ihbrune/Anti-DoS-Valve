@@ -601,6 +601,7 @@ public class CollectorPollerService {
 				v.authSessionTtlSeconds() > 0 ? v.authSessionTtlSeconds() : 900,
 				v.maxAuthCacheSize() > 0 ? v.maxAuthCacheSize() : 50000,
 				v.relevantAuthScopeOrDefault(),
+				v.activeSampleThresholdOrDefault(),
 				now,
 				configHash,
 				true

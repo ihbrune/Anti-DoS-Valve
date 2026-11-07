@@ -8,9 +8,11 @@ import org.henbru.antidos.collector.model.ClientType;
 import org.henbru.antidos.collector.model.MonitoredValve;
 import org.henbru.antidos.collector.storage.MonitoredValveRepository;
 import org.henbru.antidos.collector.storage.SubnetRollupRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -25,6 +27,15 @@ class AdvisorServiceTest {
 
 	@Autowired
 	private MonitoredValveRepository monitoredValveRepository;
+
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
+
+	@BeforeEach
+	void setUp() {
+		jdbcTemplate.update("DELETE FROM client_subnet_rollups");
+		jdbcTemplate.update("DELETE FROM monitored_valves");
+	}
 
 	@Test
 	void testCidrToRegexConversion() {
@@ -138,5 +149,122 @@ class AdvisorServiceTest {
 		assertEquals(AdvisorSeverity.CRITICAL, privFinding.severity());
 		assertEquals("10.77.25.0/24", privFinding.targetSubnet());
 		assertTrue(privFinding.suggestedConfigXml().contains("10\\.77\\.25\\..*"));
+	}
+
+	@Test
+	void testStealthCarpetAttackDetection() {
+		Instant now = Instant.now();
+		Instant hourAgo = now.minus(1, ChronoUnit.HOURS);
+		Instant twoHoursAgo = now.minus(2, ChronoUnit.HOURS);
+
+		MonitoredValve valve = new MonitoredValve(
+				"test-server-01", "GLOBAL-LIMITER", "Global Subnet Limiter", 1, "BLOCKING", false, false,
+				429, 200, 15, 20, 0f, 24, 64, 500, 500,
+				null, null, null, null, null, null, "auto",
+				false, null, false, null, null, null, 900, 50000, "ALL", 50,
+				now, 1, true
+		);
+		monitoredValveRepository.upsert(valve);
+
+		// 3 subnets in ASN 3257 sending a total of 18,000 requests with 0 blocks and 0 auth
+		ClientSubnetRollup r1 = new ClientSubnetRollup(
+				null, twoHoursAgo, hourAgo, 60, "test-server-01", "GLOBAL-LIMITER", "89.149.20.0/24",
+				6000, 6000, 0, 0, 8, 1, 1, 80, 1, 3257L, "GTT Communications", "US", ClientType.DATACENTER,
+				0, 0, 0, 0
+		);
+		ClientSubnetRollup r2 = new ClientSubnetRollup(
+				null, twoHoursAgo, hourAgo, 60, "test-server-01", "GLOBAL-LIMITER", "89.149.21.0/24",
+				6000, 6000, 0, 0, 8, 1, 1, 80, 1, 3257L, "GTT Communications", "US", ClientType.DATACENTER,
+				0, 0, 0, 0
+		);
+		ClientSubnetRollup r3 = new ClientSubnetRollup(
+				null, twoHoursAgo, hourAgo, 60, "test-server-01", "GLOBAL-LIMITER", "89.149.22.0/24",
+				6000, 6000, 0, 0, 8, 1, 1, 80, 1, 3257L, "GTT Communications", "US", ClientType.DATACENTER,
+				0, 0, 0, 0
+		);
+		subnetRollupRepository.batchUpsert(List.of(r1, r2, r3));
+
+		AdvisorReport report = advisorService.generateReport(24, List.of("test-server-01"), List.of("GLOBAL-LIMITER"));
+		assertNotNull(report);
+
+		AdvisorFinding carpetFinding = report.findings().stream()
+				.filter(f -> f.category() == AdvisorCategory.STEALTH_CARPET_ATTACK)
+				.findFirst()
+				.orElseThrow();
+
+		assertEquals(AdvisorSeverity.WARNING, carpetFinding.severity());
+		assertEquals("GLOBAL-LIMITER", carpetFinding.valveName());
+		assertTrue(carpetFinding.title().contains("ASN 3257"));
+		assertEquals(18000L, carpetFinding.totalRequests());
+		assertEquals(0L, carpetFinding.blockedRequests());
+		assertTrue(carpetFinding.explanation().contains("distributing traffic across multiple IP blocks"));
+		assertTrue(carpetFinding.suggestedRegex().contains("iptables -I INPUT -m set --match-set asn_3257 src -j DROP"));
+	}
+
+	@Test
+	void testChameleonScraperDetection() {
+		Instant now = Instant.now();
+		Instant hourAgo = now.minus(1, ChronoUnit.HOURS);
+		Instant twoHoursAgo = now.minus(2, ChronoUnit.HOURS);
+
+		MonitoredValve valve = new MonitoredValve(
+				"test-server-01", "EDGE-VALVE", "Edge Limiter", 1, "BLOCKING", false, false,
+				429, 100, 15, 20, 0f, 32, 64, 500, 500,
+				null, null, null, null, null, null, "auto",
+				false, null, false, null, null, null, 900, 50000, "ALL", 50,
+				now, 1, true
+		);
+		monitoredValveRepository.upsert(valve);
+
+		// Subnet with 14 distinct user agents across 2 client IPs, 0 auth, 0 returning
+		ClientSubnetRollup chameleon = new ClientSubnetRollup(
+				null, twoHoursAgo, hourAgo, 60, "test-server-01", "EDGE-VALVE", "185.220.101.0/24",
+				1500, 1500, 0, 0, 2, 14, 1, 75, 1, 60729L, "Tor Exit Node", "NL", ClientType.DATACENTER,
+				now, 0, 0, 0, 0
+		);
+		subnetRollupRepository.batchUpsert(List.of(chameleon));
+
+		AdvisorReport report = advisorService.generateReport(24, List.of("test-server-01"), List.of("EDGE-VALVE"));
+		assertNotNull(report);
+
+		AdvisorFinding chamFinding = report.findings().stream()
+				.filter(f -> f.category() == AdvisorCategory.CHAMELEON_BOT)
+				.findFirst()
+				.orElseThrow();
+
+		assertEquals(AdvisorSeverity.WARNING, chamFinding.severity());
+		assertEquals("185.220.101.0/24", chamFinding.targetSubnet());
+		assertTrue(chamFinding.title().contains("Chameleon"));
+		assertTrue(chamFinding.explanation().contains("rotating User-Agent strings"));
+		assertTrue(chamFinding.recommendation().contains("Do NOT whitelist this subnet"));
+	}
+
+	@Test
+	void testMissingActiveSamplingDetection() {
+		Instant now = Instant.now();
+
+		// Configure a valve with subnet mask /24 and activeSampleThreshold = 0
+		MonitoredValve valve = new MonitoredValve(
+				"test-server-01", "SUBNET-VALVE", "Subnet Aggregator", 1, "BLOCKING", false, false,
+				429, 200, 15, 20, 0f, 24, 64, 500, 500,
+				null, null, null, null, null, null, "auto",
+				false, null, false, null, null, null, 900, 50000, "ALL", 0,
+				now, 1, true
+		);
+		monitoredValveRepository.upsert(valve);
+
+		AdvisorReport report = advisorService.generateReport(24, List.of("test-server-01"), List.of("SUBNET-VALVE"));
+		assertNotNull(report);
+
+		AdvisorFinding sampFinding = report.findings().stream()
+				.filter(f -> f.category() == AdvisorCategory.SAMPLING_TUNING)
+				.findFirst()
+				.orElseThrow();
+
+		assertEquals(AdvisorSeverity.INFO, sampFinding.severity());
+		assertEquals("SUBNET-VALVE", sampFinding.valveName());
+		assertTrue(sampFinding.title().contains("Active Sampling Inactive"));
+		assertTrue(sampFinding.explanation().contains("activeSampleThreshold' is set to 0"));
+		assertTrue(sampFinding.suggestedConfigXml().contains("activeSampleThreshold=\"50\""));
 	}
 }
