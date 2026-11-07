@@ -103,10 +103,14 @@ public class DefaultIpEnrichmentService implements IpEnrichmentService {
 				clientType = ClientType.AI_CRAWLER;
 			} else if ("TOR_EXIT_NODE".equalsIgnoreCase(match.category())) {
 				clientType = ClientType.TOR_EXIT_NODE;
+			} else if ("PRIVACY_RELAY".equalsIgnoreCase(match.category())) {
+				clientType = ClientType.PRIVACY_RELAY;
 			} else {
 				clientType = ClientType.SEARCH_ENGINE;
 			}
-			if (clientType == ClientType.SEARCH_ENGINE || clientType == ClientType.AI_CRAWLER) {
+			if (clientType == ClientType.SEARCH_ENGINE
+					|| clientType == ClientType.AI_CRAWLER
+					|| clientType == ClientType.PRIVACY_RELAY) {
 				if (match.botName() != null && !match.botName().isBlank()) {
 					asOrg = match.botName();
 				}

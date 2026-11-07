@@ -11,5 +11,6 @@ public enum ClientType {
 	MOBILE,
 	PRIVATE_NETWORK,
 	TOR_EXIT_NODE,
+	PRIVACY_RELAY,
 	UNKNOWN
 }

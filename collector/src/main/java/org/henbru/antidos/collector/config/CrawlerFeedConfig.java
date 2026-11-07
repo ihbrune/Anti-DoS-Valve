@@ -8,7 +8,8 @@ import java.util.Set;
  */
 public class CrawlerFeedConfig {
 
-	public static final Set<String> VALID_CATEGORIES = Set.of("SEARCH_ENGINE", "AI_CRAWLER", "TOR_EXIT_NODE");
+	public static final Set<String> VALID_CATEGORIES = Set.of(
+			"SEARCH_ENGINE", "AI_CRAWLER", "TOR_EXIT_NODE", "PRIVACY_RELAY");
 
 	private String key;
 	private String name;

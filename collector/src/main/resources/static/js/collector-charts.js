@@ -198,6 +198,7 @@
             'RESIDENTIAL': { bg: '#f59e0b', label: 'Residential ISP' },
             'DATACENTER': { bg: '#ec4899', label: 'Datacenter / Cloud' },
             'MOBILE': { bg: '#0ea5e9', label: 'Mobile Network' },
+            'PRIVACY_RELAY': { bg: '#14b8a6', label: 'Privacy Relay' },
             'TOR_EXIT_NODE': { bg: '#a855f7', label: 'Tor Anonymizer' },
             'PRIVATE_NETWORK': { bg: '#64748b', label: 'Private Network' },
             'UNKNOWN': { bg: '#94a3b8', label: 'Standard / Unclassified' }
@@ -295,6 +296,12 @@
                 label: '🧅 Tor Exit Nodes',
                 bg: 'rgba(168, 85, 247, 0.75)',
                 border: '#a855f7',
+                data: []
+            },
+            'PRIVACY_RELAY': {
+                label: '🛡️ Privacy Relays (iCloud Private Relay)',
+                bg: 'rgba(20, 184, 166, 0.75)',
+                border: '#14b8a6',
                 data: []
             },
             'VERIFIED_BOT': {

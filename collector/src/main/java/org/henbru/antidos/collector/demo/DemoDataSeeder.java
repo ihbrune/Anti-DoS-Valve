@@ -658,11 +658,16 @@ public class DemoDataSeeder {
 
 		pollEventLogRepository.batchInsert(logs);
 
-		// 4. Pre-populate verified Crawler Feeds
+		// 4. Pre-populate verified Crawler & Privacy Relay Feeds
 		crawlerFeedRepository.upsert(new org.henbru.antidos.collector.model.CrawlerFeed(
 				"googlebot", "Googlebot", "SEARCH_ENGINE",
 				"https://developers.google.com/search/apis/ipranges/googlebot.json",
 				now.minus(2, ChronoUnit.HOURS), "SUCCESS", 284, null
+		));
+		crawlerFeedRepository.upsert(new org.henbru.antidos.collector.model.CrawlerFeed(
+				"google-special-crawlers", "Google Special Crawlers", "SEARCH_ENGINE",
+				"https://developers.google.com/search/apis/ipranges/special-crawlers.json",
+				now.minus(2, ChronoUnit.HOURS), "SUCCESS", 96, null
 		));
 		crawlerFeedRepository.upsert(new org.henbru.antidos.collector.model.CrawlerFeed(
 				"bingbot", "Bingbot", "SEARCH_ENGINE",
@@ -670,14 +675,59 @@ public class DemoDataSeeder {
 				now.minus(3, ChronoUnit.HOURS), "SUCCESS", 312, null
 		));
 		crawlerFeedRepository.upsert(new org.henbru.antidos.collector.model.CrawlerFeed(
+				"applebot", "Applebot", "SEARCH_ENGINE",
+				"https://search.developer.apple.com/applebot.json",
+				now.minus(3, ChronoUnit.HOURS), "SUCCESS", 118, null
+		));
+		crawlerFeedRepository.upsert(new org.henbru.antidos.collector.model.CrawlerFeed(
+				"duckduckbot", "DuckDuckBot", "SEARCH_ENGINE",
+				"https://duckduckgo.com/duckduckbot.json",
+				now.minus(2, ChronoUnit.HOURS), "SUCCESS", 64, null
+		));
+		crawlerFeedRepository.upsert(new org.henbru.antidos.collector.model.CrawlerFeed(
 				"openai-gptbot", "OpenAI GPTBot", "AI_CRAWLER",
 				"https://openai.com/gptbot.json",
 				now.minus(1, ChronoUnit.HOURS), "SUCCESS", 86, null
 		));
 		crawlerFeedRepository.upsert(new org.henbru.antidos.collector.model.CrawlerFeed(
+				"openai-searchbot", "OpenAI SearchBot", "AI_CRAWLER",
+				"https://openai.com/searchbot.json",
+				now.minus(1, ChronoUnit.HOURS), "SUCCESS", 54, null
+		));
+		crawlerFeedRepository.upsert(new org.henbru.antidos.collector.model.CrawlerFeed(
 				"openai-chatgpt-user", "ChatGPT User", "AI_CRAWLER",
 				"https://openai.com/chatgpt-user.json",
 				now.minus(1, ChronoUnit.HOURS), "SUCCESS", 42, null
+		));
+		crawlerFeedRepository.upsert(new org.henbru.antidos.collector.model.CrawlerFeed(
+				"anthropic-ai", "Anthropic ClaudeBot", "AI_CRAWLER",
+				"https://claude.com/crawling/bots.json",
+				now.minus(1, ChronoUnit.HOURS), "SUCCESS", 78, null
+		));
+		crawlerFeedRepository.upsert(new org.henbru.antidos.collector.model.CrawlerFeed(
+				"perplexitybot", "PerplexityBot", "AI_CRAWLER",
+				"https://www.perplexity.ai/perplexitybot.json",
+				now.minus(1, ChronoUnit.HOURS), "SUCCESS", 32, null
+		));
+		crawlerFeedRepository.upsert(new org.henbru.antidos.collector.model.CrawlerFeed(
+				"perplexity-user", "Perplexity User", "AI_CRAWLER",
+				"https://www.perplexity.ai/perplexity-user.json",
+				now.minus(1, ChronoUnit.HOURS), "SUCCESS", 18, null
+		));
+		crawlerFeedRepository.upsert(new org.henbru.antidos.collector.model.CrawlerFeed(
+				"duckassistbot", "DuckAssistBot", "AI_CRAWLER",
+				"https://duckduckgo.com/duckassistbot.json",
+				now.minus(2, ChronoUnit.HOURS), "SUCCESS", 64, null
+		));
+		crawlerFeedRepository.upsert(new org.henbru.antidos.collector.model.CrawlerFeed(
+				"icloud-private-relay", "Apple iCloud Private Relay", "PRIVACY_RELAY",
+				"https://mask-api.icloud.com/egress-ip-ranges.csv",
+				now.minus(1, ChronoUnit.HOURS), "SUCCESS", 14072, null
+		));
+		crawlerFeedRepository.upsert(new org.henbru.antidos.collector.model.CrawlerFeed(
+				"tor-exit-nodes", "Tor Bulk Exit Nodes", "TOR_EXIT_NODE",
+				"https://check.torproject.org/torbulkexitlist",
+				now.minus(1, ChronoUnit.HOURS), "SUCCESS", 1248, null
 		));
 
 		long elapsed = System.currentTimeMillis() - start;

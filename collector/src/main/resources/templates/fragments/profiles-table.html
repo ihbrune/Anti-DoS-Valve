@@ -96,6 +96,7 @@
                         <span th:if="${p.clientType() != null and p.clientType().name() == 'AI_CRAWLER'}" class="badge badge-purple">&#x1F916; AI Bot</span>
                         <span th:if="${p.clientType() != null and p.clientType().name() == 'MOBILE'}" class="badge badge-info">&#x1F4F1; Mobile</span>
                         <span th:if="${p.clientType() != null and p.clientType().name() == 'PRIVATE_NETWORK'}" class="badge badge-info">&#x1F512; Private Net</span>
+                        <span th:if="${p.clientType() != null and p.clientType().name() == 'PRIVACY_RELAY'}" class="badge badge-info">&#x1F6E1; Privacy Relay</span>
                         <span th:if="${p.clientType() != null and p.clientType().name() == 'TOR_EXIT_NODE'}" class="badge badge-purple">&#x1F9C5; Tor Exit Node</span>
                         <span th:if="${p.clientType() == null or p.clientType().name() == 'UNKNOWN'}" class="badge badge-secondary" style="padding: 1px 6px; font-size: 9px; opacity: 0.75;">Unclassified</span>
                     </td>

@@ -182,7 +182,7 @@ class CrawlerSyncServiceTest {
 	}
 
 	@Test
-	void testDefaultCrawlerFeedsContainsApplebot() {
+	void testDefaultCrawlerFeedsContainsApplebotAndExpandedFeeds() {
 		var defaults = org.henbru.antidos.collector.config.EnrichmentConfig.createDefaultCrawlerFeeds();
 		assertTrue(defaults.containsKey("applebot"));
 		var appleConfig = defaults.get("applebot");
@@ -190,6 +190,67 @@ class CrawlerSyncServiceTest {
 		assertEquals("SEARCH_ENGINE", appleConfig.getCategory());
 		assertEquals("https://search.developer.apple.com/applebot.json", appleConfig.getUrl());
 		assertTrue(appleConfig.isEnabled());
+
+		assertTrue(defaults.containsKey("icloud-private-relay"));
+		var relayConfig = defaults.get("icloud-private-relay");
+		assertEquals("Apple iCloud Private Relay", relayConfig.getName());
+		assertEquals("PRIVACY_RELAY", relayConfig.getCategory());
+		assertEquals("https://mask-api.icloud.com/egress-ip-ranges.csv", relayConfig.getUrl());
+		assertTrue(relayConfig.hasValidCategory());
+
+		assertTrue(defaults.containsKey("anthropic-ai"));
+		var claudeConfig = defaults.get("anthropic-ai");
+		assertEquals("Anthropic ClaudeBot", claudeConfig.getName());
+		assertEquals("AI_CRAWLER", claudeConfig.getCategory());
+		assertEquals("https://claude.com/crawling/bots.json", claudeConfig.getUrl());
+
+		assertTrue(defaults.containsKey("perplexitybot"));
+		assertTrue(defaults.containsKey("duckduckbot"));
+		assertTrue(defaults.containsKey("openai-searchbot"));
+	}
+
+	@Test
+	void testExtractCidrsFromICloudPrivateRelayCsv() {
+		String csv = """
+				172.224.226.0/27,GB,GB-EN,London,
+				172.224.226.32/31,GB,GB-SC,Aberdeen,
+				104.28.60.0/24,DE,DE-HE,Frankfurt,
+				2a09:bac2:1000::/45,DE,DE-BE,Berlin,
+				""";
+
+		CrawlerSyncService service = new CrawlerSyncService(
+				new CollectorProperties(),
+				mock(CrawlerFeedRepository.class),
+				mock(BotIpRangeRepository.class),
+				new ObjectMapper()
+		);
+
+		List<String> cidrs = service.extractCidrs(csv);
+		assertEquals(4, cidrs.size());
+		assertTrue(cidrs.contains("172.224.226.0/27"));
+		assertTrue(cidrs.contains("172.224.226.32/31"));
+		assertTrue(cidrs.contains("104.28.60.0/24"));
+		assertTrue(cidrs.contains("2a09:bac2:1000::/45"));
+	}
+
+	@Test
+	void testCoalesceAdjacentAndOverlappingCidrs() {
+		List<String> raw = List.of(
+				"172.224.226.0/25",
+				"172.224.226.128/26",
+				"172.224.226.192/27",
+				"172.224.226.224/27",
+				"104.28.60.0/24",
+				"104.28.60.128/25",
+				"2a09:bac2:1000::/46",
+				"2a09:bac2:1004::/46"
+		);
+
+		List<String> coalesced = org.henbru.antidos.collector.util.IpNetworkUtil.coalesceCidrs(raw);
+		assertEquals(3, coalesced.size());
+		assertTrue(coalesced.contains("172.224.226.0/24"));
+		assertTrue(coalesced.contains("104.28.60.0/24"));
+		assertTrue(coalesced.contains("2a09:bac2:1000::/45"));
 	}
 
 	@Test

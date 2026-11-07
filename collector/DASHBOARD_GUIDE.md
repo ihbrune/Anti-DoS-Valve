@@ -152,10 +152,11 @@ Provides an immediate forensic breakdown of who is consuming your application's 
 2. **`AI_CRAWLER` (Purple):** Commercial AI scrapers and dataset miners (OpenAI GPTBot/ChatGPT-User, Anthropic ClaudeBot, PerplexityBot, Common Crawl, Bytespider).
 3. **`DATACENTER` (Amber / Orange):** Traffic originating from cloud hosting facilities and VPS providers (AWS, Hetzner, DigitalOcean, OVH, Azure). Rarely genuine human end-users; high rates here indicate automated crawlers, headless browser automation, or attack vectors.
 4. **`RESIDENTIAL` (Blue):** Legitimate consumer broadband and fiber ISPs (Comcast, Deutsche Telekom, Orange, Vodafone). High block rates in this category demand scrutiny (see Scatterplot below).
-5. **`TOR_EXIT_NODE` (Deep Purple):** Relays from the public Tor anonymity network. Frequently abused for credential stuffing, automated registration, and vulnerability probes.
-6. **`MOBILE` (Teal):** Cellular 4G / 5G carrier gateways (CGNAT). Because hundreds of mobile handsets share a single carrier IPv4 address, moderate block rates may occur during peak mobile usage.
-7. **`PRIVATE_NET` (Slate Gray):** Internal RFC 1918 traffic (`10.0.0.0/8`, `192.168.0.0/16`, `127.0.0.1`) from upstream load balancers, health checkers, or container meshes.
-8. **`UNKNOWN` (Muted Gray):** Standard client traffic without specific intelligence tags or unclassified ASNs.
+5. **`PRIVACY_RELAY` (Teal):** Verified consumer privacy relay networks (such as Apple iCloud Private Relay operated via Cloudflare/Fastly/Akamai egress nodes). Represents genuine Apple Safari end-users rather than datacenter bots.
+6. **`TOR_EXIT_NODE` (Deep Purple):** Relays from the public Tor anonymity network. Frequently abused for credential stuffing, automated registration, and vulnerability probes.
+7. **`MOBILE` (Sky Blue):** Cellular 4G / 5G carrier gateways (CGNAT). Because hundreds of mobile handsets share a single carrier IPv4 address, moderate block rates may occur during peak mobile usage.
+8. **`PRIVATE_NET` (Slate Gray):** Internal RFC 1918 traffic (`10.0.0.0/8`, `192.168.0.0/16`, `127.0.0.1`) from upstream load balancers, health checkers, or container meshes.
+9. **`UNKNOWN` (Muted Gray):** Standard client traffic without specific intelligence tags or unclassified ASNs.
 
 #### Interactive Forensic Capabilities:
 * **Percentage Share:** Shows volume distribution at a glance.
@@ -733,6 +734,7 @@ Admins can trigger asynchronous maintenance actions directly from the web interf
 | `RESIDENTIAL` | Consumer Broadband / Fiber | Real home internet connections (Comcast, Deutsche Telekom, Orange). If generating high block counts, suspect malware compromise or residential proxy botnets (check for Rotating Proxy Cluster badge). |
 | `SEARCH_ENGINE` | Verified Search Bot | Verified Googlebot, Bingbot, or Yandex crawler. Ensure rate-limit rules do not unintentionally suppress indexing. |
 | `AI_CRAWLER` | AI Model Scraper | Commercial AI scrapers (OpenAI GPTBot, ClaudeBot, Perplexity). Block or rate-limit if intellectual property protection or bandwidth preservation is desired. |
+| `PRIVACY_RELAY` | Verified Privacy Relay | Consumer privacy relays (e.g., Apple iCloud Private Relay via Cloudflare/Fastly egress ranges). Represents legitimate end-user devices sharing egress IPs; enable visitor cookie tracking (`visitorCookieEnabled="true"`) to prevent false-positive NAT blocks. |
 | `TOR_EXIT_NODE` | Tor Anonymizer | Traffic from public Tor exit relays. Often used to circumvent IP blocks or conceal threat actor origins. |
 | `MOBILE` | Cellular 4G / 5G Carrier | Mobile network gateways (CGNAT). Multiple distinct cellular users share single public IPv4 addresses; exercise caution when applying permanent IP bans. |
 | `PRIVATE_NET` | RFC 1918 / Local IP | Local internal traffic (`10.0.0.0/8`, `192.168.0.0/16`, `127.0.0.1`). Typically health checks, load balancers, or internal services. |

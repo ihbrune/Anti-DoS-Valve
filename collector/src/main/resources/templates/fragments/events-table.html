@@ -96,6 +96,11 @@
                                         style="padding: 1px 6px; font-size: 9px; text-decoration: none;"
                                         title="Private Intranet / RFC 1918 / Local Network - Click to filter">&#x1F512;
                                         Private Net</a>
+                                    <a th:if="${event.clientType != null and event.clientType.name() == 'PRIVACY_RELAY'}"
+                                        th:href="@{/events(clientTypes='PRIVACY_RELAY')}" class="badge badge-info"
+                                        style="padding: 1px 6px; font-size: 9px; text-decoration: none;"
+                                        title="Verified Privacy Relay (e.g. Apple iCloud Private Relay) - Click to filter">&#x1F6E1;
+                                        Privacy Relay</a>
                                     <a th:if="${event.clientType != null and event.clientType.name() == 'TOR_EXIT_NODE'}"
                                         th:href="@{/events(clientTypes='TOR_EXIT_NODE')}" class="badge badge-purple"
                                         style="padding: 1px 6px; font-size: 9px; text-decoration: none;"

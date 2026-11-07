@@ -365,6 +365,12 @@
                         <span>&#x1F4F1; Mobile</span>
                     </label>
                     <label class="pill-label">
+                        <input type="checkbox" name="clientTypes" value="PRIVACY_RELAY" class="type-cb"
+                               th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'PRIVACY_RELAY')}"
+                               onchange="htmx.trigger('#profiles-filter-form', 'submit');">
+                        <span>&#x1F6E1; Privacy Relay</span>
+                    </label>
+                    <label class="pill-label">
                         <input type="checkbox" name="clientTypes" value="TOR_EXIT_NODE" class="type-cb"
                                th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'TOR_EXIT_NODE')}"
                                onchange="htmx.trigger('#profiles-filter-form', 'submit');">

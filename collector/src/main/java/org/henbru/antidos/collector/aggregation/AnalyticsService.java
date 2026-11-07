@@ -134,6 +134,8 @@ public class AnalyticsService {
 			String classification;
 			if (c.clientType() == ClientType.AI_CRAWLER || c.clientType() == ClientType.SEARCH_ENGINE) {
 				classification = "VERIFIED_BOT";
+			} else if (c.clientType() == ClientType.PRIVACY_RELAY) {
+				classification = "PRIVACY_RELAY";
 			} else if (c.clientType() == ClientType.TOR_EXIT_NODE) {
 				classification = "TOR_ANONYMIZER";
 			} else if (c.clientType() == ClientType.DATACENTER) {
@@ -235,6 +237,7 @@ public class AnalyticsService {
 			case AI_CRAWLER -> "AI Crawlers & Scrapers";
 			case MOBILE -> "Mobile Cellular Networks";
 			case TOR_EXIT_NODE -> "Tor Anonymizer Exit Nodes";
+			case PRIVACY_RELAY -> "Privacy Relays (iCloud Private Relay)";
 			case PRIVATE_NETWORK -> "Private / Internal RFC 1918";
 			case UNKNOWN -> "Unclassified / Standard Clients";
 		};
@@ -249,6 +252,7 @@ public class AnalyticsService {
 			case AI_CRAWLER -> "🤖";
 			case MOBILE -> "📱";
 			case TOR_EXIT_NODE -> "🧅";
+			case PRIVACY_RELAY -> "🛡️";
 			case PRIVATE_NETWORK -> "🔒";
 			case UNKNOWN -> "👤";
 		};

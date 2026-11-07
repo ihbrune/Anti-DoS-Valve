@@ -26,10 +26,18 @@ public class EnrichmentConfig {
 	public static Map<String, CrawlerFeedConfig> createDefaultCrawlerFeeds() {
 		Map<String, CrawlerFeedConfig> map = new LinkedHashMap<>();
 		map.put("googlebot", new CrawlerFeedConfig("googlebot", "Googlebot", "SEARCH_ENGINE", "https://developers.google.com/search/apis/ipranges/googlebot.json"));
+		map.put("google-special-crawlers", new CrawlerFeedConfig("google-special-crawlers", "Google Special Crawlers", "SEARCH_ENGINE", "https://developers.google.com/search/apis/ipranges/special-crawlers.json"));
 		map.put("bingbot", new CrawlerFeedConfig("bingbot", "Bingbot", "SEARCH_ENGINE", "https://www.bing.com/toolbox/bingbot.json"));
 		map.put("applebot", new CrawlerFeedConfig("applebot", "Applebot", "SEARCH_ENGINE", "https://search.developer.apple.com/applebot.json"));
+		map.put("duckduckbot", new CrawlerFeedConfig("duckduckbot", "DuckDuckBot", "SEARCH_ENGINE", "https://duckduckgo.com/duckduckbot.json"));
 		map.put("openai-gptbot", new CrawlerFeedConfig("openai-gptbot", "OpenAI GPTBot", "AI_CRAWLER", "https://openai.com/gptbot.json"));
+		map.put("openai-searchbot", new CrawlerFeedConfig("openai-searchbot", "OpenAI SearchBot", "AI_CRAWLER", "https://openai.com/searchbot.json"));
 		map.put("openai-chatgpt-user", new CrawlerFeedConfig("openai-chatgpt-user", "ChatGPT User", "AI_CRAWLER", "https://openai.com/chatgpt-user.json"));
+		map.put("anthropic-ai", new CrawlerFeedConfig("anthropic-ai", "Anthropic ClaudeBot", "AI_CRAWLER", "https://claude.com/crawling/bots.json"));
+		map.put("perplexitybot", new CrawlerFeedConfig("perplexitybot", "PerplexityBot", "AI_CRAWLER", "https://www.perplexity.ai/perplexitybot.json"));
+		map.put("perplexity-user", new CrawlerFeedConfig("perplexity-user", "Perplexity User", "AI_CRAWLER", "https://www.perplexity.ai/perplexity-user.json"));
+		map.put("duckassistbot", new CrawlerFeedConfig("duckassistbot", "DuckAssistBot", "AI_CRAWLER", "https://duckduckgo.com/duckassistbot.json"));
+		map.put("icloud-private-relay", new CrawlerFeedConfig("icloud-private-relay", "Apple iCloud Private Relay", "PRIVACY_RELAY", "https://mask-api.icloud.com/egress-ip-ranges.csv"));
 		map.put("tor-exit-nodes", new CrawlerFeedConfig("tor-exit-nodes", "Tor Bulk Exit Nodes", "TOR_EXIT_NODE", "https://check.torproject.org/torbulkexitlist"));
 		return map;
 	}

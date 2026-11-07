@@ -30,8 +30,9 @@
                     <td>
                         <span th:if="${feed.category == 'SEARCH_ENGINE'}" class="badge badge-success">&#x1F50D; Search Engine</span>
                         <span th:if="${feed.category == 'AI_CRAWLER'}" class="badge badge-purple">&#x1F916; AI Crawler</span>
+                        <span th:if="${feed.category == 'PRIVACY_RELAY'}" class="badge badge-info">&#x1F6E1; Privacy Relay</span>
                         <span th:if="${feed.category == 'TOR_EXIT_NODE'}" class="badge badge-warning">&#x1F9C5; Tor Exit Node</span>
-                        <span th:if="${feed.category != 'SEARCH_ENGINE' and feed.category != 'AI_CRAWLER' and feed.category != 'TOR_EXIT_NODE'}" class="badge badge-danger" th:text="${feed.category}">OTHER</span>
+                        <span th:if="${feed.category != 'SEARCH_ENGINE' and feed.category != 'AI_CRAWLER' and feed.category != 'PRIVACY_RELAY' and feed.category != 'TOR_EXIT_NODE'}" class="badge badge-danger" th:text="${feed.category}">OTHER</span>
                     </td>
                     <td>
                         <a th:href="${feed.url}" target="_blank" rel="noopener noreferrer"

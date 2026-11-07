@@ -68,6 +68,11 @@ collector:
         category: "SEARCH_ENGINE"
         url: "https://developers.google.com/search/apis/ipranges/googlebot.json"
         enabled: true
+      google-special-crawlers:
+        name: "Google Special Crawlers"
+        category: "SEARCH_ENGINE"
+        url: "https://developers.google.com/search/apis/ipranges/special-crawlers.json"
+        enabled: true
       bingbot:
         name: "Bingbot"
         category: "SEARCH_ENGINE"
@@ -78,15 +83,50 @@ collector:
         category: "SEARCH_ENGINE"
         url: "https://search.developer.apple.com/applebot.json"
         enabled: true
+      duckduckbot:
+        name: "DuckDuckBot"
+        category: "SEARCH_ENGINE"
+        url: "https://duckduckgo.com/duckduckbot.json"
+        enabled: true
       openai-gptbot:
         name: "OpenAI GPTBot"
         category: "AI_CRAWLER"
         url: "https://openai.com/gptbot.json"
         enabled: true
+      openai-searchbot:
+        name: "OpenAI SearchBot"
+        category: "AI_CRAWLER"
+        url: "https://openai.com/searchbot.json"
+        enabled: true
       openai-chatgpt-user:
         name: "ChatGPT User"
         category: "AI_CRAWLER"
         url: "https://openai.com/chatgpt-user.json"
+        enabled: true
+      anthropic-ai:
+        name: "Anthropic ClaudeBot"
+        category: "AI_CRAWLER"
+        url: "https://claude.com/crawling/bots.json"
+        enabled: true
+      perplexitybot:
+        name: "PerplexityBot"
+        category: "AI_CRAWLER"
+        url: "https://www.perplexity.ai/perplexitybot.json"
+        enabled: true
+      perplexity-user:
+        name: "Perplexity User"
+        category: "AI_CRAWLER"
+        url: "https://www.perplexity.ai/perplexity-user.json"
+        enabled: true
+      duckassistbot:
+        name: "DuckAssistBot"
+        category: "AI_CRAWLER"
+        url: "https://duckduckgo.com/duckassistbot.json"
+        enabled: true
+      icloud-private-relay:
+        name: "Apple iCloud Private Relay"
+        category: "PRIVACY_RELAY"
+        url: "https://mask-api.icloud.com/egress-ip-ranges.csv"
         enabled: true
       tor-exit-nodes:
         name: "Tor Bulk Exit Nodes"

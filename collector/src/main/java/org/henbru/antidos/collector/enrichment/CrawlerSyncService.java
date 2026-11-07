@@ -296,9 +296,12 @@ public class CrawlerSyncService {
 			return false;
 		}
 
-		List<BotIpRange> ranges = new ArrayList<>();
+		List<BotIpRange> ranges = new ArrayList<>(cidrs.size());
+		List<Integer> prefixes = new ArrayList<>(cidrs.size());
+		Instant now = Instant.now();
 		for (String cidr : cidrs) {
 			IpNetworkInfo net = IpNetworkUtil.parse(cidr);
+			prefixes.add(net.prefix());
 			ranges.add(new BotIpRange(
 					null,
 					config.getKey(),
@@ -308,23 +311,23 @@ public class CrawlerSyncService {
 					net.v4End(),
 					net.v6Start(),
 					net.v6End(),
-					Instant.now()
+					now
 			));
 		}
 
 		botIpRangeRepository.replaceRangesForFeed(config.getKey(), ranges);
-		crawlerFeedRepository.updateSyncStatus(config.getKey(), "SUCCESS", ranges.size(), null, Instant.now());
+		crawlerFeedRepository.updateSyncStatus(config.getKey(), "SUCCESS", ranges.size(), null, now);
 
 		if (intelRangeRepository != null && intelSourceRepository != null) {
 			List<IntelRange> intelRanges = new ArrayList<>(ranges.size());
-			for (BotIpRange r : ranges) {
-				IpNetworkInfo net = IpNetworkUtil.parse(r.cidr());
+			for (int i = 0; i < ranges.size(); i++) {
+				BotIpRange r = ranges.get(i);
 				intelRanges.add(new IntelRange(
 						null,
 						config.getKey(),
 						r.cidr(),
 						r.ipVersion(),
-						net.prefix(),
+						prefixes.get(i),
 						r.ipV4Start(),
 						r.ipV4End(),
 						r.ipV6Start(),
@@ -334,7 +337,7 @@ public class CrawlerSyncService {
 						config.getNormalizedCategory(),
 						config.getName(),
 						1,
-						Instant.now()
+						now
 				));
 			}
 			intelRangeRepository.replaceRangesForSource(config.getKey(), intelRanges);
@@ -345,7 +348,7 @@ public class CrawlerSyncService {
 					config.getNormalizedCategory(),
 					config.getUrl(),
 					1,
-					Instant.now(),
+					now,
 					"SUCCESS",
 					intelRanges.size(),
 					null
@@ -445,6 +448,13 @@ public class CrawlerSyncService {
 			parsePlaintextLines(trimmed, result);
 		}
 
+		if (result.size() > 500) {
+			List<String> coalesced = IpNetworkUtil.coalesceCidrs(result);
+			log.info("Coalesced large feed from {} raw entries into {} canonical CIDR supernets",
+					result.size(), coalesced.size());
+			return coalesced;
+		}
+
 		return new ArrayList<>(result);
 	}
 
@@ -477,10 +487,25 @@ public class CrawlerSyncService {
 	}
 
 	private void parsePlaintextLines(String text, Set<String> result) {
-		String[] lines = text.split("\\r?\\n");
-		for (String line : lines) {
-			String clean = line.trim();
-			if (!clean.isEmpty() && !clean.startsWith("#") && isValidCidrOrIp(clean)) {
+		int len = text.length();
+		int lineStart = 0;
+		while (lineStart < len) {
+			int lineEnd = text.indexOf('\n', lineStart);
+			if (lineEnd < 0) {
+				lineEnd = len;
+			}
+			int end = (lineEnd > lineStart && text.charAt(lineEnd - 1) == '\r') ? lineEnd - 1 : lineEnd;
+			String clean = text.substring(lineStart, end).trim();
+			lineStart = lineEnd + 1;
+
+			if (clean.isEmpty() || clean.startsWith("#")) {
+				continue;
+			}
+			int commaIdx = clean.indexOf(',');
+			if (commaIdx > 0) {
+				clean = clean.substring(0, commaIdx).trim();
+			}
+			if (!clean.isEmpty() && isValidCidrOrIp(clean)) {
 				result.add(canonicalCidr(clean));
 			}
 		}

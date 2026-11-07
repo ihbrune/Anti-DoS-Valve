@@ -221,6 +221,11 @@
                             <span>&#x1F512; Private Net</span>
                         </label>
                         <label class="pill-label">
+                            <input type="checkbox" name="clientTypes" value="PRIVACY_RELAY" class="type-cb"
+                                th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'PRIVACY_RELAY')}">
+                            <span>&#x1F6E1; Privacy Relay</span>
+                        </label>
+                        <label class="pill-label">
                             <input type="checkbox" name="clientTypes" value="TOR_EXIT_NODE" class="type-cb"
                                 th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'TOR_EXIT_NODE')}">
                             <span>&#x1F9C5; Tor Exit Node</span>

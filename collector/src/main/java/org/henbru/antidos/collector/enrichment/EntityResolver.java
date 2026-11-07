@@ -183,7 +183,9 @@ public class EntityResolver {
 
 		if (intelResult.preferredClientType() != null) {
 			clientType = intelResult.preferredClientType();
-			if ((clientType == ClientType.SEARCH_ENGINE || clientType == ClientType.AI_CRAWLER)
+			if ((clientType == ClientType.SEARCH_ENGINE
+					|| clientType == ClientType.AI_CRAWLER
+					|| clientType == ClientType.PRIVACY_RELAY)
 					&& intelResult.primaryLabel() != null && !intelResult.primaryLabel().isBlank()) {
 				asOrg = intelResult.primaryLabel();
 			} else if (asOrg == null || asOrg.trim().isEmpty()) {

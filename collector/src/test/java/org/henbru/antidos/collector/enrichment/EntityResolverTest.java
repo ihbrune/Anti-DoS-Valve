@@ -62,6 +62,18 @@ class EntityResolverTest {
 				)
 		));
 
+		intelSourceRepository.upsert(new IntelSource(
+				"relay-test", "FEED", "Apple iCloud Private Relay", "PRIVACY_RELAY", "https://mask-api.icloud.com/egress-ip-ranges.csv", 1L, now, "SUCCESS", 1, null
+		));
+		intelRangeRepository.replaceRangesForSource("relay-test", List.of(
+				new IntelRange(
+						null, "relay-test", "104.28.60.0/24", 4, 24,
+						IpNetworkUtil.ipv4ToLong("104.28.60.0"),
+						IpNetworkUtil.ipv4ToLong("104.28.60.255"),
+						null, null, 13335L, "DE", "PRIVACY_RELAY", "Apple iCloud Private Relay", 1L, now
+				)
+		));
+
 		intelRegistry.reload();
 	}
 
@@ -92,6 +104,17 @@ class EntityResolverTest {
 		assertEquals(ClientType.SEARCH_ENGINE, resolved.clientType());
 		assertTrue(resolved.tags() != null && resolved.tags().contains("SEARCH_ENGINE"));
 		assertEquals("Googlebot", resolved.asOrg());
+		assertEquals(EnrichmentStatus.ENRICHED, resolved.enrichmentStatus());
+	}
+
+	@Test
+	void testResolvePrivacyRelay() {
+		NetworkEntity entity = entityResolver.getOrCreate("104.28.60.42", Instant.now());
+		NetworkEntity resolved = entityResolver.resolve(entity);
+
+		assertEquals(ClientType.PRIVACY_RELAY, resolved.clientType());
+		assertTrue(resolved.tags() != null && resolved.tags().contains("PRIVACY_RELAY"));
+		assertEquals("Apple iCloud Private Relay", resolved.asOrg());
 		assertEquals(EnrichmentStatus.ENRICHED, resolved.enrichmentStatus());
 	}
 

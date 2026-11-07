@@ -2,6 +2,10 @@ package org.henbru.antidos.collector.util;
 
 import java.net.Inet6Address;
 import java.net.InetAddress;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
 import org.henbru.antidos.collector.model.IpNetworkInfo;
 
 /**
@@ -102,12 +106,14 @@ public final class IpNetworkUtil {
 			if (ipPart.startsWith("[") && ipPart.endsWith("]")) {
 				ipPart = ipPart.substring(1, ipPart.length() - 1);
 			}
-			InetAddress addr = InetAddress.getByName(ipPart);
-			if (!(addr instanceof Inet6Address)) {
-				return new IpNetworkInfo(4, 32, null, null, null, null, s);
+			byte[] bytes = tryFastParseIPv6Upper64(ipPart);
+			if (bytes == null) {
+				InetAddress addr = InetAddress.getByName(ipPart);
+				if (!(addr instanceof Inet6Address)) {
+					return new IpNetworkInfo(4, 32, null, null, null, null, s);
+				}
+				bytes = addr.getAddress(); // 16 bytes
 			}
-
-			byte[] bytes = addr.getAddress(); // 16 bytes
 
 			// Format upper 64 bits (first 8 bytes)
 			int prefixInUpper64 = Math.min(prefix, 64);
@@ -165,6 +171,86 @@ public final class IpNetworkUtil {
 		int g3 = ((b[4] & 0xFF) << 8) | (b[5] & 0xFF);
 		int g4 = ((b[6] & 0xFF) << 8) | (b[7] & 0xFF);
 		return String.format("%x:%x:%x:%x::/64", g1, g2, g3, g4);
+	}
+
+	private static byte[] tryFastParseIPv6Upper64(String s) {
+		int len = s.length();
+		if (len < 2 || len > 39 || s.indexOf('.') >= 0) {
+			return null;
+		}
+		int[] groups = new int[8];
+		int groupCount = 0;
+		int doubleColonPos = -1;
+		int val = 0;
+		int digits = 0;
+
+		for (int i = 0; i < len; i++) {
+			char c = s.charAt(i);
+			if (c == ':') {
+				if (i + 1 < len && s.charAt(i + 1) == ':') {
+					if (doubleColonPos != -1) {
+						return null;
+					}
+					if (digits > 0) {
+						if (groupCount >= 8) {
+							return null;
+						}
+						groups[groupCount++] = val;
+						val = 0;
+						digits = 0;
+					} else if (i != 0) {
+						return null;
+					}
+					doubleColonPos = groupCount;
+					i++; // consume second ':'
+				} else {
+					if (digits == 0 || groupCount >= 8) {
+						return null;
+					}
+					groups[groupCount++] = val;
+					val = 0;
+					digits = 0;
+				}
+			} else {
+				int d = Character.digit(c, 16);
+				if (d < 0 || ++digits > 4) {
+					return null;
+				}
+				val = (val << 4) | d;
+			}
+		}
+
+		if (digits > 0) {
+			if (groupCount >= 8) {
+				return null;
+			}
+			groups[groupCount++] = val;
+		} else if (s.charAt(len - 1) == ':' && (len < 2 || s.charAt(len - 2) != ':')) {
+			return null;
+		}
+
+		if (doubleColonPos != -1) {
+			if (groupCount == 8) {
+				return null;
+			}
+			int tailCount = groupCount - doubleColonPos;
+			int zeros = 8 - groupCount;
+			for (int i = tailCount - 1; i >= 0; i--) {
+				groups[doubleColonPos + zeros + i] = groups[doubleColonPos + i];
+			}
+			for (int i = 0; i < zeros; i++) {
+				groups[doubleColonPos + i] = 0;
+			}
+		} else if (groupCount != 8) {
+			return null;
+		}
+
+		byte[] upper8 = new byte[8];
+		for (int i = 0; i < 4; i++) {
+			upper8[i * 2] = (byte) ((groups[i] >>> 8) & 0xFF);
+			upper8[i * 2 + 1] = (byte) (groups[i] & 0xFF);
+		}
+		return upper8;
 	}
 
 	public static long ipv4ToLong(String ip) {
@@ -378,5 +464,145 @@ public final class IpNetworkUtil {
 		}
 
 		return null;
+	}
+
+	/**
+	 * Coalesces (merges) overlapping and adjacent IPv4 and IPv6 CIDR prefixes into a minimal set
+	 * of canonical CIDR supernets. IPv6 prefixes more specific than /64 are normalized to their /64
+	 * upper routing prefix before coalescing.
+	 */
+	public static List<String> coalesceCidrs(Collection<String> rawCidrs) {
+		if (rawCidrs == null || rawCidrs.isEmpty()) {
+			return List.of();
+		}
+
+		List<long[]> v4Intervals = new ArrayList<>();
+		List<long[]> v6Intervals = new ArrayList<>();
+
+		for (String raw : rawCidrs) {
+			if (raw == null || raw.isBlank()) {
+				continue;
+			}
+			IpNetworkInfo net = parse(raw);
+			if (net.version() == 4 && net.v4Start() != null && net.v4End() != null) {
+				v4Intervals.add(new long[]{net.v4Start(), net.v4End()});
+			} else if (net.version() == 6 && net.v6Start() != null && net.v6End() != null) {
+				long start = Long.parseUnsignedLong(net.v6Start(), 16);
+				long end = Long.parseUnsignedLong(net.v6End(), 16);
+				v6Intervals.add(new long[]{start, end});
+			}
+		}
+
+		List<String> result = new ArrayList<>();
+
+		if (!v4Intervals.isEmpty()) {
+			v4Intervals.sort(Comparator.<long[]>comparingLong(a -> a[0]).thenComparingLong(a -> -a[1]));
+			long curStart = v4Intervals.get(0)[0];
+			long curEnd = v4Intervals.get(0)[1];
+
+			for (int i = 1; i < v4Intervals.size(); i++) {
+				long nextStart = v4Intervals.get(i)[0];
+				long nextEnd = v4Intervals.get(i)[1];
+				if (nextStart <= curEnd + 1L) {
+					if (nextEnd > curEnd) {
+						curEnd = nextEnd;
+					}
+				} else {
+					decomposeIPv4Interval(curStart, curEnd, result);
+					curStart = nextStart;
+					curEnd = nextEnd;
+				}
+			}
+			decomposeIPv4Interval(curStart, curEnd, result);
+		}
+
+		if (!v6Intervals.isEmpty()) {
+			v6Intervals.sort((a, b) -> {
+				int cmp = Long.compareUnsigned(a[0], b[0]);
+				return cmp != 0 ? cmp : Long.compareUnsigned(b[1], a[1]);
+			});
+			long curStart = v6Intervals.get(0)[0];
+			long curEnd = v6Intervals.get(0)[1];
+
+			for (int i = 1; i < v6Intervals.size(); i++) {
+				long nextStart = v6Intervals.get(i)[0];
+				long nextEnd = v6Intervals.get(i)[1];
+				boolean adjacentOrOverlapping = (curEnd == -1L)
+						|| (Long.compareUnsigned(nextStart, curEnd + 1L) <= 0);
+				if (adjacentOrOverlapping) {
+					if (Long.compareUnsigned(nextEnd, curEnd) > 0) {
+						curEnd = nextEnd;
+					}
+				} else {
+					decomposeIPv6Upper64Interval(curStart, curEnd, result);
+					curStart = nextStart;
+					curEnd = nextEnd;
+				}
+			}
+			decomposeIPv6Upper64Interval(curStart, curEnd, result);
+		}
+
+		return result;
+	}
+
+	private static void decomposeIPv4Interval(long start, long end, List<String> out) {
+		long cur = start;
+		while (cur <= end) {
+			int tz = cur == 0L ? 32 : Math.min(32, Long.numberOfTrailingZeros(cur));
+			long span = end - cur + 1L;
+			int maxBits = 63 - Long.numberOfLeadingZeros(span);
+			int bits = Math.min(tz, maxBits);
+			int prefix = 32 - bits;
+			out.add(longToIPv4(cur) + "/" + prefix);
+			cur += (1L << bits);
+		}
+	}
+
+	private static void decomposeIPv6Upper64Interval(long start, long end, List<String> out) {
+		long cur = start;
+		while (Long.compareUnsigned(cur, end) <= 0) {
+			int tz = cur == 0L ? 64 : Long.numberOfTrailingZeros(cur);
+			long diff = end - cur;
+			int maxBits;
+			if (diff == -1L) {
+				maxBits = 64;
+			} else {
+				long span = diff + 1L;
+				maxBits = span == 0L ? 64 : (63 - Long.numberOfLeadingZeros(span));
+			}
+			int bits = Math.min(tz, maxBits);
+			int prefix = 64 - bits;
+			out.add(upper64ToCanonicalIPv6(cur) + "/" + prefix);
+			if (bits == 64) {
+				break;
+			}
+			long step = 1L << bits;
+			long next = cur + step;
+			if (Long.compareUnsigned(next, cur) < 0) {
+				break;
+			}
+			cur = next;
+		}
+	}
+
+	private static String upper64ToCanonicalIPv6(long upper64) {
+		int g1 = (int) ((upper64 >>> 48) & 0xFFFFL);
+		int g2 = (int) ((upper64 >>> 32) & 0xFFFFL);
+		int g3 = (int) ((upper64 >>> 16) & 0xFFFFL);
+		int g4 = (int) (upper64 & 0xFFFFL);
+		if (g1 == 0 && g2 == 0 && g3 == 0 && g4 == 0) {
+			return "::";
+		}
+		if (g2 == 0 && g3 == 0 && g4 == 0) {
+			return Integer.toHexString(g1) + "::";
+		}
+		if (g3 == 0 && g4 == 0) {
+			return Integer.toHexString(g1) + ":" + Integer.toHexString(g2) + "::";
+		}
+		if (g4 == 0) {
+			return Integer.toHexString(g1) + ":" + Integer.toHexString(g2) + ":" + Integer.toHexString(g3) + "::";
+		}
+		return Integer.toHexString(g1) + ":" + Integer.toHexString(g2) + ":"
+				+ Integer.toHexString(g3) + ":" + Integer.toHexString(g4) + "::";
 	}
 }

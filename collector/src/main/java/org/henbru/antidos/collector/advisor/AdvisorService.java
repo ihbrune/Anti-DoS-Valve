@@ -304,7 +304,7 @@ public class AdvisorService {
 				    MAX(r.max_requests_per_client) AS peak_req,
 				    ROUND(SUM(r.returning_requests) * 100.0 / NULLIF(SUM(r.returning_tracked_requests), 0), 1) AS ret_pct
 				FROM client_subnet_rollups r
-				WHERE r.client_type IN ('RESIDENTIAL', 'UNKNOWN')
+				WHERE r.client_type IN ('RESIDENTIAL', 'PRIVACY_RELAY', 'UNKNOWN')
 				  AND r.blocked_requests >= 50
 				  AND r.bucket_start >= ?
 				""");

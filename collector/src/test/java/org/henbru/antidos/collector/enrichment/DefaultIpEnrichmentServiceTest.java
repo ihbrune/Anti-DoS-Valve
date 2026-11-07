@@ -85,4 +85,17 @@ class DefaultIpEnrichmentServiceTest {
 		assertEquals(ClientType.TOR_EXIT_NODE, res.clientType());
 		assertEquals("Tor Bulk Exit Nodes", res.asOrg());
 	}
+
+	@Test
+	void testEnrichPrivacyRelay() {
+		when(botIpRangeRepository.findBotForIp("104.28.60.42")).thenReturn(
+				Optional.of(new org.henbru.antidos.collector.storage.BotIpRangeRepository.BotMatch(
+						"icloud-private-relay", "Apple iCloud Private Relay", "PRIVACY_RELAY"
+				))
+		);
+
+		IpEnrichmentResult res = enrichmentService.enrich("104.28.60.42");
+		assertEquals(ClientType.PRIVACY_RELAY, res.clientType());
+		assertEquals("Apple iCloud Private Relay", res.asOrg());
+	}
 }
