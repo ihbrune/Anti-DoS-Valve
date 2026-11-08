@@ -393,7 +393,11 @@ public class AntiDoSStatusRenderer {
 		response.setContentType("text/html;charset=UTF-8");
 		response.setCharacterEncoding("UTF-8");
 		PrintWriter out = response.getWriter();
-		if ("details".equalsIgnoreCase(view)) {
+		if ("docs".equalsIgnoreCase(view) || "api".equalsIgnoreCase(view)) {
+			out.write(buildStatusDocsHtml(filterValve, token));
+		} else if ("openapi".equalsIgnoreCase(view) || "openapi.json".equalsIgnoreCase(view)) {
+			out.write(buildOpenApiJson());
+		} else if ("details".equalsIgnoreCase(view)) {
 			String effBlockedParam = (blockedLimitParam != null && !blockedLimitParam.trim().isEmpty()) ? blockedLimitParam : limitParam;
 			String effActiveParam = (activeLimitParam != null && !activeLimitParam.trim().isEmpty()) ? activeLimitParam : limitParam;
 			Integer blockedLimit = effBlockedParam != null ? parseLimit(effBlockedParam, 50, true) : null;
@@ -437,7 +441,9 @@ public class AntiDoSStatusRenderer {
 		response.setContentType("application/json;charset=UTF-8");
 		response.setCharacterEncoding("UTF-8");
 		PrintWriter out = response.getWriter();
-		if ("details".equalsIgnoreCase(view)) {
+		if ("openapi".equalsIgnoreCase(view) || "openapi.json".equalsIgnoreCase(view)) {
+			out.write(buildOpenApiJson());
+		} else if ("details".equalsIgnoreCase(view)) {
 			String effBlockedParam = (blockedLimitParam != null && !blockedLimitParam.trim().isEmpty()) ? blockedLimitParam : limitParam;
 			String effActiveParam = (activeLimitParam != null && !activeLimitParam.trim().isEmpty()) ? activeLimitParam : limitParam;
 			Integer blockedLimit = effBlockedParam != null ? parseLimit(effBlockedParam, 50, true) : null;
@@ -450,6 +456,29 @@ public class AntiDoSStatusRenderer {
 			out.write(buildStatusJson(filterValve));
 		}
 		out.flush();
+	}
+
+	/**
+	 * Generates and writes the OpenAPI 3.1 JSON specification to the HTTP response.
+	 *
+	 * @param response The HTTP response
+	 * @throws IOException If an I/O error occurs
+	 */
+	public void renderOpenApiJson(Response response) throws IOException {
+		response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+		response.setHeader("Pragma", "no-cache");
+		response.setHeader("Referrer-Policy", "no-referrer");
+		response.setHeader("X-Content-Type-Options", "nosniff");
+		response.setHeader("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'");
+		response.setContentType("application/json;charset=UTF-8");
+		response.setCharacterEncoding("UTF-8");
+		PrintWriter out = response.getWriter();
+		out.write(buildOpenApiJson());
+		out.flush();
+	}
+
+	public String buildOpenApiJson() {
+		return AntiDoSOpenApiSpec.buildOpenApiJson(valve != null ? valve.getStatusUri() : null);
 	}
 
 	public static Long parseLongParam(String param) {
@@ -549,6 +578,12 @@ public class AntiDoSStatusRenderer {
 				.append("[data-theme=\"light\"] .badge-warn{background:#fef3c7;color:#92400e;border:1px solid #fde047}\n")
 				.append("[data-theme=\"light\"] .badge-info{background:#e0f2fe;color:#0369a1;border:1px solid #7dd3fc}\n")
 				.append("[data-theme=\"light\"] .badge-status{background:#d1fae5;color:#065f46;border:1px solid #6ee7b7}\n")
+				.append(".badge-get{background:#064e3b;color:#6ee7b7;border:1px solid #047857;font-weight:700}\n")
+				.append("[data-theme=\"light\"] .badge-get{background:#d1fae5;color:#065f46;border:1px solid #6ee7b7}\n")
+				.append(".code-box{background:#0b1120;border:1px solid var(--border);border-radius:6px;padding:12px;margin:8px 0;position:relative;overflow-x:auto}\n")
+				.append("[data-theme=\"light\"] .code-box{background:#f8fafc;border-color:#cbd5e1}\n")
+				.append(".code-box pre{margin:0;font-family:inherit;font-size:12px;white-space:pre-wrap;word-break:break-all}\n")
+				.append(".copy-btn{position:absolute;top:8px;right:8px;padding:2px 8px;font-size:11px}\n")
 				.append(".valve-desc{color:#cbd5e1;background:#0b1120;border-left:3px solid var(--accent);padding:6px 12px;margin:4px 0 10px 0;border-radius:0 4px 4px 0;font-size:12px;line-height:1.4}\n")
 				.append("[data-theme=\"light\"] .valve-desc{color:#334155;background:#f8fafc;border-left:3px solid var(--accent)}\n")
 				.append("table{width:100%;border-collapse:collapse;margin-top:6px}\n")
@@ -574,6 +609,7 @@ public class AntiDoSStatusRenderer {
 				.append("<script>\n")
 				.append("(function(){try{var t=localStorage.getItem('theme');if(!t){var m=document.cookie.match(/(?:^|; )theme=([^;]*)/);t=m?decodeURIComponent(m[1]):null}if(t==='light'||(!t&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)){document.documentElement.setAttribute('data-theme','light')}else{document.documentElement.setAttribute('data-theme','dark')}}catch(e){}})();\n")
 				.append("function toggleTheme(){try{var c=document.documentElement.getAttribute('data-theme')==='light'?'dark':'light';document.documentElement.setAttribute('data-theme',c);localStorage.setItem('theme',c);document.cookie='theme='+c+';path=/;max-age=31536000;SameSite=Lax'}catch(e){}}\n")
+				.append("function copyCode(btn,id){try{var el=document.getElementById(id);var t=el?(el.innerText||el.textContent):'';navigator.clipboard.writeText(t).then(function(){var o=btn.innerText;btn.innerText='✓ Copied!';setTimeout(function(){btn.innerText=o},1800)})}catch(e){}}\n")
 				.append("</script>\n");
 	}
 
@@ -600,6 +636,7 @@ public class AntiDoSStatusRenderer {
 		}
 		sb.append("</span>")
 				.append("<a class=\"btn\" href=\"").append(buildDashboardUrl(token, null, null, "json")).append("\">{ } JSON (All)</a>")
+				.append("<a class=\"btn\" href=\"").append(buildDashboardUrl(token, null, "docs", null)).append("\">&#128214; API Docs</a>")
 				.append("<button type=\"button\" class=\"btn\" onclick=\"toggleTheme()\" title=\"Toggle Light/Dark Theme\"><span class=\"theme-sun\">&#9728;&#65039;</span><span class=\"theme-moon\">&#127769;</span> Theme</button>")
 				.append("</div>\n")
 				.append("</div>\n");
@@ -899,6 +936,7 @@ public class AntiDoSStatusRenderer {
 				.append("    <a class=\"btn\" href=\"").append(buildDashboardUrl(token, null, null, null)).append("\">&#8592; Back to Overview</a>\n")
 				.append("    <a class=\"btn\" href=\"").append(buildDashboardUrl(token, target.getMonitorName(), "details", null, slotParam, limitStr, blockedLimitStr, activeLimitStr, true)).append("\">&#128260; Refresh</a>\n")
 				.append("    <a class=\"btn\" href=\"").append(buildDashboardUrl(token, target.getMonitorName(), "details", "json", slotParam, limitStr, blockedLimitStr, activeLimitStr, true)).append("\">{ } JSON Details</a>\n")
+				.append("    <a class=\"btn\" href=\"").append(buildDashboardUrl(token, target.getMonitorName(), "docs", null)).append("\">&#128214; API Docs</a>\n")
 				.append("    <button type=\"button\" class=\"btn\" onclick=\"toggleTheme()\" title=\"Toggle Light/Dark Theme\"><span class=\"theme-sun\">&#9728;&#65039;</span><span class=\"theme-moon\">&#127769;</span> Theme</button>\n")
 				.append("  </div>\n")
 				.append("</div>\n");
@@ -1280,6 +1318,234 @@ public class AntiDoSStatusRenderer {
 			sb.append("    </tbody>\n  </table>\n");
 		}
 		sb.append("</div>\n");
+
+		sb.append("</body>\n</html>\n");
+		return sb.toString();
+	}
+
+	/**
+	 * Renders an interactive OpenAPI and REST documentation page styled to match
+	 * the Anti-DoS Valve Status Dashboard.
+	 *
+	 * @param filterValve Optional filter valve name
+	 * @param token       Authentication token passed in query parameter
+	 * @return HTML document string
+	 */
+	public String buildStatusDocsHtml(String filterValve, String token) {
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+		sdf.setTimeZone(TimeZone.getDefault());
+		String serverTime = sdf.format(new Date(getTimeInMillis()));
+
+		String statusUri = (valve != null && valve.getStatusUri() != null) ? valve.getStatusUri() : "/antidos-status";
+		String overviewUrl = buildDashboardUrl(token, filterValve, null, null);
+		String openApiJsonUrl = buildDashboardUrl(token, filterValve, null, "openapi");
+		String summaryJsonUrl = buildDashboardUrl(token, filterValve, null, "json");
+		String detailsJsonUrl = buildDashboardUrl(token, filterValve, "details", "json");
+
+		StringBuilder sb = new StringBuilder(16384);
+		sb.append("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n")
+				.append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n")
+				.append("<title>Anti-DoS Valve &bull; API Documentation</title>\n");
+		appendCommonHeadStyles(sb);
+		sb.append("</head>\n<body>\n")
+				.append("<div class=\"header\">\n")
+				.append("  <div class=\"title\"><span>&#9889;</span> Anti-DoS Valve API Documentation</div>\n")
+				.append("  <div class=\"subtitle\">\n")
+				.append("    <span>Server Time: ").append(serverTime);
+		if (valve != null && valve.getStatusUri() != null) {
+			sb.append(" &bull; Status Host: <strong>").append(escapeHtml(valve.getName4logging()))
+					.append("</strong> (<code>").append(escapeHtml(statusUri)).append("</code>)");
+		}
+		sb.append("</span>\n")
+				.append("    <a class=\"btn\" href=\"").append(overviewUrl).append("\">&#8592; Back to Dashboard</a>\n")
+				.append("    <a class=\"btn\" href=\"").append(openApiJsonUrl).append("\" target=\"_blank\">{ } OpenAPI JSON</a>\n")
+				.append("    <a class=\"btn\" href=\"").append(openApiJsonUrl).append("\" download=\"antidos-openapi.json\">&#11015;&#65039; Download JSON</a>\n")
+				.append("    <button type=\"button\" class=\"btn\" onclick=\"toggleTheme()\" title=\"Toggle Light/Dark Theme\"><span class=\"theme-sun\">&#9728;&#65039;</span><span class=\"theme-moon\">&#127769;</span> Theme</button>\n")
+				.append("  </div>\n")
+				.append("</div>\n");
+
+		// Card 1: Overview & Security Architecture
+		sb.append("<div class=\"card\">\n")
+				.append("  <div class=\"card-header\">\n")
+				.append("    <div class=\"card-title-group\">\n")
+				.append("      <span class=\"valve-name\">Overview &amp; Security Architecture</span>\n")
+				.append("      <span class=\"badge badge-info\">OPENAPI 3.1</span>\n")
+				.append("      <span class=\"badge badge-status\">REST &bull; JSON</span>\n")
+				.append("    </div>\n")
+				.append("  </div>\n")
+				.append("  <div class=\"valve-desc\">\n")
+				.append("    The Anti-DoS Valve exposes real-time sliding-window mitigation metrics and counter forensics designed for\n")
+				.append("    automated ingestion by <strong>SIEM systems</strong> (Splunk, Elastic, Microsoft Sentinel, Wazuh),\n")
+				.append("    observability platforms (Prometheus <code>json_exporter</code>, Telegraf, Datadog), and custom security automation scripts.\n")
+				.append("  </div>\n")
+				.append("  <table class=\"data-table\">\n")
+				.append("    <thead><tr><th>Authentication / Security Layer</th><th>Mechanism</th><th>Description</th></tr></thead>\n")
+				.append("    <tbody>\n")
+				.append("      <tr><td><strong>Bearer Token</strong></td><td><code>Authorization: Bearer &lt;token&gt;</code></td><td>Standard HTTP header authentication. Recommended for SIEM and API consumers.</td></tr>\n")
+				.append("      <tr><td><strong>Query Token</strong></td><td><code>?token=&lt;token&gt;</code></td><td>URL query parameter alternative. Handy for quick curl calls and ad-hoc troubleshooting.</td></tr>\n")
+				.append("      <tr><td><strong>IP Whitelisting</strong></td><td><code>statusAllowedIPs</code></td><td>Optional regular expression. Requests from non-matching IP addresses receive <code>404 Not Found</code>.</td></tr>\n")
+				.append("      <tr><td><strong>Asymmetric Auth Defense</strong></td><td>Automated Counter Penalty</td><td>Failed authentication attempts are counted as abusive DoS probes in the monitor, progressively locking out brute-force attempts.</td></tr>\n")
+				.append("    </tbody>\n")
+				.append("  </table>\n")
+				.append("</div>\n");
+
+		// Card 2: Summary Metrics Endpoint
+		sb.append("<div class=\"card\">\n")
+				.append("  <div class=\"card-header\">\n")
+				.append("    <div class=\"card-title-group\">\n")
+				.append("      <span class=\"badge badge-get\">GET</span>\n")
+				.append("      <span class=\"valve-name\"><code>").append(escapeHtml(statusUri)).append("?format=json</code></span>\n")
+				.append("      <span class=\"badge badge-status\">PIPELINE SUMMARY</span>\n")
+				.append("    </div>\n")
+				.append("    <div class=\"card-actions\">\n")
+				.append("      <a class=\"btn\" href=\"").append(summaryJsonUrl).append("\" target=\"_blank\">Execute Query</a>\n")
+				.append("    </div>\n")
+				.append("  </div>\n")
+				.append("  <p>Returns an aggregated overview of all active Anti-DoS Valve instances in the Catalina pipeline, including current counter states, sliding-window slot keys, and tracking parameters.</p>\n")
+				.append("  <table class=\"data-table\">\n")
+				.append("    <thead><tr><th>Parameter</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>\n")
+				.append("    <tbody>\n")
+				.append("      <tr><td><code>format</code></td><td>query</td><td>string</td><td><span style=\"color:var(--red);\">Required*</span></td><td>Set to <code>json</code>. *(Alternatively pass <code>Accept: application/json</code> header).</td></tr>\n")
+				.append("      <tr><td><code>valve</code></td><td>query</td><td>string</td><td>Optional</td><td>Filter response to a specific Valve by its <code>monitorName</code>.</td></tr>\n")
+				.append("      <tr><td><code>token</code></td><td>query</td><td>string</td><td>Optional</td><td>Authentication token (if not provided via <code>Authorization</code> header).</td></tr>\n")
+				.append("      <tr><td><code>Authorization</code></td><td>header</td><td>string</td><td>Optional</td><td>Bearer token: <code>Bearer &lt;token&gt;</code>.</td></tr>\n")
+				.append("    </tbody>\n")
+				.append("  </table>\n")
+				.append("  <div style=\"margin-top:12px;font-weight:600;color:var(--muted);\">Example Request:</div>\n")
+				.append("  <div class=\"code-box\">\n")
+				.append("    <button type=\"button\" class=\"btn copy-btn\" onclick=\"copyCode(this, 'curl-summary')\">Copy</button>\n")
+				.append("    <pre id=\"curl-summary\">curl -s -H \"Authorization: Bearer mySecretToken\" \"http://localhost:8080").append(escapeHtml(statusUri)).append("?format=json\"</pre>\n")
+				.append("  </div>\n")
+				.append("  <div style=\"margin-top:12px;font-weight:600;color:var(--muted);\">Example Response (200 OK):</div>\n")
+				.append("  <div class=\"code-box\">\n")
+				.append("    <button type=\"button\" class=\"btn copy-btn\" onclick=\"copyCode(this, 'json-summary-resp')\">Copy</button>\n")
+				.append("    <pre id=\"json-summary-resp\">{\n")
+				.append("  \"serverTime\": \"2026-11-07T22:30:00Z\",\n")
+				.append("  \"totalActiveValves\": 1,\n")
+				.append("  \"valves\": [\n")
+				.append("    {\n")
+				.append("      \"monitorName\": \"AntiDoSValve-App\",\n")
+				.append("      \"pipelineOrder\": 1,\n")
+				.append("      \"monitorMode\": \"BLOCKING\",\n")
+				.append("      \"simulationMode\": false,\n")
+				.append("      \"allowedRequestsPerSlot\": 100,\n")
+				.append("      \"slotLength\": 10,\n")
+				.append("      \"numberOfSlots\": 6,\n")
+				.append("      \"currentActiveCounters\": 42,\n")
+				.append("      \"currentBlockedCounters\": 2,\n")
+				.append("      \"currentSlotKey\": 179374020,\n")
+				.append("      \"totalRequests\": 158940,\n")
+				.append("      \"visitorCookieEnabled\": true,\n")
+				.append("      \"authTrackingEnabled\": true\n")
+				.append("    }\n")
+				.append("  ]\n")
+				.append("}</pre>\n")
+				.append("  </div>\n")
+				.append("</div>\n");
+
+		// Card 3: Detailed Forensics Endpoint
+		sb.append("<div class=\"card\">\n")
+				.append("  <div class=\"card-header\">\n")
+				.append("    <div class=\"card-title-group\">\n")
+				.append("      <span class=\"badge badge-get\">GET</span>\n")
+				.append("      <span class=\"valve-name\"><code>").append(escapeHtml(statusUri)).append("?format=json&amp;view=details</code></span>\n")
+				.append("      <span class=\"badge badge-blocking\">COUNTER FORENSICS</span>\n")
+				.append("    </div>\n")
+				.append("    <div class=\"card-actions\">\n")
+				.append("      <a class=\"btn\" href=\"").append(detailsJsonUrl).append("\" target=\"_blank\">Execute Query</a>\n")
+				.append("    </div>\n")
+				.append("  </div>\n")
+				.append("  <p>Delivers detailed sliding-window slot buffers and granular lists of blocked and top active client IPs/subnets, including cardinality metrics, visitor/auth counts, and sampled URIs.</p>\n")
+				.append("  <table class=\"data-table\">\n")
+				.append("    <thead><tr><th>Parameter</th><th>In</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>\n")
+				.append("    <tbody>\n")
+				.append("      <tr><td><code>format</code></td><td>query</td><td>string</td><td>-</td><td>Must be <code>json</code>.</td></tr>\n")
+				.append("      <tr><td><code>view</code></td><td>query</td><td>string</td><td>-</td><td>Must be <code>details</code> (or pass <code>details=true</code>).</td></tr>\n")
+				.append("      <tr><td><code>valve</code></td><td>query</td><td>string</td><td>first</td><td>Target Valve <code>monitorName</code>.</td></tr>\n")
+				.append("      <tr><td><code>slot</code></td><td>query</td><td>string</td><td><code>current</code></td><td>Target slot: <code>current</code>, <code>previous</code>, or epoch <code>slotKey</code>.</td></tr>\n")
+				.append("      <tr><td><code>limit</code></td><td>query</td><td>integer</td><td><code>50</code></td><td>Fallback max entries for blocked and active client arrays.</td></tr>\n")
+				.append("      <tr><td><code>blockedLimit</code></td><td>query</td><td>integer</td><td><code>50</code></td><td>Max blocked clients returned (supports integer, <code>all</code>, or <code>-1</code>).</td></tr>\n")
+				.append("      <tr><td><code>activeLimit</code></td><td>query</td><td>integer</td><td><code>50</code></td><td>Max active clients returned (supports integer, <code>all</code>, or <code>-1</code>).</td></tr>\n")
+				.append("      <tr><td><code>sinceBlockedOrder</code></td><td>query</td><td>int64</td><td>-</td><td><strong>Incremental SIEM cursor</strong>: Returns only blocked counters with order &gt; <code>sinceBlockedOrder</code>.</td></tr>\n")
+				.append("      <tr><td><code>sinceActiveOrder</code></td><td>query</td><td>int64</td><td>-</td><td><strong>Incremental SIEM cursor</strong>: Returns only active counters with order &gt; <code>sinceActiveOrder</code>.</td></tr>\n")
+				.append("      <tr><td><code>activeMinCount</code></td><td>query</td><td>integer</td><td>-</td><td>Filter out active clients having fewer than <code>activeMinCount</code> requests.</td></tr>\n")
+				.append("    </tbody>\n")
+				.append("  </table>\n")
+				.append("  <div class=\"valve-desc\" style=\"margin-top:12px;\">\n")
+				.append("    &#128161; <strong>SIEM Incremental Polling Tip:</strong> To avoid downloading entire counter caches on each poll, store the returned <code>maxBlockedOrder</code>\n")
+				.append("    and pass it as <code>&amp;sinceBlockedOrder=&lt;last_order&gt;</code> in the next poll. The Valve will only return newly blocked IPs added since the last check!\n")
+				.append("  </div>\n")
+				.append("  <div style=\"margin-top:12px;font-weight:600;color:var(--muted);\">Example Request:</div>\n")
+				.append("  <div class=\"code-box\">\n")
+				.append("    <button type=\"button\" class=\"btn copy-btn\" onclick=\"copyCode(this, 'curl-details')\">Copy</button>\n")
+				.append("    <pre id=\"curl-details\">curl -s -H \"Authorization: Bearer mySecretToken\" \"http://localhost:8080").append(escapeHtml(statusUri)).append("?format=json&amp;view=details&amp;limit=50\"</pre>\n")
+				.append("  </div>\n")
+				.append("  <div style=\"margin-top:12px;font-weight:600;color:var(--muted);\">Example Response (200 OK):</div>\n")
+				.append("  <div class=\"code-box\">\n")
+				.append("    <button type=\"button\" class=\"btn copy-btn\" onclick=\"copyCode(this, 'json-details-resp')\">Copy</button>\n")
+				.append("    <pre id=\"json-details-resp\">{\n")
+				.append("  \"serverTime\": \"2026-11-07T22:30:00Z\",\n")
+				.append("  \"valve\": { \"monitorName\": \"AntiDoSValve-App\", \"allowedRequestsPerSlot\": 100, ... },\n")
+				.append("  \"slots\": [ ... ],\n")
+				.append("  \"selectedSlot\": { \"type\": \"CURRENT\", \"slotKey\": 179374020, \"totalRequests\": 4820 },\n")
+				.append("  \"totalBlockedClients\": 1,\n")
+				.append("  \"maxBlockedOrder\": 108,\n")
+				.append("  \"blockedClients\": [\n")
+				.append("    {\n")
+				.append("      \"key\": \"198.51.100.24\",\n")
+				.append("      \"count\": 142,\n")
+				.append("      \"retained\": 12,\n")
+				.append("      \"effective\": 154,\n")
+				.append("      \"limit\": 100,\n")
+				.append("      \"distinctClients\": 1,\n")
+				.append("      \"sampleMethod\": \"POST\",\n")
+				.append("      \"sampleUri\": \"/api/login\",\n")
+				.append("      \"sampleUserAgent\": \"python-requests/2.31.0\",\n")
+				.append("      \"status\": \"BLOCKED\"\n")
+				.append("    }\n")
+				.append("  ],\n")
+				.append("  \"totalActiveClients\": 42,\n")
+				.append("  \"maxActiveOrder\": 350,\n")
+				.append("  \"topActiveClients\": [ ... ]\n")
+				.append("}</pre>\n")
+				.append("  </div>\n")
+				.append("</div>\n");
+
+		// Card 4: Machine-Readable OpenAPI Specification
+		sb.append("<div class=\"card\">\n")
+				.append("  <div class=\"card-header\">\n")
+				.append("    <div class=\"card-title-group\">\n")
+				.append("      <span class=\"badge badge-get\">GET</span>\n")
+				.append("      <span class=\"valve-name\"><code>").append(escapeHtml(statusUri)).append("?format=openapi</code></span>\n")
+				.append("      <span class=\"badge badge-info\">OPENAPI SPEC</span>\n")
+				.append("    </div>\n")
+				.append("    <div class=\"card-actions\">\n")
+				.append("      <a class=\"btn\" href=\"").append(openApiJsonUrl).append("\" target=\"_blank\">View JSON</a>\n")
+				.append("      <a class=\"btn\" href=\"").append(openApiJsonUrl).append("\" download=\"antidos-openapi.json\">&#11015;&#65039; Download</a>\n")
+				.append("    </div>\n")
+				.append("  </div>\n")
+				.append("  <p>Returns the complete OpenAPI 3.1.0 document in JSON format. This can be directly imported into Postman, Insomnia, Swagger UI, or SIEM connector builders.</p>\n")
+				.append("  <div class=\"code-box\">\n")
+				.append("    <button type=\"button\" class=\"btn copy-btn\" onclick=\"copyCode(this, 'curl-openapi')\">Copy</button>\n")
+				.append("    <pre id=\"curl-openapi\">curl -s -H \"Authorization: Bearer mySecretToken\" \"http://localhost:8080").append(escapeHtml(statusUri)).append("?format=openapi\"</pre>\n")
+				.append("  </div>\n")
+				.append("</div>\n");
+
+		// Card 5: HTTP Status Codes
+		sb.append("<div class=\"card\">\n")
+				.append("  <div class=\"card-header\">\n")
+				.append("    <span class=\"valve-name\">HTTP Status Codes &amp; Diagnostics</span>\n")
+				.append("  </div>\n")
+				.append("  <table class=\"data-table\">\n")
+				.append("    <thead><tr><th>Status Code</th><th>Reason</th><th>Description</th></tr></thead>\n")
+				.append("    <tbody>\n")
+				.append("      <tr><td><span class=\"badge badge-status\">200 OK</span></td><td>Success</td><td>Request authorized. Returns JSON status payload, OpenAPI specification, or HTML dashboard.</td></tr>\n")
+				.append("      <tr><td><span class=\"badge badge-warn\">401 Unauthorized</span></td><td>Invalid Token</td><td>Missing or invalid authentication token/password. Symmetrically penalizes the requesting IP in the monitor.</td></tr>\n")
+				.append("      <tr><td><span class=\"badge badge-blocking\">404 Not Found</span></td><td>IP Restricted</td><td>Client IP address is rejected by <code>statusAllowedIPs</code> regex restriction.</td></tr>\n")
+				.append("      <tr><td><span class=\"badge badge-blocking\">429 Too Many Requests</span></td><td>Rate-Limited</td><td>Client IP address is currently blocked by the monitor and provided no valid token. Includes <code>Retry-After</code> header.</td></tr>\n")
+				.append("    </tbody>\n")
+				.append("  </table>\n")
+				.append("</div>\n");
 
 		sb.append("</body>\n</html>\n");
 		return sb.toString();

@@ -2034,7 +2034,13 @@ public class AntiDoSValve extends ValveBase {
 		String sinceActiveOrder = request.getParameter("sinceActiveOrder");
 		String activeMinCount = request.getParameter("activeMinCount");
 
-		if (isJson) {
+		boolean isOpenApi = "openapi".equalsIgnoreCase(format) || "openapi.json".equalsIgnoreCase(format) ||
+				"openapi".equalsIgnoreCase(view) || "openapi.json".equalsIgnoreCase(view) ||
+				(request.getHeader("Accept") != null && request.getHeader("Accept").contains("application/vnd.oai.openapi+json"));
+
+		if (isOpenApi) {
+			statusRenderer.renderOpenApiJson(response);
+		} else if (isJson) {
 			touchCollectorLease();
 			for (AntiDoSValve v : getValvesToRender()) {
 				if (filterValve == null || filterValve.trim().isEmpty() || v.getMonitorName().equalsIgnoreCase(filterValve.trim())) {

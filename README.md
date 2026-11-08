@@ -775,8 +775,12 @@ Exposing internal rate-limiting metrics over HTTP presents security risks (such 
 
 ## Accessing the Dashboard
 
-* **In the browser:**
+* **In the browser (Dashboard):**
   `http://localhost:8080/antidos-status?token=<token>`
+* **Interactive API Documentation (OpenAPI 3.1 & REST Guide):**
+  `http://localhost:8080/antidos-status?token=<token>&view=docs`
+* **OpenAPI 3.1 Machine-Readable JSON Specification:**
+  `curl -H "Authorization: Bearer <token>" "http://localhost:8080/antidos-status?format=openapi"`
 * **Via Bearer Authorization:**
   `curl -H "Authorization: Bearer <token>" http://localhost:8080/antidos-status`
 * **JSON Overview (All Valves):**
@@ -788,14 +792,17 @@ Exposing internal rate-limiting metrics over HTTP presents security risks (such 
 * **Filter Specific Valve (HTML View):**
   `http://localhost:8080/antidos-status?token=<token>&valve=STATUS+VALVE`
 
+> [!TIP]
+> The static OpenAPI 3.1 specification is also available in the repository at [docs/openapi.yaml](docs/openapi.yaml) and [docs/openapi.json](docs/openapi.json) for easy integration into SIEM tools, Postman, or client SDK generators.
+
 ## Monitoring Collector Parameters
 
-When polling the status endpoint from automated monitoring scripts or collectors:
+When polling the status endpoint from automated monitoring scripts, SIEM systems, or collectors:
 
 | Parameter | Values | Description |
 |---|---|---|
-| `format` | `json` | Renders machine-readable JSON output (can also be requested via `Accept: application/json` header). |
-| `view` | `details` | Renders full details for a valve, including the ring buffer slots, `selectedSlot`, `blockedClients`, and `topActiveClients`. |
+| `format` | `json`, `openapi` | Renders machine-readable output: `json` for monitor metrics or `openapi` (or `openapi.json`) for the full OpenAPI 3.1 specification. Also negotiated via `Accept: application/json` or `Accept: application/vnd.oai.openapi+json`. |
+| `view` | `details`, `docs`, `openapi` | Selects the response view: `details` for deep slot/counter forensics, `docs` (or `api`) for interactive HTML API documentation in dashboard style, or `openapi` for OpenAPI JSON. |
 | `slot` | `current`, `previous`, `<slotKey>` | Selects which slot's blocked/active client list to inspect. Using `slot=previous` returns the completed previous time window (requires `numberOfSlots >= 2`; collectors should deduplicate by `slotKey`). Default: `current`. |
 | `limit` | positive integer (e.g. `100`), `all`, `-1` | Maximum number of clients returned (applies to both blocked and active lists as fallback). `all` or `-1` returns all entries (HTML tables capped at 1,000 for browser responsiveness). `0` or omitted defaults to `50`. |
 | `blockedLimit` | positive integer, `0`, `all`, `-1` | Specific limit for the `blockedClients` list. Falls back to `limit` if omitted. Specifying `0` suppresses blocked clients entirely. |

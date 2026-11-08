@@ -1493,6 +1493,52 @@ class AntiDoSValveTest {
 		assertEquals(-1, respJson.getErrorCode());
 		assertTrue(respJson.getOutput().contains("\"totalActiveValves\":"));
 
+		// OpenAPI JSON format via ?format=openapi
+		TestRequest reqOpenApi = new TestRequest("/antidos-status", ip);
+		reqOpenApi.setParameter("token", "validKey");
+		reqOpenApi.setParameter("format", "openapi");
+		TestResponse respOpenApi = new TestResponse();
+		valve.handleStatusRequest(reqOpenApi, respOpenApi, ip);
+		assertEquals(-1, respOpenApi.getErrorCode());
+		assertTrue(respOpenApi.getOutput().contains("\"openapi\": \"3.1.0\""));
+		assertTrue(respOpenApi.getOutput().contains("\"ValveSummaryResponse\""));
+
+		// OpenAPI JSON format via Accept header
+		TestRequest reqOpenApiAccept = new TestRequest("/antidos-status", ip);
+		reqOpenApiAccept.setHeader("Authorization", "Bearer validKey");
+		reqOpenApiAccept.setHeader("Accept", "application/vnd.oai.openapi+json");
+		TestResponse respOpenApiAccept = new TestResponse();
+		valve.handleStatusRequest(reqOpenApiAccept, respOpenApiAccept, ip);
+		assertEquals(-1, respOpenApiAccept.getErrorCode());
+		assertTrue(respOpenApiAccept.getOutput().contains("\"openapi\": \"3.1.0\""));
+
+		// API Docs HTML via ?view=docs
+		TestRequest reqDocs = new TestRequest("/antidos-status", ip);
+		reqDocs.setParameter("token", "validKey");
+		reqDocs.setParameter("view", "docs");
+		TestResponse respDocs = new TestResponse();
+		valve.handleStatusRequest(reqDocs, respDocs, ip);
+		assertEquals(-1, respDocs.getErrorCode());
+		assertTrue(respDocs.getOutput().contains("Anti-DoS Valve API Documentation"));
+		assertTrue(respDocs.getOutput().contains("token=validKey"));
+		assertTrue(respDocs.getOutput().contains("format=openapi"));
+
+		// API Docs HTML via ?view=api
+		TestRequest reqApi = new TestRequest("/antidos-status", ip);
+		reqApi.setParameter("token", "validKey");
+		reqApi.setParameter("view", "api");
+		TestResponse respApi = new TestResponse();
+		valve.handleStatusRequest(reqApi, respApi, ip);
+		assertEquals(-1, respApi.getErrorCode());
+		assertTrue(respApi.getOutput().contains("Anti-DoS Valve API Documentation"));
+
+		// Unauthorized request to OpenAPI spec -> 401
+		TestRequest reqUnauthorizedOpenApi = new TestRequest("/antidos-status", ip);
+		reqUnauthorizedOpenApi.setParameter("format", "openapi");
+		TestResponse respUnauthorizedOpenApi = new TestResponse();
+		valve.handleStatusRequest(reqUnauthorizedOpenApi, respUnauthorizedOpenApi, ip);
+		assertEquals(401, respUnauthorizedOpenApi.getErrorCode());
+
 		valve.stop();
 	}
 
