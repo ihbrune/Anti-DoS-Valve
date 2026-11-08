@@ -229,6 +229,18 @@ public class AntiDoSValve extends ValveBase {
 	private volatile Pattern mitigationAllowedIPs = null;
 	private volatile boolean mitigationAllowedIPsValid = true;
 	private volatile String mitigationPassword = null;
+	/** Default minimal IPv4 prefix length (i.e. broadest allowed IPv4 network) for remotely pushed dynamic blocks */
+	public static final int DEFAULT_MITIGATION_MIN_PREFIX_V4 = 16;
+	/** Default minimal IPv6 prefix length for remotely pushed dynamic blocks */
+	public static final int DEFAULT_MITIGATION_MIN_PREFIX_V6 = 32;
+	/** Default maximum TTL (24 hours) for remotely pushed dynamic blocks */
+	public static final int DEFAULT_MITIGATION_MAX_TTL_SECONDS = 86400;
+	/** Default maximum number of simultaneously active dynamic blocks */
+	public static final int DEFAULT_MITIGATION_MAX_ACTIVE_BLOCKS = 5000;
+	private volatile int mitigationMinPrefixV4 = DEFAULT_MITIGATION_MIN_PREFIX_V4;
+	private volatile int mitigationMinPrefixV6 = DEFAULT_MITIGATION_MIN_PREFIX_V6;
+	private volatile int mitigationMaxTtlSeconds = DEFAULT_MITIGATION_MAX_TTL_SECONDS;
+	private volatile int mitigationMaxActiveBlocks = DEFAULT_MITIGATION_MAX_ACTIVE_BLOCKS;
 	private final AntiDoSDynamicBlockRegistry dynamicBlockRegistry = new AntiDoSDynamicBlockRegistry();
 	private final AntiDoSStatusRenderer statusRenderer = new AntiDoSStatusRenderer(this);
 
@@ -1809,6 +1821,162 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
+	 * @return The minimal IPv4 prefix length accepted for remotely pushed dynamic blocks (e.g. 16 for /16)
+	 */
+	public int getMitigationMinPrefixV4() {
+		return mitigationMinPrefixV4;
+	}
+
+	/**
+	 * Sets the minimal IPv4 prefix length (1 to 32) accepted for remotely pushed dynamic
+	 * blocks. Broader blocks (smaller prefix lengths) are rejected with HTTP 400 (default: 16).
+	 *
+	 * @param mitigationMinPrefixV4 The minimal IPv4 prefix length
+	 */
+	public void setMitigationMinPrefixV4(int mitigationMinPrefixV4) {
+		this.mitigationMinPrefixV4 = mitigationMinPrefixV4;
+	}
+
+	/**
+	 * Sets the minimal IPv4 prefix length from a string (e.g. "16" or "/16"). Empty
+	 * values restore the default.
+	 *
+	 * @param mitigationMinPrefixV4 The minimal IPv4 prefix length as string
+	 */
+	public void setMitigationMinPrefixV4(String mitigationMinPrefixV4) {
+		this.mitigationMinPrefixV4 = parseMitigationIntParam(mitigationMinPrefixV4, DEFAULT_MITIGATION_MIN_PREFIX_V4, true);
+	}
+
+	/**
+	 * @return <code>true</code> if {@link #getMitigationMinPrefixV4()} is between 1 and 32
+	 */
+	public boolean isMitigationMinPrefixV4Valid() {
+		return mitigationMinPrefixV4 >= 1 && mitigationMinPrefixV4 <= 32;
+	}
+
+	/**
+	 * @return The minimal IPv6 prefix length accepted for remotely pushed dynamic blocks (e.g. 32 for /32)
+	 */
+	public int getMitigationMinPrefixV6() {
+		return mitigationMinPrefixV6;
+	}
+
+	/**
+	 * Sets the minimal IPv6 prefix length (1 to 128) accepted for remotely pushed dynamic
+	 * blocks. Broader blocks (smaller prefix lengths) are rejected with HTTP 400 (default: 32).
+	 *
+	 * @param mitigationMinPrefixV6 The minimal IPv6 prefix length
+	 */
+	public void setMitigationMinPrefixV6(int mitigationMinPrefixV6) {
+		this.mitigationMinPrefixV6 = mitigationMinPrefixV6;
+	}
+
+	/**
+	 * Sets the minimal IPv6 prefix length from a string (e.g. "32" or "/32"). Empty
+	 * values restore the default.
+	 *
+	 * @param mitigationMinPrefixV6 The minimal IPv6 prefix length as string
+	 */
+	public void setMitigationMinPrefixV6(String mitigationMinPrefixV6) {
+		this.mitigationMinPrefixV6 = parseMitigationIntParam(mitigationMinPrefixV6, DEFAULT_MITIGATION_MIN_PREFIX_V6, true);
+	}
+
+	/**
+	 * @return <code>true</code> if {@link #getMitigationMinPrefixV6()} is between 1 and 128
+	 */
+	public boolean isMitigationMinPrefixV6Valid() {
+		return mitigationMinPrefixV6 >= 1 && mitigationMinPrefixV6 <= 128;
+	}
+
+	/**
+	 * @return The maximum TTL in seconds for remotely pushed dynamic blocks
+	 */
+	public int getMitigationMaxTtlSeconds() {
+		return mitigationMaxTtlSeconds;
+	}
+
+	/**
+	 * Sets the maximum TTL in seconds for remotely pushed dynamic blocks. Requested
+	 * expiration timestamps beyond this limit are capped (not rejected) to
+	 * <code>now + mitigationMaxTtlSeconds</code> (default: 86400 = 24 hours).
+	 *
+	 * @param mitigationMaxTtlSeconds The maximum TTL in seconds (must be positive)
+	 */
+	public void setMitigationMaxTtlSeconds(int mitigationMaxTtlSeconds) {
+		this.mitigationMaxTtlSeconds = mitigationMaxTtlSeconds;
+	}
+
+	/**
+	 * Sets the maximum TTL in seconds from a string. Empty values restore the default.
+	 *
+	 * @param mitigationMaxTtlSeconds The maximum TTL in seconds as string
+	 */
+	public void setMitigationMaxTtlSeconds(String mitigationMaxTtlSeconds) {
+		this.mitigationMaxTtlSeconds = parseMitigationIntParam(mitigationMaxTtlSeconds, DEFAULT_MITIGATION_MAX_TTL_SECONDS, false);
+	}
+
+	/**
+	 * @return <code>true</code> if {@link #getMitigationMaxTtlSeconds()} is positive
+	 */
+	public boolean isMitigationMaxTtlSecondsValid() {
+		return mitigationMaxTtlSeconds > 0;
+	}
+
+	/**
+	 * @return The maximum number of simultaneously active dynamic blocks on this valve
+	 */
+	public int getMitigationMaxActiveBlocks() {
+		return mitigationMaxActiveBlocks;
+	}
+
+	/**
+	 * Sets the maximum number of simultaneously active dynamic blocks on this valve.
+	 * Mitigation commands that would exceed this limit are rejected as a whole with
+	 * HTTP 409 Conflict, leaving the existing rule set untouched (default: 5000).
+	 *
+	 * @param mitigationMaxActiveBlocks The maximum number of active blocks (must be positive)
+	 */
+	public void setMitigationMaxActiveBlocks(int mitigationMaxActiveBlocks) {
+		this.mitigationMaxActiveBlocks = mitigationMaxActiveBlocks;
+	}
+
+	/**
+	 * Sets the maximum number of simultaneously active dynamic blocks from a string.
+	 * Empty values restore the default.
+	 *
+	 * @param mitigationMaxActiveBlocks The maximum number of active blocks as string
+	 */
+	public void setMitigationMaxActiveBlocks(String mitigationMaxActiveBlocks) {
+		this.mitigationMaxActiveBlocks = parseMitigationIntParam(mitigationMaxActiveBlocks, DEFAULT_MITIGATION_MAX_ACTIVE_BLOCKS, false);
+	}
+
+	/**
+	 * @return <code>true</code> if {@link #getMitigationMaxActiveBlocks()} is positive
+	 */
+	public boolean isMitigationMaxActiveBlocksValid() {
+		return mitigationMaxActiveBlocks > 0;
+	}
+
+	/**
+	 * Parses an integer mitigation guardrail parameter. Empty values yield the default,
+	 * unparsable values yield <code>-1</code> so that configuration validation fails.
+	 */
+	private static int parseMitigationIntParam(String value, int defaultValue, boolean allowLeadingSlash) {
+		if (value == null || value.trim().isEmpty()) {
+			return defaultValue;
+		}
+		String v = value.trim();
+		if (allowLeadingSlash && v.startsWith("/")) {
+			v = v.substring(1).trim();
+		}
+		try {
+			return Integer.parseInt(v);
+		} catch (NumberFormatException e) {
+			return -1;
+		}
+	}
+
+	/**
 	 * @return The dynamic CIDR block registry for this valve instance
 	 */
 	public AntiDoSDynamicBlockRegistry getDynamicBlockRegistry() {
@@ -2307,6 +2475,7 @@ public class AntiDoSValve extends ValveBase {
 
 		long now = getTimeInMillis();
 		touchCollectorLease();
+		int ttlCappedCount = 0;
 
 		try {
 			if ("clear".equals(action) || "clearblocks".equals(action)) {
@@ -2331,8 +2500,10 @@ public class AntiDoSValve extends ValveBase {
 			} else if ("replace".equals(action) || "replaceblocks".equals(action)) {
 				String blocksParam = request.getParameter("blocks");
 				List<AntiDoSDynamicBlockRegistry.BlockSpec> specs = parseBlockSpecs(blocksParam, now);
-				dynamicBlockRegistry.replaceAllBlocks(specs, now);
+				ttlCappedCount = capBlockSpecTtls(specs, now);
+				dynamicBlockRegistry.replaceAllBlocks(specs, now, mitigationMaxActiveBlocks);
 			} else if ("upsert".equals(action) || "upsertblocks".equals(action)) {
+				List<AntiDoSDynamicBlockRegistry.BlockSpec> specs = new ArrayList<>();
 				String singleCidr = request.getParameter("cidr");
 				if (singleCidr != null && !singleCidr.trim().isEmpty()) {
 					long expiresAt = resolveExpiresAtMillis(
@@ -2341,19 +2512,22 @@ public class AntiDoSValve extends ValveBase {
 							now);
 					String reason = request.getParameter("reason");
 					validateMitigationPrefixSafety(singleCidr.trim());
-					dynamicBlockRegistry.upsertBlock(singleCidr.trim(), expiresAt, reason, now);
+					specs.add(new AntiDoSDynamicBlockRegistry.BlockSpec(singleCidr.trim(), expiresAt, reason));
 				}
 				String blocksParam = request.getParameter("blocks");
 				if (blocksParam != null && !blocksParam.trim().isEmpty()) {
-					List<AntiDoSDynamicBlockRegistry.BlockSpec> specs = parseBlockSpecs(blocksParam, now);
-					for (AntiDoSDynamicBlockRegistry.BlockSpec spec : specs) {
-						dynamicBlockRegistry.upsertBlock(spec.cidr, spec.expiresAtMillis, spec.reason, now);
-					}
+					specs.addAll(parseBlockSpecs(blocksParam, now));
 				}
+				ttlCappedCount = capBlockSpecTtls(specs, now);
+				dynamicBlockRegistry.upsertBlocks(specs, now, mitigationMaxActiveBlocks);
 			} else {
 				response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Unknown mitigation action: " + action);
 				return;
 			}
+		} catch (AntiDoSDynamicBlockRegistry.CapacityExceededException e) {
+			log.warn(name4logging + " Mitigation command rejected (mitigationMaxActiveBlocks exceeded): " + e.getMessage());
+			response.sendError(HttpServletResponse.SC_CONFLICT, e.getMessage());
+			return;
 		} catch (IllegalArgumentException e) {
 			response.sendError(HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
 			return;
@@ -2373,9 +2547,34 @@ public class AntiDoSValve extends ValveBase {
 				+ "  \"action\": \"" + AntiDoSStatusRenderer.escapeJson(action) + "\",\n"
 				+ "  \"dynamicBlocksActiveCount\": " + activeCount + ",\n"
 				+ "  \"dynamicRulesRevision\": " + revision + ",\n"
-				+ "  \"dynamicBlocksBlockedRequests\": " + totalBlocked + "\n"
+				+ "  \"dynamicBlocksBlockedRequests\": " + totalBlocked + ",\n"
+				+ "  \"ttlCappedCount\": " + ttlCappedCount + ",\n"
+				+ "  \"mitigationMaxTtlSeconds\": " + mitigationMaxTtlSeconds + ",\n"
+				+ "  \"mitigationMaxActiveBlocks\": " + mitigationMaxActiveBlocks + "\n"
 				+ "}";
 		response.getWriter().write(json);
+	}
+
+	/**
+	 * Caps the expiration timestamps of the given block specifications in place to
+	 * <code>nowMillis + mitigationMaxTtlSeconds</code>.
+	 *
+	 * @return Number of specifications whose TTL was capped
+	 */
+	int capBlockSpecTtls(List<AntiDoSDynamicBlockRegistry.BlockSpec> specs, long nowMillis) {
+		long maxExpiresAt = nowMillis + Math.max(1L, (long) mitigationMaxTtlSeconds) * 1000L;
+		int capped = 0;
+		for (int i = 0; i < specs.size(); i++) {
+			AntiDoSDynamicBlockRegistry.BlockSpec spec = specs.get(i);
+			if (spec.expiresAtMillis > maxExpiresAt) {
+				specs.set(i, new AntiDoSDynamicBlockRegistry.BlockSpec(spec.cidr, maxExpiresAt, spec.reason));
+				capped++;
+			}
+		}
+		if (capped > 0 && log.isDebugEnabled()) {
+			log.debug(name4logging + " Capped TTL of " + capped + " dynamic block(s) to mitigationMaxTtlSeconds=" + mitigationMaxTtlSeconds);
+		}
+		return capped;
 	}
 
 	private List<AntiDoSDynamicBlockRegistry.BlockSpec> parseBlockSpecs(String blocksParam, long nowMillis) {
@@ -2421,11 +2620,13 @@ public class AntiDoSValve extends ValveBase {
 
 	private void validateMitigationPrefixSafety(String rawCidr) {
 		AntiDoSDynamicBlockRegistry.ParsedCidr parsed = AntiDoSDynamicBlockRegistry.parseAndNormalizeCidr(rawCidr);
-		if (!parsed.ipv6 && parsed.prefixBits < 16) {
-			throw new IllegalArgumentException("IPv4 dynamic block prefix must be at least /16 (rejected: " + parsed.canonicalCidr + ")");
+		int minV4 = mitigationMinPrefixV4;
+		int minV6 = mitigationMinPrefixV6;
+		if (!parsed.ipv6 && parsed.prefixBits < minV4) {
+			throw new IllegalArgumentException("IPv4 dynamic block prefix must be at least /" + minV4 + " (rejected: " + parsed.canonicalCidr + ")");
 		}
-		if (parsed.ipv6 && parsed.prefixBits < 32) {
-			throw new IllegalArgumentException("IPv6 dynamic block prefix must be at least /32 (rejected: " + parsed.canonicalCidr + ")");
+		if (parsed.ipv6 && parsed.prefixBits < minV6) {
+			throw new IllegalArgumentException("IPv6 dynamic block prefix must be at least /" + minV6 + " (rejected: " + parsed.canonicalCidr + ")");
 		}
 	}
 
@@ -2704,6 +2905,14 @@ public class AntiDoSValve extends ValveBase {
 			throw new LifecycleException(name4logging + ".statusAllowedIPs is invalid: " + statusAllowedIPsConfigValue);
 		if (!mitigationAllowedIPsValid)
 			throw new LifecycleException(name4logging + ".mitigationAllowedIPs is invalid: " + mitigationAllowedIPsConfigValue);
+		if (!isMitigationMinPrefixV4Valid())
+			throw new LifecycleException(name4logging + ".mitigationMinPrefixV4 must be between 1 and 32: " + mitigationMinPrefixV4);
+		if (!isMitigationMinPrefixV6Valid())
+			throw new LifecycleException(name4logging + ".mitigationMinPrefixV6 must be between 1 and 128: " + mitigationMinPrefixV6);
+		if (!isMitigationMaxTtlSecondsValid())
+			throw new LifecycleException(name4logging + ".mitigationMaxTtlSeconds must be positive: " + mitigationMaxTtlSeconds);
+		if (!isMitigationMaxActiveBlocksValid())
+			throw new LifecycleException(name4logging + ".mitigationMaxActiveBlocks must be positive: " + mitigationMaxActiveBlocks);
 		if (!isMonitorModeValid())
 			throw new LifecycleException(name4logging + ".monitorMode is invalid");
 		if (!isHttpStatusCodeValid())

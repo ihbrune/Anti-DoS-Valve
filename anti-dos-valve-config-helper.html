@@ -2058,7 +2058,7 @@
               </div>
 
               <!-- 39. mitigationAllowedIPs -->
-              <div class="field-group status-field-group" style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
+              <div class="field-group status-field-group">
                 <div class="field-header">
                   <label for="mitigationAllowedIPs" class="field-label">mitigationAllowedIPs</label>
                   <span class="badge badge-optional">Optional</span>
@@ -2067,6 +2067,50 @@
                   only the Collector IP). If empty, falls back to <code>statusAllowedIPs</code>.</div>
                 <input type="text" id="mitigationAllowedIPs" name="mitigationAllowedIPs"
                   placeholder="Defaults to statusAllowedIPs if empty (e.g. 127\.0\.0\.1|10\.0\.0\.5)">
+              </div>
+
+              <!-- 40. mitigationMinPrefixV4 -->
+              <div class="field-group status-field-group">
+                <div class="field-header">
+                  <label for="mitigationMinPrefixV4" class="field-label">mitigationMinPrefixV4</label>
+                  <span class="badge badge-optional">Optional</span>
+                </div>
+                <div class="field-desc">Broadest allowed IPv4 prefix for remotely pushed dynamic blocks (1&ndash;32, default: <code>16</code>). Broader blocks (e.g. <code>/8</code>) are rejected with HTTP 400.</div>
+                <input type="number" id="mitigationMinPrefixV4" name="mitigationMinPrefixV4" min="1" max="32" step="1"
+                  placeholder="16">
+              </div>
+
+              <!-- 41. mitigationMinPrefixV6 -->
+              <div class="field-group status-field-group">
+                <div class="field-header">
+                  <label for="mitigationMinPrefixV6" class="field-label">mitigationMinPrefixV6</label>
+                  <span class="badge badge-optional">Optional</span>
+                </div>
+                <div class="field-desc">Broadest allowed IPv6 prefix for remotely pushed dynamic blocks (1&ndash;128, default: <code>32</code>). Broader blocks (e.g. <code>/24</code>) are rejected with HTTP 400.</div>
+                <input type="number" id="mitigationMinPrefixV6" name="mitigationMinPrefixV6" min="1" max="128" step="1"
+                  placeholder="32">
+              </div>
+
+              <!-- 42. mitigationMaxTtlSeconds -->
+              <div class="field-group status-field-group">
+                <div class="field-header">
+                  <label for="mitigationMaxTtlSeconds" class="field-label">mitigationMaxTtlSeconds</label>
+                  <span class="badge badge-optional">Optional</span>
+                </div>
+                <div class="field-desc">Upper bound in seconds for the expiration of pushed dynamic blocks (default: <code>86400</code> = 24h). Longer expiration requests are automatically capped to this duration.</div>
+                <input type="number" id="mitigationMaxTtlSeconds" name="mitigationMaxTtlSeconds" min="1" step="1"
+                  placeholder="86400">
+              </div>
+
+              <!-- 43. mitigationMaxActiveBlocks -->
+              <div class="field-group status-field-group" style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
+                <div class="field-header">
+                  <label for="mitigationMaxActiveBlocks" class="field-label">mitigationMaxActiveBlocks</label>
+                  <span class="badge badge-optional">Optional</span>
+                </div>
+                <div class="field-desc">Maximum number of simultaneously active dynamic blocks on this Valve (default: <code>5000</code>). Commands exceeding this limit are atomically rejected with HTTP 409 Conflict.</div>
+                <input type="number" id="mitigationMaxActiveBlocks" name="mitigationMaxActiveBlocks" min="1" step="1"
+                  placeholder="5000">
               </div>
             </div>
           </form>
@@ -2693,7 +2737,11 @@
       { key: 'relevantAuthScope', isRequired: false, defaultVal: 'ALL' },
       { key: 'mitigationPassword', isRequired: false, defaultVal: '' },
       { key: 'mitigationUri', isRequired: false, defaultVal: '' },
-      { key: 'mitigationAllowedIPs', isRequired: false, defaultVal: '' }
+      { key: 'mitigationAllowedIPs', isRequired: false, defaultVal: '' },
+      { key: 'mitigationMinPrefixV4', isRequired: false, defaultVal: 16 },
+      { key: 'mitigationMinPrefixV6', isRequired: false, defaultVal: 32 },
+      { key: 'mitigationMaxTtlSeconds', isRequired: false, defaultVal: 86400 },
+      { key: 'mitigationMaxActiveBlocks', isRequired: false, defaultVal: 5000 }
     ];
 
     const form = document.getElementById('valveForm');
@@ -2841,6 +2889,12 @@
             if (param.key === 'authSessionTtlSeconds' && (val === '900' || val === 900 || parseInt(val, 10) === 900)) return;
             if (param.key === 'maxAuthCacheSize' && (val === '50000' || val === 50000 || parseInt(val, 10) === 50000)) return;
             if (param.key === 'relevantAuthScope' && (val === 'ALL' || val === '')) return;
+            const mitPwdVal = (document.getElementById('mitigationPassword').value || '').trim();
+            if (param.key.startsWith('mitigation') && param.key !== 'mitigationPassword' && !mitPwdVal) return;
+            if (param.key === 'mitigationMinPrefixV4' && (val === '16' || val === 16 || parseInt(val, 10) === 16)) return;
+            if (param.key === 'mitigationMinPrefixV6' && (val === '32' || val === 32 || parseInt(val, 10) === 32)) return;
+            if (param.key === 'mitigationMaxTtlSeconds' && (val === '86400' || val === 86400 || parseInt(val, 10) === 86400)) return;
+            if (param.key === 'mitigationMaxActiveBlocks' && (val === '5000' || val === 5000 || parseInt(val, 10) === 5000)) return;
           }
         }
 

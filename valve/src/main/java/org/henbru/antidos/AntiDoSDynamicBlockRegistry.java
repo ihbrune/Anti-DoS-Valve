@@ -224,6 +224,86 @@ public class AntiDoSDynamicBlockRegistry {
 	 * preserving hit counters for rules that remain active and removing rules not present in {@code specs}.
 	 */
 	public synchronized int replaceAllBlocks(Collection<BlockSpec> specs, long nowMillis) {
+		return replaceAllBlocks(specs, nowMillis, 0);
+	}
+
+	/**
+	 * Atomically reconciles the registry with the given full set of block specifications,
+	 * enforcing an upper limit for the number of active rules. If the resulting rule set would
+	 * exceed {@code maxActiveBlocks}, the registry is left untouched.
+	 *
+	 * @param specs           Full desired set of block specifications
+	 * @param nowMillis       Current epoch timestamp in milliseconds
+	 * @param maxActiveBlocks Maximum number of active rules, or {@code <= 0} for unlimited
+	 * @return Number of entries after reconciliation
+	 * @throws CapacityExceededException If the desired set exceeds {@code maxActiveBlocks}
+	 * @throws IllegalArgumentException  If a CIDR is syntactically invalid
+	 */
+	public synchronized int replaceAllBlocks(Collection<BlockSpec> specs, long nowMillis, int maxActiveBlocks) {
+		if (maxActiveBlocks > 0 && specs != null) {
+			Set<String> desired = new HashSet<>();
+			for (BlockSpec spec : specs) {
+				if (spec != null && spec.cidr != null && spec.expiresAtMillis > nowMillis) {
+					desired.add(parseAndNormalizeCidr(spec.cidr).canonicalCidr);
+				}
+			}
+			if (desired.size() > maxActiveBlocks) {
+				throw new CapacityExceededException("Replace command contains " + desired.size()
+						+ " active dynamic blocks, exceeding mitigationMaxActiveBlocks=" + maxActiveBlocks);
+			}
+		}
+		return replaceAllBlocksUnchecked(specs, nowMillis);
+	}
+
+	/**
+	 * Atomically upserts the given block specifications, enforcing an upper limit for the number
+	 * of active rules. If adding the new (not yet active) CIDRs would exceed {@code maxActiveBlocks},
+	 * none of the specifications are applied.
+	 *
+	 * @param specs           Block specifications to insert or update
+	 * @param nowMillis       Current epoch timestamp in milliseconds
+	 * @param maxActiveBlocks Maximum number of active rules, or {@code <= 0} for unlimited
+	 * @return Number of active entries after the upsert
+	 * @throws CapacityExceededException If the resulting rule set would exceed {@code maxActiveBlocks}
+	 * @throws IllegalArgumentException  If a CIDR is syntactically invalid
+	 */
+	public synchronized int upsertBlocks(Collection<BlockSpec> specs, long nowMillis, int maxActiveBlocks) {
+		if (specs == null || specs.isEmpty()) {
+			return getActiveCount(nowMillis);
+		}
+		if (maxActiveBlocks > 0) {
+			int active = 0;
+			for (DynamicBlockEntry entry : entriesByCidr.values()) {
+				if (nowMillis < entry.getExpiresAtMillis()) {
+					active++;
+				}
+			}
+			Set<String> newCidrs = new HashSet<>();
+			for (BlockSpec spec : specs) {
+				if (spec == null || spec.cidr == null || spec.expiresAtMillis <= nowMillis) {
+					continue;
+				}
+				String canonical = parseAndNormalizeCidr(spec.cidr).canonicalCidr;
+				DynamicBlockEntry existing = entriesByCidr.get(canonical);
+				if (existing == null || nowMillis >= existing.getExpiresAtMillis()) {
+					newCidrs.add(canonical);
+				}
+			}
+			if (active + newCidrs.size() > maxActiveBlocks) {
+				throw new CapacityExceededException("Upsert would raise active dynamic blocks to " + (active + newCidrs.size())
+						+ ", exceeding mitigationMaxActiveBlocks=" + maxActiveBlocks + " (currently active: " + active + ")");
+			}
+		}
+		for (BlockSpec spec : specs) {
+			if (spec == null || spec.cidr == null) {
+				continue;
+			}
+			upsertBlock(spec.cidr, spec.expiresAtMillis, spec.reason, nowMillis);
+		}
+		return getActiveCount(nowMillis);
+	}
+
+	private int replaceAllBlocksUnchecked(Collection<BlockSpec> specs, long nowMillis) {
 		Set<String> keepCanonical = new HashSet<>();
 		if (specs != null) {
 			for (BlockSpec spec : specs) {
@@ -619,6 +699,18 @@ public class AntiDoSDynamicBlockRegistry {
 			this.ipv6 = ipv6;
 			this.ipv4MaskedInt = ipv4MaskedInt;
 			this.ipv6Key = ipv6Key;
+		}
+	}
+
+	/**
+	 * Thrown when a mitigation command would exceed the configured maximum number of active dynamic blocks.
+	 * The registry is left unchanged in this case.
+	 */
+	public static final class CapacityExceededException extends IllegalStateException {
+		private static final long serialVersionUID = 1L;
+
+		public CapacityExceededException(String message) {
+			super(message);
 		}
 	}
 

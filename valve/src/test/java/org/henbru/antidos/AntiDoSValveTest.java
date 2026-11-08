@@ -2894,5 +2894,231 @@ class AntiDoSValveTest {
 		valve.invoke(afterRemReq, afterRemResp);
 		assertEquals(-1, afterRemResp.getErrorCode());
 	}
+
+	@Test
+	void testMitigationGuardrailParameterBindingAndValidation() {
+		AntiDoSValve valve = new AntiDoSValve();
+		valve.setContainer(new StandardEngine());
+		setValidAntiDoSMonitorconfiguration(valve, "MITIGATION_GUARDRAIL_BINDING_TEST");
+
+		// Defaults
+		assertEquals(16, valve.getMitigationMinPrefixV4());
+		assertEquals(32, valve.getMitigationMinPrefixV6());
+		assertEquals(86400, valve.getMitigationMaxTtlSeconds());
+		assertEquals(5000, valve.getMitigationMaxActiveBlocks());
+
+		// String binding (as used by Tomcat's server.xml digester)
+		valve.setMitigationMinPrefixV4("/24");
+		valve.setMitigationMinPrefixV6("48");
+		valve.setMitigationMaxTtlSeconds("3600");
+		valve.setMitigationMaxActiveBlocks("100");
+		assertEquals(24, valve.getMitigationMinPrefixV4());
+		assertEquals(48, valve.getMitigationMinPrefixV6());
+		assertEquals(3600, valve.getMitigationMaxTtlSeconds());
+		assertEquals(100, valve.getMitigationMaxActiveBlocks());
+
+		// Empty strings restore defaults
+		valve.setMitigationMinPrefixV4("");
+		valve.setMitigationMinPrefixV6(" ");
+		valve.setMitigationMaxTtlSeconds((String) null);
+		valve.setMitigationMaxActiveBlocks("");
+		assertEquals(16, valve.getMitigationMinPrefixV4());
+		assertEquals(32, valve.getMitigationMinPrefixV6());
+		assertEquals(86400, valve.getMitigationMaxTtlSeconds());
+		assertEquals(5000, valve.getMitigationMaxActiveBlocks());
+
+		// Invalid values fail the lifecycle start
+		valve.setMitigationMinPrefixV4(33);
+		assertFalse(valve.isMitigationMinPrefixV4Valid());
+		LifecycleException exV4 = assertThrows(LifecycleException.class, () -> valve.start());
+		assertTrue(exV4.getMessage().contains("mitigationMinPrefixV4"));
+		valve.setMitigationMinPrefixV4(16);
+
+		valve.setMitigationMinPrefixV6("abc");
+		assertFalse(valve.isMitigationMinPrefixV6Valid());
+		LifecycleException exV6 = assertThrows(LifecycleException.class, () -> valve.start());
+		assertTrue(exV6.getMessage().contains("mitigationMinPrefixV6"));
+		valve.setMitigationMinPrefixV6(32);
+
+		valve.setMitigationMaxTtlSeconds(0);
+		assertFalse(valve.isMitigationMaxTtlSecondsValid());
+		LifecycleException exTtl = assertThrows(LifecycleException.class, () -> valve.start());
+		assertTrue(exTtl.getMessage().contains("mitigationMaxTtlSeconds"));
+		valve.setMitigationMaxTtlSeconds(86400);
+
+		valve.setMitigationMaxActiveBlocks(-5);
+		assertFalse(valve.isMitigationMaxActiveBlocksValid());
+		LifecycleException exMax = assertThrows(LifecycleException.class, () -> valve.start());
+		assertTrue(exMax.getMessage().contains("mitigationMaxActiveBlocks"));
+	}
+
+	private static TestResponse sendMitigationCommand(AntiDoSValve valve, String... params) throws Exception {
+		TestRequest req = new TestRequest("/antidos-mitigate", "10.0.0.5");
+		req.setMethod("POST");
+		req.setHeader("Authorization", "Bearer guardrailMitigationToken123");
+		for (int i = 0; i + 1 < params.length; i += 2) {
+			req.setParameter(params[i], params[i + 1]);
+		}
+		TestResponse resp = new TestResponse();
+		valve.invoke(req, resp);
+		return resp;
+	}
+
+	private static AntiDoSValve createGuardrailTestValve(String name) {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, name);
+		valve.setMitigationUri("/antidos-mitigate");
+		valve.setMitigationAllowedIPs("10\\.0\\.0\\.5");
+		valve.setMitigationPassword("guardrailMitigationToken123");
+		valve.reloadMonitor();
+		return valve;
+	}
+
+	@Test
+	void testMitigationGuardrailConfigurableMinPrefix() throws Exception {
+		AntiDoSValve valve = createGuardrailTestValve("MITIGATION_MIN_PREFIX_TEST");
+		valve.setMitigationMinPrefixV4(24);
+		valve.setMitigationMinPrefixV6(48);
+
+		// /20 is allowed by the old hardcoded /16 limit but rejected by the configured /24 limit
+		TestResponse broadV4 = sendMitigationCommand(valve, "action", "upsert", "cidr", "198.51.96.0/20");
+		assertEquals(400, broadV4.getErrorCode());
+
+		TestResponse okV4 = sendMitigationCommand(valve, "action", "upsert", "cidr", "198.51.100.0/24");
+		assertEquals(200, okV4.getStatus());
+
+		TestResponse broadV6 = sendMitigationCommand(valve, "action", "upsert", "cidr", "2001:db8::/40");
+		assertEquals(400, broadV6.getErrorCode());
+
+		TestResponse okV6 = sendMitigationCommand(valve, "action", "upsert", "cidr", "2001:db8:1234::/48");
+		assertEquals(200, okV6.getStatus());
+
+		// Batch commands (replace) are validated as a whole: one broad entry rejects the complete command
+		TestResponse broadReplace = sendMitigationCommand(valve, "action", "replace", "blocks",
+				"203.0.113.0/24|600|ok\n203.0.0.0/16|600|too broad");
+		assertEquals(400, broadReplace.getErrorCode());
+		assertEquals(2, valve.getDynamicBlockRegistry().getActiveCount(valve.getTimeInMillis()));
+
+		// A broader configuration (e.g. /12) is honored as well
+		valve.setMitigationMinPrefixV4(12);
+		TestResponse okBroad = sendMitigationCommand(valve, "action", "upsert", "cidr", "198.48.0.0/12");
+		assertEquals(200, okBroad.getStatus());
+	}
+
+	@Test
+	void testMitigationGuardrailMaxTtlIsCapped() throws Exception {
+		AntiDoSValve valve = createGuardrailTestValve("MITIGATION_MAX_TTL_TEST");
+		valve.setMitigationMaxTtlSeconds(3600);
+
+		long before = valve.getTimeInMillis();
+		// ttlSeconds far beyond the limit
+		TestResponse ttlResp = sendMitigationCommand(valve, "action", "upsert", "cidr", "198.51.100.0/24",
+				"ttlSeconds", "604800");
+		assertEquals(200, ttlResp.getStatus());
+		assertTrue(ttlResp.getOutput().contains("\"ttlCappedCount\": 1"));
+		assertTrue(ttlResp.getOutput().contains("\"mitigationMaxTtlSeconds\": 3600"));
+
+		// Absolute expiresAt in the year 2099 via batch upsert
+		TestResponse absResp = sendMitigationCommand(valve, "action", "upsert", "blocks",
+				"203.0.113.0/24|4102444800000|far future;192.0.2.0/24|600|short");
+		assertEquals(200, absResp.getStatus());
+		assertTrue(absResp.getOutput().contains("\"ttlCappedCount\": 1"));
+
+		long after = valve.getTimeInMillis();
+		long maxAllowed = after + 3600_000L;
+		AntiDoSDynamicBlockRegistry registry = valve.getDynamicBlockRegistry();
+		long exp1 = registry.getActiveEntryByCidr("198.51.100.0/24", after).getExpiresAtMillis();
+		long exp2 = registry.getActiveEntryByCidr("203.0.113.0/24", after).getExpiresAtMillis();
+		long exp3 = registry.getActiveEntryByCidr("192.0.2.0/24", after).getExpiresAtMillis();
+		assertTrue(exp1 <= maxAllowed && exp1 >= before + 3600_000L, "ttlSeconds must be capped to mitigationMaxTtlSeconds");
+		assertTrue(exp2 <= maxAllowed, "Absolute expiresAt must be capped to mitigationMaxTtlSeconds");
+		assertTrue(exp3 <= after + 600_000L, "TTLs below the limit must remain untouched");
+
+		// Replace action is capped as well
+		TestResponse replResp = sendMitigationCommand(valve, "action", "replace", "blocks",
+				"198.51.100.0/24|999999|long");
+		assertEquals(200, replResp.getStatus());
+		assertTrue(replResp.getOutput().contains("\"ttlCappedCount\": 1"));
+		assertTrue(registry.getActiveEntryByCidr("198.51.100.0/24", after).getExpiresAtMillis()
+				<= valve.getTimeInMillis() + 3600_000L);
+	}
+
+	@Test
+	void testMitigationGuardrailMaxActiveBlocks() throws Exception {
+		AntiDoSValve valve = createGuardrailTestValve("MITIGATION_MAX_ACTIVE_TEST");
+		valve.setMitigationMaxActiveBlocks(3);
+		AntiDoSDynamicBlockRegistry registry = valve.getDynamicBlockRegistry();
+
+		TestResponse first = sendMitigationCommand(valve, "action", "upsert", "blocks",
+				"198.51.100.0/24|600|a;198.51.101.0/24|600|b");
+		assertEquals(200, first.getStatus());
+		assertEquals(2, registry.getActiveCount(valve.getTimeInMillis()));
+
+		// Adding two new CIDRs would exceed the limit -> rejected atomically with 409, nothing applied
+		TestResponse overflow = sendMitigationCommand(valve, "action", "upsert", "blocks",
+				"198.51.102.0/24|600|c;198.51.103.0/24|600|d");
+		assertEquals(409, overflow.getErrorCode());
+		assertEquals(2, registry.getActiveCount(valve.getTimeInMillis()));
+		assertNull(registry.getActiveEntryByCidr("198.51.102.0/24", valve.getTimeInMillis()));
+
+		// Re-upserting (extending) existing CIDRs plus one new CIDR fits into the limit
+		TestResponse extend = sendMitigationCommand(valve, "action", "upsert", "blocks",
+				"198.51.100.0/24|1200|a2;198.51.101.0/24|1200|b2;198.51.102.0/24|600|c");
+		assertEquals(200, extend.getStatus());
+		assertEquals(3, registry.getActiveCount(valve.getTimeInMillis()));
+
+		// Single-CIDR upsert beyond the limit is rejected
+		TestResponse single = sendMitigationCommand(valve, "action", "upsert", "cidr", "198.51.104.0/24");
+		assertEquals(409, single.getErrorCode());
+		assertEquals(3, registry.getActiveCount(valve.getTimeInMillis()));
+
+		// Replace with more entries than allowed is rejected and leaves the current set untouched
+		TestResponse replaceOverflow = sendMitigationCommand(valve, "action", "replace", "blocks",
+				"203.0.113.0/24|600;203.0.114.0/24|600;203.0.115.0/24|600;203.0.116.0/24|600");
+		assertEquals(409, replaceOverflow.getErrorCode());
+		assertEquals(3, registry.getActiveCount(valve.getTimeInMillis()));
+		assertNotNull(registry.getActiveEntryByCidr("198.51.100.0/24", valve.getTimeInMillis()));
+
+		// Replace within the limit swaps the rule set
+		TestResponse replaceOk = sendMitigationCommand(valve, "action", "replace", "blocks",
+				"203.0.113.0/24|600;203.0.114.0/24|600");
+		assertEquals(200, replaceOk.getStatus());
+		assertEquals(2, registry.getActiveCount(valve.getTimeInMillis()));
+
+		// Removing frees capacity again
+		TestResponse remove = sendMitigationCommand(valve, "action", "remove", "cidr", "203.0.113.0/24");
+		assertEquals(200, remove.getStatus());
+		TestResponse refill = sendMitigationCommand(valve, "action", "upsert", "blocks",
+				"198.51.110.0/24|600;198.51.111.0/24|600");
+		assertEquals(200, refill.getStatus());
+		assertEquals(3, registry.getActiveCount(valve.getTimeInMillis()));
+	}
+
+	@Test
+	void testMitigationGuardrailsExposedInStatusOutput() throws Exception {
+		AntiDoSValve valve = createGuardrailTestValve("MITIGATION_GUARDRAIL_STATUS_TEST");
+		valve.setStatusUri("/antidos-status");
+		valve.setStatusPassword("guardrailStatusToken123");
+		valve.setMitigationMinPrefixV4(20);
+		valve.setMitigationMinPrefixV6(40);
+		valve.setMitigationMaxTtlSeconds(7200);
+		valve.setMitigationMaxActiveBlocks(250);
+
+		AntiDoSStatusRenderer renderer = new AntiDoSStatusRenderer(valve);
+		String overviewJson = renderer.buildStatusJson("MITIGATION_GUARDRAIL_STATUS_TEST");
+		assertTrue(overviewJson.contains("\"mitigationMinPrefixV4\": 20"));
+		assertTrue(overviewJson.contains("\"mitigationMinPrefixV6\": 40"));
+		assertTrue(overviewJson.contains("\"mitigationMaxTtlSeconds\": 7200"));
+		assertTrue(overviewJson.contains("\"mitigationMaxActiveBlocks\": 250"));
+
+		String detailsJson = renderer.buildStatusJsonDetails("MITIGATION_GUARDRAIL_STATUS_TEST");
+		assertTrue(detailsJson.contains("\"mitigationMaxActiveBlocks\": 250"));
+
+		String detailsHtml = renderer.buildStatusHtmlDetails("MITIGATION_GUARDRAIL_STATUS_TEST");
+		assertTrue(detailsHtml.contains("Guardrails"));
+		assertTrue(detailsHtml.contains("/20"));
+		assertTrue(detailsHtml.contains("/40"));
+		assertTrue(detailsHtml.contains("2h 0m"));
+	}
 }
 

@@ -523,13 +523,18 @@ Available since version 1.8.0: Enables dynamic, TTL-based CIDR subnet blocking o
 * **`mitigationPassword`** (default: `null` / disabled): Write token/password (minimum 10 characters) that activates dynamic CIDR mitigation on this specific Valve and authenticates incoming `POST` commands. Dynamic blocks are strictly isolated to the Valve instance where `mitigationPassword` is configured (no JVM-wide inheritance), allowing upstream simulation/monitoring Valves to continue observing raw traffic before the blocking Valve rejects it.
 * **`mitigationUri`** (optional, falls back to `statusUri`): Dedicated URI path for receiving `POST` mitigation commands (e.g. `mitigationUri="/antidos-mitigate"`). If omitted, `POST` commands are accepted on `statusUri` (when configured on the same Valve).
 * **`mitigationAllowedIPs`** (optional regular expression, falls back to `statusAllowedIPs`): Restricts which client IP addresses may send `POST` mitigation commands (e.g. restricting write access exclusively to the Anti-DoS Collector IP while allowing broader read-only access on `statusAllowedIPs`).
+* **`mitigationMinPrefixV4`** (default: `16`): Broadest allowed IPv4 prefix length accepted for remotely pushed dynamic blocks (1 to 32). Overly broad blocks (e.g. `/8`) are rejected with `HTTP 400 Bad Request`.
+* **`mitigationMinPrefixV6`** (default: `32`): Broadest allowed IPv6 prefix length accepted for remotely pushed dynamic blocks (1 to 128). Overly broad blocks (e.g. `/24`) are rejected with `HTTP 400 Bad Request`.
+* **`mitigationMaxTtlSeconds`** (default: `86400` = 24 hours): Upper limit in seconds for dynamic block expiration. Expiration timestamps exceeding `now + mitigationMaxTtlSeconds` are automatically capped to this duration.
+* **`mitigationMaxActiveBlocks`** (default: `5000`): Maximum number of simultaneously active dynamic blocks on this Valve. Commands that would exceed this capacity are atomically rejected with `HTTP 409 Conflict`, leaving the existing rule set untouched.
 
 ### Precedence & Deterrence Telemetry
 
 1. **Server-Wide Enforcement (`alwaysAllowedIPs` Wins):** Active dynamic CIDR blocks are evaluated in `isRequestAllowed()` immediately after `alwaysAllowedIPs` and **before** `nonRelevantPaths`, `relevantAuthScope`, and `relevantPaths`. Whitelisted IPs in `alwaysAllowedIPs` can never be locked out by a dynamic subnet block.
-2. **Prefix Width Safety Guardrail:** The Valve rejects overly broad dynamic blocks (`< /16` for IPv4 or `< /32` for IPv6) with `HTTP 400 Bad Request`.
-3. **Self-Expiring TTL:** Every dynamic rule carries an expiration timestamp (`expiresAtMillis`) and ceases blocking at the exact millisecond its TTL expires, even if the Collector becomes unreachable.
-4. **Attacker Deterrence Tracking:** Requests rejected by a dynamic CIDR rule are recorded both on the rule entry and in the current `AntiDoSSlot` as a locked counter keyed by the matched canonical CIDR (e.g. `198.51.100.0/24`), including distinct client IPs, distinct User-Agents, and a forensic sample request (`method`, `uri`, `userAgent`).
+2. **Prefix Width Safety Guardrail:** The Valve validates incoming dynamic blocks against `mitigationMinPrefixV4` and `mitigationMinPrefixV6`, rejecting broader networks with `HTTP 400 Bad Request`.
+3. **Bounded & Self-Expiring TTL:** Every dynamic rule carries an expiration timestamp (`expiresAtMillis`) bounded by `mitigationMaxTtlSeconds`. It ceases blocking at the exact millisecond its TTL expires, even if the Collector becomes unreachable.
+4. **Capacity Protection:** `mitigationMaxActiveBlocks` bounds memory usage and blast radius.
+5. **Attacker Deterrence Tracking:** Requests rejected by a dynamic CIDR rule are recorded both on the rule entry and in the current `AntiDoSSlot` as a locked counter keyed by the matched canonical CIDR (e.g. `198.51.100.0/24`), including distinct client IPs, distinct User-Agents, and a forensic sample request (`method`, `uri`, `userAgent`).
 
 # Sample Configurations
 

@@ -777,9 +777,10 @@ public class AntiDoSStatusRenderer {
 				String effMitUri = v.getMitigationUri() != null ? v.getMitigationUri() : v.getStatusUri();
 				String effMitIps = v.getMitigationAllowedIPs() != null ? v.getMitigationAllowedIPs() : v.getStatusAllowedIPs();
 				sb.append("    <tr><th>Dynamic CIDR Mitigation</th><td><span class=\"badge badge-blocking\">ENABLED</span>")
-						.append(" &bull; Active CIDR Blocks: <strong>").append(dynActive).append("</strong>")
+						.append(" &bull; Active CIDR Blocks: <strong>").append(dynActive).append("</strong> / ").append(v.getMitigationMaxActiveBlocks())
 						.append(" &bull; Rejected Requests: <strong>").append(dynBlocked).append("</strong>")
-						.append(" &bull; Revision: <code>").append(dynRev).append("</code>");
+						.append(" &bull; Revision: <code>").append(dynRev).append("</code>")
+						.append(" &bull; Guardrails: min <code>/").append(v.getMitigationMinPrefixV4()).append("</code> (IPv4) / <code>/").append(v.getMitigationMinPrefixV6()).append("</code> (IPv6), max TTL <code>").append(formatDuration(v.getMitigationMaxTtlSeconds())).append("</code>");
 				if (effMitUri != null) {
 					sb.append(" &bull; Endpoint: <code>POST ").append(escapeHtml(effMitUri)).append("</code>");
 				}
@@ -1066,9 +1067,10 @@ public class AntiDoSStatusRenderer {
 			String effMitUri = target.getMitigationUri() != null ? target.getMitigationUri() : target.getStatusUri();
 			String effMitIps = target.getMitigationAllowedIPs() != null ? target.getMitigationAllowedIPs() : target.getStatusAllowedIPs();
 			sb.append("    <tr><th>Dynamic CIDR Mitigation</th><td><span class=\"badge badge-blocking\">ENABLED</span>")
-					.append(" &bull; Active CIDR Blocks: <strong>").append(dynActive).append("</strong>")
+					.append(" &bull; Active CIDR Blocks: <strong>").append(dynActive).append("</strong> / ").append(target.getMitigationMaxActiveBlocks())
 					.append(" &bull; Rejected Requests: <strong>").append(dynBlocked).append("</strong>")
 					.append(" &bull; Revision: <code>").append(dynRev).append("</code>")
+						.append(" &bull; Guardrails: min <code>/").append(target.getMitigationMinPrefixV4()).append("</code> (IPv4) / <code>/").append(target.getMitigationMinPrefixV6()).append("</code> (IPv6), max TTL <code>").append(formatDuration(target.getMitigationMaxTtlSeconds())).append("</code>")
 					.append(" &bull; Password: <em>*** (configured)</em>");
 			if (effMitUri != null) {
 				sb.append(" &bull; Endpoint: <code>POST ").append(escapeHtml(effMitUri)).append("</code>");
@@ -1736,6 +1738,10 @@ public class AntiDoSStatusRenderer {
 					.append("      \"dynamicMitigationEnabled\": ").append(v.isDynamicMitigationEnabled()).append(",\n")
 					.append("      \"mitigationUri\": ").append(v.getMitigationUri() != null ? "\"" + escapeJson(v.getMitigationUri()) + "\"" : "null").append(",\n")
 					.append("      \"mitigationAllowedIPs\": ").append(v.getMitigationAllowedIPs() != null ? "\"" + escapeJson(v.getMitigationAllowedIPs()) + "\"" : "null").append(",\n")
+					.append("      \"mitigationMinPrefixV4\": ").append(v.getMitigationMinPrefixV4()).append(",\n")
+					.append("      \"mitigationMinPrefixV6\": ").append(v.getMitigationMinPrefixV6()).append(",\n")
+					.append("      \"mitigationMaxTtlSeconds\": ").append(v.getMitigationMaxTtlSeconds()).append(",\n")
+					.append("      \"mitigationMaxActiveBlocks\": ").append(v.getMitigationMaxActiveBlocks()).append(",\n")
 					.append("      \"dynamicBlocksActiveCount\": ").append(v.isDynamicMitigationEnabled() ? v.getDynamicBlockRegistry().getActiveCount(getTimeInMillis()) : 0).append(",\n")
 					.append("      \"dynamicBlocksBlockedRequests\": ").append(v.isDynamicMitigationEnabled() ? v.getDynamicBlockRegistry().getTotalBlockedRequests() : 0).append(",\n")
 					.append("      \"dynamicRulesRevision\": ").append(v.isDynamicMitigationEnabled() ? v.getDynamicBlockRegistry().getRevision(getTimeInMillis()) : 0).append(",\n")
@@ -1853,6 +1859,10 @@ public class AntiDoSStatusRenderer {
 				.append("    \"dynamicMitigationEnabled\": ").append(target.isDynamicMitigationEnabled()).append(",\n")
 				.append("    \"mitigationUri\": ").append(target.getMitigationUri() != null ? "\"" + escapeJson(target.getMitigationUri()) + "\"" : "null").append(",\n")
 				.append("    \"mitigationAllowedIPs\": ").append(target.getMitigationAllowedIPs() != null ? "\"" + escapeJson(target.getMitigationAllowedIPs()) + "\"" : "null").append(",\n")
+				.append("    \"mitigationMinPrefixV4\": ").append(target.getMitigationMinPrefixV4()).append(",\n")
+				.append("    \"mitigationMinPrefixV6\": ").append(target.getMitigationMinPrefixV6()).append(",\n")
+				.append("    \"mitigationMaxTtlSeconds\": ").append(target.getMitigationMaxTtlSeconds()).append(",\n")
+				.append("    \"mitigationMaxActiveBlocks\": ").append(target.getMitigationMaxActiveBlocks()).append(",\n")
 				.append("    \"dynamicBlocksActiveCount\": ").append(target.isDynamicMitigationEnabled() ? target.getDynamicBlockRegistry().getActiveCount(getTimeInMillis()) : 0).append(",\n")
 				.append("    \"dynamicBlocksBlockedRequests\": ").append(target.isDynamicMitigationEnabled() ? target.getDynamicBlockRegistry().getTotalBlockedRequests() : 0).append(",\n")
 				.append("    \"dynamicRulesRevision\": ").append(target.isDynamicMitigationEnabled() ? target.getDynamicBlockRegistry().getRevision(getTimeInMillis()) : 0).append(",\n")
