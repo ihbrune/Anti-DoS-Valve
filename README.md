@@ -147,8 +147,9 @@ When an incoming HTTP request reaches the valve, it is processed in two distinct
 
 ### Phase 1: Ingress Evaluation (Pre-Processing)
 
-0. **Internal Status Endpoint (`statusUri`)**: Does the request URI match the configured `statusUri`?
-   * **Yes**: The request is intercepted **immediately** by the valve and never reaches the web application or downstream valves:
+0. **Internal Control Endpoints (`statusUri` & `mitigationUri`)**: Does the request URI match the configured `mitigationUri` or `statusUri`?
+   * **`mitigationUri` (`POST`)**: If dynamic mitigation is enabled (`mitigationPassword="..."`), incoming rule synchronization requests (push, extend, revoke) from the Anti-DoS Collector or administrators are authenticated and executed immediately. The response is returned as JSON and never reaches downstream valves or web applications.
+   * **`statusUri` (`GET`)**: The monitoring status request is intercepted **immediately** by the valve:
      * **IP Whitelist (`statusAllowedIPs`)**: If configured, the client IP must match this pattern; otherwise &rarr; **404 Not Found**.
      * **Authentication**: Token must be valid (via `?token=...` or `Authorization: Bearer <token>`):
        * **Valid Token**: **Allow (200 OK)** and render the dashboard (HTML or JSON). Valid status queries are never counted in DoS counters. An administrator with the correct token is granted access **even if their IP address is currently blocked on other application paths** (e.g. after testing rate limits).
@@ -164,6 +165,10 @@ When an incoming HTTP request reaches the valve, it is processed in two distinct
    *(Evaluated directly on the individual client IP address string; by default not counted in the dynamic rate monitor, or registered as BLOCKED with limit 0 when `trackAlwaysForbiddenInMonitor="true"`).*
 2. **Static Whitelist (`alwaysAllowedIPs`)**: Does the client IP address match the regular expression pattern? &rarr; **Allow**.  
    *(Evaluated directly on the individual client IP address string; request is not counted in the dynamic rate monitor).*
+2b. **Dynamic CIDR Mitigation Blocks (`mitigationPassword` / `dynamicBlockRegistry`)**: If dynamic mitigation is enabled on this Valve, does the client IP address match an active, unexpired dynamic CIDR block pushed by the Anti-DoS Collector or an administrator?
+   * **Yes**: &rarr; **Block (HTTP error code, e.g. 429)**.  
+     *(Evaluated immediately after `alwaysAllowedIPs` and **before** `nonRelevantPaths`, `relevantAuthScope`, and `relevantPaths`. Whitelisted IPs in `alwaysAllowedIPs` can never be locked out by a dynamic subnet block. Rejections apply server-wide across all paths; blocked hits are recorded on the matched rule and in a synthetic `CIDR:<subnet>` monitor slot with distinct IPs, User-Agents, and forensic request samples for real-time deterrence tracking).*
+   * **No**: Continues to step 3.
 3. **Path Whitelist (`nonRelevantPaths`)**: Does the request URI match `nonRelevantPaths`? &rarr; **Allow**.  
    *(Evaluated before `relevantPaths`; request is not counted; bypasses rate limiting for health-checks or static error pages even if the client IP or its subnet is currently blocked).*
 3b. **Auth Scope Filter (`relevantAuthScope`)**: Does the request match the configured authentication scope?
