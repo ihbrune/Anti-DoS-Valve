@@ -275,11 +275,20 @@ public class MitigationController {
 				.mapToLong(MitigationRule::totalBlockedHits)
 				.sum();
 
-		// Collect distinct active batch IDs for quick batch revocation
-		Map<String, Integer> activeBatches = new LinkedHashMap<>();
+		// Collect distinct active batch metadata for quick batch overview & revocation
+		Map<String, ActiveBatchSummary> activeBatches = new LinkedHashMap<>();
 		for (MitigationRule r : activeRules) {
 			if (r.batchId() != null && !r.batchId().isBlank()) {
-				activeBatches.merge(r.batchId(), 1, Integer::sum);
+				activeBatches.compute(r.batchId(), (k, existing) -> {
+					if (existing == null) {
+						return new ActiveBatchSummary(r.batchId(), 1, r.createdAt(), r.expiresAt(), r.reason());
+					} else {
+						Instant earliestCreated = existing.createdAt().isBefore(r.createdAt()) ? existing.createdAt() : r.createdAt();
+						Instant latestExpires = existing.expiresAt().isAfter(r.expiresAt()) ? existing.expiresAt() : r.expiresAt();
+						return new ActiveBatchSummary(k, existing.ruleCount() + 1, earliestCreated, latestExpires,
+								existing.reason() != null ? existing.reason() : r.reason());
+					}
+				});
 			}
 		}
 
@@ -292,10 +301,49 @@ public class MitigationController {
 		model.addAttribute("persistentCount", persistentCount);
 		model.addAttribute("deterredCount", deterredCount);
 		model.addAttribute("totalDynamicHits", totalDynamicHits);
-		model.addAttribute("activeBatches", activeBatches);
+		model.addAttribute("activeBatches", activeBatches.values());
 		model.addAttribute("defaultTtlMinutes", properties.getDefaultMitigationTtlMinutes());
 		model.addAttribute("feedbackSuccess", feedbackSuccess);
 		model.addAttribute("feedbackError", feedbackError);
+	}
+
+	public record ActiveBatchSummary(
+			String batchId,
+			int ruleCount,
+			Instant createdAt,
+			Instant expiresAt,
+			String reason
+	) {
+		public String getBatchId() { return batchId; }
+		public int getRuleCount() { return ruleCount; }
+		public Instant getCreatedAt() { return createdAt; }
+		public Instant getExpiresAt() { return expiresAt; }
+		public String getReason() { return reason; }
+
+		public String formattedCreatedAt() {
+			if (createdAt == null) return "—";
+			return createdAt.atZone(java.time.ZoneId.systemDefault())
+					.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+		}
+
+		public String formattedExpiresAt() {
+			if (expiresAt == null) return "—";
+			return expiresAt.atZone(java.time.ZoneId.systemDefault())
+					.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+		}
+
+		public String remainingFormatted(Instant now) {
+			if (expiresAt == null || !expiresAt.isAfter(now)) {
+				return "Expired";
+			}
+			long sec = java.time.temporal.ChronoUnit.SECONDS.between(now, expiresAt);
+			if (sec < 60) return sec + "s";
+			long min = sec / 60;
+			if (min < 60) return min + "m";
+			long h = min / 60;
+			long remM = min % 60;
+			return remM > 0 ? h + "h " + remM + "m" : h + "h";
+		}
 	}
 
 	private static List<String> parseInputCidrs(String input) {

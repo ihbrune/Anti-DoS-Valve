@@ -246,19 +246,25 @@
     <!-- Active Batches Quick-Revoke Bar -->
     <div th:if="${activeBatches != null and !activeBatches.isEmpty()}"
          class="sys-card" style="padding: 14px 18px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
-        <div style="font-size: 13px; font-weight: 700; color: var(--text-primary);">
+        <div style="font-size: 13px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
             <span>&#x1F4E6;</span> Active Rule Batches:
         </div>
-        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <div th:each="entry : ${activeBatches}"
-                 style="display: inline-flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 12px;">
-                <code th:text="${entry.key}">ASN-64496</code>
-                <span class="badge badge-secondary" th:text="${entry.value} + ' subnets'">12 subnets</span>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+            <div th:each="b : ${activeBatches}"
+                 style="display: inline-flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); padding: 5px 12px; border-radius: var(--radius-sm); font-size: 12px;">
+                <code th:text="${b.batchId}" style="font-weight: 700;">ASN-64496</code>
+                <span class="badge badge-secondary" th:text="${b.ruleCount} + ' subnets'">12 subnets</span>
+                <span style="font-size: 11px; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 4px;">
+                    <span>&#x1F552;</span>
+                    <span th:text="${b.formattedCreatedAt()} + ' &ndash; ' + ${b.formattedExpiresAt()}">12:00 &ndash; 13:00</span>
+                    <span class="badge badge-warning" style="font-family: ui-monospace, monospace; font-size: 10.5px; padding: 1px 5px;"
+                          th:text="${b.remainingFormatted(now)}">45m</span>
+                </span>
                 <button type="button" class="btn btn-danger"
                         style="padding: 2px 8px; font-size: 11px;"
-                        th:attr="hx-post=@{/mitigation/batch/revoke(batchId=${entry.key})}"
+                        th:attr="hx-post=@{/mitigation/batch/revoke(batchId=${b.batchId})}"
                         hx-target="#mitigation-dashboard-container"
-                        hx-swap="outerHTML"
+                        hx-swap="outerHTML show:top"
                         title="Immediately revoke all active rules in this batch">
                     Revoke Batch
                 </button>
