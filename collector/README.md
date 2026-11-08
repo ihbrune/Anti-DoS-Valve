@@ -23,6 +23,7 @@ The documentation suite is tailored for distinct operational roles:
   * Zero-Configuration Demo Mode Setup
   * Linux `systemd` Production Service Deployment
   * Frictionless GitHub Updates (`git pull` workflow with decoupled code, config, and data)
+  * Active Fleet Mitigation & Autonomous Defense (Tomcat Valve interplay, token hierarchy, and 7 safety guardrails)
   * Database Engines (Embedded SQLite WAL mode vs. Enterprise PostgreSQL multi-server fleet)
   * Relational Database Schema, Data Models & Flyway Migrations
   * Offline IP Enrichment Setup (MaxMind / DB-IP MMDB & custom ASN threat overlays)

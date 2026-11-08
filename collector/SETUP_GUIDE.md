@@ -288,6 +288,241 @@ Automated background schedules execute hourly and nightly at **03:00 AM** and **
 
 ---
 
+## Active Fleet Mitigation & Autonomous Defense Setup
+
+The Anti-DoS ecosystem combines high-performance edge rate-limiting in Apache Tomcat (`AntiDoSValve`) with central telemetry aggregation, threat analysis, and automated fleet-wide mitigation (`AntiDoSCollector`).
+
+This section explains the end-to-end architecture, configuration touchpoints, fail-safe security guardrails, and rollout procedures for system administrators and SRE teams.
+
+---
+
+### 1. Holistic Architecture & Component Interplay
+
+The interaction between Tomcat Valves and the Collector is decoupled and asynchronous:
+
+```
+ +-------------------------------------------------------------------------------+
+ |                               APACHE TOMCAT                                   |
+ |                                                                               |
+ |   Incoming HTTP Requests                                                      |
+ |            |                                                                  |
+ |            v                                                                  |
+ |   +-----------------------------------------------------------------------+   |
+ |   | AntiDoSValve (Catalina Pipeline)                                      |   |
+ |   |                                                                       |   |
+ |   |  Step 1: Check alwaysAllowedIPs (Whitelisted IPs bypass all blocks)   |   |
+ |   |  Step 2: Check Dynamic CIDR Registry (HTTP 429 if match & not expired)|   |
+ |   |  Step 3: Evaluate Sliding-Window Rate Limits (Local IP / Subnet)     |   |
+ |   +-----------------------------------------------------------------------+   |
+ |            |                                              ^                   |
+ |            | Telemetry                                    | Dynamic Blocks    |
+ |            | (GET /antidos-status)                        | (POST /antidos-   |
+ |            | Pull: every 15s                              |        mitigate)  |
+ +------------|----------------------------------------------|-------------------+
+              |                                              |
+              v                                              |
+ +-----------------------------------------------------------|-------------------+
+ | ANTI-DOS COLLECTOR                                        |                   |
+ |                                                           |                   |
+ |   +-------------------------------------------------------+---------------+   |
+ |   | Mitigation Control Plane & AutoMitigationService                      |   |
+ |   |                                                                       |   |
+ |   |  * Scheduled Telemetry Evaluation (every 2m)                          |   |
+ |   |  * Carpet Attack Detection (Multi-subnet ASN flood analysis)           |   |
+ |   |  * 7 Deterministic Safety Guardrails (Zero auth, returning ratio, etc)|   |
+ |   |  * In-Memory / Database Rule Management (system_settings dominance)   |   |
+ |   |  * Browser Notifications (HTML5 Desktop & In-App Toast Alerts)        |   |
+ |   +-----------------------------------------------------------------------+   |
+ |            |                                                                  |
+ |            v                                                                  |
+ |   +-------------------------+      +--------------------------------------+   |
+ |   | Relational Database     |      | Web UI: /mitigation                  |   |
+ |   | (mitigation_rules,      |      | (Rule Batches, Deterrence Monitor,   |   |
+ |   |  mitigation_audit_log,  |      |  Live Settings Toggles, Auditing)    |   |
+ |   |  system_settings)       |      +--------------------------------------+   |
+ |   +-------------------------+                                                 |
+ +-------------------------------------------------------------------------------+
+```
+
+#### Decoupled Resilience Principles:
+1. **Zero Runtime Overhead on Request Ingress:** The Valve executes in Tomcat's fast path without querying any database or network service. Dynamic CIDR matching uses an optimized, thread-safe in-memory radix trie.
+2. **Collector Outage Isolation:** If the Collector is stopped, restarted, or partitioned by network issues, the Valves continue rate-limiting and enforcing active dynamic blocks until each block's bounded time-to-live (`expiresAt`) expires. No traffic is dropped due to Collector downtime.
+3. **Graceful Valve Restarts:** If a Tomcat instance restarts, its volatile in-memory dynamic blocks are cleared. On the next 15-second polling cycle, the Collector detects the revision mismatch (`dynamicRulesRevision`) and automatically reconciles the active rule set.
+4. **Selective Enforcement:** Nodes without `mitigationPassword` configured (e.g., upstream simulation or pure monitoring valves) remain untouched, continuing to capture raw baseline telemetry without dropping packets.
+
+---
+
+### 2. Configuration: What Goes Where?
+
+Configuration is split cleanly between the protected Tomcat server and the central Collector service.
+
+#### A. Valve Configuration (`conf/server.xml`)
+
+To enable dynamic mitigation on a Tomcat Valve, configure `mitigationPassword` (minimum 10 characters). If omitted, dynamic mitigation endpoints are disabled (`HTTP 403 Forbidden`).
+
+```xml
+<Valve className="org.henbru.antidos.AntiDoSValve"
+       statusUri="/antidos-status"
+       statusSecretToken="statusSecretToken1"
+       mitigationUri="/antidos-mitigate"
+       mitigationPassword="strongMitigationSecretToken123"
+       mitigationMinPrefixV4="16"
+       mitigationMinPrefixV6="32"
+       mitigationMaxTtlSeconds="86400"
+       mitigationMaxActiveBlocks="500"
+       alwaysAllowedIPs="127.0.0.1,10.0.0.0/8,192.168.1.0/24"
+       defaultPeriodSeconds="60"
+       defaultAllowedRequests="100" />
+```
+
+| Parameter (`server.xml`) | Default | Description |
+|---|---|---|
+| `mitigationPassword` | *null* (disabled) | Shared write secret required to authenticate dynamic block push, extend, and revoke commands via `POST /antidos-mitigate`. Must be at least 10 characters. |
+| `mitigationUri` | `/antidos-mitigate` | URL path exposing the dynamic mitigation control endpoint. |
+| `mitigationMinPrefixV4` | `16` | Minimum CIDR prefix length allowed for IPv4 dynamic blocks. Rejects overly broad blocks (e.g. `/8` or `/0`) with `HTTP 400 Bad Request`. |
+| `mitigationMinPrefixV6` | `32` | Minimum CIDR prefix length allowed for IPv6 dynamic blocks. |
+| `mitigationMaxTtlSeconds` | `86400` (24h) | Hard upper ceiling for block durations. Any requested TTL exceeding this value is clamped to prevent permanent lockouts. |
+| `mitigationMaxActiveBlocks` | `500` | Maximum number of concurrent dynamic CIDR blocks stored in RAM, protecting Tomcat against memory exhaustion. |
+
+---
+
+#### B. Collector Configuration (`collector-config.yaml`)
+
+The Collector requires credentials to communicate with the Valve's mitigation endpoint and configuration for the autonomous defense engine:
+
+```yaml
+collector:
+  # Global write token (matches 'mitigationPassword' on target Valves)
+  mitigation-token: "strongMitigationSecretToken123"
+
+  # Default duration for newly created dynamic blocks in minutes (default: 60)
+  default-mitigation-ttl-minutes: 60
+
+  # Autonomous Defense Engine (Auto-Mitigation)
+  auto-mitigation:
+    enabled: false                # Master switch (default: false for safe initial deployment)
+    dry-run: true                 # Simulation mode (audits decisions without altering Valve rules)
+    carpet-min-subnets: 3         # Minimum active subnets per ASN to detect carpet attacks
+    carpet-min-requests: 5000     # Minimum aggregate requests across the ASN
+    max-returning-ratio-pct: 5.0  # Max returning visitor ratio allowed for auto-blocking (collateral protection)
+    max-active-rules: 50          # Circuit breaker cap across the fleet
+    default-ttl-minutes: 60       # Default TTL for autonomous blocks
+    auto-extend-persistent: true  # Automatically extend persistent attackers near expiration
+    max-extension-hours: 12       # Maximum cumulative lifetime cap
+
+  endpoints:
+    - name: "Edge-Node-01"
+      url: "http://10.0.1.10:8080/antidos-status"
+      token: "statusSecretToken1"
+      # Optional: per-server override if different from global mitigation-token
+      # mitigation-token: "edgeSpecificSecretToken"
+      # mitigation-url: "http://10.0.1.10:8080/antidos-mitigate"
+```
+
+##### Token Resolution Cascade:
+When pushing mitigation commands to an endpoint, the Collector resolves credentials in this order:
+1. `endpoints[].mitigation-token` (explicit per-server override)
+2. `collector.mitigation-token` (global shared write token)
+3. `endpoints[].token` (fallback to the server's status token)
+
+---
+
+#### C. Runtime Dominance & Database Settings (`system_settings`)
+
+To allow operations teams to respond quickly to live attacks without modifying YAML files or restarting the Collector, settings follow a strict **Database-over-File** precedence hierarchy:
+
+```
+  Deployment Baseline                 Runtime Overrides                  Active Engine
++----------------------+           +--------------------+           +----------------------+
+| collector-config.yaml| --------> | Database Table:    | --------> | AutoMitigationService|
+| (or ENV variables)   | (Fallback)| system_settings    | (Dominates| (Evaluates DB first) |
++----------------------+           +--------------------+           +----------------------+
+```
+
+1. **Deployment Baseline:** Configuration files define startup defaults, ideal for GitOps and Infrastructure-as-Code pipelines.
+2. **Runtime Overrides via UI:** Changes made in the `/mitigation` dashboard (e.g. Master Switch, Dry-Run toggle, threshold adjustments) are immediately saved to the `system_settings` relational table.
+3. **Execution Dominance:** The `AutoMitigationService` reads from `system_settings` on every scheduled cycle. If a parameter exists in the database, it overrides the YAML configuration.
+4. **Clean Reset:** Clicking **Reset to Defaults** in the UI removes database overrides, cleanly reverting all parameters back to the `collector-config.yaml` values.
+
+---
+
+### 3. Deterministic Safety Architecture
+
+Automated blocking systems carry the risk of collateral damage if misconfigured. The Anti-DoS Autonomous Defense Engine is built around **7 deterministic safety guardrails** to ensure legitimate traffic is never disrupted:
+
+```
++-----------------------------------------------------------------------------------+
+|                        7 DETERMINISTIC SAFETY GUARDRAILS                          |
++-----------------------------------------------------------------------------------+
+| 1. Whitelist Precedence    | alwaysAllowedIPs evaluated BEFORE dynamic blocks.     |
+| 2. Zero Auth Sessions      | ANY authenticated request (authenticated > 0) exempts|
+|                            | the subnet partition from autonomous mitigation.     |
+| 3. Returning Visitor Ratio | Subnets with cookie returning ratio > max_ratio (5%) |
+|                            | are protected against auto-blocking.                 |
+| 4. Crawler & RFC1918 Bypas | Verified bots (Google, Bing) and private nets spared.|
+| 5. Prefix Width Limits     | Hard limits (/16-/32 IPv4, /32-/128 IPv6).           |
+| 6. Self-Expiring TTL       | In-memory leases with automatic eviction. No residue.|
+| 7. Fleet Circuit Breaker   | Hard limit on active auto-rules (default: 50).        |
++-----------------------------------------------------------------------------------+
+```
+
+1. **`alwaysAllowedIPs` Ingress Precedence:**
+   - Evaluated *before* dynamic CIDR checks in the Valve's Catalina request pipeline.
+   - Internal load balancers, health checks, VPN exit nodes, payment provider callbacks, and corporate office ranges can **never** be locked out by dynamic rules.
+
+2. **Zero Authenticated Sessions Safeguard:**
+   - The Valve tracks user sessions via `authTrackingEnabled="true"` and login paths (`authLoginPaths`).
+   - If even **a single authenticated request** (`authenticated_requests > 0`) is observed from a subnet in the telemetry window, that subnet is strictly disqualified from autonomous mitigation and flagged for operator review.
+
+3. **Returning Visitor Ratio Firewall (`max_returning_ratio_pct`):**
+   - Legitimate user pools (residential broadband providers, university campuses, mobile carrier CGNATs) accumulate returning cookies over time (`visitorCookieEnabled="true"`).
+   - Distributed botnet carpet scrapers use disposable HTTP clients with near-zero cookie retention.
+   - The engine computes:
+     $$\text{Returning Ratio} = \frac{\text{Returning Requests}}{\text{Total Requests}} \times 100$$
+   - If the ratio exceeds `max_returning_ratio_pct` (default: 5.0%), autonomous blocking is aborted to protect genuine human users.
+
+4. **Crawler Feed & RFC 1918 Exclusions:**
+   - IP ranges matching verified search engines (Googlebot, Bingbot) and private networks (RFC 1918: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, and loopback) are automatically excluded.
+
+5. **CIDR Prefix Boundaries:**
+   - Enforced by both the Collector and the Valve's `mitigationMinPrefixV4` / `mitigationMinPrefixV6`.
+   - Prevents catastrophic over-blocking (e.g. accidental submission of `/8`, `/0`, or carrier supernets).
+
+6. **Bounded Self-Expiring In-Memory Leases:**
+   - Every block carries a strict `expiresAt` timestamp and is capped by `mitigationMaxTtlSeconds` (default: 24 hours).
+   - If the Collector crashes, loses network connectivity, or is decommissioned, all dynamic blocks automatically expire and vanish from the Valve's RAM. No permanent or stale firewall rules are left behind.
+
+7. **Fleet-Wide Circuit Breaker Cap (`maxActiveRules`):**
+   - Restricts the total number of simultaneous autonomous blocks across the fleet (default: 50).
+   - Prevents cascading runaway blocking during massive, multi-vector DDoS events and alerts administrators to intervene manually.
+
+---
+
+### 4. Administrator Rollout Playbook: In 3 Steps
+
+Deploying autonomous defense follows a structured verification path:
+
+#### Step 1: Baseline Verification
+1. Add `mitigationPassword` to Tomcat's `server.xml` and restart Tomcat.
+2. Add `mitigation-token` to `collector-config.yaml` and restart the Collector.
+3. Open **Mitigation (`/mitigation`)** in the Collector dashboard. Verify that the **Targeted Valves** counter reflects your mitigation-enabled instances.
+4. Perform a manual single IP test block (e.g. 5-minute TTL on a test IP) and verify immediate HTTP 429 response. Revoke the test block.
+
+#### Step 2: Simulation Mode (Dry-Run Auditing)
+1. In `collector-config.yaml` (or via the UI drawer in `/mitigation`), set:
+   * `enabled: true`
+   * `dry-run: true`
+2. Subscribe to **Browser Notifications** by clicking the bell icon (`🔔`) in the top navigation bar and granting browser notification permissions.
+3. Allow the system to run through peak traffic and overnight hours.
+4. Inspect the **Mitigation Audit Trail** (`/mitigation`). Review all entries marked `AUTO_WOULD_BLOCK` and `AUTO_WOULD_EXTEND` to verify that detected ASNs and subnets represent genuine attacks and that no legitimate user pools are targeted.
+
+#### Step 3: Activation of Live Autonomous Defense
+1. Once satisfied with the simulation results, open `/mitigation` and toggle **Dry-Run Mode** to **Off**.
+2. The Autonomous Defense Engine will now push live dynamic blocks to the Valves whenever a qualifying attack occurs.
+3. Active blocks appear under **Active Rule Batches** and **Deterrence Monitor**, where their deterrence state (`OBSERVING`, `PERSISTENT`, `DETERRED`) can be tracked in real-time.
+
+---
+
 ## Configuration Reference (`application.yaml` & `collector-config.yaml`)
 
 All parameters can be configured via `collector-config.yaml` or overridden via environment variables:
@@ -324,12 +559,21 @@ All parameters can be configured via `collector-config.yaml` or overridden via e
 | `surge-min-requests` | `COLLECTOR_SURGE_MIN_REQUESTS` | `1000` | De minimis 24-hour volume threshold (requests) required before a subnet can trigger a High Surge alert. |
 | `surge-multiplier-alert` | `COLLECTOR_SURGE_MULTIPLIER_ALERT` | `5.0` | Multiplier above 30-day historical baseline required to trigger High Surge categorization. |
 
-### Active Fleet Mitigation (Dynamic CIDR Blocking)
+### Active Fleet Mitigation & Autonomous Defense
 
 | YAML Property (`collector.*`) | Environment Variable | Default | Description |
 |---|---|---|---|
 | `mitigation-token` | `COLLECTOR_MITIGATION_TOKEN` | `null` | Shared write secret matching `mitigationPassword` on the target Valve(s) for pushing dynamic CIDR blocks (`POST`). Can also be overridden per endpoint via `endpoints[].mitigation-token` and `endpoints[].mitigation-url`. |
 | `default-mitigation-ttl-minutes` | `COLLECTOR_DEFAULT_MITIGATION_TTL_MINUTES` | `60` | Default TTL duration (in minutes) for newly created dynamic CIDR blocks before they automatically self-expire. |
+| `auto-mitigation.enabled` | `COLLECTOR_AUTO_MITIGATION_ENABLED` | `false` | Master switch for the Autonomous Defense Engine. |
+| `auto-mitigation.dry-run` | `COLLECTOR_AUTO_MITIGATION_DRY_RUN` | `true` | Simulation mode: audits decisions as `AUTO_WOULD_BLOCK` and `AUTO_WOULD_EXTEND` in the mitigation audit trail without altering live Valve rules. |
+| `auto-mitigation.carpet-min-subnets` | `COLLECTOR_AUTO_MITIGATION_CARPET_MIN_SUBNETS` | `3` | Minimum active `/24` or `/64` subnets belonging to a single ASN required to qualify as a horizontal carpet attack. |
+| `auto-mitigation.carpet-min-requests` | `COLLECTOR_AUTO_MITIGATION_CARPET_MIN_REQUESTS` | `5000` | Aggregate request volume threshold across the attacking ASN subnets. |
+| `auto-mitigation.max-returning-ratio-pct` | `COLLECTOR_AUTO_MITIGATION_MAX_RETURNING_RATIO_PCT` | `5.0` | Maximum returning visitor cookie ratio (%) permitted for autonomous blocking. Protects legitimate residential ISP and mobile carrier CGNAT pools from collateral blocks. |
+| `auto-mitigation.max-active-rules` | `COLLECTOR_AUTO_MITIGATION_MAX_ACTIVE_RULES` | `50` | Circuit breaker cap limiting the maximum number of concurrent autonomous dynamic rules across the fleet. |
+| `auto-mitigation.default-ttl-minutes` | `COLLECTOR_AUTO_MITIGATION_DEFAULT_TTL_MINUTES` | `60` | Initial block lease duration (in minutes) assigned to autonomous dynamic CIDR blocks. |
+| `auto-mitigation.auto-extend-persistent` | `COLLECTOR_AUTO_MITIGATION_AUTO_EXTEND_PERSISTENT` | `true` | Proactively extends persistent attackers (`PERSISTENT` deterrence state) near expiration. |
+| `auto-mitigation.max-extension-hours` | `COLLECTOR_AUTO_MITIGATION_MAX_EXTENSION_HOURS` | `12` | Maximum cumulative lifetime cap (in hours) permitted for an autonomously extended rule. |
 
 ### SQLite Storage Maintenance & Compaction
 
