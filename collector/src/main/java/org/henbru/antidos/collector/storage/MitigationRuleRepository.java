@@ -193,4 +193,23 @@ public class MitigationRuleRepository {
 				"SELECT * FROM mitigation_audit_log ORDER BY created_at DESC, id DESC LIMIT ?",
 				AUDIT_MAPPER, Math.max(1, limit));
 	}
+
+	public long findLatestAlertAuditId() {
+		Long max = jdbcTemplate.queryForObject(
+				"SELECT COALESCE(MAX(id), 0) FROM mitigation_audit_log WHERE action IN ('AUTO_BLOCK', 'AUTO_EXTEND', 'AUTO_CIRCUIT_BREAKER')",
+				Long.class);
+		return max != null ? max : 0L;
+	}
+
+	public List<MitigationAuditEntry> findAlertEntriesSince(long sinceId, int limit) {
+		return jdbcTemplate.query(
+				"""
+				SELECT * FROM mitigation_audit_log
+				WHERE id > ?
+				  AND action IN ('AUTO_BLOCK', 'AUTO_EXTEND', 'AUTO_CIRCUIT_BREAKER')
+				ORDER BY id ASC
+				LIMIT ?
+				""",
+				AUDIT_MAPPER, sinceId, Math.max(1, limit));
+	}
 }

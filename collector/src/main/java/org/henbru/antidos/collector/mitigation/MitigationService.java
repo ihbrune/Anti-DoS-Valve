@@ -1104,6 +1104,14 @@ public class MitigationService {
 		return ruleRepository.findRecentAuditEntries(limit);
 	}
 
+	public long getLatestAlertAuditId() {
+		return ruleRepository.findLatestAlertAuditId();
+	}
+
+	public List<MitigationAuditEntry> getAlertEntriesSince(long sinceId, int limit) {
+		return ruleRepository.findAlertEntriesSince(sinceId, limit);
+	}
+
 	public void recordAudit(Long ruleId, String cidr, String action, String details, Integer ttlSeconds, String actor) {
 		recordAudit(ruleId, cidr, null, action, ttlSeconds, details, actor);
 	}

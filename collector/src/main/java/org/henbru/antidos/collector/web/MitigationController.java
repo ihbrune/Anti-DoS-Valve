@@ -333,6 +333,24 @@ public class MitigationController {
 		return ResponseEntity.ok(body);
 	}
 
+	@GetMapping("/api/v1/mitigation/alerts")
+	@ResponseBody
+	public ResponseEntity<Map<String, Object>> apiGetAlerts(
+			@RequestParam(value = "sinceId", required = false) Long sinceId) {
+		long latestId = mitigationService.getLatestAlertAuditId();
+		List<MitigationAuditEntry> alerts;
+		if (sinceId == null || sinceId < 0) {
+			alerts = List.of();
+		} else {
+			alerts = mitigationService.getAlertEntriesSince(sinceId, 50);
+		}
+		Map<String, Object> body = new LinkedHashMap<>();
+		body.put("latestId", latestId);
+		body.put("hasNewAlerts", !alerts.isEmpty());
+		body.put("alerts", alerts);
+		return ResponseEntity.ok(body);
+	}
+
 	private void populateMitigationModel(Model model, String feedbackSuccess, String feedbackError) {
 		Instant now = Instant.now();
 		mitigationService.refreshDeterrenceMetrics();
