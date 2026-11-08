@@ -316,4 +316,42 @@ class MitigationServiceTest {
 				.anyMatch(w -> "FLEET_CAPACITY".equalsIgnoreCase(w.getCidr()) && w.getMessage().contains("Fleet capacity limit exceeded"));
 		assertTrue(hasCapacityWarning, "Must raise FLEET_CAPACITY critical preflight warning");
 	}
+
+	@Test
+	void testAlertNotificationEndpointAndRepository() {
+		CollectorProperties props = new CollectorProperties();
+		org.henbru.antidos.collector.storage.SystemSettingsRepository settingsRepo =
+				new org.henbru.antidos.collector.storage.SystemSettingsRepository(jdbcTemplate);
+		AutoMitigationService autoMitigationService =
+				new AutoMitigationService(props, settingsRepo, mitigationService, jdbcTemplate);
+		org.henbru.antidos.collector.web.MitigationController controller =
+				new org.henbru.antidos.collector.web.MitigationController(mitigationService, autoMitigationService, props);
+
+		long idBefore = mitigationService.getLatestAlertAuditId();
+
+		// Record an autonomous alert
+		mitigationService.recordAudit(null, "198.51.100.0/24", "AUTO_BLOCK", "Carpet attack", 3600, "AUTO_ENGINE");
+
+		long idAfter = mitigationService.getLatestAlertAuditId();
+		assertTrue(idAfter > idBefore);
+
+		List<MitigationAuditEntry> alerts = mitigationService.getAlertEntriesSince(idBefore, 10);
+		assertEquals(1, alerts.size());
+		assertEquals("AUTO_BLOCK", alerts.getFirst().getAction());
+		assertEquals("198.51.100.0/24", alerts.getFirst().getCidr());
+
+		// Initial poll with sinceId < 0 must return 0 alerts to avoid historical flood
+		var initResp = controller.apiGetAlerts(-1L);
+		assertEquals(200, initResp.getStatusCode().value());
+		assertEquals(false, initResp.getBody().get("hasNewAlerts"));
+		assertEquals(List.of(), initResp.getBody().get("alerts"));
+		assertEquals(idAfter, initResp.getBody().get("latestId"));
+
+		// Subsequent poll with sinceId = idBefore must return the new alert
+		var pollResp = controller.apiGetAlerts(idBefore);
+		assertEquals(200, pollResp.getStatusCode().value());
+		assertEquals(true, pollResp.getBody().get("hasNewAlerts"));
+		List<?> polled = (List<?>) pollResp.getBody().get("alerts");
+		assertEquals(1, polled.size());
+	}
 }

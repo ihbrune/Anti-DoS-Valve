@@ -7,6 +7,7 @@
     <link rel="stylesheet" th:href="@{/css/collector.css}">
     <script th:src="@{/js/theme.js}"></script>
     <script th:src="@{/js/collector-history.js}"></script>
+    <script th:src="@{/js/collector-notifications.js}" defer></script>
     <script th:src="@{/js/htmx.min.js}" defer></script>
     <script th:src="@{/js/htmx-lite.js}" defer></script>
 </head>
@@ -63,6 +64,12 @@
                         aria-label="Investigation History">
                     <span>&#x1F552;</span>
                     <span class="history-badge-count" style="display:none;"></span>
+                </button>
+                <button type="button" class="nav-util-btn notification-toggle-btn" onclick="toggleNotificationPermission()"
+                    title="Desktop &amp; In-App Notifications for Autonomous Defense"
+                    aria-label="Toggle Autonomous Defense Notifications">
+                    <span>&#x1F514;</span>
+                    <span class="notification-status-dot" style="display:none;"></span>
                 </button>
                 <button type="button" class="nav-util-btn"
                         hx-get="/fragments/help?doc=ui&section=system-status-configuration"

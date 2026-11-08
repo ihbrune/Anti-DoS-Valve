@@ -76,6 +76,28 @@ collector:
   parallel-fleet-polling: true
 
   # ---------------------------------------------------------------------------
+  # Active Dynamic CIDR Mitigation & Fleet Defense
+  # ---------------------------------------------------------------------------
+  # Global write token (matching 'mitigationPassword' on target Valves in Tomcat's server.xml).
+  # Required to authenticate dynamic block push, extend, and revoke commands.
+  mitigation-token: "changeMeMitigationSecretToken"
+
+  # Default time-to-live in minutes for dynamic CIDR blocks created manually or via ASN batches (default: 60)
+  default-mitigation-ttl-minutes: 60
+
+  # Autonomous Defense Engine (Auto-Mitigation)
+  auto-mitigation:
+    enabled: false                # Master switch for autonomous mitigation engine
+    dry-run: true                 # Simulation mode (audits AUTO_WOULD_BLOCK without altering Valve rules)
+    carpet-min-subnets: 3         # Minimum active subnets per ASN to detect carpet attacks
+    carpet-min-requests: 5000     # Minimum aggregate requests across the ASN
+    max-returning-ratio-pct: 5.0  # Max returning visitor ratio allowed for auto-blocking (collateral protection)
+    max-active-rules: 50          # Circuit breaker cap across the fleet
+    default-ttl-minutes: 60       # Default TTL for auto rules
+    auto-extend-persistent: false # Automatically extend persistent attackers near expiration
+    max-extension-hours: 24       # Maximum cumulative lifetime
+
+  # ---------------------------------------------------------------------------
   # Telemetry & Active Tracking Rules (3-Tier Cascade)
   # ---------------------------------------------------------------------------
   # 1. Global Default: applies to all valves on all servers unless overridden below
@@ -111,6 +133,8 @@ collector:
     - name: "Local-Tomcat"
       url: "http://localhost:8080/antidos-status"
       token: "secretToken1"
+      # Optional: Override the global collector.mitigation-token specifically for this node
+      # mitigation-token: "changeMeMitigationSecretToken"
       poll-intermediate-slots: false
       enabled: true
 
