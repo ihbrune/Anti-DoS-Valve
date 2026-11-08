@@ -158,7 +158,8 @@ public class MitigationController {
 		try {
 			List<MitigationRule> created = mitigationService.blockAsnSubnets(asn, hours, ttlMinutes, reason, "ADMIN");
 			if (created.isEmpty()) {
-				populateMitigationModel(model, null,
+				populateMitigationModel(model, null, null);
+				model.addAttribute("asnPreviewError",
 						"No eligible unauthenticated subnets found for ASN " + asn + " in the last " + hours + "h.");
 			} else {
 				populateMitigationModel(model,

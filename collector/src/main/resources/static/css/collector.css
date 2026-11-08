@@ -121,15 +121,17 @@ body {
 .nav-actions {
     display: flex;
     align-items: center;
-    gap: 4px;
-    flex-wrap: nowrap;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
 .nav-links {
     display: flex;
     align-items: center;
-    gap: 2px;
-    flex-wrap: nowrap;
+    gap: 3px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
 .nav-actions .btn {
@@ -1092,16 +1094,15 @@ html[data-theme="light"] .theme-icon-moon {
     .navbar {
         flex-direction: column;
         align-items: stretch;
-        gap: 14px;
-        padding: 14px 18px;
+        gap: 12px;
+        padding: 12px 16px;
     }
     .nav-actions {
         width: 100%;
-        overflow-x: auto;
-        padding-bottom: 4px;
         justify-content: space-between;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: thin;
+    }
+    .nav-links {
+        justify-content: flex-start;
     }
 }
 

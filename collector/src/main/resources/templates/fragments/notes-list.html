@@ -157,6 +157,18 @@
                        title="View aggregated Top Offenders for this subnet">
                         <span>&#x26A0;</span> Top Offenders
                     </a>
+                    <a th:if="${a.isAsn()}"
+                       th:href="@{/mitigation(asn=${a.asn() != null ? a.asn() : a.targetKey()},reason='Note: ' + ${a.targetKey()},source='NOTE')}"
+                       class="btn btn-danger" style="padding: 2px 8px; font-size: 11px; font-weight: 700;"
+                       title="Batch mitigate active unauthenticated subnets of this ASN">
+                        <span>&#x1F6E1;&#xFE0F;</span> Mitigate ASN
+                    </a>
+                    <a th:if="${a.isSubnet()}"
+                       th:href="@{/mitigation(cidr=${a.targetKey()},reason='Note: ' + ${a.targetKey()},source='NOTE')}"
+                       class="btn btn-danger" style="padding: 2px 8px; font-size: 11px; font-weight: 700;"
+                       title="Create dynamic CIDR block for this subnet">
+                        <span>&#x1F6E1;&#xFE0F;</span> Dynamic Block
+                    </a>
                 </div>
             </div>
         </div>

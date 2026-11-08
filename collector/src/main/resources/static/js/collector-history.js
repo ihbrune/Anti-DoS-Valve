@@ -303,17 +303,22 @@
                     html += '<a href="/offenders?clientQuery=' + encodeURIComponent(item.value) + '" class="history-action-link" title="Analyze offender surge & behavior">⚠️ Offenders</a>';
                     if (item.subnet) {
                         html += '<a href="/profiles?clientQuery=' + encodeURIComponent(item.subnet) + '" class="history-action-link" title="30-day baseline for subnet ' + escapeHtml(item.subnet) + '">⚡ Subnet</a>';
+                        html += '<a href="/mitigation?cidr=' + encodeURIComponent(item.subnet) + '&source=HISTORY" class="history-action-link" style="color: var(--color-danger);" title="Send subnet ' + escapeHtml(item.subnet) + ' to Mitigation dialog">🛡️ Mitigate</a>';
+                    } else {
+                        html += '<a href="/mitigation?cidr=' + encodeURIComponent(item.value) + '&source=HISTORY" class="history-action-link" style="color: var(--color-danger);" title="Send IP ' + escapeHtml(item.value) + ' to Mitigation dialog">🛡️ Mitigate</a>';
                     }
                     html += '<button type="button" class="history-action-link" onclick="AntiDoSHistory.openNoteModal(\'SUBNET\', \'' + escapeJs(item.value) + '\')" title="View or create investigative note">📝 Note</button>';
                 } else if (item.type === 'SUBNET') {
                     html += '<a href="/profiles?clientQuery=' + encodeURIComponent(item.value) + '" class="history-action-link" title="30-day traffic profile & surge radar">⚡ Profiles</a>';
                     html += '<a href="/offenders?groupBy=SUBNET&clientQuery=' + encodeURIComponent(item.value) + '" class="history-action-link" title="Subnet rollup & offender table">⚠️ Rollup</a>';
                     html += '<a href="/events?clientQuery=' + encodeURIComponent(item.value) + '" class="history-action-link" title="Incident explorer for this subnet">📋 Incidents</a>';
+                    html += '<a href="/mitigation?cidr=' + encodeURIComponent(item.value) + '&source=HISTORY" class="history-action-link" style="color: var(--color-danger);" title="Open subnet in Mitigation dialog">🛡️ Mitigate</a>';
                     html += '<button type="button" class="history-action-link" onclick="AntiDoSHistory.openNoteModal(\'SUBNET\', \'' + escapeJs(item.value) + '\')" title="View or create subnet note">📝 Note</button>';
                 } else if (item.type === 'ASN') {
                     html += '<a href="/profiles?asn=' + encodeURIComponent(cleanAsn) + '" class="history-action-link" title="Subnet profiles in this ASN">⚡ Profiles</a>';
                     html += '<a href="/offenders?asn=' + encodeURIComponent(cleanAsn) + '" class="history-action-link" title="Top offenders from this ASN">⚠️ Offenders</a>';
                     html += '<a href="/events?asn=' + encodeURIComponent(cleanAsn) + '" class="history-action-link" title="Incidents from this ASN">📋 Incidents</a>';
+                    html += '<a href="/mitigation?asn=' + encodeURIComponent(cleanAsn) + '&source=HISTORY" class="history-action-link" style="color: var(--color-danger);" title="Batch mitigate active unauthenticated subnets of this ASN">🛡️ Mitigate</a>';
                     html += '<a href="/analytics" class="history-action-link" title="Bot-mix & Residential proxy cluster">📊 Analytics</a>';
                     html += '<button type="button" class="history-action-link" onclick="AntiDoSHistory.openNoteModal(\'ASN\', \'' + escapeJs(item.value) + '\')" title="View or create ASN note">📝 Note</button>';
                 }
