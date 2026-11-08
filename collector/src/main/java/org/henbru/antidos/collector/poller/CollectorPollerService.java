@@ -50,8 +50,20 @@ public class CollectorPollerService {
 	private final EntityResolver entityResolver;
 	private final ValveRuleResolver valveRuleResolver;
 	private final ExecutorService pollerExecutor;
+	private org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService;
+	private org.henbru.antidos.collector.mitigation.MitigationService mitigationService;
 
 	private final java.util.concurrent.ConcurrentMap<String, Integer> knownConfigHashes = new java.util.concurrent.ConcurrentHashMap<>();
+
+	@Autowired(required = false)
+	public void setRollupAggregationService(org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService) {
+		this.rollupAggregationService = rollupAggregationService;
+	}
+
+	@Autowired(required = false)
+	public void setMitigationService(org.henbru.antidos.collector.mitigation.MitigationService mitigationService) {
+		this.mitigationService = mitigationService;
+	}
 
 	@Autowired
 	public CollectorPollerService(
@@ -216,6 +228,21 @@ public class CollectorPollerService {
 					activeIncludedValveNames.add(v.monitorName());
 					valvesPolled++;
 					updateValveConfigIfChanged(endpoint.getName(), v, now);
+					if (monitoredValveRepository != null) {
+						monitoredValveRepository.updateDynamicMitigationStats(
+								endpoint.getName(),
+								v.monitorName(),
+								v.dynamicMitigationEnabledOrDefault(),
+								v.mitigationUri(),
+								v.dynamicBlocksActiveCountOrDefault(),
+								v.dynamicBlocksBlockedRequestsOrDefault(),
+								v.dynamicRulesRevisionOrDefault(),
+								now
+						);
+					}
+					if (mitigationService != null && v.dynamicMitigationEnabledOrDefault()) {
+						mitigationService.syncValveIfNeeded(endpoint, v, now);
+					}
 					IngestResult result = ingestValve(endpoint, v, now);
 					slotsIngested += result.slotsIngested();
 					eventsIngested += result.eventsIngested();
@@ -227,6 +254,14 @@ public class CollectorPollerService {
 			}
 			if (monitoredValveRepository != null) {
 				monitoredValveRepository.syncActiveValves(endpoint.getName(), activeIncludedValveNames);
+			}
+			if (eventsIngested > 0) {
+				if (rollupAggregationService != null) {
+					rollupAggregationService.signalRealtimeRollupRefresh();
+				}
+				if (mitigationService != null) {
+					mitigationService.refreshDeterrenceMetricsAsync();
+				}
 			}
 
 			long totalDuration = System.currentTimeMillis() - start;
@@ -602,6 +637,11 @@ public class CollectorPollerService {
 				v.maxAuthCacheSize() > 0 ? v.maxAuthCacheSize() : 50000,
 				v.relevantAuthScopeOrDefault(),
 				v.activeSampleThresholdOrDefault(),
+				v.dynamicMitigationEnabledOrDefault(),
+				v.mitigationUri(),
+				v.dynamicBlocksActiveCountOrDefault(),
+				v.dynamicBlocksBlockedRequestsOrDefault(),
+				v.dynamicRulesRevisionOrDefault(),
 				now,
 				configHash,
 				true

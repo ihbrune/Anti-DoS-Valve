@@ -926,6 +926,12 @@ public class DemoDataSeeder {
 								v.authSessionTtlSeconds() > 0 ? v.authSessionTtlSeconds() : 900,
 								v.maxAuthCacheSize() > 0 ? v.maxAuthCacheSize() : 50000,
 								v.relevantAuthScopeOrDefault(),
+								v.activeSampleThresholdOrDefault(),
+								v.dynamicMitigationEnabledOrDefault(),
+								v.mitigationUri(),
+								v.dynamicBlocksActiveCountOrDefault(),
+								v.dynamicBlocksBlockedRequestsOrDefault(),
+								v.dynamicRulesRevisionOrDefault(),
 								now,
 								v.configHashCode(),
 								true

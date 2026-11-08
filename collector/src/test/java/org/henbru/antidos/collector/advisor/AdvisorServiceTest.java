@@ -166,20 +166,20 @@ class AdvisorServiceTest {
 		);
 		monitoredValveRepository.upsert(valve);
 
-		// 3 subnets in ASN 3257 sending a total of 18,000 requests with 0 blocks and 0 auth
+		// 3 subnets in ASN 64496 sending a total of 18,000 requests with 0 blocks and 0 auth
 		ClientSubnetRollup r1 = new ClientSubnetRollup(
-				null, twoHoursAgo, hourAgo, 60, "test-server-01", "GLOBAL-LIMITER", "89.149.20.0/24",
-				6000, 6000, 0, 0, 8, 1, 1, 80, 1, 3257L, "GTT Communications", "US", ClientType.DATACENTER,
+				null, twoHoursAgo, hourAgo, 60, "test-server-01", "GLOBAL-LIMITER", "198.51.100.0/24",
+				6000, 6000, 0, 0, 8, 1, 1, 80, 1, 64496L, "Example Hosting Corp.", "US", ClientType.DATACENTER,
 				0, 0, 0, 0
 		);
 		ClientSubnetRollup r2 = new ClientSubnetRollup(
-				null, twoHoursAgo, hourAgo, 60, "test-server-01", "GLOBAL-LIMITER", "89.149.21.0/24",
-				6000, 6000, 0, 0, 8, 1, 1, 80, 1, 3257L, "GTT Communications", "US", ClientType.DATACENTER,
+				null, twoHoursAgo, hourAgo, 60, "test-server-01", "GLOBAL-LIMITER", "203.0.113.0/24",
+				6000, 6000, 0, 0, 8, 1, 1, 80, 1, 64496L, "Example Hosting Corp.", "US", ClientType.DATACENTER,
 				0, 0, 0, 0
 		);
 		ClientSubnetRollup r3 = new ClientSubnetRollup(
-				null, twoHoursAgo, hourAgo, 60, "test-server-01", "GLOBAL-LIMITER", "89.149.22.0/24",
-				6000, 6000, 0, 0, 8, 1, 1, 80, 1, 3257L, "GTT Communications", "US", ClientType.DATACENTER,
+				null, twoHoursAgo, hourAgo, 60, "test-server-01", "GLOBAL-LIMITER", "192.0.2.0/24",
+				6000, 6000, 0, 0, 8, 1, 1, 80, 1, 64496L, "Example Hosting Corp.", "US", ClientType.DATACENTER,
 				0, 0, 0, 0
 		);
 		subnetRollupRepository.batchUpsert(List.of(r1, r2, r3));
@@ -194,11 +194,11 @@ class AdvisorServiceTest {
 
 		assertEquals(AdvisorSeverity.WARNING, carpetFinding.severity());
 		assertEquals("GLOBAL-LIMITER", carpetFinding.valveName());
-		assertTrue(carpetFinding.title().contains("ASN 3257"));
+		assertTrue(carpetFinding.title().contains("ASN 64496"));
 		assertEquals(18000L, carpetFinding.totalRequests());
 		assertEquals(0L, carpetFinding.blockedRequests());
 		assertTrue(carpetFinding.explanation().contains("distributing traffic across multiple IP blocks"));
-		assertTrue(carpetFinding.suggestedRegex().contains("iptables -I INPUT -m set --match-set asn_3257 src -j DROP"));
+		assertTrue(carpetFinding.suggestedRegex().contains("iptables -I INPUT -m set --match-set asn_64496 src -j DROP"));
 	}
 
 	@Test

@@ -4,10 +4,14 @@ import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
 
+import org.henbru.antidos.collector.mitigation.MitigationService;
 import org.henbru.antidos.collector.model.ValveDetailsDto;
 import org.henbru.antidos.collector.model.ValveOverviewDto;
+import org.henbru.antidos.collector.poller.ValveStatusClient;
 import org.springframework.stereotype.Component;
 
 /**
@@ -20,6 +24,46 @@ public class MockValveSimulator {
 	public static final int SLOT_LENGTH_SECONDS = 10;
 	public static final int SLOT_LENGTH_MILLIS = SLOT_LENGTH_SECONDS * 1000;
 	public static final int NUMBER_OF_SLOTS = 6;
+
+	private final Map<String, Map<String, Long>> mockDynamicBlocksByValve = new ConcurrentHashMap<>();
+
+	public ValveStatusClient.MitigationCommandResponse applyMitigationCommand(
+			String nodeId, String monitorName, String action, String cidr, Integer ttlSeconds, String reason, String blocks) {
+		String key = normalizeNodeId(nodeId) + "#" + (monitorName != null ? monitorName : "Subnet-Guard");
+		Map<String, Long> map = mockDynamicBlocksByValve.computeIfAbsent(key, k -> new ConcurrentHashMap<>());
+		long now = System.currentTimeMillis();
+		map.entrySet().removeIf(e -> e.getValue() <= now);
+
+		if ("replace".equalsIgnoreCase(action)) {
+			map.clear();
+			if (blocks != null && !blocks.isBlank()) {
+				for (String line : blocks.split("\\r?\\n")) {
+					String trimmed = line.trim();
+					if (trimmed.isEmpty()) continue;
+					String[] parts = trimmed.split("\\|");
+					if (parts.length >= 2) {
+						try {
+							long exp = Long.parseLong(parts[1].trim());
+							if (exp > now) {
+								map.put(parts[0].trim(), exp);
+							}
+						} catch (NumberFormatException ignored) {
+						}
+					}
+				}
+			}
+		} else if ("upsert".equalsIgnoreCase(action) && cidr != null) {
+			long exp = now + (ttlSeconds != null && ttlSeconds > 0 ? ttlSeconds * 1000L : 3600_000L);
+			map.put(cidr.trim(), exp);
+		} else if ("remove".equalsIgnoreCase(action) && cidr != null) {
+			map.remove(cidr.trim());
+		} else if ("clear".equalsIgnoreCase(action)) {
+			map.clear();
+		}
+
+		long rev = MitigationService.computeRevisionForCidrs(map.keySet());
+		return new ValveStatusClient.MitigationCommandResponse("ok", action, monitorName, map.size(), rev, null);
+	}
 
 	public record SimulatedProbe(String method, String uri, String userAgent) {}
 
@@ -310,6 +354,8 @@ public class MockValveSimulator {
 		long cumulative = 310_000L + offset + (currentKey % 50_000L) * 1400L;
 		long totalAuth = (long) (cumulative * 0.38);
 		long prevAuth = (long) (prev.totalRequests() * 0.38);
+		Map<String, Long> dynMap = mockDynamicBlocksByValve.getOrDefault(normalizeNodeId(nodeId) + "#Subnet-Guard", Map.of());
+		long dynRev = MitigationService.computeRevisionForCidrs(dynMap.keySet());
 		return new ValveOverviewDto.ValveSummaryDto(
 				"Subnet-Guard",
 				"Subnet-level DDoS traffic partition absorbing distributed botnet clusters across /24 and /48 prefixes.",
@@ -342,6 +388,14 @@ public class MockValveSimulator {
 				900,
 				50000,
 				142,
+				"ALL",
+				0,
+				true,
+				"/antidos-status",
+				"127.0.0.1, 10.0.0.0/8",
+				dynMap.size(),
+				dynMap.size() * 42L,
+				dynRev,
 				0L,
 				cur.activeCounters(),
 				cur.blockedCounters(),

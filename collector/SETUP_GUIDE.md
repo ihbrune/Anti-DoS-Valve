@@ -324,6 +324,13 @@ All parameters can be configured via `collector-config.yaml` or overridden via e
 | `surge-min-requests` | `COLLECTOR_SURGE_MIN_REQUESTS` | `1000` | De minimis 24-hour volume threshold (requests) required before a subnet can trigger a High Surge alert. |
 | `surge-multiplier-alert` | `COLLECTOR_SURGE_MULTIPLIER_ALERT` | `5.0` | Multiplier above 30-day historical baseline required to trigger High Surge categorization. |
 
+### Active Fleet Mitigation (Dynamic CIDR Blocking)
+
+| YAML Property (`collector.*`) | Environment Variable | Default | Description |
+|---|---|---|---|
+| `mitigation-token` | `COLLECTOR_MITIGATION_TOKEN` | `null` | Shared write secret matching `mitigationPassword` on the target Valve(s) for pushing dynamic CIDR blocks (`POST`). Can also be overridden per endpoint via `endpoints[].mitigation-token` and `endpoints[].mitigation-url`. |
+| `default-mitigation-ttl-minutes` | `COLLECTOR_DEFAULT_MITIGATION_TTL_MINUTES` | `60` | Default TTL duration (in minutes) for newly created dynamic CIDR blocks before they automatically self-expire. |
+
 ### SQLite Storage Maintenance & Compaction
 
 | YAML Property (`collector.*`) | Environment Variable | Default | Description |
@@ -473,6 +480,7 @@ The database separates real-time transient telemetry, persistent subnet aggregat
 12. **`asn_info`:** Autonomous System catalog caching organization names and datacenter / hosting provider classifications.
 13. **`crawler_feeds` & `bot_ip_ranges`:** Automatic synchronization catalog for official bot feeds (Googlebot, Bingbot, OpenAI, Anthropic) with versioning and orphan pruning.
 14. **`poll_event_log`:** Diagnostic audit trail tracking background ingestion cycles (`blocked_events_ingested`, `marked_events_ingested`, `events_ingested`), communication latency, warnings, and recovery gap-fills.
+15. **`mitigation_rules` & `mitigation_audit_log`:** Persistent dynamic CIDR block rules (`cidr`, `status`, `source`, `batch_id`, `expires_at`, `total_blocked_hits`, `peak_distinct_ips`, `deterrence_state`) and full operator/batch audit history (`CREATE`, `EXTEND`, `REVOKE`, `BATCH_CREATE`, `BATCH_REVOKE`).
 
 ---
 

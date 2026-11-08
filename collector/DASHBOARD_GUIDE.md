@@ -18,6 +18,7 @@ The Collector interface is built around high-throughput, real-time observability
   * **Dashboard (`/`):** Real-time fleet overview, health cards, and top offenders.
   * **Analytics (`/analytics`):** Dedicated visual telemetry cockpit, attack timelines, bot-mix composition, and 2D residential proxy cluster scatterplots.
   * **Top Offenders (`/offenders`):** Multi-server aggregation ranking, Subnet Rollup (`/24` & `/64`), and ASN cluster detection.
+  * **Mitigation (`/mitigation`):** Active fleet-wide dynamic CIDR blocking, ASN active subnet batch expansion, pre-flight collateral damage checks, and attacker deterrence tracking.
   * **Profiles (`/profiles`):** Dedicated baseline inventory, 30-day moving daily frequencies, 24h surge multipliers, dormancy breakouts, and residential proxy cluster triage.
   * **Incident Explorer (`/events`):** High-resolution log search with CIDR subnets, exact time horizons, and classification tags.
   * **Network Notes (`/notes`):** Persistent operator knowledge archive and forensic memory for ASNs and Subnets, completely immune to data retention cleanups.
@@ -739,6 +740,37 @@ Admins can trigger asynchronous maintenance actions directly from the web interf
 * **Clear Resolver Cache:** Clears the in-memory ASN/crawler IP classification cache, forcing fresh lookups against persistent storage and MMDB.
 * **Force Fleet Poll:** Triggers an immediate polling sweep across all monitored servers.
 * **Reset Demo Data (Demo Mode Only):** Re-seeds the demo database with clean, realistic 7-day telemetry curves.
+
+---
+
+## Active Fleet Mitigation & Deterrence Monitor (/mitigation)
+
+Accessible via `/mitigation`. The active defense control plane for creating, extending, revoking, and auditing temporary dynamic CIDR blocks across mitigation-enabled Anti-DoS Valve instances.
+
+### 1. Selective Valve Targeting & Auto-Discovery
+Dynamic CIDR rules are pushed **exclusively** to Valve instances that have a `mitigationPassword` configured in Tomcat's `server.xml` (which reports `"mitigationEnabled": true` in `/antidos-status`). Upstream monitoring or simulation Valves in the same pipeline remain untouched so they can continue observing full incoming traffic baselines.
+* **Expected Revision & Sync Status:** Each active rule set has a deterministic revision hash. During every 15-second poll cycle, the Collector compares the Valve's `dynamicRulesRevision` against the expected revision and automatically reconciles any newly restarted or out-of-sync Valve.
+* **Server-Wide Enforcement:** Dynamic CIDR blocks act like `serverWideBlocking="true"` for matching subnets, immediately returning HTTP 429 on all paths regardless of `relevantPaths` or `nonRelevantPaths`.
+* **Self-Expiring Fail-Safe:** Every rule carries an explicit `expiresAt` timestamp. If the Collector becomes unreachable, rules automatically expire in the Valve's lock-free memory registry once their TTL elapses.
+
+### 2. Creating Single or Multi-Subnet Dynamic CIDR Blocks
+* **Prefix Guardrails:** To prevent accidental broad-spectrum blackholing, dynamic rules enforce a maximum subnet width of `/16`–`/32` for IPv4 and `/32`–`/128` for IPv6.
+* **🔍 Run Pre-Flight Check:** Evaluates the entered IP(s) or CIDR subnet(s) against the Collector's 24-hour telemetry and intelligence feeds before blocking:
+  * **Authenticated Session Protection:** Warns if any requests with `authenticatedRequests > 0` were observed from the target range in the last 24 hours.
+  * **Search Engine & Private Range Guardrail:** Warns if the range overlaps verified `SEARCH_ENGINE` crawlers or RFC 1918 / loopback addresses.
+  * If a safety warning is triggered, activating the block requires explicitly checking **Override Pre-Flight Safety Warning**.
+
+### 3. ASN Batch Mitigation (Expand Active Subnets)
+During distributed multi-subnet carpet attacks from a single hosting or transit provider (e.g. `ASN 64496`), manually entering dozens of `/24` subnets is impractical, while blocking `/8` or `/12` supernets risks collateral damage:
+* **🔎 Preview ASN Subnets:** Queries the Collector's recent telemetry (`6h`, `24h`, or `72h`) for all active `/24` (IPv4) and `/64` (IPv6) subnets belonging to the target ASN that have **0 authenticated requests**.
+* **⚡ Block Unauthenticated ASN Subnets:** Pushes all eligible `/24` and `/64` subnets in a single atomic batch (`batchId = ASN-64496`), automatically skipping any subnet where legitimate authenticated users were observed.
+* **Quick Batch Revocation:** Active batches appear in the **Active Rule Batches** bar and can be lifted across the entire fleet with one click (`Revoke Batch`).
+
+### 4. Attacker Deterrence Tracking (`OBSERVING`, `PERSISTENT`, `DETERRED`)
+Even while a subnet is dynamically blocked (HTTP 429), the Valve records lightweight counter telemetry in a synthetic `CIDR:<subnet>` slot (`status="Blocked"`). The Collector aggregates these hits to classify attacker behavior:
+* **👁 OBSERVING:** Rule was created less than 10 minutes ago; gathering post-block telemetry.
+* **🔥 PERSISTENT (Still Attacking):** Blocked hits were recorded within the last 10 minutes. The botnet is ignoring HTTP 429 responses; consider extending the TTL (`+1h` / `+6h`).
+* **✅ DETERRED (Quiet ≥10m):** Zero blocked hits for at least 10 minutes (or since rule activation after the initial 10-minute observation window). The attacker has rotated away or ceased requests; the rule can safely expire.
 
 ---
 

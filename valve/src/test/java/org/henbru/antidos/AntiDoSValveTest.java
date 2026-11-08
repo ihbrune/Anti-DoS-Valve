@@ -2606,6 +2606,11 @@ class AntiDoSValveTest {
 		}
 
 		@Override
+		public void sendError(int status, String message) {
+			this.errorCode = status;
+		}
+
+		@Override
 		public void setContentType(String type) {
 		}
 
@@ -2716,6 +2721,178 @@ class AntiDoSValveTest {
 		assertTrue(json.contains("\"sampleMethod\": \"POST\""));
 		assertTrue(json.contains("\"sampleUri\": \"/api/data\""));
 		assertTrue(json.contains("\"sampleUserAgent\": \"TestBot/2.0\""));
+	}
+
+	@Test
+	void testDynamicBlockRegistryScaleAndTtlExpiration() {
+		AntiDoSDynamicBlockRegistry registry = new AntiDoSDynamicBlockRegistry();
+		long now = 1_700_000_000_000L;
+
+		// 1. Insert 2,000 IPv4 /24 subnets and 100 IPv6 /64 subnets
+		for (int i = 0; i < 2000; i++) {
+			int secondOctet = (i >> 8) & 0xFF;
+			int thirdOctet = i & 0xFF;
+			String cidr = "198." + secondOctet + "." + thirdOctet + ".0/24";
+			registry.upsertBlock(cidr, now + 60_000L, "ASN 64496 Wave", now);
+		}
+		for (int i = 0; i < 100; i++) {
+			String cidr = "2001:db8:" + Integer.toHexString(i) + "::/48";
+			registry.upsertBlock(cidr, now + 60_000L, "IPv6 Botnet", now);
+		}
+
+		assertEquals(2100, registry.getActiveCount(now));
+		long rev1 = registry.getRevision(now);
+		assertTrue(rev1 > 0);
+
+		// Match IP inside one of the 2,000 subnets
+		AntiDoSDynamicBlockRegistry.DynamicBlockEntry hit = registry.match("198.3.210.45", null, now + 1000L);
+		assertNotNull(hit);
+		assertEquals("198.3.210.0/24", hit.getCidr());
+
+		// Match IPv6 inside one of the 100 /48 subnets
+		AntiDoSDynamicBlockRegistry.DynamicBlockEntry hitV6 = registry.match("2001:db8:2a:1234::1", null, now + 1000L);
+		assertNotNull(hitV6);
+		assertEquals("2001:db8:2a:0:0:0:0:0/48", hitV6.getCidr());
+
+		// Unmatched IPs return null
+		assertNull(registry.match("192.0.2.1", null, now + 1000L));
+		assertNull(registry.match("2001:db8:999::1", null, now + 1000L));
+
+		// Advance clock past TTL -> self-expiring without external cleanup
+		long afterExpiry = now + 60_001L;
+		assertNull(registry.match("198.3.210.45", null, afterExpiry));
+		assertEquals(0, registry.getActiveCount(afterExpiry));
+		assertEquals(0L, registry.getRevision(afterExpiry));
+	}
+
+	@Test
+	void testDynamicMitigationEndpointPrecedenceAndDeterrenceTracking() throws Exception {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "DYNAMIC_MITIGATION_TEST");
+		valve.setRelevantPaths("/api/.*");
+		valve.setNonRelevantPaths("/api/health");
+		valve.setAlwaysAllowedIPs("198\\.51\\.100\\.99");
+		valve.setStatusUri("/antidos-status");
+		valve.setStatusPassword("readOnlyStatusToken123");
+		valve.setMitigationUri("/antidos-mitigate");
+		valve.setMitigationAllowedIPs("127\\.0\\.0\\.1|10\\.0\\.0\\.5");
+		valve.setMitigationPassword("superSecretMitigationToken999");
+		valve.setCollectorIntegration("true");
+		valve.reloadMonitor();
+
+		assertTrue(valve.isDynamicMitigationEnabled());
+
+		// 1. Unauthorized IP gets 404 on mitigation endpoint
+		TestRequest badIpReq = new TestRequest("/antidos-mitigate", "203.0.113.77");
+		badIpReq.setMethod("POST");
+		badIpReq.setHeader("Authorization", "Bearer superSecretMitigationToken999");
+		badIpReq.setParameter("action", "upsert");
+		badIpReq.setParameter("cidr", "198.51.100.0/24");
+		TestResponse badIpResp = new TestResponse();
+		valve.invoke(badIpReq, badIpResp);
+		assertEquals(404, badIpResp.getErrorCode());
+
+		// 2. Read-only statusPassword gets 401 on mitigation endpoint
+		TestRequest wrongTokReq = new TestRequest("/antidos-mitigate", "10.0.0.5");
+		wrongTokReq.setMethod("POST");
+		wrongTokReq.setHeader("Authorization", "Bearer readOnlyStatusToken123");
+		wrongTokReq.setParameter("action", "upsert");
+		wrongTokReq.setParameter("cidr", "198.51.100.0/24");
+		TestResponse wrongTokResp = new TestResponse();
+		valve.invoke(wrongTokReq, wrongTokResp);
+		assertEquals(401, wrongTokResp.getErrorCode());
+
+		// 3. Overly broad prefix (/8) gets rejected with 400 Bad Request
+		TestRequest broadReq = new TestRequest("/antidos-mitigate", "10.0.0.5");
+		broadReq.setMethod("POST");
+		broadReq.setHeader("Authorization", "Bearer superSecretMitigationToken999");
+		broadReq.setParameter("action", "upsert");
+		broadReq.setParameter("cidr", "198.0.0.0/8");
+		TestResponse broadResp = new TestResponse();
+		valve.invoke(broadReq, broadResp);
+		assertEquals(400, broadResp.getErrorCode());
+
+		// 4. Valid POST upsert of 198.51.100.0/24
+		TestRequest upsertReq = new TestRequest("/antidos-mitigate", "10.0.0.5");
+		upsertReq.setMethod("POST");
+		upsertReq.setHeader("Authorization", "Bearer superSecretMitigationToken999");
+		upsertReq.setParameter("action", "upsert");
+		upsertReq.setParameter("cidr", "198.51.100.15/24");
+		upsertReq.setParameter("ttlSeconds", "1800");
+		upsertReq.setParameter("reason", "Example Hosting Stealth Carpet Attack");
+		TestResponse upsertResp = new TestResponse();
+		valve.invoke(upsertReq, upsertResp);
+		assertEquals(200, upsertResp.getStatus());
+		assertTrue(upsertResp.getOutput().contains("\"dynamicBlocksActiveCount\": 1"));
+
+		// 5. Request from 198.51.100.11 to an UNMONITORED path (/public/home) and nonRelevantPath (/api/health)
+		// must be blocked immediately (serverWideBlocking effect of dynamic blocks)
+		TestRequest atk1 = new TestRequest("/public/home", "198.51.100.11");
+		atk1.setMethod("GET");
+		atk1.setHeader("User-Agent", "Chrome/134.0");
+		TestResponse atk1Resp = new TestResponse();
+		valve.invoke(atk1, atk1Resp);
+		assertEquals(429, atk1Resp.getErrorCode());
+		assertNotNull(atk1Resp.getHeader("Retry-After"));
+
+		TestRequest atk2 = new TestRequest("/api/health", "198.51.100.22");
+		atk2.setMethod("HEAD");
+		atk2.setHeader("User-Agent", "Mozilla/5.0 Bot");
+		TestResponse atk2Resp = new TestResponse();
+		valve.invoke(atk2, atk2Resp);
+		assertEquals(429, atk2Resp.getErrorCode());
+
+		// 6. Request from whitelisted IP (198.51.100.99 in alwaysAllowedIPs) inside the blocked /24 MUST be allowed!
+		TestRequest whiteReq = new TestRequest("/api/data", "198.51.100.99");
+		TestResponse whiteResp = new TestResponse();
+		valve.invoke(whiteReq, whiteResp);
+		assertEquals(-1, whiteResp.getErrorCode());
+		assertEquals(200, whiteResp.getStatus());
+
+		// 7. Verify deterrence tracking in the monitor's current slot under canonical CIDR "198.51.100.0/24"
+		AntiDoSCounter cidrCounter = valve.provideMonitor().provideCurrentCounter("198.51.100.0/24");
+		assertNotNull(cidrCounter, "Dynamic block hits must be tracked under the matched canonical CIDR in the slot");
+		assertTrue(cidrCounter.isLocked());
+		assertEquals(2, cidrCounter.getCount());
+		assertEquals(2, cidrCounter.getDistinctClients(), "Must track 2 distinct attacking IPs (.11 and .22)");
+		assertEquals(2, cidrCounter.getDistinctUserAgents(), "Must track 2 distinct User-Agents");
+		assertNotNull(cidrCounter.getSample(), "First blocked request sample must be captured");
+		assertEquals("GET", cidrCounter.getSample().method());
+		assertEquals("/public/home", cidrCounter.getSample().uri());
+		assertEquals("Chrome/134.0", cidrCounter.getSample().userAgent());
+
+		// 8. Verify JSON & HTML status output includes dynamic mitigation telemetry
+		AntiDoSStatusRenderer renderer = new AntiDoSStatusRenderer(valve);
+		String overviewJson = renderer.buildStatusJson("DYNAMIC_MITIGATION_TEST");
+		assertTrue(overviewJson.contains("\"dynamicMitigationEnabled\": true"));
+		assertTrue(overviewJson.contains("\"dynamicBlocksActiveCount\": 1"));
+		assertTrue(overviewJson.contains("\"dynamicBlocksBlockedRequests\": 2"));
+
+		String detailsJson = renderer.buildStatusJsonDetails("DYNAMIC_MITIGATION_TEST");
+		assertTrue(detailsJson.contains("\"dynamicBlocks\": ["));
+		assertTrue(detailsJson.contains("\"cidr\": \"198.51.100.0/24\""));
+		assertTrue(detailsJson.contains("\"reason\": \"Example Hosting Stealth Carpet Attack\""));
+
+		String detailsHtml = renderer.buildStatusHtmlDetails("DYNAMIC_MITIGATION_TEST");
+		assertTrue(detailsHtml.contains("Active Dynamic CIDR Mitigations"));
+		assertTrue(detailsHtml.contains("198.51.100.0/24"));
+		assertTrue(detailsHtml.contains("0 (Dynamic CIDR)"));
+
+		// 9. Remove the block via POST action=remove and verify traffic is allowed again
+		TestRequest remReq = new TestRequest("/antidos-mitigate", "10.0.0.5");
+		remReq.setMethod("POST");
+		remReq.setHeader("Authorization", "Bearer superSecretMitigationToken999");
+		remReq.setParameter("action", "remove");
+		remReq.setParameter("cidr", "198.51.100.0/24");
+		TestResponse remResp = new TestResponse();
+		valve.invoke(remReq, remResp);
+		assertEquals(200, remResp.getStatus());
+		assertEquals(0, valve.getDynamicBlockRegistry().getActiveCount(valve.getTimeInMillis()));
+
+		TestRequest afterRemReq = new TestRequest("/public/home", "198.51.100.11");
+		TestResponse afterRemResp = new TestResponse();
+		valve.invoke(afterRemReq, afterRemResp);
+		assertEquals(-1, afterRemResp.getErrorCode());
 	}
 }
 

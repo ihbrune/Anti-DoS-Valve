@@ -12,6 +12,8 @@ public class EndpointConfig {
 	private String name;
 	private String url;
 	private String token;
+	private String mitigationUrl;
+	private String mitigationToken;
 	private boolean pollIntermediateSlots = false;
 	private boolean enabled = true;
 	private List<EndpointValveConfig> valves = new ArrayList<>();
@@ -63,6 +65,22 @@ public class EndpointConfig {
 
 	public void setToken(String token) {
 		this.token = token;
+	}
+
+	public String getMitigationUrl() {
+		return mitigationUrl;
+	}
+
+	public void setMitigationUrl(String mitigationUrl) {
+		this.mitigationUrl = mitigationUrl;
+	}
+
+	public String getMitigationToken() {
+		return mitigationToken;
+	}
+
+	public void setMitigationToken(String mitigationToken) {
+		this.mitigationToken = mitigationToken;
 	}
 
 	public boolean isPollIntermediateSlots() {

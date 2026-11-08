@@ -140,21 +140,22 @@
                          httpStatusCode="429"
                     />
 
-                    <!-- AntiDoSValve Hard Blacklist with Collector Forensics demo configuration:
-                         Permanently blocks hostile CIDRs / attacker IPs on first contact and
-                         registers them into the monitor's BLOCKED category (limit 0) for Collector forensics. -->
-                    <!--
+                    <!-- AntiDoSValve Hard Blacklist / Dynamic CIDR Mitigation demo configuration:
+                         Permanently blocks static hostile CIDRs (alwaysForbiddenIPs) or accepts dynamic,
+                         TTL-based CIDR blocks pushed from the Anti-DoS Collector via mitigationPassword. -->
                     <Valve className="org.henbru.antidos.AntiDoSValve"
                          monitorName="BLACKLIST-FORENSIC-VALVE"
-                         description="Static blacklist tracking blocked requests in monitor for Collector observability"
+                         description="Static blacklist and dynamic CIDR mitigation tracking blocked requests in monitor"
                          alwaysForbiddenIPs="198\.51\.100\..*"
                          trackAlwaysForbiddenInMonitor="true"
+                         mitigationUri="/antidos-mitigate"
+                         mitigationAllowedIPs="192\.168\.\d+\.\d+|127\.0\.0\.1"
+                         mitigationPassword="changeMeMitigationSecretToken"
                          maxIPCacheSize="500"
                          maxBlockedIPCacheSize="1000"
                          numberOfSlots="6"
                          slotLength="60"
                     />
-                    -->
 
                </Host>
           </Engine>

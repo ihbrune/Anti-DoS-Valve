@@ -83,6 +83,107 @@ public class ValveStatusClient {
 		return executeGet(endpoint, sb.toString(), ValveDetailsDto.class);
 	}
 
+	@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+	public record MitigationCommandResponse(
+			String status,
+			String valve,
+			String action,
+			int dynamicBlocksActiveCount,
+			long dynamicRulesRevision,
+			long dynamicBlocksBlockedRequests
+	) {
+		public MitigationCommandResponse(String status, String action, String valve, int activeCount, long revision, String error) {
+			this(status, valve, action, activeCount, revision, 0L);
+		}
+
+		public int activeCount() {
+			return dynamicBlocksActiveCount;
+		}
+
+		public long revision() {
+			return dynamicRulesRevision;
+		}
+	}
+
+	public MitigationCommandResponse sendMitigationCommand(
+			String targetUrl,
+			String mitigationToken,
+			String valveName,
+			String action,
+			String cidr,
+			Integer ttlSeconds,
+			String reason,
+			String blocksPayload) throws IOException, InterruptedException {
+		java.util.Map<String, String> params = new java.util.LinkedHashMap<>();
+		if (action != null) params.put("action", action);
+		if (cidr != null) params.put("cidr", cidr);
+		if (ttlSeconds != null) params.put("ttlSeconds", String.valueOf(ttlSeconds));
+		if (reason != null) params.put("reason", reason);
+		if (blocksPayload != null) params.put("blocks", blocksPayload);
+		return sendMitigationCommand(targetUrl, mitigationToken, valveName, params);
+	}
+
+	/**
+	 * Sends a dynamic CIDR mitigation command (POST) to the target Valve endpoint.
+	 *
+	 * @param targetUrl       Target mitigation URL (either dedicated mitigationUrl or endpoint statusUrl)
+	 * @param mitigationToken Write token configured for mitigation
+	 * @param valveName       Optional target valve name
+	 * @param formParams      Key-value parameters for application/x-www-form-urlencoded body
+	 */
+	public MitigationCommandResponse sendMitigationCommand(
+			String targetUrl,
+			String mitigationToken,
+			String valveName,
+			java.util.Map<String, String> formParams) throws IOException, InterruptedException {
+		String base = cleanBaseUrl(targetUrl);
+		StringBuilder body = new StringBuilder();
+		if (valveName != null && !valveName.isBlank()) {
+			body.append("valve=").append(URLEncoder.encode(valveName.trim(), StandardCharsets.UTF_8));
+		}
+		if (formParams != null) {
+			for (java.util.Map.Entry<String, String> entry : formParams.entrySet()) {
+				if (entry.getKey() == null || entry.getValue() == null) {
+					continue;
+				}
+				if (body.length() > 0) {
+					body.append('&');
+				}
+				body.append(URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8))
+						.append('=')
+						.append(URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8));
+			}
+		}
+
+		HttpRequest.Builder builder = HttpRequest.newBuilder()
+				.uri(URI.create(base))
+				.timeout(Duration.ofSeconds(10))
+				.header("Accept", "application/json")
+				.header("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8");
+
+		if (mitigationToken != null && !mitigationToken.trim().isEmpty()) {
+			builder.header("Authorization", "Bearer " + mitigationToken.trim());
+		}
+
+		HttpRequest request = builder.POST(HttpRequest.BodyPublishers.ofString(body.toString(), StandardCharsets.UTF_8)).build();
+		HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+
+		if (response.statusCode() == 401 || response.statusCode() == 403) {
+			throw new IOException("HTTP " + response.statusCode() + " Unauthorized: Invalid or missing mitigation token for " + base);
+		}
+		if (response.statusCode() == 404) {
+			throw new IOException("HTTP 404 Not Found: Mitigation endpoint unavailable or blocked by IP filter at " + base);
+		}
+		if (response.statusCode() == 400) {
+			throw new IOException("HTTP 400 Bad Request from " + base + ": " + response.body());
+		}
+		if (response.statusCode() != 200) {
+			throw new IOException("HTTP " + response.statusCode() + " response from " + base);
+		}
+
+		return objectMapper.readValue(response.body(), MitigationCommandResponse.class);
+	}
+
 	private <T> T executeGet(EndpointConfig endpoint, String url, Class<T> targetClass)
 			throws IOException, InterruptedException {
 		HttpRequest.Builder builder = HttpRequest.newBuilder()

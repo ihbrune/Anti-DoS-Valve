@@ -27,4 +27,23 @@ public record AdvisorFinding(
 		String recommendation,
 		String suggestedConfigXml,
 		String suggestedRegex
-) {}
+) {
+	public Long extractAsn() {
+		if (targetSubnet != null && targetSubnet.startsWith("ASN ")) {
+			int spaceIdx = targetSubnet.indexOf(' ', 4);
+			String numPart = spaceIdx > 4 ? targetSubnet.substring(4, spaceIdx).trim() : targetSubnet.substring(4).trim();
+			try {
+				long val = Long.parseLong(numPart);
+				return val > 0 ? val : null;
+			} catch (NumberFormatException ignored) {
+			}
+		}
+		return null;
+	}
+
+	public boolean isDirectCidrTarget() {
+		return targetSubnet != null
+				&& !targetSubnet.startsWith("ASN ")
+				&& (targetSubnet.contains("/") || targetSubnet.contains(".") || targetSubnet.contains(":"));
+	}
+}

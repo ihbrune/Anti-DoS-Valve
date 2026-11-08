@@ -377,6 +377,86 @@ public class AntiDoSMonitor {
 	}
 
 	/**
+	 * Registers a request blocked by a dynamic CIDR mitigation rule.
+	 * <p>
+	 * The request is aggregated under the matched {@code cidrKey} (e.g. {@code "198.51.100.0/24"})
+	 * in the current slot's blocked counters cache so that thousands of attacking IPs within a
+	 * blocked subnet consume only a single slot counter while preserving request counts,
+	 * distinct client cardinality, User-Agent diversity, and forensic samples.
+	 *
+	 * @param cidrKey          The canonical CIDR string of the matched dynamic block rule
+	 * @param clientIp         The actual client IP address
+	 * @param ipv4Bytes        Pre-parsed 4-byte IPv4 array (or null)
+	 * @param prefixBits       Prefix length of the matched rule
+	 * @param trackCardinality Whether to track distinct client IPs and User-Agents
+	 * @param returningVisitor Whether the request carried a valid visitor cookie
+	 * @param authenticated    Whether the request carried a valid authenticated session
+	 * @param userAgent        The User-Agent header value (or null)
+	 */
+	public void registerDynamicBlockRequest(
+			String cidrKey,
+			String clientIp,
+			byte[] ipv4Bytes,
+			int prefixBits,
+			boolean trackCardinality,
+			boolean returningVisitor,
+			boolean authenticated,
+			String userAgent) {
+
+		if (cidrKey == null || cidrKey.isEmpty()) {
+			throw new IllegalArgumentException("CIDR key must not be null or empty");
+		}
+
+		totalrequests.increment();
+		if (authenticated) {
+			totalAuthenticatedRequests.increment();
+		}
+
+		AntiDoSSlot slot = provideCurrentSlot();
+		slot.incrementTotalRequests();
+		if (authenticated) {
+			slot.incrementAuthenticatedRequests();
+		}
+
+		AntiDoSCounter counter = slot.getCounter(cidrKey);
+		counter.incrementCount();
+		if (returningVisitor) {
+			counter.incrementReturningCount();
+		}
+		if (authenticated) {
+			counter.incrementAuthenticatedCount();
+		}
+		if (trackCardinality) {
+			if (clientIp != null && !cidrKey.equals(clientIp)) {
+				int v4Mask = (ipv4Bytes != null) ? Math.min(24, prefixBits) : 24;
+				int v6Mask = (ipv4Bytes == null) ? Math.min(64, prefixBits) : 64;
+				counter.registerClientIp(ipv4Bytes, clientIp, v4Mask, v6Mask);
+			}
+			if (userAgent != null && !userAgent.isEmpty()) {
+				counter.registerUserAgent(userAgent);
+			}
+		}
+
+		if (!counter.isLocked()) {
+			counter.setRetainedCounts(0);
+			counter.lock();
+			slot.blockCounter(cidrKey, counter);
+
+			if (log.isInfoEnabled()) {
+				boolean canLog = blockLogThrottler.shouldLog(getTimeInMillis(), suppressed -> {
+					log.info(name4logging + " - [LogThrottler] Suppressed " + suppressed
+							+ " block log events in the previous interval");
+				});
+				if (canLog) {
+					log.info(name4logging + " - DynamicBlock Counter for '" + cidrKey + "': " + counter.toString());
+				}
+			}
+		} else {
+			slot.blockCounter(cidrKey, counter);
+		}
+	}
+
+	/**
 	 * This method fetches the desired counter from the current slot. Does not
 	 * modify the status of the counter
 	 * 

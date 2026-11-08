@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<div th:fragment="mitigationDashboard" id="mitigation-dashboard-container">
+
+    <!-- Action Feedback Banners -->
+    <div th:if="${feedbackSuccess != null}"
+         style="background: rgba(16, 185, 129, 0.14); border: 1px solid rgba(16, 185, 129, 0.45); color: var(--color-success); padding: 12px 16px; border-radius: var(--radius-md); margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600;">
+        <div><span>&#x2705;</span> <span th:text="${feedbackSuccess}">Action completed.</span></div>
+    </div>
+    <div th:if="${feedbackError != null}"
+         style="background: rgba(239, 68, 68, 0.14); border: 1px solid rgba(239, 68, 68, 0.45); color: var(--color-danger); padding: 12px 16px; border-radius: var(--radius-md); margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600;">
+        <div><span>&#x26A0;&#xFE0F;</span> <span th:text="${feedbackError}">Error message.</span></div>
+    </div>
+
+    <!-- Top KPI Row -->
+    <div class="stats-grid" style="margin-bottom: 20px;">
+        <div class="stat-card">
+            <div class="stat-label">Active Dynamic CIDR Blocks</div>
+            <div class="stat-value danger" th:text="${activeRules != null ? activeRules.size() : 0}">0</div>
+            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
+                Server-wide CIDR rules currently enforced
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Mitigation-Enabled Valves</div>
+            <div class="stat-value info" th:text="${mitigationValves != null ? mitigationValves.size() : 0}">0</div>
+            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
+                Auto-discovered via <code>mitigationPassword</code>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Persistent Attackers</div>
+            <div class="stat-value warning" th:text="${persistentCount != null ? persistentCount : 0}">0</div>
+            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
+                Still hitting blocks within last 10m (extend TTL)
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Deterred Subnets</div>
+            <div class="stat-value success" th:text="${deterredCount != null ? deterredCount : 0}">0</div>
+            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
+                Ceased requests for &ge; 10m (safe to expire)
+            </div>
+        </div>
+    </div>
+
+    <!-- Fleet Mitigation Targets Status Bar -->
+    <div class="sys-card" style="padding: 16px 18px; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;">
+            <div>
+                <div style="font-size: 14px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                    <span>&#x1F6E1;&#xFE0F;</span> Mitigation-Capable Fleet Valves
+                    <span class="badge badge-secondary" style="font-family: ui-monospace, monospace;"
+                          th:text="'Expected Revision: ' + ${expectedRevision}">Expected Revision: 0</span>
+                </div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
+                    Dynamic blocks are pushed only to Valves that have <code>mitigationPassword</code> configured. Upstream monitoring/simulation Valves remain unaffected.
+                </div>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <button type="button" class="btn btn-primary"
+                        hx-post="/mitigation/sync"
+                        hx-target="#mitigation-dashboard-container"
+                        hx-swap="outerHTML"
+                        style="font-size: 12px; padding: 6px 14px;">
+                    <span>&#x1F504;</span> Sync Fleet &amp; Refresh Deterrence
+                </button>
+            </div>
+        </div>
+
+        <div th:if="${mitigationValves == null or mitigationValves.isEmpty()}"
+             style="padding: 12px 14px; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: var(--radius-sm); font-size: 12.5px; color: var(--text-secondary);">
+            <strong>No mitigation-enabled Valve detected yet.</strong> To enable active dynamic CIDR blocking on a specific Valve in Tomcat's <code>server.xml</code>, configure <code>mitigationPassword="..."</code> on that Valve and set <code>collector.mitigation-token</code> in the Collector's <code>application.yaml</code>.
+        </div>
+
+        <div th:if="${mitigationValves != null and !mitigationValves.isEmpty()}"
+             style="display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 10px;">
+            <div th:each="mv : ${mitigationValves}"
+                 style="padding: 10px 14px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: var(--radius-sm); display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                <div>
+                    <div style="font-size: 13px; font-weight: 700; color: var(--text-primary);">
+                        <a th:href="@{/servers/{id}(id=${mv.serverId})}" style="color: var(--color-primary); text-decoration: none;" th:text="${mv.serverId}">Node</a>
+                        <span style="color: var(--text-muted);">/</span>
+                        <span th:text="${mv.valveName}">Valve</span>
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                        <span th:text="${mv.dynamicBlocksActiveCount} + ' active rules'">0 active rules</span>
+                        &bull;
+                        <span th:text="${#numbers.formatInteger(mv.dynamicBlocksBlockedRequests, 1, 'COMMA')} + ' blocked hits'">0 blocked hits</span>
+                    </div>
+                </div>
+                <div>
+                    <span th:if="${mv.dynamicRulesRevision == expectedRevision}" class="badge badge-success" title="Valve rule revision matches Collector">IN SYNC</span>
+                    <span th:if="${mv.dynamicRulesRevision != expectedRevision}" class="badge badge-warning" title="Will reconcile on next sync or poll">PENDING SYNC</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Forms Grid: Manual CIDR Block + ASN Batch Mitigation -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 20px; margin-bottom: 24px;">
+
+        <!-- Panel 1: Manual / Multi-Subnet CIDR Block with Pre-Flight Check -->
+        <div class="sys-card" style="padding: 18px; margin: 0;">
+            <div style="font-size: 14.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                <span>&#x1F6AB;</span> Create Dynamic CIDR Block (Single or Multi-Subnet)
+            </div>
+            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 14px;">
+                Enforces immediate <code>serverWideBlocking</code> across all paths on mitigation-enabled Valves. Prefix guardrail: IPv4 <code>/16</code>&ndash;<code>/32</code>, IPv6 <code>/32</code>&ndash;<code>/128</code>.
+            </div>
+
+            <form hx-post="/mitigation/block" hx-target="#mitigation-dashboard-container" hx-swap="outerHTML">
+                <input type="hidden" name="source" th:value="${prefillSource != null ? prefillSource : 'MANUAL'}">
+
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
+                        Target IP or CIDR Subnet(s) (one per line or comma-separated)
+                    </label>
+                    <textarea name="cidrInput" id="cidr-input-field" rows="3"
+                              placeholder="e.g. 198.51.100.0/24, 203.0.113.42/32, 2001:db8:abcd::/48"
+                              style="width: 100%; background: var(--bg-input, rgba(0,0,0,0.3)); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 10px; font-family: ui-monospace, monospace; font-size: 12.5px;"
+                              th:text="${prefillCidr}"></textarea>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 140px 1fr; gap: 12px; margin-bottom: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
+                            TTL Duration
+                        </label>
+                        <select name="ttlMinutes"
+                                style="width: 100%; background: var(--bg-input, rgba(0,0,0,0.3)); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 10px; font-size: 12.5px;">
+                            <option value="15" th:selected="${prefillTtlMinutes == 15}">15 minutes</option>
+                            <option value="30" th:selected="${prefillTtlMinutes == 30}">30 minutes</option>
+                            <option value="60" th:selected="${prefillTtlMinutes == null or prefillTtlMinutes == 60}">1 hour (60m)</option>
+                            <option value="180" th:selected="${prefillTtlMinutes == 180}">3 hours (180m)</option>
+                            <option value="360" th:selected="${prefillTtlMinutes == 360}">6 hours (360m)</option>
+                            <option value="720" th:selected="${prefillTtlMinutes == 720}">12 hours (720m)</option>
+                            <option value="1440" th:selected="${prefillTtlMinutes == 1440}">24 hours (1440m)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
+                            Audit Reason / Incident Note (optional)
+                        </label>
+                        <input type="text" name="reason"
+                               placeholder="e.g. Nightly carpet scraping wave / Chameleon botnet"
+                               th:value="${prefillReason}"
+                               style="width: 100%; background: var(--bg-input, rgba(0,0,0,0.3)); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 10px; font-size: 12.5px;">
+                    </div>
+                </div>
+
+                <!-- Dynamic Pre-Flight Check Box -->
+                <div th:replace="~{fragments/mitigation-content :: preflightBox}"></div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px;">
+                    <button type="button" class="btn"
+                            hx-post="/mitigation/preflight"
+                            hx-target="#preflight-check-box"
+                            hx-swap="outerHTML"
+                            style="font-size: 12px;">
+                        <span>&#x1F50D;</span> Run Pre-Flight Check
+                    </button>
+                    <button type="submit" class="btn btn-danger" style="font-size: 12.5px; font-weight: 700; padding: 7px 16px;">
+                        <span>&#x1F6E1;&#xFE0F;</span> Activate Dynamic Block
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Panel 2: ASN Batch Mitigation (Active Subnet Expansion) -->
+        <div class="sys-card" style="padding: 18px; margin: 0;">
+            <div style="font-size: 14.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                <span>&#x1F310;</span> ASN Batch Mitigation (Expand Active Subnets)
+            </div>
+            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 14px;">
+                Automatically discovers all active <code>/24</code> &amp; <code>/64</code> subnets from an attacking Autonomous System (e.g. <code>64496</code>) with <strong>0 authenticated requests</strong> and blocks them as a single batch.
+            </div>
+
+            <form hx-post="/mitigation/asn-block" hx-target="#mitigation-dashboard-container" hx-swap="outerHTML">
+                <div style="display: grid; grid-template-columns: 1fr 120px 130px; gap: 10px; margin-bottom: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
+                            Target ASN Number
+                        </label>
+                        <input type="number" name="asn" id="asn-input-field" min="1"
+                               placeholder="e.g. 64496"
+                               th:value="${prefillAsn}"
+                               style="width: 100%; background: var(--bg-input, rgba(0,0,0,0.3)); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 10px; font-family: ui-monospace, monospace; font-size: 12.5px;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
+                            Lookback
+                        </label>
+                        <select name="hours" id="asn-hours-field"
+                                style="width: 100%; background: var(--bg-input, rgba(0,0,0,0.3)); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 10px; font-size: 12.5px;">
+                            <option value="6">Last 6h</option>
+                            <option value="24" selected>Last 24h</option>
+                            <option value="72">Last 72h</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
+                            Batch TTL
+                        </label>
+                        <select name="ttlMinutes"
+                                style="width: 100%; background: var(--bg-input, rgba(0,0,0,0.3)); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 10px; font-size: 12.5px;">
+                            <option value="60" selected>1 hour (60m)</option>
+                            <option value="180">3 hours (180m)</option>
+                            <option value="360">6 hours (360m)</option>
+                            <option value="720">12 hours (720m)</option>
+                            <option value="1440">24 hours (1440m)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
+                        Audit Reason / Incident Note (optional)
+                    </label>
+                    <input type="text" name="reason"
+                           placeholder="e.g. Multi-subnet carpet attack from transit/hosting ASN"
+                           style="width: 100%; background: var(--bg-input, rgba(0,0,0,0.3)); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 10px; font-size: 12.5px;">
+                </div>
+
+                <!-- Dynamic ASN Preview Box -->
+                <div th:replace="~{fragments/mitigation-content :: asnPreviewBox}"></div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px;">
+                    <button type="button" class="btn"
+                            hx-post="/mitigation/asn-preview"
+                            hx-target="#asn-preview-box"
+                            hx-swap="outerHTML"
+                            style="font-size: 12px;">
+                        <span>&#x1F50E;</span> Preview ASN Subnets
+                    </button>
+                    <button type="submit" class="btn btn-danger" style="font-size: 12.5px; font-weight: 700; padding: 7px 16px;">
+                        <span>&#x26A1;</span> Block Unauthenticated ASN Subnets
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Active Batches Quick-Revoke Bar -->
+    <div th:if="${activeBatches != null and !activeBatches.isEmpty()}"
+         class="sys-card" style="padding: 14px 18px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <div style="font-size: 13px; font-weight: 700; color: var(--text-primary);">
+            <span>&#x1F4E6;</span> Active Rule Batches:
+        </div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <div th:each="entry : ${activeBatches}"
+                 style="display: inline-flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: var(--radius-sm); font-size: 12px;">
+                <code th:text="${entry.key}">ASN-64496</code>
+                <span class="badge badge-secondary" th:text="${entry.value} + ' subnets'">12 subnets</span>
+                <button type="button" class="btn btn-danger"
+                        style="padding: 2px 8px; font-size: 11px;"
+                        th:attr="hx-post=@{/mitigation/batch/revoke(batchId=${entry.key})}"
+                        hx-target="#mitigation-dashboard-container"
+                        hx-swap="outerHTML"
+                        title="Immediately revoke all active rules in this batch">
+                    Revoke Batch
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Dynamic Mitigation Rules Table -->
+    <div class="sys-card" style="padding: 18px; margin-bottom: 24px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+            <div>
+                <div style="font-size: 15px; font-weight: 700; color: var(--text-primary);">
+                    <span>&#x1F6E1;&#xFE0F;</span> Active Dynamic CIDR Mitigations
+                    <span class="badge badge-danger" style="margin-left: 6px;" th:text="${activeRules != null ? activeRules.size() : 0}">0</span>
+                </div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
+                    Real-time TTL countdown and attacker deterrence telemetry from blocked CIDR slots
+                </div>
+            </div>
+        </div>
+
+        <div th:if="${activeRules == null or activeRules.isEmpty()}"
+             style="text-align: center; padding: 36px 20px; color: var(--text-muted); font-size: 13px;">
+            No dynamic CIDR blocks are currently active. All Valves are operating on their standard rate-limiting rules.
+        </div>
+
+        <div th:if="${activeRules != null and !activeRules.isEmpty()}" style="overflow-x: auto;">
+            <table class="data-table" style="width: 100%; font-size: 12.5px;">
+                <thead>
+                    <tr>
+                        <th>CIDR Subnet</th>
+                        <th>ASN / Organization</th>
+                        <th>Source &amp; Batch</th>
+                        <th>Reason</th>
+                        <th>Remaining TTL</th>
+                        <th style="text-align: right;">Blocked Hits</th>
+                        <th style="text-align: right;">Peak IPs</th>
+                        <th>Deterrence Status</th>
+                        <th style="text-align: right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="r : ${activeRules}">
+                        <td style="font-family: ui-monospace, monospace; font-weight: 700;">
+                            <a th:href="@{/offenders(search=${r.cidr})}" style="color: var(--color-primary); text-decoration: none;"
+                               th:text="${r.cidr}">198.51.100.0/24</a>
+                        </td>
+                        <td>
+                            <span th:if="${r.asn != null and r.asn > 0}" th:text="'ASN ' + ${r.asn} + ' (' + ${r.asnOrganization != null ? r.asnOrganization : 'Unknown'} + ')'">ASN 64496</span>
+                            <span th:if="${r.asn == null or r.asn <= 0}" style="color: var(--text-muted);">&mdash;</span>
+                        </td>
+                        <td>
+                            <span class="badge badge-secondary" th:text="${r.source}">MANUAL</span>
+                            <div th:if="${r.batchId != null}" style="font-size: 10.5px; color: var(--text-muted); font-family: ui-monospace, monospace; margin-top: 2px;"
+                                 th:text="${r.batchId}">ASN-64496</div>
+                        </td>
+                        <td th:text="${r.reason}">Carpet attack</td>
+                        <td style="font-family: ui-monospace, monospace;">
+                            <span th:text="${(r.remainingSeconds(now) / 60)} + 'm ' + (${r.remainingSeconds(now) % 60}) + 's'">59m 12s</span>
+                        </td>
+                        <td style="text-align: right; font-weight: 700; color: var(--color-danger);"
+                            th:text="${#numbers.formatInteger(r.totalBlockedHits, 1, 'COMMA')}">0</td>
+                        <td style="text-align: right;" th:text="${r.peakDistinctIps}">0</td>
+                        <td>
+                            <span th:if="${r.deterrenceState == 'PERSISTENT'}"
+                                  class="badge badge-danger"
+                                  title="Attacker continues sending requests into the dynamic block within the last 10 minutes. Consider extending TTL.">
+                                &#x1F525; PERSISTENT (Still Attacking)
+                            </span>
+                            <span th:if="${r.deterrenceState == 'DETERRED'}"
+                                  class="badge badge-success"
+                                  title="No blocked hits observed for at least 10 minutes. Attacker has stopped or rotated away.">
+                                &#x2705; DETERRED (Quiet &ge;10m)
+                            </span>
+                            <span th:if="${r.deterrenceState != 'PERSISTENT' and r.deterrenceState != 'DETERRED'}"
+                                  class="badge badge-info"
+                                  title="Rule was recently created; observing whether attacker persists or stops.">
+                                &#x1F441; OBSERVING
+                            </span>
+                        </td>
+                        <td style="text-align: right; white-space: nowrap;">
+                            <button type="button" class="btn"
+                                    style="padding: 3px 8px; font-size: 11px;"
+                                    th:attr="hx-post=@{/mitigation/{id}/extend(id=${r.id},additionalMinutes=60)}"
+                                    hx-target="#mitigation-dashboard-container"
+                                    hx-swap="outerHTML"
+                                    title="Extend TTL by +60 minutes">
+                                +1h
+                            </button>
+                            <button type="button" class="btn"
+                                    style="padding: 3px 8px; font-size: 11px;"
+                                    th:attr="hx-post=@{/mitigation/{id}/extend(id=${r.id},additionalMinutes=360)}"
+                                    hx-target="#mitigation-dashboard-container"
+                                    hx-swap="outerHTML"
+                                    title="Extend TTL by +6 hours">
+                                +6h
+                            </button>
+                            <button type="button" class="btn btn-danger"
+                                    style="padding: 3px 8px; font-size: 11px;"
+                                    th:attr="hx-post=@{/mitigation/{id}/revoke(id=${r.id})}"
+                                    hx-target="#mitigation-dashboard-container"
+                                    hx-swap="outerHTML"
+                                    title="Immediately lift this CIDR block across all Valves">
+                                Revoke
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Bottom Grid: Historical Rules + Audit Log -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 20px;">
+
+        <!-- Recently Expired / Revoked Rules -->
+        <div class="sys-card" style="padding: 18px; margin: 0;">
+            <div style="font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 10px;">
+                <span>&#x1F552;</span> Recently Expired &amp; Revoked Rules
+            </div>
+            <div th:if="${historicalRules == null or historicalRules.isEmpty()}"
+                 style="color: var(--text-muted); font-size: 12.5px; padding: 16px 0;">
+                No expired or revoked mitigation rules recorded yet.
+            </div>
+            <div th:if="${historicalRules != null and !historicalRules.isEmpty()}" style="overflow-x: auto;">
+                <table class="data-table" style="width: 100%; font-size: 12px;">
+                    <thead>
+                        <tr>
+                            <th>CIDR</th>
+                            <th>Status</th>
+                            <th style="text-align: right;">Blocked Hits</th>
+                            <th>Final Deterrence</th>
+                            <th style="text-align: right;">Re-Activate</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="h : ${historicalRules}">
+                            <td style="font-family: ui-monospace, monospace; font-weight: 600;" th:text="${h.cidr}">198.51.100.0/24</td>
+                            <td>
+                                <span th:if="${h.status == 'REVOKED'}" class="badge badge-warning">REVOKED</span>
+                                <span th:if="${h.status != 'REVOKED'}" class="badge badge-secondary" th:text="${h.status}">EXPIRED</span>
+                            </td>
+                            <td style="text-align: right;" th:text="${#numbers.formatInteger(h.totalBlockedHits, 1, 'COMMA')}">0</td>
+                            <td th:text="${h.deterrenceState}">DETERRED</td>
+                            <td style="text-align: right;">
+                                <button type="button" class="btn"
+                                        style="padding: 2px 8px; font-size: 11px;"
+                                        th:attr="hx-post=@{/mitigation/{id}/extend(id=${h.id},additionalMinutes=60)}"
+                                        hx-target="#mitigation-dashboard-container"
+                                        hx-swap="outerHTML"
+                                        title="Re-activate this rule for 60 minutes">
+                                    Re-Block 1h
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Mitigation Audit Log -->
+        <div class="sys-card" style="padding: 18px; margin: 0;">
+            <div style="font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 10px;">
+                <span>&#x1F4DC;</span> Mitigation Audit Trail
+            </div>
+            <div th:if="${auditEntries == null or auditEntries.isEmpty()}"
+                 style="color: var(--text-muted); font-size: 12.5px; padding: 16px 0;">
+                No mitigation audit events recorded yet.
+            </div>
+            <div th:if="${auditEntries != null and !auditEntries.isEmpty()}" style="overflow-x: auto; max-height: 340px; overflow-y: auto;">
+                <table class="data-table" style="width: 100%; font-size: 12px;">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Action</th>
+                            <th>Target CIDR / Batch</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="a : ${auditEntries}">
+                            <td style="font-family: ui-monospace, monospace; white-space: nowrap; font-size: 11px; color: var(--text-muted);"
+                                th:text="${a.formattedCreatedAt()}">2026-11-08 10:00:00</td>
+                            <td>
+                                <span class="badge badge-secondary" th:text="${a.action}">CREATE</span>
+                            </td>
+                            <td style="font-family: ui-monospace, monospace; font-weight: 600;" th:text="${a.cidr}">198.51.100.0/24</td>
+                            <td style="color: var(--text-secondary);" th:text="${a.details}">Reason</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Fragment: Pre-Flight Safety Check Box -->
+<div th:fragment="preflightBox" id="preflight-check-box">
+    <div th:if="${preflightResult != null}"
+         style="padding: 10px 12px; border-radius: var(--radius-sm); font-size: 12px; margin-bottom: 8px;"
+         th:styleappend="${!preflightResult.invalidInputs.isEmpty() or preflightResult.hasCriticalWarnings() ? 'background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.4);' : (preflightResult.validCidrs.isEmpty() ? 'background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4);' : 'background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.4);')}">
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;"
+             th:if="${preflightCheckedAt != null}">
+            <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary);">
+                Pre-Flight Safety Check Result
+            </span>
+            <span class="badge badge-secondary" style="font-size: 10px; font-family: ui-monospace, monospace;"
+                  th:text="'Checked at ' + ${preflightCheckedAt}">Checked at 12:00:00</span>
+        </div>
+
+        <div th:if="${preflightResult.invalidInputs.isEmpty() and preflightResult.validCidrs.isEmpty()}"
+             style="color: var(--color-warning); font-weight: 600;">
+            &#x26A0;&#xFE0F; Please enter at least one IP address or CIDR subnet above (e.g. <code>198.51.100.0/24</code>) to run the pre-flight safety check.
+        </div>
+
+        <div th:if="${!preflightResult.invalidInputs.isEmpty()}" style="color: var(--color-danger); font-weight: 700; margin-bottom: 4px;">
+            <div th:each="err : ${preflightResult.invalidInputs}" th:text="'&#x274C; ' + ${err}">Invalid CIDR</div>
+        </div>
+
+        <div th:if="${!preflightResult.validCidrs.isEmpty()}">
+            <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">
+                Normalized Target(s): <code th:text="${#strings.listJoin(preflightResult.validCidrs, ', ')}">198.51.100.0/24</code>
+                &bull; 24h Traffic: <span th:text="${#numbers.formatInteger(preflightResult.totalObservedRequests24h, 1, 'COMMA')} + ' reqs'">0 reqs</span>
+                (<span th:text="${#numbers.formatInteger(preflightResult.totalAuthenticatedRequests24h, 1, 'COMMA')} + ' authenticated'">0 authenticated</span>)
+            </div>
+
+            <div th:if="${preflightResult.warnings.isEmpty()}" style="color: var(--color-success); font-weight: 600;">
+                &#x2705; Pre-Flight Safety Check Passed: 0 authenticated users, no search engine crawlers, public routable prefix.
+            </div>
+
+            <div th:if="${!preflightResult.warnings.isEmpty()}" style="margin-top: 6px;">
+                <div th:each="w : ${preflightResult.warnings}" style="color: var(--color-danger); font-weight: 600; margin-bottom: 4px;">
+                    &#x26A0;&#xFE0F; <span th:text="${w.cidr} + ': ' + ${w.message}">Warning</span>
+                </div>
+                <label style="display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; font-weight: 700; color: var(--text-primary); cursor: pointer;">
+                    <input type="checkbox" name="confirmOverride" value="true">
+                    <span>Override Pre-Flight Safety Warning (I understand the collateral damage risk)</span>
+                </label>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Fragment: ASN Batch Preview Box -->
+<div th:fragment="asnPreviewBox" id="asn-preview-box">
+    <div th:if="${asnPreviewError != null}"
+         style="padding: 10px 12px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: var(--radius-sm); font-size: 12px; margin-bottom: 8px; color: var(--color-warning); font-weight: 600;">
+        &#x26A0;&#xFE0F; <span th:text="${asnPreviewError}">Please enter a valid ASN number.</span>
+    </div>
+    <div th:if="${asnPreview != null}"
+         style="padding: 10px 12px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: var(--radius-sm); font-size: 12px; margin-bottom: 8px;">
+        <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">
+            ASN <span th:text="${asnPreview.asn}">64496</span> (<span th:text="${asnPreview.asnOrganization}">Example Hosting Corp.</span>) &mdash;
+            <span th:text="${asnPreview.candidates.size()} + ' eligible unauthenticated subnet(s)'">12 subnets</span>
+            (<span th:text="${#numbers.formatInteger(asnPreview.totalCandidateRequests, 1, 'COMMA')} + ' reqs in last ' + ${asnPreview.hours} + 'h'">0 reqs</span>)
+        </div>
+        <div th:if="${asnPreview.skippedAuthenticatedSubnets > 0}" style="color: var(--color-success); font-size: 11.5px; margin-bottom: 6px;">
+            &#x1F6E1;&#xFE0F; Automatically excluded <strong th:text="${asnPreview.skippedAuthenticatedSubnets}">1</strong> subnet(s) containing authenticated user sessions.
+        </div>
+        <div th:if="${asnPreview.candidates.isEmpty()}" style="color: var(--text-secondary); font-size: 11.5px; margin-top: 4px;">
+            No active unauthenticated subnets found for ASN <span th:text="${asnPreview.asn}">64496</span> in the last <span th:text="${asnPreview.hours}">24</span>h.
+        </div>
+        <div th:if="${!asnPreview.candidates.isEmpty()}" style="display: flex; gap: 6px; flex-wrap: wrap; max-height: 95px; overflow-y: auto; margin-top: 6px;">
+            <span th:each="c : ${asnPreview.candidates}"
+                  class="badge badge-secondary"
+                  style="font-family: ui-monospace, monospace; font-size: 11px;"
+                  th:text="${c.subnetCidr} + ' (' + ${#numbers.formatInteger(c.totalRequests, 1, 'COMMA')} + ')'">
+                198.51.100.0/24 (1,200)
+            </span>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
+

@@ -670,6 +670,23 @@
                          th:text="${f.recommendation}">
                         Recommendation text...
                     </div>
+
+                    <!-- 1-Click Active Mitigation Actions for Attack Categories -->
+                    <div th:if="${f.category.name() == 'STEALTH_CARPET_ATTACK' or f.category.name() == 'CHAMELEON_BOT' or f.category.name() == 'DATACENTER_OFFLOAD'}"
+                         style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
+                        <a th:if="${f.extractAsn() != null}"
+                           th:href="@{/mitigation(asn=${f.extractAsn()},reason=${f.title},source='ADVISOR')}"
+                           class="btn btn-danger"
+                           style="font-size: 11.5px; padding: 5px 12px; font-weight: 700;">
+                            <span>&#x1F6E1;&#xFE0F;</span> Mitigate ASN <span th:text="${f.extractAsn()}">64496</span> Active Subnets &rarr;
+                        </a>
+                        <a th:if="${f.isDirectCidrTarget()}"
+                           th:href="@{/mitigation(cidr=${f.targetSubnet},reason=${f.title},source='ADVISOR')}"
+                           class="btn btn-danger"
+                           style="font-size: 11.5px; padding: 5px 12px; font-weight: 700;">
+                            <span>&#x1F6E1;&#xFE0F;</span> Block Subnet <span th:text="${f.targetSubnet}">198.51.100.0/24</span> Dynamically &rarr;
+                        </a>
+                    </div>
                 </div>
 
                 <!-- Suggested Configuration XML Snippet if available -->

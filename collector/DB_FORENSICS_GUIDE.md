@@ -301,7 +301,7 @@ ORDER BY blocked_requests DESC;
 
 ## 4. Botnet Forensics: Stealth Waves, Carpet Attacks & ASN Footprints
 
-### 4.1 Detecting Horizontal Stealth Carpet Attacks (e.g. ASN 3257 / ASN 398781)
+### 4.1 Detecting Horizontal Stealth Carpet Attacks (e.g. ASN 64496 / ASN 64500)
 
 In distributed horizontal waves, attackers distribute requests across dozens of contiguous `/24` subnets, keeping traffic below both individual `/32` IP limits and `/24` subnet limits:
 
@@ -328,8 +328,8 @@ ORDER BY total_requests DESC
 LIMIT 20;
 ```
 
-**Forensic Signature of ASN 3257:**
-* `active_24_subnets`: 48 contiguous subnets (`87.87.144.0/24` to `87.87.191.0/24`).
+**Forensic Signature of a Horizontal ASN Carpet Attack (e.g. ASN 64496):**
+* `active_24_subnets`: 48 contiguous subnets (`198.51.100.0/24` etc.).
 * `blocked_requests`: 0 (all stayed below the 5,000 req/slot threshold).
 * `auth_requests`: 0.0%.
 * `distinct_user_agents`: 1 across all subnets.

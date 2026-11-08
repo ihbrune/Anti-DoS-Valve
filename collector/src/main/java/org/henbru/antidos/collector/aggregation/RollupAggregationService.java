@@ -28,6 +28,8 @@ public class RollupAggregationService {
 	private final SubnetRollupRepository rollupRepository;
 	private final CollectorProperties properties;
 	private final SubnetProfileService subnetProfileService;
+	private final java.util.concurrent.atomic.AtomicBoolean realtimePending = new java.util.concurrent.atomic.AtomicBoolean(false);
+	private final java.util.concurrent.atomic.AtomicBoolean realtimeWorkerRunning = new java.util.concurrent.atomic.AtomicBoolean(false);
 
 	@Autowired
 	public RollupAggregationService(
@@ -161,6 +163,60 @@ public class RollupAggregationService {
 
 	public RollupExecutionResult getLastRollupResult() {
 		return lastRollupResult;
+	}
+
+	/**
+	 * Signals the coalescing real-time rollup worker to refresh the current in-progress rollup bucket
+	 * asynchronously on a Virtual Thread without blocking the caller (poller).
+	 */
+	public void signalRealtimeRollupRefresh() {
+		if (!properties.isRollupEnabled()) {
+			return;
+		}
+		realtimePending.set(true);
+		if (realtimeWorkerRunning.compareAndSet(false, true)) {
+			Thread.ofVirtual().name("realtime-rollup-worker").start(this::runRealtimeRollupLoop);
+		}
+	}
+
+	private void runRealtimeRollupLoop() {
+		try {
+			while (realtimePending.getAndSet(false)) {
+				try {
+					// Coalesce bursty parallel endpoint polls over a 2-second quiet window
+					Thread.sleep(2000L);
+					realtimePending.set(false);
+					aggregateCurrentBucket();
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					break;
+				} catch (Exception e) {
+					log.debug("Real-time rollup refresh encountered an issue: {}", e.getMessage());
+				}
+			}
+		} finally {
+			realtimeWorkerRunning.set(false);
+			if (realtimePending.get() && realtimeWorkerRunning.compareAndSet(false, true)) {
+				Thread.ofVirtual().name("realtime-rollup-worker").start(this::runRealtimeRollupLoop);
+			}
+		}
+	}
+
+	/**
+	 * Aggregates the currently open (in-progress) rollup bucket so Advisor and Mitigation rules
+	 * have near-real-time visibility without waiting for the 15-minute cron.
+	 */
+	public int aggregateCurrentBucket() {
+		if (!properties.isRollupEnabled()) {
+			return 0;
+		}
+		int windowMinutes = Math.max(1, properties.getRollupWindowMinutes());
+		Instant now = Instant.now();
+		long currentEpochMinutes = now.getEpochSecond() / 60;
+		long bucketStartMinutes = (currentEpochMinutes / windowMinutes) * windowMinutes;
+		Instant bStart = Instant.ofEpochSecond(bucketStartMinutes * 60);
+		Instant bEnd = bStart.plus(windowMinutes, ChronoUnit.MINUTES);
+		return aggregateWindow(bStart, bEnd);
 	}
 
 	/**

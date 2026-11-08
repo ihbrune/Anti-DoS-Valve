@@ -696,6 +696,11 @@ public class AntiDoSStatusRenderer {
 			if (v.isServerWideBlocking()) {
 				sb.append("      <span class=\"badge badge-warn\">SERVER-WIDE BLOCKING</span>\n");
 			}
+			if (v.isDynamicMitigationEnabled()) {
+				int dynActive = v.getDynamicBlockRegistry().getActiveCount(getTimeInMillis());
+				sb.append("      <span class=\"badge badge-blocking\">&#128737;&#65039; DYNAMIC MITIGATION (")
+						.append(dynActive).append(" CIDR").append(dynActive == 1 ? "" : "s").append(")</span>\n");
+			}
 
 			sb.append("    </div>\n")
 					.append("    <div class=\"card-actions\">\n")
@@ -762,6 +767,26 @@ public class AntiDoSStatusRenderer {
 				sb.append("    <tr><th>Always Forbidden IPs</th><td><code>").append(escapeHtml(v.getAlwaysForbiddenIPsConfigValue())).append("</code></td></tr>\n");
 				sb.append("    <tr><th>Always Forbidden Blocks</th><td><strong>").append(v.getAlwaysForbiddenBlockedRequests()).append("</strong> requests rejected</td></tr>\n");
 				sb.append("    <tr><th>Track Always Forbidden in Monitor</th><td>").append(v.isTrackAlwaysForbiddenInMonitor() ? "<span class=\"badge badge-success\">ENABLED</span>" : "<span class=\"badge badge-muted\">DISABLED</span>").append("</td></tr>\n");
+			}
+
+			if (v.isDynamicMitigationEnabled()) {
+				long nowMs = getTimeInMillis();
+				int dynActive = v.getDynamicBlockRegistry().getActiveCount(nowMs);
+				long dynBlocked = v.getDynamicBlockRegistry().getTotalBlockedRequests();
+				long dynRev = v.getDynamicBlockRegistry().getRevision(nowMs);
+				String effMitUri = v.getMitigationUri() != null ? v.getMitigationUri() : v.getStatusUri();
+				String effMitIps = v.getMitigationAllowedIPs() != null ? v.getMitigationAllowedIPs() : v.getStatusAllowedIPs();
+				sb.append("    <tr><th>Dynamic CIDR Mitigation</th><td><span class=\"badge badge-blocking\">ENABLED</span>")
+						.append(" &bull; Active CIDR Blocks: <strong>").append(dynActive).append("</strong>")
+						.append(" &bull; Rejected Requests: <strong>").append(dynBlocked).append("</strong>")
+						.append(" &bull; Revision: <code>").append(dynRev).append("</code>");
+				if (effMitUri != null) {
+					sb.append(" &bull; Endpoint: <code>POST ").append(escapeHtml(effMitUri)).append("</code>");
+				}
+				if (effMitIps != null) {
+					sb.append(" &bull; Allowed IPs: <code>").append(escapeHtml(effMitIps)).append("</code>");
+				}
+				sb.append("</td></tr>\n");
 			}
 
 			// Rate limit parameters
@@ -967,6 +992,11 @@ public class AntiDoSStatusRenderer {
 		if (target.isServerWideBlocking()) {
 			sb.append("      <span class=\"badge badge-warn\">SERVER-WIDE BLOCKING</span>\n");
 		}
+		if (target.isDynamicMitigationEnabled()) {
+			int dynActive = target.getDynamicBlockRegistry().getActiveCount(getTimeInMillis());
+			sb.append("      <span class=\"badge badge-blocking\">&#128737;&#65039; DYNAMIC MITIGATION (")
+					.append(dynActive).append(" CIDR").append(dynActive == 1 ? "" : "s").append(")</span>\n");
+		}
 
 		sb.append("    </div>\n")
 				.append("  </div>\n");
@@ -1027,6 +1057,26 @@ public class AntiDoSStatusRenderer {
 			sb.append("    <tr><th>Always Forbidden IPs</th><td><code>").append(escapeHtml(target.getAlwaysForbiddenIPsConfigValue())).append("</code></td></tr>\n");
 			sb.append("    <tr><th>Always Forbidden Blocks</th><td><strong>").append(target.getAlwaysForbiddenBlockedRequests()).append("</strong> requests rejected</td></tr>\n");
 			sb.append("    <tr><th>Track Always Forbidden in Monitor</th><td>").append(target.isTrackAlwaysForbiddenInMonitor() ? "<span class=\"badge badge-success\">ENABLED</span>" : "<span class=\"badge badge-muted\">DISABLED</span>").append("</td></tr>\n");
+		}
+		if (target.isDynamicMitigationEnabled()) {
+			long nowMs = getTimeInMillis();
+			int dynActive = target.getDynamicBlockRegistry().getActiveCount(nowMs);
+			long dynBlocked = target.getDynamicBlockRegistry().getTotalBlockedRequests();
+			long dynRev = target.getDynamicBlockRegistry().getRevision(nowMs);
+			String effMitUri = target.getMitigationUri() != null ? target.getMitigationUri() : target.getStatusUri();
+			String effMitIps = target.getMitigationAllowedIPs() != null ? target.getMitigationAllowedIPs() : target.getStatusAllowedIPs();
+			sb.append("    <tr><th>Dynamic CIDR Mitigation</th><td><span class=\"badge badge-blocking\">ENABLED</span>")
+					.append(" &bull; Active CIDR Blocks: <strong>").append(dynActive).append("</strong>")
+					.append(" &bull; Rejected Requests: <strong>").append(dynBlocked).append("</strong>")
+					.append(" &bull; Revision: <code>").append(dynRev).append("</code>")
+					.append(" &bull; Password: <em>*** (configured)</em>");
+			if (effMitUri != null) {
+				sb.append(" &bull; Endpoint: <code>POST ").append(escapeHtml(effMitUri)).append("</code>");
+			}
+			if (effMitIps != null) {
+				sb.append(" &bull; Allowed IPs: <code>").append(escapeHtml(effMitIps)).append("</code>");
+			}
+			sb.append("</td></tr>\n");
 		}
 
 		int retentionPct = Math.round(target.getShareOfRetainedFormerRequests() * 100);
@@ -1100,6 +1150,44 @@ public class AntiDoSStatusRenderer {
 		}
 
 		sb.append("  </table>\n</div>\n");
+
+		if (target.isDynamicMitigationEnabled()) {
+			long nowMs = getTimeInMillis();
+			List<AntiDoSDynamicBlockRegistry.DynamicBlockEntry> activeDynamicBlocks = target.getDynamicBlockRegistry().getActiveEntries(nowMs);
+			int dynTotal = activeDynamicBlocks.size();
+			long dynRev = target.getDynamicBlockRegistry().getRevision(nowMs);
+			sb.append("<div class=\"card\">\n")
+					.append("  <div class=\"card-header\"><div class=\"card-title-group\"><span class=\"valve-name\">Active Dynamic CIDR Mitigations</span>")
+					.append(" <span class=\"subtitle\">(").append(dynTotal).append(" active subnet block").append(dynTotal == 1 ? "" : "s")
+					.append(" &bull; Revision: <code>").append(dynRev).append("</code>)</span></div></div>\n");
+			if (dynTotal == 0) {
+				sb.append("  <div style=\"color:var(--muted);padding:4px 0;\">No active dynamic CIDR blocks currently set on this valve.</div>\n");
+			} else {
+				int dynDisplay = Math.min(dynTotal, MAX_HTML_LIMIT);
+				sb.append("  <table class=\"data-table\">\n")
+						.append("    <thead><tr><th>CIDR Subnet</th><th>Created</th><th>Expires</th><th>Remaining TTL</th><th>Blocked Hits</th><th>Last Hit</th><th>Reason</th></tr></thead>\n")
+						.append("    <tbody>\n");
+				for (int i = 0; i < dynDisplay; i++) {
+					AntiDoSDynamicBlockRegistry.DynamicBlockEntry d = activeDynamicBlocks.get(i);
+					long remSec = d.getRemainingSeconds(nowMs);
+					String createdStr = sdf.format(new Date(d.getCreatedAtMillis()));
+					String expiresStr = sdf.format(new Date(d.getExpiresAtMillis()));
+					long lastHitMs = d.getLastHitMillis();
+					String lastHitStr = lastHitMs > 0
+							? sdf.format(new Date(lastHitMs)) + " (" + formatDuration(Math.max(0, (nowMs - lastHitMs) / 1000)) + " ago)"
+							: "-";
+					sb.append("      <tr><td><code>").append(escapeHtml(d.getCidr())).append("</code></td>")
+							.append("<td>").append(createdStr).append("</td>")
+							.append("<td>").append(expiresStr).append("</td>")
+							.append("<td><span class=\"badge badge-warn\">").append(formatDuration(remSec)).append("</span></td>")
+							.append("<td><strong>").append(d.getBlockedRequests()).append("</strong></td>")
+							.append("<td>").append(lastHitStr).append("</td>")
+							.append("<td>").append(escapeHtml(d.getReason())).append("</td></tr>\n");
+				}
+				sb.append("    </tbody>\n  </table>\n");
+			}
+			sb.append("</div>\n");
+		}
 
 		// Card 2: Slot Timeline
 		boolean isSubnetMode = target.isSubnetAggregationActive();
@@ -1238,7 +1326,11 @@ public class AntiDoSStatusRenderer {
 				if (showAuthenticated) {
 					sb.append("<td>").append(e.authenticatedCount()).append("</td>");
 				}
-				String clientLimitStr = target.isIPAddressInAlwaysForbidden(e.key()) ? "0 (Always Forbidden)" : String.valueOf(allowedReqs);
+				String clientLimitStr = target.isIPAddressInAlwaysForbidden(e.key())
+						? "0 (Always Forbidden)"
+						: (target.isDynamicMitigationEnabled() && target.getDynamicBlockRegistry().getActiveEntryByCidr(e.key(), getTimeInMillis()) != null
+								? "0 (Dynamic CIDR)"
+								: String.valueOf(allowedReqs));
 				sb.append("<td>").append(clientLimitStr).append("</td>");
 				if (e.sample() != null && e.sample().uri() != null) {
 					String sampleTitle = e.sample().userAgent() != null ? "User-Agent: " + escapeHtml(e.sample().userAgent()) : "";
@@ -1641,6 +1733,12 @@ public class AntiDoSStatusRenderer {
 					.append("      \"isStatusHost\": ").append(v.getStatusUri() != null).append(",\n")
 					.append("      \"isCurrentHost\": ").append(v == valve).append(",\n")
 					.append("      \"alwaysForbiddenBlockedRequests\": ").append(v.getAlwaysForbiddenBlockedRequests()).append(",\n")
+					.append("      \"dynamicMitigationEnabled\": ").append(v.isDynamicMitigationEnabled()).append(",\n")
+					.append("      \"mitigationUri\": ").append(v.getMitigationUri() != null ? "\"" + escapeJson(v.getMitigationUri()) + "\"" : "null").append(",\n")
+					.append("      \"mitigationAllowedIPs\": ").append(v.getMitigationAllowedIPs() != null ? "\"" + escapeJson(v.getMitigationAllowedIPs()) + "\"" : "null").append(",\n")
+					.append("      \"dynamicBlocksActiveCount\": ").append(v.isDynamicMitigationEnabled() ? v.getDynamicBlockRegistry().getActiveCount(getTimeInMillis()) : 0).append(",\n")
+					.append("      \"dynamicBlocksBlockedRequests\": ").append(v.isDynamicMitigationEnabled() ? v.getDynamicBlockRegistry().getTotalBlockedRequests() : 0).append(",\n")
+					.append("      \"dynamicRulesRevision\": ").append(v.isDynamicMitigationEnabled() ? v.getDynamicBlockRegistry().getRevision(getTimeInMillis()) : 0).append(",\n")
 					.append("      \"httpStatusCode\": ").append(v.getHttpStatusCode()).append("\n")
 					.append("    }");
 		}
@@ -1752,8 +1850,35 @@ public class AntiDoSStatusRenderer {
 				.append("    \"isStatusHost\": ").append(target.getStatusUri() != null).append(",\n")
 				.append("    \"isCurrentHost\": ").append(target == valve).append(",\n")
 				.append("    \"alwaysForbiddenBlockedRequests\": ").append(target.getAlwaysForbiddenBlockedRequests()).append(",\n")
+				.append("    \"dynamicMitigationEnabled\": ").append(target.isDynamicMitigationEnabled()).append(",\n")
+				.append("    \"mitigationUri\": ").append(target.getMitigationUri() != null ? "\"" + escapeJson(target.getMitigationUri()) + "\"" : "null").append(",\n")
+				.append("    \"mitigationAllowedIPs\": ").append(target.getMitigationAllowedIPs() != null ? "\"" + escapeJson(target.getMitigationAllowedIPs()) + "\"" : "null").append(",\n")
+				.append("    \"dynamicBlocksActiveCount\": ").append(target.isDynamicMitigationEnabled() ? target.getDynamicBlockRegistry().getActiveCount(getTimeInMillis()) : 0).append(",\n")
+				.append("    \"dynamicBlocksBlockedRequests\": ").append(target.isDynamicMitigationEnabled() ? target.getDynamicBlockRegistry().getTotalBlockedRequests() : 0).append(",\n")
+				.append("    \"dynamicRulesRevision\": ").append(target.isDynamicMitigationEnabled() ? target.getDynamicBlockRegistry().getRevision(getTimeInMillis()) : 0).append(",\n")
 				.append("    \"httpStatusCode\": ").append(target.getHttpStatusCode()).append("\n")
 				.append("  },\n");
+
+		if (target.isDynamicMitigationEnabled()) {
+			long nowMs = getTimeInMillis();
+			List<AntiDoSDynamicBlockRegistry.DynamicBlockEntry> dynEntries = target.getDynamicBlockRegistry().getActiveEntries(nowMs);
+			sb.append("  \"dynamicBlocks\": [\n");
+			for (int i = 0; i < dynEntries.size(); i++) {
+				if (i > 0) sb.append(",\n");
+				AntiDoSDynamicBlockRegistry.DynamicBlockEntry d = dynEntries.get(i);
+				long lastHitMs = d.getLastHitMillis();
+				sb.append("    {\n")
+						.append("      \"cidr\": \"").append(escapeJson(d.getCidr())).append("\",\n")
+						.append("      \"createdAt\": \"").append(sdf.format(new Date(d.getCreatedAtMillis()))).append("\",\n")
+						.append("      \"expiresAt\": \"").append(sdf.format(new Date(d.getExpiresAtMillis()))).append("\",\n")
+						.append("      \"remainingSeconds\": ").append(d.getRemainingSeconds(nowMs)).append(",\n")
+						.append("      \"blockedRequests\": ").append(d.getBlockedRequests()).append(",\n")
+						.append("      \"lastHitAt\": ").append(lastHitMs > 0 ? "\"" + sdf.format(new Date(lastHitMs)) + "\"" : "null").append(",\n")
+						.append("      \"reason\": ").append(d.getReason() != null ? "\"" + escapeJson(d.getReason()) + "\"" : "null").append("\n")
+						.append("    }");
+			}
+			sb.append("\n  ],\n");
+		}
 
 		// Slots array
 		int numSlots = monitor != null ? monitor.getNumberOfSlots() : target.getNumberOfSlots();
@@ -1841,7 +1966,9 @@ public class AntiDoSStatusRenderer {
 		for (int i = 0; i < blockedList.size(); i++) {
 			if (i > 0) sb.append(",\n");
 			CounterEntry e = blockedList.get(i);
-			int clientLimit = target.isIPAddressInAlwaysForbidden(e.key()) ? 0 : target.getAllowedRequestsPerSlot();
+			boolean isDynBlock = target.isDynamicMitigationEnabled()
+					&& target.getDynamicBlockRegistry().getActiveEntryByCidr(e.key(), getTimeInMillis()) != null;
+			int clientLimit = (target.isIPAddressInAlwaysForbidden(e.key()) || isDynBlock) ? 0 : target.getAllowedRequestsPerSlot();
 			sb.append("    {\n")
 					.append("      \"key\": \"").append(escapeJson(e.key())).append("\",\n")
 					.append("      \"count\": ").append(e.count()).append(",\n")

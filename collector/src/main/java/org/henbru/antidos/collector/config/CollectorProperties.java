@@ -33,6 +33,8 @@ public class CollectorProperties {
 	private String reportCron = "0 0 1 * * *"; // Daily at 01:00 AM (2 hours prior to 03:00 AM retention cleanup)
 	private long surgeMinRequests = 1000L; // De minimis volume threshold: min. 24h requests required to qualify as High Surge
 	private double surgeMultiplierAlert = 5.0; // Multiplier threshold above 30d baseline to qualify as High Surge
+	private String mitigationToken; // Optional fleet-wide default write token for dynamic CIDR mitigation
+	private int defaultMitigationTtlMinutes = 60;
 	private List<EndpointConfig> endpoints = new ArrayList<>();
 	private EnrichmentConfig enrichment = new EnrichmentConfig();
 
@@ -246,5 +248,21 @@ public class CollectorProperties {
 
 	public void setSurgeMultiplierAlert(double surgeMultiplierAlert) {
 		this.surgeMultiplierAlert = Math.max(1.0, surgeMultiplierAlert);
+	}
+
+	public String getMitigationToken() {
+		return mitigationToken;
+	}
+
+	public void setMitigationToken(String mitigationToken) {
+		this.mitigationToken = mitigationToken;
+	}
+
+	public int getDefaultMitigationTtlMinutes() {
+		return defaultMitigationTtlMinutes;
+	}
+
+	public void setDefaultMitigationTtlMinutes(int defaultMitigationTtlMinutes) {
+		this.defaultMitigationTtlMinutes = Math.max(1, defaultMitigationTtlMinutes);
 	}
 }

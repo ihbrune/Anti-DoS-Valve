@@ -11,10 +11,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.henbru.antidos.collector.poller.ValveStatusClient;
 
 /**
  * In-app mock REST controller exposing AntiDoSValve-compatible status endpoints
@@ -86,5 +88,25 @@ public class MockValveController {
 
 		ValveOverviewDto overview = simulator.buildOverview(nodeId, valve);
 		return ResponseEntity.ok(overview);
+	}
+
+	@PostMapping("/{nodeId}/antidos-status")
+	public ResponseEntity<?> postMitigation(
+			@PathVariable("nodeId") String nodeId,
+			@RequestParam(value = "action", required = false) String action,
+			@RequestParam(value = "monitorName", required = false) String monitorName,
+			@RequestParam(value = "cidr", required = false) String cidr,
+			@RequestParam(value = "ttlSeconds", required = false) Integer ttlSeconds,
+			@RequestParam(value = "reason", required = false) String reason,
+			@RequestParam(value = "blocks", required = false) String blocks,
+			@RequestHeader(value = "Authorization", required = false) String authHeader
+	) {
+		if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+			return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+					.body(new ValveStatusClient.MitigationCommandResponse("error", action, monitorName, 0, 0L, "Unauthorized"));
+		}
+		ValveStatusClient.MitigationCommandResponse resp = simulator.applyMitigationCommand(
+				nodeId, monitorName, action, cidr, ttlSeconds, reason, blocks);
+		return ResponseEntity.ok(resp);
 	}
 }

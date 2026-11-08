@@ -224,6 +224,12 @@ public class AntiDoSValve extends ValveBase {
 	private volatile Pattern statusAllowedIPs = null;
 	private volatile boolean statusAllowedIPsValid = true;
 	private volatile String statusPassword = null;
+	private volatile String mitigationUri = null;
+	private volatile String mitigationAllowedIPsConfigValue = null;
+	private volatile Pattern mitigationAllowedIPs = null;
+	private volatile boolean mitigationAllowedIPsValid = true;
+	private volatile String mitigationPassword = null;
+	private final AntiDoSDynamicBlockRegistry dynamicBlockRegistry = new AntiDoSDynamicBlockRegistry();
 	private final AntiDoSStatusRenderer statusRenderer = new AntiDoSStatusRenderer(this);
 
 	public AntiDoSStatusRenderer getStatusRenderer() {
@@ -1715,6 +1721,108 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
+	 * @return The dedicated URI path for receiving dynamic mitigation commands, or <code>null</code> if using {@link #getStatusUri()}
+	 */
+	public String getMitigationUri() {
+		return mitigationUri;
+	}
+
+	/**
+	 * Sets an optional dedicated URI path for receiving dynamic mitigation commands (e.g. "/antidos-mitigate").
+	 * If null or empty, dynamic mitigation POST commands are accepted on {@link #getStatusUri()}.
+	 *
+	 * @param mitigationUri The mitigation URI path
+	 */
+	public void setMitigationUri(String mitigationUri) {
+		if (mitigationUri == null || mitigationUri.trim().isEmpty()) {
+			this.mitigationUri = null;
+		} else {
+			String uri = mitigationUri.trim();
+			if (!uri.startsWith("/")) {
+				uri = "/" + uri;
+			}
+			this.mitigationUri = uri;
+		}
+	}
+
+	/**
+	 * @return Regular expression matching IP addresses allowed to send dynamic mitigation commands
+	 */
+	public String getMitigationAllowedIPs() {
+		return mitigationAllowedIPsConfigValue;
+	}
+
+	/**
+	 * Sets a regular expression matching client IP addresses allowed to send dynamic mitigation commands.
+	 * If null or empty, falls back to {@link #getStatusAllowedIPs()}.
+	 *
+	 * @param mitigationAllowedIPs Regular expression for allowed mitigation client IPs
+	 */
+	public void setMitigationAllowedIPs(String mitigationAllowedIPs) {
+		this.mitigationAllowedIPsConfigValue = mitigationAllowedIPs;
+		if (mitigationAllowedIPs == null || mitigationAllowedIPs.trim().isEmpty()) {
+			this.mitigationAllowedIPs = null;
+			this.mitigationAllowedIPsValid = true;
+			return;
+		}
+		try {
+			this.mitigationAllowedIPs = Pattern.compile(mitigationAllowedIPs.trim());
+			this.mitigationAllowedIPsValid = true;
+		} catch (Exception e) {
+			this.mitigationAllowedIPsValid = false;
+		}
+	}
+
+	/**
+	 * @return <code>true</code> if {@link #getMitigationAllowedIPs()} contains a valid regular expression
+	 */
+	public boolean isMitigationAllowedIPsValid() {
+		return mitigationAllowedIPsValid;
+	}
+
+	/**
+	 * @return The configured password/token required to set or remove dynamic CIDR blocks, or <code>null</code> if disabled
+	 */
+	public String getMitigationPassword() {
+		return mitigationPassword;
+	}
+
+	/**
+	 * Sets the write password/token required to push dynamic CIDR blocks to this valve.
+	 * Dynamic mitigation is only active on valves where {@code mitigationPassword} is explicitly configured.
+	 *
+	 * @param mitigationPassword The write password/token
+	 */
+	public void setMitigationPassword(String mitigationPassword) {
+		if (mitigationPassword == null || mitigationPassword.trim().isEmpty()) {
+			this.mitigationPassword = null;
+		} else {
+			this.mitigationPassword = mitigationPassword.trim();
+		}
+	}
+
+	/**
+	 * @return <code>true</code> if dynamic CIDR mitigation is enabled on this valve (via {@link #setMitigationPassword(String)})
+	 */
+	public boolean isDynamicMitigationEnabled() {
+		return mitigationPassword != null && !mitigationPassword.isEmpty();
+	}
+
+	/**
+	 * @return The dynamic CIDR block registry for this valve instance
+	 */
+	public AntiDoSDynamicBlockRegistry getDynamicBlockRegistry() {
+		return dynamicBlockRegistry;
+	}
+
+	/**
+	 * @return Total number of requests blocked by dynamic CIDR rules on this valve
+	 */
+	public long getDynamicBlockedRequests() {
+		return dynamicBlockRegistry.getTotalBlockedRequests();
+	}
+
+	/**
 	 * This method is called on every request. It uses
 	 * {@link #isRequestAllowed(String, String)} for its checks. If a request is
 	 * blocked the reaction of the valve depends on its mode:
@@ -1729,6 +1837,11 @@ public class AntiDoSValve extends ValveBase {
 
 		String ip = request.getRemoteAddr();
 		String path = request.getRequestURI();
+
+		if (mitigationUri != null && mitigationUri.equals(path)) {
+			handleMitigationRequest(request, response, ip);
+			return;
+		}
 
 		if (statusUri != null && statusUri.equals(path)) {
 			handleStatusRequest(request, response, ip);
@@ -1822,7 +1935,7 @@ public class AntiDoSValve extends ValveBase {
 		if (isMonitorModeDefault()) {
 			// block request:
 			if (httpStatusCode == DEFAULT_HTTP_STATUS_CODE) {
-				int retryAfter = provideRetryAfterSeconds();
+				int retryAfter = provideRetryAfterSeconds(ip, now);
 				response.setHeader("Retry-After", Integer.toString(retryAfter));
 			}
 			response.sendError(httpStatusCode);
@@ -1865,6 +1978,12 @@ public class AntiDoSValve extends ValveBase {
 		if (counter == null && !counterName.equals(ip)) {
 			counter = monitor.provideCurrentCounter(ip);
 		}
+		if (counter == null && isDynamicMitigationEnabled()) {
+			AntiDoSDynamicBlockRegistry.DynamicBlockEntry dynEntry = dynamicBlockRegistry.match(ip, null, getTimeInMillis());
+			if (dynEntry != null) {
+				counter = monitor.provideCurrentCounter(dynEntry.getCidr());
+			}
+		}
 		if (counter != null && counter.getSample() == null) {
 			String method = request.getMethod();
 			String ua = request.getHeader("User-Agent");
@@ -1897,6 +2016,36 @@ public class AntiDoSValve extends ValveBase {
 				monitor.registerAlwaysForbiddenRequest(ip, returningVisitor, authenticated, userAgent);
 			} catch (Exception e) {
 				log.warn(name4logging + " Failed to register always-forbidden IP in monitor: " + ip, e);
+			}
+		}
+	}
+
+	private void registerDynamicBlockInMonitor(
+			AntiDoSDynamicBlockRegistry.DynamicBlockEntry dynEntry,
+			String ip,
+			byte[] preParsedIpv4Bytes,
+			boolean returningVisitor,
+			boolean authenticated,
+			String userAgent) {
+		AntiDoSMonitor monitor = provideMonitor();
+		if (monitor != null && dynEntry != null) {
+			try {
+				byte[] v4Bytes = preParsedIpv4Bytes;
+				if (v4Bytes == null && !dynEntry.isIpv6()) {
+					v4Bytes = parseIPv4Literal(ip);
+				}
+				boolean trackCard = isExtendedMetricsActive();
+				monitor.registerDynamicBlockRequest(
+						dynEntry.getCidr(),
+						ip,
+						v4Bytes,
+						dynEntry.getPrefixBits(),
+						trackCard,
+						returningVisitor,
+						authenticated,
+						userAgent);
+			} catch (Exception e) {
+				log.warn(name4logging + " Failed to register dynamic block hit in monitor: " + ip, e);
 			}
 		}
 	}
@@ -1976,6 +2125,16 @@ public class AntiDoSValve extends ValveBase {
 	 * @throws IOException
 	 */
 	void handleStatusRequest(Request request, Response response, String ip) throws IOException {
+		if ("POST".equalsIgnoreCase(request.getMethod())) {
+			AntiDoSValve targetValve = resolveTargetMitigationValve(request.getParameter("valve"));
+			if (targetValve != null && (targetValve.getMitigationUri() == null || targetValve.getMitigationUri().equals(this.statusUri))) {
+				targetValve.handleMitigationRequest(request, response, ip, this.statusAllowedIPs);
+				return;
+			}
+			response.sendError(HttpServletResponse.SC_NOT_FOUND);
+			return;
+		}
+
 		// 1. Check IP whitelist if configured
 		if (statusAllowedIPs != null && !statusAllowedIPs.matcher(ip).matches()) {
 			if (log.isDebugEnabled()) {
@@ -2056,6 +2215,222 @@ public class AntiDoSValve extends ValveBase {
 
 	boolean isStatusTokenValid(Request request) {
 		String expected = getEffectiveStatusPassword();
+		if (expected == null || expected.isEmpty()) {
+			return false;
+		}
+
+		String provided = request.getParameter("token");
+		if (provided == null || provided.isEmpty()) {
+			String authHeader = request.getHeader("Authorization");
+			if (authHeader != null && authHeader.regionMatches(true, 0, "Bearer ", 0, 7)) {
+				provided = authHeader.substring(7).trim();
+			}
+		}
+
+		if (provided == null) {
+			return false;
+		}
+
+		return MessageDigest.isEqual(provided.trim().getBytes(StandardCharsets.UTF_8),
+				expected.getBytes(StandardCharsets.UTF_8));
+	}
+
+	AntiDoSValve resolveTargetMitigationValve(String requestedValveName) {
+		if (requestedValveName != null && !requestedValveName.trim().isEmpty()) {
+			String target = requestedValveName.trim();
+			if (target.equalsIgnoreCase(this.monitorName) && this.isDynamicMitigationEnabled()) {
+				return this;
+			}
+			for (AntiDoSValve v : getValvesToRender()) {
+				if (target.equalsIgnoreCase(v.getMonitorName()) && v.isDynamicMitigationEnabled()) {
+					return v;
+				}
+			}
+			return null;
+		}
+		if (this.isDynamicMitigationEnabled()) {
+			return this;
+		}
+		for (AntiDoSValve v : getValvesToRender()) {
+			if (v.isDynamicMitigationEnabled()) {
+				return v;
+			}
+		}
+		return null;
+	}
+
+	void handleMitigationRequest(Request request, Response response, String ip) throws IOException {
+		handleMitigationRequest(request, response, ip, null);
+	}
+
+	void handleMitigationRequest(Request request, Response response, String ip, Pattern fallbackAllowedIPs) throws IOException {
+		if (!isDynamicMitigationEnabled()) {
+			response.sendError(HttpServletResponse.SC_NOT_FOUND);
+			return;
+		}
+
+		// 1. Check IP whitelist (mitigationAllowedIPs -> statusAllowedIPs -> host statusAllowedIPs)
+		Pattern effectiveAllowed = this.mitigationAllowedIPs != null
+				? this.mitigationAllowedIPs
+				: (this.statusAllowedIPs != null ? this.statusAllowedIPs : fallbackAllowedIPs);
+		if (effectiveAllowed != null && !effectiveAllowed.matcher(ip).matches()) {
+			if (log.isDebugEnabled()) {
+				log.debug(name4logging + " Mitigation request rejected (IP not allowed): " + ip);
+			}
+			response.sendError(HttpServletResponse.SC_NOT_FOUND);
+			return;
+		}
+
+		// 2. Check mitigation password/token
+		if (!isMitigationTokenValid(request)) {
+			if (isIPAddressCurrentlyBlocked(ip)) {
+				if (httpStatusCode == DEFAULT_HTTP_STATUS_CODE) {
+					response.setHeader("Retry-After", Integer.toString(provideRetryAfterSeconds(ip, getTimeInMillis())));
+				}
+				response.sendError(httpStatusCode);
+				return;
+			}
+			if (log.isDebugEnabled()) {
+				log.debug(name4logging + " Mitigation request unauthorized (invalid or missing token): " + ip);
+			}
+			isIPAddressBlocked(ip);
+			response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+			return;
+		}
+
+		String action = request.getParameter("action");
+		if (action == null || action.trim().isEmpty()) {
+			action = "upsert";
+		} else {
+			action = action.trim().toLowerCase();
+		}
+
+		long now = getTimeInMillis();
+		touchCollectorLease();
+
+		try {
+			if ("clear".equals(action) || "clearblocks".equals(action)) {
+				dynamicBlockRegistry.clearAll();
+			} else if ("remove".equals(action) || "removeblocks".equals(action)) {
+				String singleCidr = request.getParameter("cidr");
+				if (singleCidr != null && !singleCidr.trim().isEmpty()) {
+					dynamicBlockRegistry.removeBlock(singleCidr.trim());
+				}
+				String blocksParam = request.getParameter("blocks");
+				if (blocksParam != null && !blocksParam.trim().isEmpty()) {
+					String[] lines = blocksParam.split("[\\r\\n;,]+");
+					for (String line : lines) {
+						String token = line.trim();
+						if (!token.isEmpty()) {
+							int pipeIdx = token.indexOf('|');
+							String c = pipeIdx >= 0 ? token.substring(0, pipeIdx).trim() : token;
+							dynamicBlockRegistry.removeBlock(c);
+						}
+					}
+				}
+			} else if ("replace".equals(action) || "replaceblocks".equals(action)) {
+				String blocksParam = request.getParameter("blocks");
+				List<AntiDoSDynamicBlockRegistry.BlockSpec> specs = parseBlockSpecs(blocksParam, now);
+				dynamicBlockRegistry.replaceAllBlocks(specs, now);
+			} else if ("upsert".equals(action) || "upsertblocks".equals(action)) {
+				String singleCidr = request.getParameter("cidr");
+				if (singleCidr != null && !singleCidr.trim().isEmpty()) {
+					long expiresAt = resolveExpiresAtMillis(
+							request.getParameter("expiresAt"),
+							request.getParameter("ttlSeconds"),
+							now);
+					String reason = request.getParameter("reason");
+					validateMitigationPrefixSafety(singleCidr.trim());
+					dynamicBlockRegistry.upsertBlock(singleCidr.trim(), expiresAt, reason, now);
+				}
+				String blocksParam = request.getParameter("blocks");
+				if (blocksParam != null && !blocksParam.trim().isEmpty()) {
+					List<AntiDoSDynamicBlockRegistry.BlockSpec> specs = parseBlockSpecs(blocksParam, now);
+					for (AntiDoSDynamicBlockRegistry.BlockSpec spec : specs) {
+						dynamicBlockRegistry.upsertBlock(spec.cidr, spec.expiresAtMillis, spec.reason, now);
+					}
+				}
+			} else {
+				response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Unknown mitigation action: " + action);
+				return;
+			}
+		} catch (IllegalArgumentException e) {
+			response.sendError(HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
+			return;
+		}
+
+		dynamicBlockRegistry.evictExpired(now);
+		int activeCount = dynamicBlockRegistry.getActiveCount(now);
+		long revision = dynamicBlockRegistry.getRevision(now);
+		long totalBlocked = dynamicBlockRegistry.getTotalBlockedRequests();
+
+		response.setStatus(HttpServletResponse.SC_OK);
+		response.setContentType("application/json;charset=UTF-8");
+		response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+		String json = "{\n"
+				+ "  \"status\": \"OK\",\n"
+				+ "  \"valve\": \"" + AntiDoSStatusRenderer.escapeJson(this.monitorName) + "\",\n"
+				+ "  \"action\": \"" + AntiDoSStatusRenderer.escapeJson(action) + "\",\n"
+				+ "  \"dynamicBlocksActiveCount\": " + activeCount + ",\n"
+				+ "  \"dynamicRulesRevision\": " + revision + ",\n"
+				+ "  \"dynamicBlocksBlockedRequests\": " + totalBlocked + "\n"
+				+ "}";
+		response.getWriter().write(json);
+	}
+
+	private List<AntiDoSDynamicBlockRegistry.BlockSpec> parseBlockSpecs(String blocksParam, long nowMillis) {
+		if (blocksParam == null || blocksParam.trim().isEmpty()) {
+			return Collections.emptyList();
+		}
+		String[] lines = blocksParam.split("[\\r\\n;]+");
+		List<AntiDoSDynamicBlockRegistry.BlockSpec> specs = new ArrayList<>(lines.length);
+		for (String rawLine : lines) {
+			String line = rawLine.trim();
+			if (line.isEmpty()) {
+				continue;
+			}
+			String[] parts = line.split("\\|", 3);
+			String cidr = parts[0].trim();
+			if (cidr.isEmpty()) {
+				continue;
+			}
+			validateMitigationPrefixSafety(cidr);
+			long expiresAt = nowMillis + 3600_000L;
+			if (parts.length >= 2 && !parts[1].trim().isEmpty()) {
+				long val = Long.parseLong(parts[1].trim());
+				// Support either epoch millis (> 10^11) or relative TTL seconds
+				expiresAt = val > 100_000_000_000L ? val : (nowMillis + val * 1000L);
+			}
+			String reason = parts.length >= 3 ? parts[2].trim() : "Dynamic Mitigation";
+			specs.add(new AntiDoSDynamicBlockRegistry.BlockSpec(cidr, expiresAt, reason));
+		}
+		return specs;
+	}
+
+	private long resolveExpiresAtMillis(String expiresAtParam, String ttlSecondsParam, long nowMillis) {
+		if (expiresAtParam != null && !expiresAtParam.trim().isEmpty()) {
+			long val = Long.parseLong(expiresAtParam.trim());
+			return val > 100_000_000_000L ? val : (nowMillis + val * 1000L);
+		}
+		if (ttlSecondsParam != null && !ttlSecondsParam.trim().isEmpty()) {
+			long ttl = Long.parseLong(ttlSecondsParam.trim());
+			return nowMillis + Math.max(1L, ttl) * 1000L;
+		}
+		return nowMillis + 3600_000L;
+	}
+
+	private void validateMitigationPrefixSafety(String rawCidr) {
+		AntiDoSDynamicBlockRegistry.ParsedCidr parsed = AntiDoSDynamicBlockRegistry.parseAndNormalizeCidr(rawCidr);
+		if (!parsed.ipv6 && parsed.prefixBits < 16) {
+			throw new IllegalArgumentException("IPv4 dynamic block prefix must be at least /16 (rejected: " + parsed.canonicalCidr + ")");
+		}
+		if (parsed.ipv6 && parsed.prefixBits < 32) {
+			throw new IllegalArgumentException("IPv6 dynamic block prefix must be at least /32 (rejected: " + parsed.canonicalCidr + ")");
+		}
+	}
+
+	boolean isMitigationTokenValid(Request request) {
+		String expected = this.mitigationPassword;
 		if (expected == null || expected.isEmpty()) {
 			return false;
 		}
@@ -2327,6 +2702,8 @@ public class AntiDoSValve extends ValveBase {
 			throw new LifecycleException(name4logging + ".relevantPaths is invalid");
 		if (!statusAllowedIPsValid)
 			throw new LifecycleException(name4logging + ".statusAllowedIPs is invalid: " + statusAllowedIPsConfigValue);
+		if (!mitigationAllowedIPsValid)
+			throw new LifecycleException(name4logging + ".mitigationAllowedIPs is invalid: " + mitigationAllowedIPsConfigValue);
 		if (!isMonitorModeValid())
 			throw new LifecycleException(name4logging + ".monitorMode is invalid");
 		if (!isHttpStatusCodeValid())
@@ -2525,6 +2902,18 @@ public class AntiDoSValve extends ValveBase {
 		return Math.max(1, remainingSec);
 	}
 
+	public int provideRetryAfterSeconds(String ip, long currentTimeMillis) {
+		if (ip != null && isDynamicMitigationEnabled()) {
+			AntiDoSDynamicBlockRegistry.DynamicBlockEntry dynEntry = dynamicBlockRegistry.match(ip, null, currentTimeMillis);
+			if (dynEntry != null) {
+				long remainingMillis = dynEntry.getExpiresAtMillis() - currentTimeMillis;
+				int remainingSec = (int) Math.ceil(remainingMillis / 1000.0);
+				return Math.max(1, Math.min(3600, remainingSec));
+			}
+		}
+		return provideRetryAfterSeconds(currentTimeMillis);
+	}
+
 	/**
 	 * Provides current time in milliseconds. Can be overridden in tests.
 	 */
@@ -2594,6 +2983,19 @@ public class AntiDoSValve extends ValveBase {
 				log.debug(name4logging + " Is in alwaysAllowedIPs: " + ip);
 
 			return true;
+		}
+
+		if (isDynamicMitigationEnabled()) {
+			long nowMillis = getTimeInMillis();
+			AntiDoSDynamicBlockRegistry.DynamicBlockEntry matchedRule = dynamicBlockRegistry.match(ip, null, nowMillis);
+			if (matchedRule != null) {
+				dynamicBlockRegistry.recordBlockedHit(matchedRule, nowMillis);
+				registerDynamicBlockInMonitor(matchedRule, ip, null, returningVisitor, authenticated, userAgent);
+				if (log.isDebugEnabled()) {
+					log.debug(name4logging + " Dynamically blocked by CIDR rule " + matchedRule.getCidr() + ": " + ip);
+				}
+				return false;
+			}
 		}
 
 		if (isRequestURIInNonRelevantPaths(requestURI)) {
@@ -2748,6 +3150,9 @@ public class AntiDoSValve extends ValveBase {
 	public boolean isIPAddressCurrentlyBlocked(String ip) throws IllegalArgumentException {
 		if (ip == null || ip.isEmpty()) {
 			throw new IllegalArgumentException("IP address must not be null or empty");
+		}
+		if (isDynamicMitigationEnabled() && dynamicBlockRegistry.match(ip, null, getTimeInMillis()) != null) {
+			return true;
 		}
 		String counterName = resolveCounterName(ip);
 		AntiDoSMonitor monitor = provideMonitor();
