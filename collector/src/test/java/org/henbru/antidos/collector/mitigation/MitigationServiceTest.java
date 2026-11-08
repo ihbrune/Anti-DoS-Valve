@@ -224,4 +224,92 @@ class MitigationServiceTest {
 		assertEquals(64496L, preview.getAsn());
 		assertEquals(24, preview.getHours());
 	}
+
+	@Test
+	void testFleetGuardrailsDynamicPrefixEnforcement() {
+		// Insert an active valve requiring minimum /24 for IPv4 and /48 for IPv6
+		org.henbru.antidos.collector.model.MonitoredValve valve = new org.henbru.antidos.collector.model.MonitoredValve(
+				"Srv1", "VALVE1", "Description", 1, "BLOCKING", false, false, 429,
+				50, 30, 10, 0.0f, 32, 64, 1000, 1000,
+				"/api/.*", null, null, null, "/antidos-status", null, "auto",
+				false, "_adv", false, "OFF", null, null, 900, 50000, "ALL", 0,
+				true, "/antidos-mitigate", 0, 0L, 0L,
+				24, 48, 86400, 5000,
+				Instant.now(), 12345, true
+		);
+		valveRepository.upsert(valve);
+
+		assertEquals(24, mitigationService.getEffectiveMinIpv4Prefix());
+		assertEquals(48, mitigationService.getEffectiveMinIpv6Prefix());
+
+		// /20 is broader than /24 -> evaluatePreflight must reject it
+		MitigationService.PreflightCheckResult preflightBroad =
+				mitigationService.evaluatePreflight(List.of("198.51.96.0/20"));
+		assertFalse(preflightBroad.isSafeToProceedWithoutOverride());
+		assertEquals(1, preflightBroad.getInvalidInputs().size());
+		assertTrue(preflightBroad.getInvalidInputs().getFirst().contains("between /24 and /32"));
+
+		// /24 is valid
+		MitigationService.PreflightCheckResult preflightOk =
+				mitigationService.evaluatePreflight(List.of("198.51.100.0/24"));
+		assertTrue(preflightOk.getInvalidInputs().isEmpty());
+		assertEquals(List.of("198.51.100.0/24"), preflightOk.getValidCidrs());
+	}
+
+	@Test
+	void testFleetGuardrailsMaxTtlCapping() {
+		// Insert an active valve with max TTL of 1 hour (3600 seconds)
+		org.henbru.antidos.collector.model.MonitoredValve valve = new org.henbru.antidos.collector.model.MonitoredValve(
+				"Srv1", "VALVE1", "Description", 1, "BLOCKING", false, false, 429,
+				50, 30, 10, 0.0f, 32, 64, 1000, 1000,
+				"/api/.*", null, null, null, "/antidos-status", null, "auto",
+				false, "_adv", false, "OFF", null, null, 900, 50000, "ALL", 0,
+				true, "/antidos-mitigate", 0, 0L, 0L,
+				16, 32, 3600, 5000,
+				Instant.now(), 12345, true
+		);
+		valveRepository.upsert(valve);
+
+		assertEquals(3600, mitigationService.getEffectiveMaxTtlSeconds());
+
+		// Request a block for 180 minutes (3 hours)
+		Instant before = Instant.now();
+		MitigationRule rule = mitigationService.createOrUpdateBlock(
+				"198.51.100.0/24", 180, "TTL test", MitigationRule.SOURCE_MANUAL, null, "ADMIN");
+
+		// Stored rule expiresAt must be capped to at most 60 minutes
+		long remainingSec = Duration.between(before, rule.expiresAt()).toSeconds();
+		assertTrue(remainingSec <= 3605 && remainingSec >= 3590,
+				"Requested 180m must be capped to fleet max of 60m (3600s), got " + remainingSec + "s");
+	}
+
+	@Test
+	void testFleetGuardrailsCapacityLimitPreflightWarning() {
+		// Insert an active valve with capacity of 2 active blocks
+		org.henbru.antidos.collector.model.MonitoredValve valve = new org.henbru.antidos.collector.model.MonitoredValve(
+				"Srv1", "VALVE1", "Description", 1, "BLOCKING", false, false, 429,
+				50, 30, 10, 0.0f, 32, 64, 1000, 1000,
+				"/api/.*", null, null, null, "/antidos-status", null, "auto",
+				false, "_adv", false, "OFF", null, null, 900, 50000, "ALL", 0,
+				true, "/antidos-mitigate", 0, 0L, 0L,
+				16, 32, 86400, 2,
+				Instant.now(), 12345, true
+		);
+		valveRepository.upsert(valve);
+
+		assertEquals(2, mitigationService.getEffectiveMaxActiveBlocks());
+
+		// Fill capacity with 2 blocks
+		mitigationService.createOrUpdateBlock("198.51.100.0/24", 60, "R1", MitigationRule.SOURCE_MANUAL, null, "ADMIN");
+		mitigationService.createOrUpdateBlock("198.51.101.0/24", 60, "R2", MitigationRule.SOURCE_MANUAL, null, "ADMIN");
+
+		// Evaluate preflight for a 3rd new block
+		MitigationService.PreflightCheckResult preflight =
+				mitigationService.evaluatePreflight(List.of("198.51.102.0/24"));
+
+		assertTrue(preflight.hasCriticalWarnings());
+		boolean hasCapacityWarning = preflight.getWarnings().stream()
+				.anyMatch(w -> "FLEET_CAPACITY".equalsIgnoreCase(w.getCidr()) && w.getMessage().contains("Fleet capacity limit exceeded"));
+		assertTrue(hasCapacityWarning, "Must raise FLEET_CAPACITY critical preflight warning");
+	}
 }

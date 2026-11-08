@@ -642,6 +642,10 @@ public class CollectorPollerService {
 				v.dynamicBlocksActiveCountOrDefault(),
 				v.dynamicBlocksBlockedRequestsOrDefault(),
 				v.dynamicRulesRevisionOrDefault(),
+				v.mitigationMinPrefixV4OrDefault(),
+				v.mitigationMinPrefixV6OrDefault(),
+				v.mitigationMaxTtlSecondsOrDefault(),
+				v.mitigationMaxActiveBlocksOrDefault(),
 				now,
 				configHash,
 				true

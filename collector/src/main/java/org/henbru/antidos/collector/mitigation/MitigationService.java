@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -159,12 +160,27 @@ public class MitigationService {
 
 	/**
 	 * Parses, validates, and normalizes an IPv4 or IPv6 address or CIDR string.
-	 * Rejects overly broad prefixes ({@code < /16} for IPv4, {@code < /32} for IPv6).
+	 * Rejects overly broad prefixes ({@code < /16} for IPv4, {@code < /32} for IPv6 by default).
 	 */
 	public static NormalizedCidr normalizeAndValidateCidr(String rawInput) {
+		return normalizeAndValidateCidr(rawInput, MIN_IPV4_PREFIX, MIN_IPV6_PREFIX);
+	}
+
+	/**
+	 * Parses, validates, and normalizes an IPv4 or IPv6 address or CIDR string against dynamic prefix guardrails.
+	 *
+	 * @param rawInput      Raw CIDR or IP address string
+	 * @param minIpv4Prefix Broadest allowed IPv4 prefix (1..32)
+	 * @param minIpv6Prefix Broadest allowed IPv6 prefix (1..128)
+	 * @return Canonical {@link NormalizedCidr}
+	 * @throws IllegalArgumentException If syntax is invalid or prefix is broader than the minimum
+	 */
+	public static NormalizedCidr normalizeAndValidateCidr(String rawInput, int minIpv4Prefix, int minIpv6Prefix) {
 		if (rawInput == null || rawInput.trim().isEmpty()) {
 			throw new IllegalArgumentException("CIDR or IP address must not be empty.");
 		}
+		int safeMinV4 = Math.max(1, Math.min(32, minIpv4Prefix));
+		int safeMinV6 = Math.max(1, Math.min(128, minIpv6Prefix));
 		String s = rawInput.trim();
 		int slashIdx = s.indexOf('/');
 		String ipPart = slashIdx >= 0 ? s.substring(0, slashIdx).trim() : s;
@@ -183,9 +199,9 @@ public class MitigationService {
 					throw new IllegalArgumentException("Invalid IPv4 prefix length in CIDR: '" + rawInput + "'");
 				}
 			}
-			if (prefix < MIN_IPV4_PREFIX || prefix > 32) {
+			if (prefix < safeMinV4 || prefix > 32) {
 				throw new IllegalArgumentException(
-						"IPv4 prefix length must be between /" + MIN_IPV4_PREFIX + " and /32 (got /" + prefix + " in '" + rawInput + "').");
+						"IPv4 prefix length must be between /" + safeMinV4 + " and /32 (got /" + prefix + " in '" + rawInput + "').");
 			}
 			int addr = ((ipv4[0] & 0xFF) << 24)
 					| ((ipv4[1] & 0xFF) << 16)
@@ -220,9 +236,9 @@ public class MitigationService {
 					throw new IllegalArgumentException("Invalid IPv6 prefix length in CIDR: '" + rawInput + "'");
 				}
 			}
-			if (prefix < MIN_IPV6_PREFIX || prefix > 128) {
+			if (prefix < safeMinV6 || prefix > 128) {
 				throw new IllegalArgumentException(
-						"IPv6 prefix length must be between /" + MIN_IPV6_PREFIX + " and /128 (got /" + prefix + " in '" + rawInput + "').");
+						"IPv6 prefix length must be between /" + safeMinV6 + " and /128 (got /" + prefix + " in '" + rawInput + "').");
 			}
 			long hi = bytesToLong(ipv6, 0);
 			long lo = bytesToLong(ipv6, 8);
@@ -285,6 +301,66 @@ public class MitigationService {
 	}
 
 	// =========================================================================
+	// Fleet Guardrails & Policy Helpers
+	// =========================================================================
+
+	/**
+	 * @return The strictest (largest prefix number) minimal IPv4 prefix configured across active mitigation Valves
+	 */
+	public int getEffectiveMinIpv4Prefix() {
+		List<MonitoredValve> valves = getMitigationCapableValves();
+		int max = MIN_IPV4_PREFIX;
+		for (MonitoredValve v : valves) {
+			if (v.mitigationMinPrefixV4() > max) {
+				max = v.mitigationMinPrefixV4();
+			}
+		}
+		return max;
+	}
+
+	/**
+	 * @return The strictest (largest prefix number) minimal IPv6 prefix configured across active mitigation Valves
+	 */
+	public int getEffectiveMinIpv6Prefix() {
+		List<MonitoredValve> valves = getMitigationCapableValves();
+		int max = MIN_IPV6_PREFIX;
+		for (MonitoredValve v : valves) {
+			if (v.mitigationMinPrefixV6() > max) {
+				max = v.mitigationMinPrefixV6();
+			}
+		}
+		return max;
+	}
+
+	/**
+	 * @return The strictest (lowest duration in seconds) maximum TTL configured across active mitigation Valves
+	 */
+	public int getEffectiveMaxTtlSeconds() {
+		List<MonitoredValve> valves = getMitigationCapableValves();
+		int min = 86400;
+		for (MonitoredValve v : valves) {
+			if (v.mitigationMaxTtlSeconds() > 0 && v.mitigationMaxTtlSeconds() < min) {
+				min = v.mitigationMaxTtlSeconds();
+			}
+		}
+		return min;
+	}
+
+	/**
+	 * @return The strictest (lowest maximum count) active blocks capacity limit across active mitigation Valves
+	 */
+	public int getEffectiveMaxActiveBlocks() {
+		List<MonitoredValve> valves = getMitigationCapableValves();
+		int min = 5000;
+		for (MonitoredValve v : valves) {
+			if (v.mitigationMaxActiveBlocks() > 0 && v.mitigationMaxActiveBlocks() < min) {
+				min = v.mitigationMaxActiveBlocks();
+			}
+		}
+		return min;
+	}
+
+	// =========================================================================
 	// Pre-Flight Safety Check
 	// =========================================================================
 
@@ -292,6 +368,9 @@ public class MitigationService {
 		if (rawInputs == null || rawInputs.isEmpty()) {
 			return new PreflightCheckResult(List.of(), List.of("No CIDR or IP specified."), List.of(), 0L, 0L, false);
 		}
+
+		int minV4 = getEffectiveMinIpv4Prefix();
+		int minV6 = getEffectiveMinIpv6Prefix();
 
 		List<String> validCidrs = new ArrayList<>();
 		List<String> invalidInputs = new ArrayList<>();
@@ -307,7 +386,7 @@ public class MitigationService {
 			}
 			NormalizedCidr norm;
 			try {
-				norm = normalizeAndValidateCidr(raw);
+				norm = normalizeAndValidateCidr(raw, minV4, minV6);
 			} catch (IllegalArgumentException e) {
 				invalidInputs.add(e.getMessage());
 				continue;
@@ -360,6 +439,21 @@ public class MitigationService {
 			}
 		}
 
+		// Capacity check against fleet guardrails
+		if (!validCidrs.isEmpty()) {
+			int maxCap = getEffectiveMaxActiveBlocks();
+			List<MitigationRule> active = ruleRepository.findActiveRules(Instant.now());
+			Set<String> activeCidrs = new HashSet<>(active.stream().map(MitigationRule::cidr).toList());
+			long newCount = validCidrs.stream().filter(c -> !activeCidrs.contains(c)).count();
+			if (active.size() + newCount > maxCap) {
+				warnings.add(new PreflightWarning(
+						"CRITICAL",
+						"FLEET_CAPACITY",
+						"Fleet capacity limit exceeded: adding " + newCount + " new rule(s) would result in "
+								+ (active.size() + newCount) + " active rules, exceeding fleet limit of " + maxCap + "."));
+			}
+		}
+
 		boolean safe = invalidInputs.isEmpty()
 				&& !validCidrs.isEmpty()
 				&& warnings.stream().noneMatch(w -> "CRITICAL".equalsIgnoreCase(w.severity()));
@@ -378,8 +472,15 @@ public class MitigationService {
 			String source,
 			String batchId,
 			String actor) {
-		NormalizedCidr norm = normalizeAndValidateCidr(rawCidr);
+		NormalizedCidr norm = normalizeAndValidateCidr(rawCidr, getEffectiveMinIpv4Prefix(), getEffectiveMinIpv6Prefix());
 		int effectiveTtlMin = ttlMinutes > 0 ? ttlMinutes : properties.getDefaultMitigationTtlMinutes();
+		int maxTtlSec = getEffectiveMaxTtlSeconds();
+		if ((long) effectiveTtlMin * 60L > maxTtlSec) {
+			int cappedMin = Math.max(1, maxTtlSec / 60);
+			log.info("Capping requested dynamic block TTL from {} min to fleet max {} min ({} s) for {}",
+					effectiveTtlMin, cappedMin, maxTtlSec, norm.canonicalCidr());
+			effectiveTtlMin = cappedMin;
+		}
 		Instant now = Instant.now();
 		Instant expiresAt = now.plus(Duration.ofMinutes(effectiveTtlMin));
 
@@ -790,6 +891,10 @@ public class MitigationService {
 						now
 				);
 				syncedCount++;
+				if (resp.ttlCappedCountOrDefault() > 0) {
+					log.info("Valve '{}/{}' capped TTL for {} dynamic block(s) to mitigationMaxTtlSeconds={}s",
+							valve.serverId(), valve.valveName(), resp.ttlCappedCountOrDefault(), resp.mitigationMaxTtlSecondsOrDefault());
+				}
 			} catch (IOException | InterruptedException | RuntimeException e) {
 				String err = valve.serverId() + "/" + valve.valveName() + ": " + ValveStatusClient.formatErrorMessage(e);
 				log.warn("Failed to sync dynamic mitigations to '{}': {}", valve.serverId() + "/" + valve.valveName(), e.getMessage());
@@ -843,6 +948,10 @@ public class MitigationService {
 			);
 			log.info("Auto-synchronized {} dynamic CIDR rule(s) to '{}/{}' (revision {} -> {})",
 					resp.activeCount(), endpoint.getName(), valveSummary.monitorName(), valveRevision, resp.revision());
+			if (resp.ttlCappedCountOrDefault() > 0) {
+				log.info("Valve '{}/{}' capped TTL for {} dynamic block(s) to mitigationMaxTtlSeconds={}s",
+						endpoint.getName(), valveSummary.monitorName(), resp.ttlCappedCountOrDefault(), resp.mitigationMaxTtlSecondsOrDefault());
+			}
 		} catch (Exception e) {
 			log.warn("Auto-sync of dynamic CIDR rules to '{}/{}' failed: {}",
 					endpoint.getName(), valveSummary.monitorName(), ValveStatusClient.formatErrorMessage(e));

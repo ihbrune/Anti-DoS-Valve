@@ -90,10 +90,13 @@ public class ValveStatusClient {
 			String action,
 			int dynamicBlocksActiveCount,
 			long dynamicRulesRevision,
-			long dynamicBlocksBlockedRequests
+			long dynamicBlocksBlockedRequests,
+			Integer ttlCappedCount,
+			Integer mitigationMaxTtlSeconds,
+			Integer mitigationMaxActiveBlocks
 	) {
 		public MitigationCommandResponse(String status, String action, String valve, int activeCount, long revision, String error) {
-			this(status, valve, action, activeCount, revision, 0L);
+			this(status, valve, action, activeCount, revision, 0L, 0, 86400, 5000);
 		}
 
 		public int activeCount() {
@@ -102,6 +105,18 @@ public class ValveStatusClient {
 
 		public long revision() {
 			return dynamicRulesRevision;
+		}
+
+		public int ttlCappedCountOrDefault() {
+			return ttlCappedCount != null ? ttlCappedCount : 0;
+		}
+
+		public int mitigationMaxTtlSecondsOrDefault() {
+			return mitigationMaxTtlSeconds != null && mitigationMaxTtlSeconds > 0 ? mitigationMaxTtlSeconds : 86400;
+		}
+
+		public int mitigationMaxActiveBlocksOrDefault() {
+			return mitigationMaxActiveBlocks != null && mitigationMaxActiveBlocks > 0 ? mitigationMaxActiveBlocks : 5000;
 		}
 	}
 
@@ -175,10 +190,16 @@ public class ValveStatusClient {
 			throw new IOException("HTTP 404 Not Found: Mitigation endpoint unavailable or blocked by IP filter at " + base);
 		}
 		if (response.statusCode() == 400) {
-			throw new IOException("HTTP 400 Bad Request from " + base + ": " + response.body());
+			String msg = response.body() != null && !response.body().isBlank() ? ": " + response.body().trim() : "";
+			throw new IOException("HTTP 400 Bad Request from " + base + msg);
+		}
+		if (response.statusCode() == 409) {
+			String msg = response.body() != null && !response.body().isBlank() ? ": " + response.body().trim() : "";
+			throw new IOException("HTTP 409 Conflict from " + base + " (capacity limit reached)" + msg);
 		}
 		if (response.statusCode() != 200) {
-			throw new IOException("HTTP " + response.statusCode() + " response from " + base);
+			String msg = response.body() != null && !response.body().isBlank() ? ": " + response.body().trim() : "";
+			throw new IOException("HTTP " + response.statusCode() + " response from " + base + msg);
 		}
 
 		return objectMapper.readValue(response.body(), MitigationCommandResponse.class);

@@ -266,67 +266,119 @@
                 return;
             }
 
-            var html = '';
+            listContainer.innerHTML = '';
             for (var j = 0; j < filtered.length; j++) {
-                var item = filtered[j];
-                var typeClass = 'badge-info';
-                var typeLabel = 'IP';
-                var cleanAsn = item.value.replace(/^AS/i, '');
+                (function(item) {
+                    var card = document.createElement('div');
+                    card.className = 'history-card';
+                    card.setAttribute('data-id', item.id);
 
-                if (item.type === 'SUBNET') {
-                    typeClass = 'badge-warning';
-                    typeLabel = 'SUBNET';
-                } else if (item.type === 'ASN') {
-                    typeClass = 'badge-purple';
-                    typeLabel = 'ASN';
-                }
+                    // Header
+                    var header = document.createElement('div');
+                    header.className = 'history-card-header';
 
-                html += '<div class="history-card" data-id="' + item.id + '">';
-                html +=   '<div class="history-card-header">';
-                html +=     '<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0;">';
-                html +=       '<span class="badge ' + typeClass + '" style="font-size: 9px; padding: 2px 5px; font-weight: 700;">' + typeLabel + '</span>';
-                html +=       '<span class="history-value ip-mono">' + escapeHtml(item.value) + '</span>';
-                if (item.extra) {
-                    html +=   '<span class="history-extra" title="' + escapeHtml(item.extra) + '">' + escapeHtml(item.extra) + '</span>';
-                }
-                html +=     '</div>';
-                html +=     '<div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">';
-                html +=       '<span class="history-time">' + AntiDoSHistory.formatTimeAgo(item.timestamp) + '</span>';
-                html +=       '<button type="button" class="history-item-del" onclick="AntiDoSHistory.removeEntry(\'' + item.id + '\')" title="Remove this entry">&times;</button>';
-                html +=     '</div>';
-                html +=   '</div>';
+                    var left = document.createElement('div');
+                    left.style.cssText = 'display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0;';
 
-                // Action Navigation Buttons
-                html +=   '<div class="history-card-actions">';
-                if (item.type === 'IP') {
-                    html += '<a href="/events?clientQuery=' + encodeURIComponent(item.value) + '" class="history-action-link" title="Explore raw incident timeline">📋 Incidents</a>';
-                    html += '<a href="/offenders?clientQuery=' + encodeURIComponent(item.value) + '" class="history-action-link" title="Analyze offender surge & behavior">⚠️ Offenders</a>';
-                    if (item.subnet) {
-                        html += '<a href="/profiles?clientQuery=' + encodeURIComponent(item.subnet) + '" class="history-action-link" title="30-day baseline for subnet ' + escapeHtml(item.subnet) + '">⚡ Subnet</a>';
-                        html += '<a href="/mitigation?cidr=' + encodeURIComponent(item.subnet) + '&source=HISTORY" class="history-action-link" style="color: var(--color-danger);" title="Send subnet ' + escapeHtml(item.subnet) + ' to Mitigation dialog">🛡️ Mitigate</a>';
-                    } else {
-                        html += '<a href="/mitigation?cidr=' + encodeURIComponent(item.value) + '&source=HISTORY" class="history-action-link" style="color: var(--color-danger);" title="Send IP ' + escapeHtml(item.value) + ' to Mitigation dialog">🛡️ Mitigate</a>';
+                    var badge = document.createElement('span');
+                    var typeClass = (item.type === 'SUBNET') ? 'badge-warning' : (item.type === 'ASN' ? 'badge-purple' : 'badge-info');
+                    badge.className = 'badge ' + typeClass;
+                    badge.style.cssText = 'font-size: 9px; padding: 2px 5px; font-weight: 700;';
+                    badge.textContent = item.type;
+                    left.appendChild(badge);
+
+                    var valSpan = document.createElement('span');
+                    valSpan.className = 'history-value ip-mono';
+                    valSpan.textContent = item.value;
+                    left.appendChild(valSpan);
+
+                    if (item.extra) {
+                        var extraSpan = document.createElement('span');
+                        extraSpan.className = 'history-extra';
+                        extraSpan.title = item.extra;
+                        extraSpan.textContent = item.extra;
+                        left.appendChild(extraSpan);
                     }
-                    html += '<button type="button" class="history-action-link" onclick="AntiDoSHistory.openNoteModal(\'SUBNET\', \'' + escapeJs(item.value) + '\')" title="View or create investigative note">📝 Note</button>';
-                } else if (item.type === 'SUBNET') {
-                    html += '<a href="/profiles?clientQuery=' + encodeURIComponent(item.value) + '" class="history-action-link" title="30-day traffic profile & surge radar">⚡ Profiles</a>';
-                    html += '<a href="/offenders?groupBy=SUBNET&clientQuery=' + encodeURIComponent(item.value) + '" class="history-action-link" title="Subnet rollup & offender table">⚠️ Rollup</a>';
-                    html += '<a href="/events?clientQuery=' + encodeURIComponent(item.value) + '" class="history-action-link" title="Incident explorer for this subnet">📋 Incidents</a>';
-                    html += '<a href="/mitigation?cidr=' + encodeURIComponent(item.value) + '&source=HISTORY" class="history-action-link" style="color: var(--color-danger);" title="Open subnet in Mitigation dialog">🛡️ Mitigate</a>';
-                    html += '<button type="button" class="history-action-link" onclick="AntiDoSHistory.openNoteModal(\'SUBNET\', \'' + escapeJs(item.value) + '\')" title="View or create subnet note">📝 Note</button>';
-                } else if (item.type === 'ASN') {
-                    html += '<a href="/profiles?asn=' + encodeURIComponent(cleanAsn) + '" class="history-action-link" title="Subnet profiles in this ASN">⚡ Profiles</a>';
-                    html += '<a href="/offenders?asn=' + encodeURIComponent(cleanAsn) + '" class="history-action-link" title="Top offenders from this ASN">⚠️ Offenders</a>';
-                    html += '<a href="/events?asn=' + encodeURIComponent(cleanAsn) + '" class="history-action-link" title="Incidents from this ASN">📋 Incidents</a>';
-                    html += '<a href="/mitigation?asn=' + encodeURIComponent(cleanAsn) + '&source=HISTORY" class="history-action-link" style="color: var(--color-danger);" title="Batch mitigate active unauthenticated subnets of this ASN">🛡️ Mitigate</a>';
-                    html += '<a href="/analytics" class="history-action-link" title="Bot-mix & Residential proxy cluster">📊 Analytics</a>';
-                    html += '<button type="button" class="history-action-link" onclick="AntiDoSHistory.openNoteModal(\'ASN\', \'' + escapeJs(item.value) + '\')" title="View or create ASN note">📝 Note</button>';
-                }
-                html +=   '</div>';
-                html += '</div>';
-            }
+                    header.appendChild(left);
 
-            listContainer.innerHTML = html;
+                    var right = document.createElement('div');
+                    right.style.cssText = 'display: flex; align-items: center; gap: 6px; flex-shrink: 0;';
+
+                    var timeSpan = document.createElement('span');
+                    timeSpan.className = 'history-time';
+                    timeSpan.textContent = AntiDoSHistory.formatTimeAgo(item.timestamp);
+                    right.appendChild(timeSpan);
+
+                    var delBtn = document.createElement('button');
+                    delBtn.type = 'button';
+                    delBtn.className = 'history-item-del';
+                    delBtn.title = 'Remove this entry';
+                    delBtn.textContent = '×';
+                    delBtn.addEventListener('click', function() {
+                        AntiDoSHistory.removeEntry(item.id);
+                    });
+                    right.appendChild(delBtn);
+
+                    header.appendChild(right);
+                    card.appendChild(header);
+
+                    // Action Navigation Buttons
+                    var actions = document.createElement('div');
+                    actions.className = 'history-card-actions';
+
+                    function addActionLink(href, title, text, isDanger) {
+                        var a = document.createElement('a');
+                        a.href = href;
+                        a.className = 'history-action-link';
+                        a.title = title;
+                        a.textContent = text;
+                        if (isDanger) a.style.color = 'var(--color-danger)';
+                        actions.appendChild(a);
+                    }
+
+                    function addNoteButton(noteType, noteKey, title) {
+                        var btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'history-action-link';
+                        btn.title = title;
+                        btn.textContent = '📝 Note';
+                        btn.addEventListener('click', function() {
+                            AntiDoSHistory.openNoteModal(noteType, noteKey);
+                        });
+                        actions.appendChild(btn);
+                    }
+
+                    var cleanAsn = item.value.replace(/^AS/i, '');
+
+                    if (item.type === 'IP') {
+                        addActionLink('/events?clientQuery=' + encodeURIComponent(item.value), 'Explore raw incident timeline', '📋 Incidents');
+                        addActionLink('/offenders?clientQuery=' + encodeURIComponent(item.value), 'Analyze offender surge & behavior', '⚠️ Offenders');
+                        if (item.subnet) {
+                            addActionLink('/profiles?clientQuery=' + encodeURIComponent(item.subnet), '30-day baseline for subnet ' + item.subnet, '⚡ Subnet');
+                            addActionLink('/mitigation?cidr=' + encodeURIComponent(item.subnet) + '&source=HISTORY', 'Send subnet ' + item.subnet + ' to Mitigation dialog', '🛡️ Mitigate', true);
+                        } else {
+                            addActionLink('/mitigation?cidr=' + encodeURIComponent(item.value) + '&source=HISTORY', 'Send IP ' + item.value + ' to Mitigation dialog', '🛡️ Mitigate', true);
+                        }
+                        addNoteButton('SUBNET', item.value, 'View or create investigative note');
+                    } else if (item.type === 'SUBNET') {
+                        addActionLink('/profiles?clientQuery=' + encodeURIComponent(item.value), '30-day traffic profile & surge radar', '⚡ Profiles');
+                        addActionLink('/offenders?groupBy=SUBNET&clientQuery=' + encodeURIComponent(item.value), 'Subnet rollup & offender table', '⚠️ Rollup');
+                        addActionLink('/events?clientQuery=' + encodeURIComponent(item.value), 'Incident explorer for this subnet', '📋 Incidents');
+                        addActionLink('/mitigation?cidr=' + encodeURIComponent(item.value) + '&source=HISTORY', 'Open subnet in Mitigation dialog', '🛡️ Mitigate', true);
+                        addNoteButton('SUBNET', item.value, 'View or create subnet note');
+                    } else if (item.type === 'ASN') {
+                        addActionLink('/profiles?asn=' + encodeURIComponent(cleanAsn), 'Subnet profiles in this ASN', '⚡ Profiles');
+                        addActionLink('/offenders?asn=' + encodeURIComponent(cleanAsn), 'Top offenders from this ASN', '⚠️ Offenders');
+                        addActionLink('/events?asn=' + encodeURIComponent(cleanAsn), 'Incidents from this ASN', '📋 Incidents');
+                        addActionLink('/mitigation?asn=' + encodeURIComponent(cleanAsn) + '&source=HISTORY', 'Batch mitigate active unauthenticated subnets of this ASN', '🛡️ Mitigate', true);
+                        addActionLink('/analytics', 'Bot-mix & Residential proxy cluster', '📊 Analytics');
+                        addNoteButton('ASN', item.value, 'View or create ASN note');
+                    }
+
+                    card.appendChild(actions);
+                    listContainer.appendChild(card);
+                })(item);
+            }
         }
     };
 

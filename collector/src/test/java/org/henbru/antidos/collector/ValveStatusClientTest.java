@@ -213,4 +213,72 @@ class ValveStatusClientTest {
 		assertEquals(12, activeClient.effective());
 		assertEquals(24, activeClient.quotaPercent());
 	}
+
+	@Test
+	void testParseMitigationCommandResponseWithGuardrails() throws Exception {
+		String json = """
+				{
+				  "status": "OK",
+				  "valve": "TEST-VALVE",
+				  "action": "upsert",
+				  "dynamicBlocksActiveCount": 3,
+				  "dynamicRulesRevision": 123456789,
+				  "dynamicBlocksBlockedRequests": 42,
+				  "ttlCappedCount": 1,
+				  "mitigationMaxTtlSeconds": 3600,
+				  "mitigationMaxActiveBlocks": 100
+				}
+				""";
+		ValveStatusClient.MitigationCommandResponse resp =
+				objectMapper.readValue(json, ValveStatusClient.MitigationCommandResponse.class);
+		assertNotNull(resp);
+		assertEquals("OK", resp.status());
+		assertEquals("TEST-VALVE", resp.valve());
+		assertEquals(3, resp.activeCount());
+		assertEquals(123456789L, resp.revision());
+		assertEquals(42L, resp.dynamicBlocksBlockedRequests());
+		assertEquals(1, resp.ttlCappedCountOrDefault());
+		assertEquals(3600, resp.mitigationMaxTtlSecondsOrDefault());
+		assertEquals(100, resp.mitigationMaxActiveBlocksOrDefault());
+	}
+
+	@Test
+	void testParseOverviewJsonWithMitigationGuardrails() throws Exception {
+		String json = """
+				{
+				  "serverTime": "2026-11-08T13:00:00Z",
+				  "valves": [
+				    {
+				      "monitorName": "GUARDRAIL-VALVE",
+				      "pipelineOrder": 1,
+				      "monitorMode": "BLOCKING",
+				      "simulationMode": false,
+				      "serverWideBlocking": false,
+				      "allowedRequestsPerSlot": 50,
+				      "slotLength": 60,
+				      "numberOfSlots": 5,
+				      "dynamicMitigationEnabled": true,
+				      "mitigationUri": "/antidos-mitigate",
+				      "dynamicBlocksActiveCount": 5,
+				      "dynamicBlocksBlockedRequests": 100,
+				      "dynamicRulesRevision": 9999,
+				      "mitigationMinPrefixV4": 24,
+				      "mitigationMinPrefixV6": 48,
+				      "mitigationMaxTtlSeconds": 7200,
+				      "mitigationMaxActiveBlocks": 250
+				    }
+				  ]
+				}
+				""";
+		ValveOverviewDto dto = objectMapper.readValue(json, ValveOverviewDto.class);
+		assertNotNull(dto);
+		ValveOverviewDto.ValveSummaryDto v = dto.valves().getFirst();
+		assertEquals("GUARDRAIL-VALVE", v.monitorName());
+		assertTrue(v.dynamicMitigationEnabledOrDefault());
+		assertEquals("/antidos-mitigate", v.mitigationUri());
+		assertEquals(24, v.mitigationMinPrefixV4OrDefault());
+		assertEquals(48, v.mitigationMinPrefixV6OrDefault());
+		assertEquals(7200, v.mitigationMaxTtlSecondsOrDefault());
+		assertEquals(250, v.mitigationMaxActiveBlocksOrDefault());
+	}
 }
