@@ -582,7 +582,7 @@ public class MitigationService {
 					created.getFirst().id(),
 					created.size() + " subnets (" + created.getFirst().cidr() + "...)",
 					batchId,
-					"BATCH_CREATE",
+					"AUTO_ENGINE".equals(actor) ? "AUTO_BLOCK" : "BATCH_CREATE",
 					actor != null ? actor : "ADMIN",
 					effectiveTtlMin * 60,
 					(reason != null ? reason : "Batch mitigation") + " [" + created.size() + " rules]",
@@ -1102,6 +1102,16 @@ public class MitigationService {
 
 	public List<MitigationAuditEntry> getRecentAuditEntries(int limit) {
 		return ruleRepository.findRecentAuditEntries(limit);
+	}
+
+	public void recordAudit(Long ruleId, String cidr, String action, String details, Integer ttlSeconds, String actor) {
+		recordAudit(ruleId, cidr, null, action, ttlSeconds, details, actor);
+	}
+
+	public void recordAudit(Long ruleId, String cidr, String batchId, String action, Integer ttlSeconds, String details, String actor) {
+		ruleRepository.insertAuditEntry(new MitigationAuditEntry(
+				null, ruleId, cidr, batchId, action, actor != null ? actor : "AUTO-ENGINE", ttlSeconds, details, Instant.now()
+		));
 	}
 
 	public List<MonitoredValve> getMitigationCapableValves() {

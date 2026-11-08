@@ -195,8 +195,12 @@ class MitigationServiceTest {
 	void testMitigationControllerEndpointsAndSpringElGetters() {
 		CollectorProperties props = new CollectorProperties();
 		props.setDefaultMitigationTtlMinutes(60);
+		org.henbru.antidos.collector.storage.SystemSettingsRepository settingsRepo =
+				new org.henbru.antidos.collector.storage.SystemSettingsRepository(jdbcTemplate);
+		AutoMitigationService autoMitigationService =
+				new AutoMitigationService(props, settingsRepo, mitigationService, jdbcTemplate);
 		org.henbru.antidos.collector.web.MitigationController controller =
-				new org.henbru.antidos.collector.web.MitigationController(mitigationService, props);
+				new org.henbru.antidos.collector.web.MitigationController(mitigationService, autoMitigationService, props);
 
 		org.springframework.ui.ExtendedModelMap model = new org.springframework.ui.ExtendedModelMap();
 		String preflightView = controller.evaluatePreflight("198.51.100.42/24", model);

@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.henbru.antidos.collector.config.CollectorProperties;
+import org.henbru.antidos.collector.mitigation.AutoMitigationService;
 import org.henbru.antidos.collector.mitigation.MitigationService;
 import org.henbru.antidos.collector.model.MitigationAuditEntry;
 import org.henbru.antidos.collector.model.MitigationRule;
@@ -29,10 +30,15 @@ import org.springframework.web.bind.annotation.ResponseBody;
 public class MitigationController {
 
 	private final MitigationService mitigationService;
+	private final AutoMitigationService autoMitigationService;
 	private final CollectorProperties properties;
 
-	public MitigationController(MitigationService mitigationService, CollectorProperties properties) {
+	public MitigationController(
+			MitigationService mitigationService,
+			AutoMitigationService autoMitigationService,
+			CollectorProperties properties) {
 		this.mitigationService = mitigationService;
+		this.autoMitigationService = autoMitigationService;
 		this.properties = properties;
 	}
 
@@ -234,6 +240,80 @@ public class MitigationController {
 		return "fragments/mitigation-content :: mitigationDashboard";
 	}
 
+	@PostMapping("/mitigation/auto/settings")
+	public String updateAutoMitigationSettings(
+			@RequestParam(value = "enabled", defaultValue = "false") boolean enabled,
+			@RequestParam(value = "dryRun", defaultValue = "false") boolean dryRun,
+			@RequestParam(value = "carpetMinSubnets", defaultValue = "3") int carpetMinSubnets,
+			@RequestParam(value = "carpetMinRequests", defaultValue = "5000") long carpetMinRequests,
+			@RequestParam(value = "maxReturningRatioPct", defaultValue = "5.0") double maxReturningRatioPct,
+			@RequestParam(value = "maxActiveRules", defaultValue = "50") int maxActiveRules,
+			@RequestParam(value = "defaultTtlMinutes", defaultValue = "60") int defaultTtlMinutes,
+			@RequestParam(value = "autoExtendPersistent", defaultValue = "false") boolean autoExtendPersistent,
+			@RequestParam(value = "maxExtensionHours", defaultValue = "24") int maxExtensionHours,
+			Model model) {
+		try {
+			autoMitigationService.updateSettings(
+					enabled, dryRun, carpetMinSubnets, carpetMinRequests,
+					maxReturningRatioPct, maxActiveRules, defaultTtlMinutes,
+					autoExtendPersistent, maxExtensionHours, "ADMIN");
+			populateMitigationModel(model, "Autonomous defense engine settings saved to system_settings.", null);
+		} catch (Exception e) {
+			populateMitigationModel(model, null, "Failed to update autonomous defense settings: " + e.getMessage());
+		}
+		return "fragments/mitigation-content :: mitigationDashboard";
+	}
+
+	@PostMapping("/mitigation/auto/toggle")
+	public String toggleAutoMitigationSetting(
+			@RequestParam("property") String property,
+			Model model) {
+		try {
+			AutoMitigationService.EffectiveAutoSettings current = autoMitigationService.getEffectiveSettings();
+			boolean newEnabled = current.enabled();
+			boolean newDryRun = current.dryRun();
+			if ("enabled".equalsIgnoreCase(property)) {
+				newEnabled = !newEnabled;
+			} else if ("dryRun".equalsIgnoreCase(property)) {
+				newDryRun = !newDryRun;
+			}
+			autoMitigationService.updateSettings(
+					newEnabled, newDryRun, current.carpetMinSubnets(), current.carpetMinRequests(),
+					current.maxReturningRatioPct(), current.maxActiveRules(), current.defaultTtlMinutes(),
+					current.autoExtendPersistent(), current.maxExtensionHours(), "ADMIN");
+			populateMitigationModel(model, "Toggled " + property + " to " + ("enabled".equalsIgnoreCase(property) ? newEnabled : newDryRun) + ".", null);
+		} catch (Exception e) {
+			populateMitigationModel(model, null, "Failed to toggle setting: " + e.getMessage());
+		}
+		return "fragments/mitigation-content :: mitigationDashboard";
+	}
+
+	@PostMapping("/mitigation/auto/reset")
+	public String resetAutoMitigationSettings(Model model) {
+		try {
+			autoMitigationService.resetToDefaults("ADMIN");
+			populateMitigationModel(model, "Autonomous defense settings reset to application.yaml defaults.", null);
+		} catch (Exception e) {
+			populateMitigationModel(model, null, "Failed to reset settings: " + e.getMessage());
+		}
+		return "fragments/mitigation-content :: mitigationDashboard";
+	}
+
+	@PostMapping("/mitigation/auto/evaluate")
+	public String triggerAutoEvaluation(Model model) {
+		try {
+			AutoMitigationService.EffectiveAutoSettings config = autoMitigationService.getEffectiveSettings();
+			var candidates = autoMitigationService.evaluateAndEnforce(config);
+			if (config.autoExtendPersistent()) {
+				autoMitigationService.evaluateExtensions(config);
+			}
+			populateMitigationModel(model, "Autonomous evaluation completed. Evaluated " + candidates.size() + " candidate ASN(s).", null);
+		} catch (Exception e) {
+			populateMitigationModel(model, null, "Evaluation error: " + e.getMessage());
+		}
+		return "fragments/mitigation-content :: mitigationDashboard";
+	}
+
 	// =========================================================================
 	// JSON REST API Endpoints
 	// =========================================================================
@@ -303,6 +383,7 @@ public class MitigationController {
 		model.addAttribute("totalDynamicHits", totalDynamicHits);
 		model.addAttribute("activeBatches", activeBatches.values());
 		model.addAttribute("defaultTtlMinutes", properties.getDefaultMitigationTtlMinutes());
+		model.addAttribute("autoSettings", autoMitigationService.getEffectiveSettings());
 		model.addAttribute("feedbackSuccess", feedbackSuccess);
 		model.addAttribute("feedbackError", feedbackError);
 	}

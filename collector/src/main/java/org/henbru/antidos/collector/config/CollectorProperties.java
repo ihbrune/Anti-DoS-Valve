@@ -35,6 +35,7 @@ public class CollectorProperties {
 	private double surgeMultiplierAlert = 5.0; // Multiplier threshold above 30d baseline to qualify as High Surge
 	private String mitigationToken; // Optional fleet-wide default write token for dynamic CIDR mitigation
 	private int defaultMitigationTtlMinutes = 60;
+	private AutoMitigationConfig autoMitigation = new AutoMitigationConfig();
 	private List<EndpointConfig> endpoints = new ArrayList<>();
 	private EnrichmentConfig enrichment = new EnrichmentConfig();
 
@@ -264,5 +265,47 @@ public class CollectorProperties {
 
 	public void setDefaultMitigationTtlMinutes(int defaultMitigationTtlMinutes) {
 		this.defaultMitigationTtlMinutes = Math.max(1, defaultMitigationTtlMinutes);
+	}
+
+	public AutoMitigationConfig getAutoMitigation() {
+		return autoMitigation;
+	}
+
+	public void setAutoMitigation(AutoMitigationConfig autoMitigation) {
+		this.autoMitigation = autoMitigation != null ? autoMitigation : new AutoMitigationConfig();
+	}
+
+	/**
+	 * Configuration properties for autonomous mitigation engine.
+	 */
+	public static class AutoMitigationConfig {
+		private boolean enabled = false;
+		private boolean dryRun = true;
+		private int carpetMinSubnets = 8;
+		private long carpetMinRequests = 5000L;
+		private double maxReturningRatioPct = 5.0;
+		private int maxActiveRules = 100;
+		private int defaultTtlMinutes = 60;
+		private boolean autoExtendPersistent = true;
+		private int maxExtensionHours = 12;
+
+		public boolean isEnabled() { return enabled; }
+		public void setEnabled(boolean enabled) { this.enabled = enabled; }
+		public boolean isDryRun() { return dryRun; }
+		public void setDryRun(boolean dryRun) { this.dryRun = dryRun; }
+		public int getCarpetMinSubnets() { return carpetMinSubnets; }
+		public void setCarpetMinSubnets(int carpetMinSubnets) { this.carpetMinSubnets = Math.max(2, carpetMinSubnets); }
+		public long getCarpetMinRequests() { return carpetMinRequests; }
+		public void setCarpetMinRequests(long carpetMinRequests) { this.carpetMinRequests = Math.max(100L, carpetMinRequests); }
+		public double getMaxReturningRatioPct() { return maxReturningRatioPct; }
+		public void setMaxReturningRatioPct(double maxReturningRatioPct) { this.maxReturningRatioPct = Math.max(0.0, Math.min(100.0, maxReturningRatioPct)); }
+		public int getMaxActiveRules() { return maxActiveRules; }
+		public void setMaxActiveRules(int maxActiveRules) { this.maxActiveRules = Math.max(1, maxActiveRules); }
+		public int getDefaultTtlMinutes() { return defaultTtlMinutes; }
+		public void setDefaultTtlMinutes(int defaultTtlMinutes) { this.defaultTtlMinutes = Math.max(5, defaultTtlMinutes); }
+		public boolean isAutoExtendPersistent() { return autoExtendPersistent; }
+		public void setAutoExtendPersistent(boolean autoExtendPersistent) { this.autoExtendPersistent = autoExtendPersistent; }
+		public int getMaxExtensionHours() { return maxExtensionHours; }
+		public void setMaxExtensionHours(int maxExtensionHours) { this.maxExtensionHours = Math.max(1, maxExtensionHours); }
 	}
 }

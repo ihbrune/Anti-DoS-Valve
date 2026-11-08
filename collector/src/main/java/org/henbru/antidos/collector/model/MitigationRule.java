@@ -36,6 +36,7 @@ public record MitigationRule(
 	public static final String SOURCE_ASN_BATCH = "ASN_BATCH";
 	public static final String SOURCE_ADVISOR = "ADVISOR";
 	public static final String SOURCE_AUTO_RULE = "AUTO_RULE";
+	public static final String SOURCE_AUTO_CARPET = "AUTO_CARPET";
 
 	public static final String DETERRENCE_OBSERVING = "OBSERVING";
 	public static final String DETERRENCE_DETERRED = "DETERRED";
