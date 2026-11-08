@@ -1,11 +1,6 @@
-> [!IMPORTANT]
-> **Active Development Notice:**
-> This project is currently in active development and undergoing substantial changes.
-> For production deployments, please use the stable GitHub Release **[v1.7.0](https://github.com/ihbrune/Anti-DoS-Valve/releases/tag/v.1.7.0)** rather than the current `master` branch.
-
 # What is the Anti-DoS Valve?
 
-This project implements a Tomcat valve that enforces dynamic access rate limits on requests from individual IP addresses or subnets. This helps prevent Tomcat servers from becoming overloaded by DoS attacks or aggressive web crawlers, or at least mitigates their impact.
+This project implements a Tomcat valve that enforces dynamic access rate limits on requests from individual IP addresses or subnets. This helps prevent Tomcat servers from becoming overloaded by DoS attacks or aggressive web crawlers, or at least mitigates their impact. For fleet-wide monitoring and forensics across many valve instances, the repository also contains the optional (preview) **[Anti-DoS Collector](collector/README.md)**; the valve works fully standalone without it.
 
 The valve cannot, of course, provide complete protection against every kind of malicious overload. The goal is rather to provide a simple, easy-to-use overload protection mechanism that can be deployed quickly and with minimal effort, introduces very little overhead in Tomcat, and is particularly effective at slowing down aggressive web crawlers.
 
@@ -22,6 +17,25 @@ A Dockerfile is included to run Tomcat with the valve using minimal setup.
 Since version 1.4, the valve is built against Tomcat 10.1 libraries. This means it makes use of the <strong>jakarta.servlet.\*</strong> packages. Versions prior to 1.3.0 of the valve were tested on Tomcat 7.0, 8.0, and 9.0, using the legacy <strong>javax.servlet.\*</strong> packages.
 
 Since version 1.6.0, Tomcat 9 compatibility is provided by shading the valve code with javax.servlet. The section below "[Installation and Setup](#installation-and-setup)" describes how to use the valve with Tomcat 9.
+
+# Project Structure (Multi-Module Build since 1.8.0)
+
+> [!IMPORTANT]
+> **Build systems that only need the valve must be adapted.** After version 1.7.0 the repository was converted from a single-module project into a Maven multi-module build with the parent POM `org.henbru.antidos:anti-dos-parent` in the repository root. The valve now lives in the submodule [`valve/`](valve/) (artifact `anti-dos-valve`), so its build output moved from `target/` to `valve/target/`.
+>
+> If your scripts, CI jobs, Dockerfiles or deployment tooling build or copy the valve from this repository, please:
+> * build only the valve module: `mvn package -pl valve` (add `-am` if you rely on the parent POM);
+> * pick up the JARs from `valve/target/` (`anti-dos-valve-<version>.jar` and `anti-dos-valve-<version>-tomcat9.jar`);
+> * update any hard-coded paths such as `target/anti-dos-valve-*.jar`.
+>
+> Alternatively, use a prebuilt JAR from a GitHub Release. The valve module itself still has zero runtime dependencies.
+
+| Module | Purpose |
+| :--- | :--- |
+| [`valve/`](valve/) | The Tomcat valve (this README). Zero runtime dependencies, Tomcat 10+ and Tomcat 9 builds. |
+| [`collector/`](collector/README.md) | Optional fleet monitoring and forensics service (preview). |
+| [`benchmark/`](benchmark/README.md) | JMH performance harness and traffic simulator. |
+| [`docker/`](docker/README.md) | Demo Tomcat environment. |
 
 # Implementation of Dynamic Access Rate Limiting
 
@@ -69,7 +83,7 @@ In 2026, new traffic patterns from AI crawlers—partly routed through residenti
 
 Here are the steps to set up and activate the valve:
 
-1. Clone the project from GitHub and build the JARs with Maven: `mvn package` (or `mvn install`). Both variants are generated automatically in `target/`:
+1. Clone the project from GitHub and build the JARs with Maven: `mvn package -pl valve` (or `mvn install -pl valve`; plain `mvn package` additionally builds the collector and benchmark modules). Both variants are generated automatically in `valve/target/`:
    * **Tomcat 10 / 11 (Jakarta EE):** `anti-dos-valve-<version>.jar`
    * **Tomcat 9 (`javax.servlet`):** `anti-dos-valve-<version>-tomcat9.jar`
 2. Make the appropriate JAR available in Tomcat. For example, copy it into `<CATALINA_HOME>/lib/` (probably alongside your JDBC drivers).
