@@ -1,8 +1,10 @@
 # What is the Anti-DoS Valve?
 
-This project implements a Tomcat valve that enforces dynamic access rate limits on requests from individual IP addresses or subnets. This helps prevent Tomcat servers from becoming overloaded by DoS attacks or aggressive web crawlers, or at least mitigates their impact. For fleet-wide monitoring and forensics across many valve instances, the repository also contains the optional (preview) **[Anti-DoS Collector](collector/README.md)**; the valve works fully standalone without it.
+This project implements a Tomcat valve that enforces dynamic access rate limits on requests from individual IP addresses or subnets. This helps prevent Tomcat servers from becoming overloaded by DoS attacks or aggressive web crawlers, or at least mitigates their impact.
 
 The valve cannot, of course, provide complete protection against every kind of malicious overload. The goal is rather to provide a simple, easy-to-use overload protection mechanism that can be deployed quickly and with minimal effort, introduces very little overhead in Tomcat, and is particularly effective at slowing down aggressive web crawlers.
+
+For fleet-wide monitoring and forensics across many valve instances, the repository also contains the optional (preview) **[Anti-DoS Collector](collector/README.md)**; the valve works fully standalone without it.
 
 The valve is highly configurable and also provides options to permanently block specific IP addresses or subnets, or to exclude trusted IP addresses and subnets from blocking altogether.
 
