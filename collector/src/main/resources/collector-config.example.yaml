@@ -90,12 +90,14 @@ collector:
     enabled: false                # Master switch for autonomous mitigation engine
     dry-run: true                 # Simulation mode (audits AUTO_WOULD_BLOCK without altering Valve rules)
     carpet-min-subnets: 3         # Minimum active subnets per ASN to detect carpet attacks
-    carpet-min-requests: 5000     # Minimum aggregate requests across the ASN
+    carpet-min-requests: 5000     # Minimum aggregate requests across the ASN in the lookback window
+    carpet-window-hours: 1        # Lookback evaluation window in hours (default: 1 hour)
+    protected-asns: "8075,16509,14618,15169,13335" # Protected ASNs exempt from auto-mitigation (Microsoft, AWS, Google, Cloudflare)
     max-returning-ratio-pct: 5.0  # Max returning visitor ratio allowed for auto-blocking (collateral protection)
     max-active-rules: 50          # Circuit breaker cap across the fleet
     default-ttl-minutes: 60       # Default TTL for auto rules
-    auto-extend-persistent: false # Automatically extend persistent attackers near expiration
-    max-extension-hours: 24       # Maximum cumulative lifetime
+    auto-extend-persistent: true  # Automatically extend persistent attackers near expiration
+    max-extension-hours: 12       # Maximum cumulative lifetime cap
 
   # ---------------------------------------------------------------------------
   # Telemetry & Active Tracking Rules (3-Tier Cascade)

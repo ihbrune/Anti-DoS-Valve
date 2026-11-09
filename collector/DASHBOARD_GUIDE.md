@@ -774,11 +774,12 @@ Even while a subnet is dynamically blocked (HTTP 429), the Valve records lightwe
 
 ### 5. Autonomous Defense Engine (Auto-Mitigation)
 Outside business hours or during high-rate overnight waves, the Autonomous Defense Engine continuously monitors telemetry (scheduled every 2 minutes) and can autonomously enforce, extend, and expire dynamic fleet mitigations without manual operator intervention:
-* **Horizontal Carpet Attack Detection:** Identifies attacking ASNs distributing flood traffic across multiple `/24` or `/64` subnets (configurable threshold: `carpetMinSubnets`, default `3`) with heavy aggregate volume (`carpetMinRequests`, default `5,000` requests).
-* **Deterministic Dual Safety Guardrails:**
+* **Horizontal Carpet Attack Detection:** Identifies attacking ASNs distributing flood traffic across multiple `/24` or `/64` subnets (configurable threshold: `carpetMinSubnets`, default `3`) with heavy aggregate volume (`carpetMinRequests`, default `5,000` requests within the configurable `carpetWindowHours` lookback window, default `1` hour).
+* **Deterministic Safety Guardrails:**
+  * **Protected ASNs Exemption (`protectedAsns`):** Major cloud hyper-scalers (e.g. Microsoft AS8075, AWS AS16509/14618, Google Cloud AS15169, Cloudflare AS13335) are protected by a configurable exemption list to prevent whole-cloud collateral blocks.
   * **Zero Authenticated Requests:** Any subnet with even a single authenticated session (`authenticatedRequests > 0`) is strictly excluded.
   * **Returning Visitor Ratio Firewall:** Protects legitimate residential and corporate clusters by enforcing a maximum returning visitor ratio (`maxReturningRatioPct`, default `5.0%`). Since distributed botnet carpet scrapers exhibit near-zero returning cookies/ratios, subnets with regular returning visitors are never auto-blocked.
-  * **Crawler & RFC 1918 Exclusions:** Verified search engines and private networks are automatically bypassed.
+  * **Crawler & RFC 1918 Exclusions:** Verified search engines, official commercial AI crawlers (`AI_CRAWLER`), and private networks are automatically bypassed.
 * **Simulation (Dry-Run) Mode:** Can run in simulation mode (`dryRun = true`), logging would-be block decisions as `AUTO_WOULD_BLOCK` and `AUTO_WOULD_EXTEND` in the **Mitigation Audit Trail** for forensics without altering Valve rules.
 * **Circuit Breaker Cap:** Limits the maximum number of active auto-rules simultaneously enforced across the fleet (`maxActiveRules`, default `50`) to prevent resource exhaustion or runaway blocking.
 * **Auto-Extension for Persistent Attackers:** When enabled (`autoExtendPersistent = true`), rules whose attackers remain in `PERSISTENT` deterrence state near expiration are autonomously extended by +60 minutes up to a configurable maximum lifetime cap (`maxExtensionHours`, default `24h`).

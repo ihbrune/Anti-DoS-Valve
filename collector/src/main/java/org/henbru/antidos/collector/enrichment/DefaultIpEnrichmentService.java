@@ -108,13 +108,8 @@ public class DefaultIpEnrichmentService implements IpEnrichmentService {
 			} else {
 				clientType = ClientType.SEARCH_ENGINE;
 			}
-			if (clientType == ClientType.SEARCH_ENGINE
-					|| clientType == ClientType.AI_CRAWLER
-					|| clientType == ClientType.PRIVACY_RELAY) {
-				if (match.botName() != null && !match.botName().isBlank()) {
-					asOrg = match.botName();
-				}
-			} else if (asOrg == null || asOrg.trim().isEmpty()) {
+			// Preserve genuine ASN organization from MMDB; only fall back to bot name if MMDB has no org
+			if (asOrg == null || asOrg.trim().isEmpty()) {
 				asOrg = match.botName();
 			}
 		} else {

@@ -1,9 +1,13 @@
 package org.henbru.antidos.collector.config;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -283,6 +287,8 @@ public class CollectorProperties {
 		private boolean dryRun = true;
 		private int carpetMinSubnets = 8;
 		private long carpetMinRequests = 5000L;
+		private int carpetWindowHours = 1;
+		private String protectedAsns = "8075,16509,14618,15169,13335";
 		private double maxReturningRatioPct = 5.0;
 		private int maxActiveRules = 100;
 		private int defaultTtlMinutes = 60;
@@ -297,6 +303,11 @@ public class CollectorProperties {
 		public void setCarpetMinSubnets(int carpetMinSubnets) { this.carpetMinSubnets = Math.max(1, carpetMinSubnets); }
 		public long getCarpetMinRequests() { return carpetMinRequests; }
 		public void setCarpetMinRequests(long carpetMinRequests) { this.carpetMinRequests = Math.max(1L, carpetMinRequests); }
+		public int getCarpetWindowHours() { return carpetWindowHours; }
+		public void setCarpetWindowHours(int carpetWindowHours) { this.carpetWindowHours = Math.max(1, Math.min(720, carpetWindowHours)); }
+		public String getProtectedAsns() { return protectedAsns; }
+		public void setProtectedAsns(String protectedAsns) { this.protectedAsns = protectedAsns != null ? protectedAsns.trim() : ""; }
+		public Set<Long> getProtectedAsnSet() { return parseAsnSet(this.protectedAsns); }
 		public double getMaxReturningRatioPct() { return maxReturningRatioPct; }
 		public void setMaxReturningRatioPct(double maxReturningRatioPct) { this.maxReturningRatioPct = Math.max(0.0, Math.min(100.0, maxReturningRatioPct)); }
 		public int getMaxActiveRules() { return maxActiveRules; }
@@ -307,5 +318,27 @@ public class CollectorProperties {
 		public void setAutoExtendPersistent(boolean autoExtendPersistent) { this.autoExtendPersistent = autoExtendPersistent; }
 		public int getMaxExtensionHours() { return maxExtensionHours; }
 		public void setMaxExtensionHours(int maxExtensionHours) { this.maxExtensionHours = Math.max(1, maxExtensionHours); }
+
+		public static Set<Long> parseAsnSet(String csv) {
+			if (csv == null || csv.isBlank()) {
+				return Set.of();
+			}
+			Set<Long> set = new HashSet<>();
+			for (String part : csv.split(",")) {
+				String clean = part.trim().toUpperCase(Locale.ROOT);
+				if (clean.startsWith("AS")) {
+					clean = clean.substring(2).trim();
+				}
+				if (!clean.isEmpty()) {
+					try {
+						long val = Long.parseLong(clean);
+						if (val > 0) {
+							set.add(val);
+						}
+					} catch (NumberFormatException ignored) {}
+				}
+			}
+			return Collections.unmodifiableSet(set);
+		}
 	}
 }

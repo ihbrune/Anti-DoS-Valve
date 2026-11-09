@@ -617,7 +617,7 @@ public class MitigationService {
 				FROM client_subnet_rollups
 				WHERE asn = ?
 				  AND bucket_start >= ?
-				  AND client_type NOT IN ('SEARCH_ENGINE', 'PRIVATE_NETWORK')
+				  AND (client_type IS NULL OR client_type NOT IN ('SEARCH_ENGINE', 'AI_CRAWLER', 'PRIVATE_NETWORK'))
 				GROUP BY subnet_group
 				ORDER BY tot_req DESC
 				""", rs -> {

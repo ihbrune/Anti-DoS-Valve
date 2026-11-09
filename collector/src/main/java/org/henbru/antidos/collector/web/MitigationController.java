@@ -246,6 +246,8 @@ public class MitigationController {
 			@RequestParam(value = "dryRun", defaultValue = "false") boolean dryRun,
 			@RequestParam(value = "carpetMinSubnets", defaultValue = "3") int carpetMinSubnets,
 			@RequestParam(value = "carpetMinRequests", defaultValue = "5000") long carpetMinRequests,
+			@RequestParam(value = "carpetWindowHours", defaultValue = "1") int carpetWindowHours,
+			@RequestParam(value = "protectedAsns", defaultValue = "8075,16509,14618,15169,13335") String protectedAsns,
 			@RequestParam(value = "maxReturningRatioPct", defaultValue = "5.0") double maxReturningRatioPct,
 			@RequestParam(value = "maxActiveRules", defaultValue = "50") int maxActiveRules,
 			@RequestParam(value = "defaultTtlMinutes", defaultValue = "60") int defaultTtlMinutes,
@@ -255,6 +257,7 @@ public class MitigationController {
 		try {
 			autoMitigationService.updateSettings(
 					enabled, dryRun, carpetMinSubnets, carpetMinRequests,
+					carpetWindowHours, protectedAsns,
 					maxReturningRatioPct, maxActiveRules, defaultTtlMinutes,
 					autoExtendPersistent, maxExtensionHours, "ADMIN");
 			populateMitigationModel(model, "Autonomous defense engine settings saved to system_settings.", null);
@@ -279,6 +282,7 @@ public class MitigationController {
 			}
 			autoMitigationService.updateSettings(
 					newEnabled, newDryRun, current.carpetMinSubnets(), current.carpetMinRequests(),
+					current.carpetWindowHours(), current.protectedAsns(),
 					current.maxReturningRatioPct(), current.maxActiveRules(), current.defaultTtlMinutes(),
 					current.autoExtendPersistent(), current.maxExtensionHours(), "ADMIN");
 			populateMitigationModel(model, "Toggled " + property + " to " + ("enabled".equalsIgnoreCase(property) ? newEnabled : newDryRun) + ".", null);

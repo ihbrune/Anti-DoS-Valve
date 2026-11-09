@@ -94,17 +94,23 @@ class AutoMitigationServiceTest {
 		assertTrue(s1.isDryRun());
 		assertEquals(3, s1.getCarpetMinSubnets());
 		assertEquals(5000L, s1.getCarpetMinRequests());
+		assertEquals(1, s1.getCarpetWindowHours());
+		assertTrue(s1.getProtectedAsnSet().contains(8075L));
 		assertEquals(5.0, s1.getMaxReturningRatioPct(), 0.001);
 		assertEquals(50, s1.getMaxActiveRules());
 		assertFalse(s1.isHasDatabaseOverrides());
 
 		// 2. Update settings via database overrides
-		autoMitigationService.updateSettings(true, false, 5, 10000L, 2.5, 30, 90, true, 48, "OPERATOR-ALICE");
+		autoMitigationService.updateSettings(true, false, 5, 10000L, 3, "8075,16509", 2.5, 30, 90, true, 48, "OPERATOR-ALICE");
 		AutoMitigationService.EffectiveAutoSettings s2 = autoMitigationService.getEffectiveSettings();
 		assertTrue(s2.isEnabled());
 		assertFalse(s2.isDryRun());
 		assertEquals(5, s2.getCarpetMinSubnets());
 		assertEquals(10000L, s2.getCarpetMinRequests());
+		assertEquals(3, s2.getCarpetWindowHours());
+		assertEquals("8075,16509", s2.getProtectedAsns());
+		assertTrue(s2.getProtectedAsnSet().contains(8075L));
+		assertTrue(s2.getProtectedAsnSet().contains(16509L));
 		assertEquals(2.5, s2.getMaxReturningRatioPct(), 0.001);
 		assertEquals(30, s2.getMaxActiveRules());
 		assertEquals(90, s2.getDefaultTtlMinutes());
@@ -113,10 +119,12 @@ class AutoMitigationServiceTest {
 		assertTrue(s2.isHasDatabaseOverrides());
 
 		// 2b. Verify arbitrary / low values are supported without artificial step/min clamping
-		autoMitigationService.updateSettings(false, true, 1, 50L, 0.25, 1, 60, false, 2, "OPERATOR-BOB");
+		autoMitigationService.updateSettings(false, true, 1, 50L, 1, "AS8075", 0.25, 1, 60, false, 2, "OPERATOR-BOB");
 		AutoMitigationService.EffectiveAutoSettings s2b = autoMitigationService.getEffectiveSettings();
 		assertEquals(1, s2b.getCarpetMinSubnets());
 		assertEquals(50L, s2b.getCarpetMinRequests());
+		assertEquals(1, s2b.getCarpetWindowHours());
+		assertTrue(s2b.getProtectedAsnSet().contains(8075L));
 		assertEquals(0.25, s2b.getMaxReturningRatioPct(), 0.001);
 		assertEquals(1, s2b.getMaxActiveRules());
 		assertEquals(60, s2b.getDefaultTtlMinutes());
@@ -129,6 +137,7 @@ class AutoMitigationServiceTest {
 		assertTrue(s3.isDryRun());
 		assertEquals(3, s3.getCarpetMinSubnets());
 		assertEquals(5000L, s3.getCarpetMinRequests());
+		assertEquals(1, s3.getCarpetWindowHours());
 		assertEquals(5.0, s3.getMaxReturningRatioPct(), 0.001);
 		assertFalse(s3.isHasDatabaseOverrides());
 	}
@@ -155,7 +164,7 @@ class AutoMitigationServiceTest {
 		insertSubnetRollup("192.0.4.0/24", 64498L, "Mixed Transit", 2000, 10, 5, now.minus(Duration.ofMinutes(15))); // 5 auth reqs
 
 		AutoMitigationService.EffectiveAutoSettings config = new AutoMitigationService.EffectiveAutoSettings(
-				true, true, 3, 5000L, 5.0, 50, 60, false, 24, false);
+				true, true, 3, 5000L, 2, "8075", 5.0, 50, 60, false, 24, false);
 
 		List<AutoMitigationService.CarpetAttackCandidate> candidates = autoMitigationService.findCarpetAttackCandidates(config, 2);
 		assertEquals(1, candidates.size());
@@ -179,7 +188,7 @@ class AutoMitigationServiceTest {
 		}
 
 		AutoMitigationService.EffectiveAutoSettings config = new AutoMitigationService.EffectiveAutoSettings(
-				true, true, 3, 5000L, 5.0, 50, 60, false, 24, false); // dryRun = true
+				true, true, 3, 5000L, 2, "8075", 5.0, 50, 60, false, 24, false); // dryRun = true
 
 		List<AutoMitigationService.CarpetAttackCandidate> candidates = autoMitigationService.evaluateAndEnforce(config);
 		assertEquals(1, candidates.size());
@@ -206,7 +215,7 @@ class AutoMitigationServiceTest {
 		}
 
 		AutoMitigationService.EffectiveAutoSettings config = new AutoMitigationService.EffectiveAutoSettings(
-				true, false, 3, 5000L, 5.0, 50, 60, false, 24, false); // dryRun = false
+				true, false, 3, 5000L, 2, "8075", 5.0, 50, 60, false, 24, false); // dryRun = false
 
 		List<AutoMitigationService.CarpetAttackCandidate> candidates = autoMitigationService.evaluateAndEnforce(config);
 		assertEquals(1, candidates.size());
@@ -237,7 +246,7 @@ class AutoMitigationServiceTest {
 
 		// Cap at 2 max active rules
 		AutoMitigationService.EffectiveAutoSettings config = new AutoMitigationService.EffectiveAutoSettings(
-				true, false, 3, 5000L, 5.0, 2, 60, false, 24, false);
+				true, false, 3, 5000L, 2, "8075", 5.0, 2, 60, false, 24, false);
 
 		autoMitigationService.evaluateAndEnforce(config);
 		List<MitigationRule> active = mitigationService.getActiveRules();
@@ -266,7 +275,7 @@ class AutoMitigationServiceTest {
 				Timestamp.from(now.plus(Duration.ofMinutes(10))), r.id());
 
 		AutoMitigationService.EffectiveAutoSettings config = new AutoMitigationService.EffectiveAutoSettings(
-				true, false, 3, 5000L, 5.0, 50, 60, true, 24, false); // autoExtend = true
+				true, false, 3, 5000L, 2, "8075", 5.0, 50, 60, true, 24, false); // autoExtend = true
 
 		int extended = autoMitigationService.evaluateExtensions(config);
 		assertEquals(1, extended);
@@ -278,7 +287,7 @@ class AutoMitigationServiceTest {
 		jdbcTemplate.update("UPDATE mitigation_rules SET expires_at = ? WHERE id = ?",
 				Timestamp.from(now.plus(Duration.ofMinutes(10))), r.id());
 		AutoMitigationService.EffectiveAutoSettings dryRunConfig = new AutoMitigationService.EffectiveAutoSettings(
-				true, true, 3, 5000L, 5.0, 50, 60, true, 24, false);
+				true, true, 3, 5000L, 2, "8075", 5.0, 50, 60, true, 24, false);
 		int dryExtended = autoMitigationService.evaluateExtensions(dryRunConfig);
 		assertEquals(0, dryExtended, "Dry run does not increment actual extendedCount");
 
@@ -310,11 +319,14 @@ class AutoMitigationServiceTest {
 
 		// 3. Update settings
 		ExtendedModelMap model3 = new ExtendedModelMap();
-		controller.updateAutoMitigationSettings(true, false, 4, 7500L, 3.5, 40, 120, true, 36, model3);
+		controller.updateAutoMitigationSettings(true, false, 4, 7500L, 2, "8075,16509", 3.5, 40, 120, true, 36, model3);
 		AutoMitigationService.EffectiveAutoSettings s3 =
 				(AutoMitigationService.EffectiveAutoSettings) model3.getAttribute("autoSettings");
 		assertEquals(4, s3.getCarpetMinSubnets());
 		assertEquals(7500L, s3.getCarpetMinRequests());
+		assertEquals(2, s3.getCarpetWindowHours());
+		assertEquals("8075,16509", s3.getProtectedAsns());
+		assertTrue(s3.getProtectedAsnSet().contains(8075L));
 		assertEquals(3.5, s3.getMaxReturningRatioPct(), 0.001);
 
 		// 4. Reset to defaults
@@ -329,6 +341,57 @@ class AutoMitigationServiceTest {
 		String view5 = controller.triggerAutoEvaluation(model5);
 		assertEquals("fragments/mitigation-content :: mitigationDashboard", view5);
 		assertNotNull(model5.getAttribute("feedbackSuccess"));
+	}
+
+	@Test
+	void testProtectedAsnExemptionSkipsAutonomousBlock() {
+		Instant now = Instant.now();
+		// ASN 8075 (Microsoft): 4 subnets, 10,000 reqs, 0 auth
+		for (int i = 1; i <= 4; i++) {
+			insertSubnetRollup("20.245.10" + i + ".0/24", 8075L, "Microsoft Corporation",
+					2500, 25, 0, now.minus(Duration.ofMinutes(15)));
+		}
+
+		AutoMitigationService.EffectiveAutoSettings config = new AutoMitigationService.EffectiveAutoSettings(
+				true, false, 3, 5000L, 1, "8075,16509,14618,15169,13335", 5.0, 50, 60, false, 24, false);
+
+		List<AutoMitigationService.CarpetAttackCandidate> candidates = autoMitigationService.evaluateAndEnforce(config);
+		assertEquals(1, candidates.size(), "Candidate is detected in telemetry");
+
+		// BUT it must NOT create any active rules because ASN 8075 is protected!
+		List<MitigationRule> activeRules = mitigationService.getActiveRules();
+		assertTrue(activeRules.isEmpty(), "Active rules must remain empty for protected ASNs");
+
+		// And an audit entry for AUTO_SKIPPED_PROTECTED_ASN must be recorded
+		List<MitigationAuditEntry> audits = mitigationService.getRecentAuditEntries(10);
+		assertTrue(audits.stream().anyMatch(a -> "AUTO_SKIPPED_PROTECTED_ASN".equals(a.getAction())));
+	}
+
+	@Test
+	void testAiCrawlerClientTypeIsExcludedFromCarpetDetection() {
+		Instant now = Instant.now();
+		// Insert rollups for an ASN with client_type = 'AI_CRAWLER'
+		for (int i = 1; i <= 4; i++) {
+			jdbcTemplate.update("""
+					INSERT INTO client_subnet_rollups (
+					    bucket_start, bucket_end, bucket_minutes, server_id, valve_name, subnet_group,
+					    asn, as_org, country_code, client_type, total_requests, active_requests,
+					    blocked_requests, marked_requests, distinct_clients, min_requests_per_client,
+					    max_requests_per_client, returning_requests,
+					    returning_tracked_requests, authenticated_requests
+					) VALUES (?, ?, 60, 'Srv01', 'PRIMARY', ?, 64499, 'OpenAI Bot Range', 'US',
+					          'AI_CRAWLER', 3000, 3000, 0, 0, 25, 10, 150, 0, 3000, 0)
+					""",
+					Timestamp.from(now.minus(Duration.ofMinutes(15))),
+					Timestamp.from(now),
+					"198.51.20" + i + ".0/24");
+		}
+
+		AutoMitigationService.EffectiveAutoSettings config = new AutoMitigationService.EffectiveAutoSettings(
+				true, false, 3, 5000L, 1, "8075", 5.0, 50, 60, false, 24, false);
+
+		List<AutoMitigationService.CarpetAttackCandidate> candidates = autoMitigationService.findCarpetAttackCandidates(config, 1);
+		assertTrue(candidates.isEmpty(), "AI_CRAWLER rollups must be excluded from carpet attack detection");
 	}
 
 	private void insertSubnetRollup(

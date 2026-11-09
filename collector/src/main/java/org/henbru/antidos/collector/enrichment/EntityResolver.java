@@ -183,12 +183,8 @@ public class EntityResolver {
 
 		if (intelResult.preferredClientType() != null) {
 			clientType = intelResult.preferredClientType();
-			if ((clientType == ClientType.SEARCH_ENGINE
-					|| clientType == ClientType.AI_CRAWLER
-					|| clientType == ClientType.PRIVACY_RELAY)
-					&& intelResult.primaryLabel() != null && !intelResult.primaryLabel().isBlank()) {
-				asOrg = intelResult.primaryLabel();
-			} else if (asOrg == null || asOrg.trim().isEmpty()) {
+			// Preserve genuine ASN organization from MMDB; only fall back to intelligence label if MMDB has no org
+			if (asOrg == null || asOrg.trim().isEmpty()) {
 				asOrg = intelResult.primaryLabel();
 			}
 		} else {

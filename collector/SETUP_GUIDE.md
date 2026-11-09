@@ -403,7 +403,9 @@ collector:
     enabled: false                # Master switch (default: false for safe initial deployment)
     dry-run: true                 # Simulation mode (audits decisions without altering Valve rules)
     carpet-min-subnets: 3         # Minimum active subnets per ASN to detect carpet attacks
-    carpet-min-requests: 5000     # Minimum aggregate requests across the ASN
+    carpet-min-requests: 5000     # Minimum aggregate requests across the ASN in the lookback window
+    carpet-window-hours: 1        # Lookback evaluation window in hours (default: 1 hour)
+    protected-asns: "8075,16509,14618,15169,13335" # Protected ASNs exempt from auto-mitigation (Microsoft, AWS, Google, Cloudflare)
     max-returning-ratio-pct: 5.0  # Max returning visitor ratio allowed for auto-blocking (collateral protection)
     max-active-rules: 50          # Circuit breaker cap across the fleet
     default-ttl-minutes: 60       # Default TTL for autonomous blocks
@@ -568,7 +570,9 @@ All parameters can be configured via `collector-config.yaml` or overridden via e
 | `auto-mitigation.enabled` | `COLLECTOR_AUTO_MITIGATION_ENABLED` | `false` | Master switch for the Autonomous Defense Engine. |
 | `auto-mitigation.dry-run` | `COLLECTOR_AUTO_MITIGATION_DRY_RUN` | `true` | Simulation mode: audits decisions as `AUTO_WOULD_BLOCK` and `AUTO_WOULD_EXTEND` in the mitigation audit trail without altering live Valve rules. |
 | `auto-mitigation.carpet-min-subnets` | `COLLECTOR_AUTO_MITIGATION_CARPET_MIN_SUBNETS` | `3` | Minimum active `/24` or `/64` subnets belonging to a single ASN required to qualify as a horizontal carpet attack. |
-| `auto-mitigation.carpet-min-requests` | `COLLECTOR_AUTO_MITIGATION_CARPET_MIN_REQUESTS` | `5000` | Aggregate request volume threshold across the attacking ASN subnets. |
+| `auto-mitigation.carpet-min-requests` | `COLLECTOR_AUTO_MITIGATION_CARPET_MIN_REQUESTS` | `5000` | Aggregate request volume threshold across the attacking ASN subnets within the lookback window. |
+| `auto-mitigation.carpet-window-hours` | `COLLECTOR_AUTO_MITIGATION_CARPET_WINDOW_HOURS` | `1` | Evaluation lookback window (in hours) across persistent subnet rollups for carpet attack detection. |
+| `auto-mitigation.protected-asns` | `COLLECTOR_AUTO_MITIGATION_PROTECTED_ASNS` | `8075,16509,14618,15169,13335` | Comma-separated list of protected ASNs (e.g. Microsoft Azure, Amazon AWS, Google Cloud, Cloudflare) exempt from autonomous ASN-wide blocking. |
 | `auto-mitigation.max-returning-ratio-pct` | `COLLECTOR_AUTO_MITIGATION_MAX_RETURNING_RATIO_PCT` | `5.0` | Maximum returning visitor cookie ratio (%) permitted for autonomous blocking. Protects legitimate residential ISP and mobile carrier CGNAT pools from collateral blocks. |
 | `auto-mitigation.max-active-rules` | `COLLECTOR_AUTO_MITIGATION_MAX_ACTIVE_RULES` | `50` | Circuit breaker cap limiting the maximum number of concurrent autonomous dynamic rules across the fleet. |
 | `auto-mitigation.default-ttl-minutes` | `COLLECTOR_AUTO_MITIGATION_DEFAULT_TTL_MINUTES` | `60` | Initial block lease duration (in minutes) assigned to autonomous dynamic CIDR blocks. |
