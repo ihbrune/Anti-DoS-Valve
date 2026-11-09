@@ -112,6 +112,16 @@ class AutoMitigationServiceTest {
 		assertEquals(48, s2.getMaxExtensionHours());
 		assertTrue(s2.isHasDatabaseOverrides());
 
+		// 2b. Verify arbitrary / low values are supported without artificial step/min clamping
+		autoMitigationService.updateSettings(false, true, 1, 50L, 0.25, 1, 60, false, 2, "OPERATOR-BOB");
+		AutoMitigationService.EffectiveAutoSettings s2b = autoMitigationService.getEffectiveSettings();
+		assertEquals(1, s2b.getCarpetMinSubnets());
+		assertEquals(50L, s2b.getCarpetMinRequests());
+		assertEquals(0.25, s2b.getMaxReturningRatioPct(), 0.001);
+		assertEquals(1, s2b.getMaxActiveRules());
+		assertEquals(60, s2b.getDefaultTtlMinutes());
+		assertEquals(2, s2b.getMaxExtensionHours());
+
 		// 3. Reset settings deletes overrides and falls back to YAML
 		autoMitigationService.resetToDefaults("OPERATOR-ALICE");
 		AutoMitigationService.EffectiveAutoSettings s3 = autoMitigationService.getEffectiveSettings();

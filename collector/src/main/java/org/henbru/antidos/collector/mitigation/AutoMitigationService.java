@@ -131,11 +131,11 @@ public class AutoMitigationService {
 	) {
 		settingsRepository.setSetting(KEY_ENABLED, String.valueOf(enabled), "Auto-mitigation master switch", updatedBy);
 		settingsRepository.setSetting(KEY_DRY_RUN, String.valueOf(dryRun), "Auto-mitigation dry-run simulation mode", updatedBy);
-		settingsRepository.setSetting(KEY_CARPET_MIN_SUBNETS, String.valueOf(Math.max(2, carpetMinSubnets)), "Min subnets per ASN for carpet attack detection", updatedBy);
-		settingsRepository.setSetting(KEY_CARPET_MIN_REQUESTS, String.valueOf(Math.max(100L, carpetMinRequests)), "Min aggregate requests for carpet attack detection", updatedBy);
+		settingsRepository.setSetting(KEY_CARPET_MIN_SUBNETS, String.valueOf(Math.max(1, carpetMinSubnets)), "Min subnets per ASN for carpet attack detection", updatedBy);
+		settingsRepository.setSetting(KEY_CARPET_MIN_REQUESTS, String.valueOf(Math.max(1L, carpetMinRequests)), "Min aggregate requests for carpet attack detection", updatedBy);
 		settingsRepository.setSetting(KEY_MAX_RETURNING_PCT, String.valueOf(Math.max(0.0, Math.min(100.0, maxReturningRatioPct))), "Max returning visitor ratio allowed for auto-block", updatedBy);
 		settingsRepository.setSetting(KEY_MAX_ACTIVE_RULES, String.valueOf(Math.max(1, maxActiveRules)), "Circuit-breaker max active auto rules", updatedBy);
-		settingsRepository.setSetting(KEY_DEFAULT_TTL_MINUTES, String.valueOf(Math.max(5, defaultTtlMinutes)), "Default TTL minutes for auto rules", updatedBy);
+		settingsRepository.setSetting(KEY_DEFAULT_TTL_MINUTES, String.valueOf(Math.max(1, defaultTtlMinutes)), "Default TTL minutes for auto rules", updatedBy);
 		settingsRepository.setSetting(KEY_AUTO_EXTEND, String.valueOf(autoExtendPersistent), "Auto-extend persistent attackers", updatedBy);
 		settingsRepository.setSetting(KEY_MAX_EXTENSION_HOURS, String.valueOf(Math.max(1, maxExtensionHours)), "Max extension hours for auto rules", updatedBy);
 		log.info("Auto-mitigation settings updated by '{}': enabled={}, dryRun={}, carpetMinSubnets={}, maxReturningRatioPct={}%",

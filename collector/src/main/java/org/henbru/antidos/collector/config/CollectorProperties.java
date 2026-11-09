@@ -294,15 +294,15 @@ public class CollectorProperties {
 		public boolean isDryRun() { return dryRun; }
 		public void setDryRun(boolean dryRun) { this.dryRun = dryRun; }
 		public int getCarpetMinSubnets() { return carpetMinSubnets; }
-		public void setCarpetMinSubnets(int carpetMinSubnets) { this.carpetMinSubnets = Math.max(2, carpetMinSubnets); }
+		public void setCarpetMinSubnets(int carpetMinSubnets) { this.carpetMinSubnets = Math.max(1, carpetMinSubnets); }
 		public long getCarpetMinRequests() { return carpetMinRequests; }
-		public void setCarpetMinRequests(long carpetMinRequests) { this.carpetMinRequests = Math.max(100L, carpetMinRequests); }
+		public void setCarpetMinRequests(long carpetMinRequests) { this.carpetMinRequests = Math.max(1L, carpetMinRequests); }
 		public double getMaxReturningRatioPct() { return maxReturningRatioPct; }
 		public void setMaxReturningRatioPct(double maxReturningRatioPct) { this.maxReturningRatioPct = Math.max(0.0, Math.min(100.0, maxReturningRatioPct)); }
 		public int getMaxActiveRules() { return maxActiveRules; }
 		public void setMaxActiveRules(int maxActiveRules) { this.maxActiveRules = Math.max(1, maxActiveRules); }
 		public int getDefaultTtlMinutes() { return defaultTtlMinutes; }
-		public void setDefaultTtlMinutes(int defaultTtlMinutes) { this.defaultTtlMinutes = Math.max(5, defaultTtlMinutes); }
+		public void setDefaultTtlMinutes(int defaultTtlMinutes) { this.defaultTtlMinutes = Math.max(1, defaultTtlMinutes); }
 		public boolean isAutoExtendPersistent() { return autoExtendPersistent; }
 		public void setAutoExtendPersistent(boolean autoExtendPersistent) { this.autoExtendPersistent = autoExtendPersistent; }
 		public int getMaxExtensionHours() { return maxExtensionHours; }

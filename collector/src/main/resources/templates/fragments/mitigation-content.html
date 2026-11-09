@@ -203,7 +203,7 @@
                         <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
                             Min Active Subnets per ASN
                         </label>
-                        <input type="number" name="carpetMinSubnets" min="2" max="100"
+                        <input type="number" name="carpetMinSubnets" min="1"
                                th:value="${autoSettings.carpetMinSubnets}"
                                style="width: 100%; background: var(--bg-input, rgba(0,0,0,0.3)); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 6px 10px; font-size: 12.5px;">
                     </div>
@@ -213,7 +213,7 @@
                         <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
                             Min Aggregate Requests
                         </label>
-                        <input type="number" name="carpetMinRequests" min="100" step="500"
+                        <input type="number" name="carpetMinRequests" min="1"
                                th:value="${autoSettings.carpetMinRequests}"
                                style="width: 100%; background: var(--bg-input, rgba(0,0,0,0.3)); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 6px 10px; font-size: 12.5px;">
                     </div>
@@ -223,7 +223,7 @@
                         <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
                             Max Returning Visitors (%)
                         </label>
-                        <input type="number" name="maxReturningRatioPct" min="0.0" max="100.0" step="0.5"
+                        <input type="number" name="maxReturningRatioPct" min="0" max="100" step="any"
                                th:value="${autoSettings.maxReturningRatioPct}"
                                style="width: 100%; background: var(--bg-input, rgba(0,0,0,0.3)); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 6px 10px; font-size: 12.5px;">
                     </div>
@@ -233,7 +233,7 @@
                         <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
                             Circuit Breaker Cap (Max Active Rules)
                         </label>
-                        <input type="number" name="maxActiveRules" min="5" max="500"
+                        <input type="number" name="maxActiveRules" min="1"
                                th:value="${autoSettings.maxActiveRules}"
                                style="width: 100%; background: var(--bg-input, rgba(0,0,0,0.3)); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 6px 10px; font-size: 12.5px;">
                     </div>
@@ -243,7 +243,7 @@
                         <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
                             Default Block TTL (minutes)
                         </label>
-                        <input type="number" name="defaultTtlMinutes" min="10" max="1440" step="15"
+                        <input type="number" name="defaultTtlMinutes" min="1"
                                th:value="${autoSettings.defaultTtlMinutes}"
                                style="width: 100%; background: var(--bg-input, rgba(0,0,0,0.3)); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 6px 10px; font-size: 12.5px;">
                     </div>
@@ -264,7 +264,7 @@
                         <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
                             Max Cumulative Lifetime (hours)
                         </label>
-                        <input type="number" name="maxExtensionHours" min="1" max="168"
+                        <input type="number" name="maxExtensionHours" min="1"
                                th:value="${autoSettings.maxExtensionHours}"
                                style="width: 100%; background: var(--bg-input, rgba(0,0,0,0.3)); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 6px 10px; font-size: 12.5px;">
                     </div>
