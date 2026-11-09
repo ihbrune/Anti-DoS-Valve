@@ -525,7 +525,7 @@ Access password for the status dashboard. If explicitly configured, it must be a
 
 ## mitigationPassword, mitigationUri, mitigationAllowedIPs (optional) — Dynamic CIDR Mitigation
 
-Available since version 1.8.0: Enables dynamic, TTL-based CIDR subnet blocking on a specific Valve instance, allowing the Anti-DoS Collector (or an operator) to push, extend, or revoke subnet blocks at runtime via HTTP `POST` without restarting Tomcat.
+Available since version 1.9.0: Enables dynamic, TTL-based CIDR subnet blocking on a specific Valve instance, allowing the Anti-DoS Collector (or an operator) to push, extend, or revoke subnet blocks at runtime via HTTP `POST` without restarting Tomcat.
 
 * **`mitigationPassword`** (default: `null` / disabled): Write token/password (minimum 10 characters) that activates dynamic CIDR mitigation on this specific Valve and authenticates incoming `POST` commands. Dynamic blocks are strictly isolated to the Valve instance where `mitigationPassword` is configured (no JVM-wide inheritance), allowing upstream simulation/monitoring Valves to continue observing raw traffic before the blocking Valve rejects it.
 * **`mitigationUri`** (optional, falls back to `statusUri`): Dedicated URI path for receiving `POST` mitigation commands (e.g. `mitigationUri="/antidos-mitigate"`). If omitted, `POST` commands are accepted on `statusUri` (when configured on the same Valve).

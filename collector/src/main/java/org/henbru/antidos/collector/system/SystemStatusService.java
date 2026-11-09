@@ -411,7 +411,7 @@ public class SystemStatusService {
 
 	private SystemStatusDto.RuntimeInfo buildRuntimeInfo() {
 		String appVersion = getClass().getPackage() != null && getClass().getPackage().getImplementationVersion() != null
-				? getClass().getPackage().getImplementationVersion() : "1.8.0-SNAPSHOT";
+				? getClass().getPackage().getImplementationVersion() : "1.9.0-SNAPSHOT";
 
 		String javaVersion = System.getProperty("java.version");
 		String javaVendor = System.getProperty("java.vendor");

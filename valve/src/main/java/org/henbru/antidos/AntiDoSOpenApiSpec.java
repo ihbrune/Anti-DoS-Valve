@@ -41,7 +41,7 @@ public final class AntiDoSOpenApiSpec {
   "info": {
     "title": "Anti-DoS Valve Monitor & Metrics API",
     "description": "High-performance Apache Tomcat Valve protecting web applications against Denial-of-Service (DoS) and abusive request rates. This API exposes real-time monitor states, sliding-window slot statistics, and counter forensics for SIEM and monitoring integrations.",
-    "version": "1.8.0",
+    "version": "1.9.0",
     "license": {
       "name": "Apache-2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
