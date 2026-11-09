@@ -223,6 +223,17 @@ public class MitigationController {
 		return "fragments/mitigation-content :: mitigationDashboard";
 	}
 
+	@PostMapping("/mitigation/flush")
+	public String flushAllRules(
+			@RequestParam(value = "reason", required = false) String reason,
+			Model model) {
+		int count = mitigationService.revokeAll(reason, "ADMIN");
+		populateMitigationModel(model,
+				"Emergency flush executed: Revoked all " + count + " active dynamic rule(s) across the entire fleet.",
+				null);
+		return "fragments/mitigation-content :: mitigationDashboard";
+	}
+
 	@PostMapping("/mitigation/sync")
 	public String syncFleet(Model model) {
 		mitigationService.refreshDeterrenceMetrics();

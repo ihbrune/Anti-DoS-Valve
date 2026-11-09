@@ -772,7 +772,13 @@ Even while a subnet is dynamically blocked (HTTP 429), the Valve records lightwe
 * **🔥 PERSISTENT (Still Attacking):** Blocked hits were recorded within the last 10 minutes. The botnet is ignoring HTTP 429 responses; consider extending the TTL (`+1h` / `+6h`).
 * **✅ DETERRED (Quiet ≥10m):** Zero blocked hits for at least 10 minutes (or since rule activation after the initial 10-minute observation window). The attacker has rotated away or ceased requests; the rule can safely expire.
 
-### 5. Autonomous Defense Engine (Auto-Mitigation)
+### 5. Emergency Flush & Rule Revocation (Panic Button)
+Whenever dynamic CIDR blocks are active, operators have multiple granular rollback levels:
+* **Single Rule Revoke:** Click **Revoke** on any individual row in the active mitigations table to lift that specific CIDR block across all Valves.
+* **Batch Revoke:** Click **Revoke Batch** in the *Active Rule Batches* summary bar to lift all subnets belonging to a specific incident or ASN campaign at once.
+* **🚨 Emergency Flush (Revoke All):** Displayed prominently in the header of the *Active Dynamic CIDR Mitigations* card whenever active rules exist. Prompts with a browser confirmation dialog to prevent accidental clicks. When confirmed, it immediately revokes all active rules in the database, records an `EMERGENCY_FLUSH` audit entry, and synchronizes an empty rule set (`action=replace`, `blocks=""`) to all Valves across the entire fleet—clearing every in-memory block in milliseconds and restoring baseline traffic immediately.
+
+### 6. Autonomous Defense Engine (Auto-Mitigation)
 Outside business hours or during high-rate overnight waves, the Autonomous Defense Engine continuously monitors telemetry (scheduled every 2 minutes) and can autonomously enforce, extend, and expire dynamic fleet mitigations without manual operator intervention:
 * **Horizontal Carpet Attack Detection:** Identifies attacking ASNs distributing flood traffic across multiple `/24` or `/64` subnets (configurable threshold: `carpetMinSubnets`, default `3`) with heavy aggregate volume (`carpetMinRequests`, default `5,000` requests within the configurable `carpetWindowHours` lookback window, default `1` hour).
 * **Deterministic Safety Guardrails:**

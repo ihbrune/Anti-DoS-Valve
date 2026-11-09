@@ -454,7 +454,7 @@ Automated blocking systems carry the risk of collateral damage if misconfigured.
 
 ```
 +-----------------------------------------------------------------------------------+
-|                        7 DETERMINISTIC SAFETY GUARDRAILS                          |
+|                        8 DETERMINISTIC SAFETY GUARDRAILS                          |
 +-----------------------------------------------------------------------------------+
 | 1. Whitelist Precedence    | alwaysAllowedIPs evaluated BEFORE dynamic blocks.     |
 | 2. Zero Auth Sessions      | ANY authenticated request (authenticated > 0) exempts|
@@ -465,6 +465,7 @@ Automated blocking systems carry the risk of collateral damage if misconfigured.
 | 5. Prefix Width Limits     | Hard limits (/16-/32 IPv4, /32-/128 IPv6).           |
 | 6. Self-Expiring TTL       | In-memory leases with automatic eviction. No residue.|
 | 7. Fleet Circuit Breaker   | Hard limit on active auto-rules (default: 50).        |
+| 8. Fleet Emergency Flush   | One-click panic button immediately wipes all blocks. |
 +-----------------------------------------------------------------------------------+
 ```
 
@@ -498,6 +499,10 @@ Automated blocking systems carry the risk of collateral damage if misconfigured.
    - Restricts the total number of simultaneous autonomous blocks across the fleet (default: 50).
    - Prevents cascading runaway blocking during massive, multi-vector DDoS events and alerts administrators to intervene manually.
 
+8. **Fleet Emergency Flush (Instant Reversion Panic Button):**
+   - If an unexpected block or operator configuration mistake occurs, the `/mitigation` dashboard provides an instant **🚨 Emergency Flush (Revoke All)** action.
+   - When confirmed, all active rules are marked `REVOKED` in the database, audited as `EMERGENCY_FLUSH`, and an empty block set (`action=replace`, `blocks=""`) is pushed immediately to all Valves across the entire fleet—clearing every in-memory dynamic block in milliseconds and instantly reopening traffic.
+
 ---
 
 ### 4. Administrator Rollout Playbook: In 3 Steps
@@ -522,6 +527,7 @@ Deploying autonomous defense follows a structured verification path:
 1. Once satisfied with the simulation results, open `/mitigation` and toggle **Dry-Run Mode** to **Off**.
 2. The Autonomous Defense Engine will now push live dynamic blocks to the Valves whenever a qualifying attack occurs.
 3. Active blocks appear under **Active Rule Batches** and **Deterrence Monitor**, where their deterrence state (`OBSERVING`, `PERSISTENT`, `DETERRED`) can be tracked in real-time.
+4. In the event of an unintended block or emergency, click **🚨 Emergency Flush (Revoke All)** in the active mitigations card to immediately clear all dynamic blocks across the entire fleet in milliseconds.
 
 ---
 

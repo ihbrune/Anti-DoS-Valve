@@ -832,6 +832,35 @@ public class MitigationService {
 		return count;
 	}
 
+	/**
+	 * Emergency flush: revokes ALL active dynamic mitigation rules immediately and synchronizes
+	 * an empty rule set to all mitigation-capable Valves across the fleet.
+	 *
+	 * @param revokeReason Optional reason for the emergency flush
+	 * @param actor        Operator identity executing the emergency flush
+	 * @return Number of revoked active rules
+	 */
+	public int revokeAll(String revokeReason, String actor) {
+		Instant now = Instant.now();
+		String safeRevokeReason = (revokeReason != null && !revokeReason.isBlank())
+				? revokeReason.trim()
+				: "Emergency flush executed by operator";
+		int count = ruleRepository.revokeAllActive(now, safeRevokeReason);
+		ruleRepository.insertAuditEntry(new MitigationAuditEntry(
+				null,
+				null,
+				"ALL",
+				null,
+				"EMERGENCY_FLUSH",
+				actor != null ? actor : "ADMIN",
+				0,
+				safeRevokeReason + " (" + count + " active rule(s) revoked)",
+				now
+		));
+		syncFleetMitigations();
+		return count;
+	}
+
 	// =========================================================================
 	// Fleet Synchronization & Auto-Discovery
 	// =========================================================================

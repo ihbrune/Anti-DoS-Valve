@@ -505,6 +505,17 @@
                     Real-time TTL countdown and attacker deterrence telemetry from blocked CIDR slots
                 </div>
             </div>
+            <div th:if="${activeRules != null and !activeRules.isEmpty()}">
+                <button type="button" class="btn btn-danger"
+                        hx-post="/mitigation/flush"
+                        hx-target="#mitigation-dashboard-container"
+                        hx-swap="outerHTML show:top"
+                        hx-confirm="EMERGENCY FLUSH: Are you sure you want to revoke ALL active dynamic CIDR blocks immediately and flush them from all Tomcat Valves across the entire fleet?"
+                        style="font-size: 12px; padding: 6px 14px; display: inline-flex; align-items: center; gap: 6px;"
+                        title="Immediately revoke all dynamic blocks and clear in-memory registries on all Valves">
+                    <span>&#x1F6A8;</span> Emergency Flush (Revoke All)
+                </button>
+            </div>
         </div>
 
         <div th:if="${activeRules == null or activeRules.isEmpty()}"

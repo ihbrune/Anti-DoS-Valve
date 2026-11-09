@@ -167,6 +167,24 @@ class MitigationServiceTest {
 	}
 
 	@Test
+	void testEmergencyFlushRevokesAllActiveRules() {
+		mitigationService.createOrUpdateBlock("198.51.100.0/24", 60, "Attack 1", MitigationRule.SOURCE_MANUAL, null, "ADMIN");
+		mitigationService.createOrUpdateBlock("203.0.113.0/24", 60, "Attack 2", MitigationRule.SOURCE_MANUAL, null, "ADMIN");
+		mitigationService.createOrUpdateBlock("2001:db8:1234::/48", 60, "Attack 3", MitigationRule.SOURCE_MANUAL, null, "ADMIN");
+
+		assertEquals(3, mitigationService.getActiveRules().size());
+
+		int flushedCount = mitigationService.revokeAll("Emergency operator override", "ADMIN");
+		assertEquals(3, flushedCount);
+		assertEquals(0, mitigationService.getActiveRules().size());
+
+		List<MitigationAuditEntry> audits = mitigationService.getRecentAuditEntries(10);
+		MitigationAuditEntry latest = audits.getFirst();
+		assertEquals("EMERGENCY_FLUSH", latest.action());
+		assertTrue(latest.details().contains("3 active rule(s) revoked"));
+	}
+
+	@Test
 	void testDeterrenceTrackingTransitionsFromObservingToPersistent() {
 		MitigationRule rule = mitigationService.createOrUpdateBlock(
 				"198.51.100.0/24", 60, "Carpet attack", MitigationRule.SOURCE_MANUAL, null, "ADMIN");

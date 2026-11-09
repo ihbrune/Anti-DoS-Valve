@@ -151,6 +151,25 @@ public class MitigationRuleRepository {
 				Timestamp.from(now), Timestamp.from(now)));
 	}
 
+	public int revokeAllActive(Instant now, String reason) {
+		String sql = """
+				UPDATE mitigation_rules
+				SET status = 'REVOKED',
+				    revoked_at = ?,
+				    revoked_reason = ?,
+				    updated_at = ?
+				WHERE status = 'ACTIVE' AND expires_at > ?
+				""";
+		return StorageRetryUtil.executeWithRetry("MitigationRuleRepository.revokeAllActive", () ->
+				jdbcTemplate.update(sql,
+						Timestamp.from(now),
+						reason,
+						Timestamp.from(now),
+						Timestamp.from(now)
+				)
+		);
+	}
+
 	public void updateDeterrenceTelemetry(long id, long totalBlockedHits, int peakDistinctIps, Instant lastHitAt, String deterrenceState, Instant now) {
 		StorageRetryUtil.executeWithRetry("MitigationRuleRepository.updateDeterrenceTelemetry", () -> {
 			jdbcTemplate.update(
