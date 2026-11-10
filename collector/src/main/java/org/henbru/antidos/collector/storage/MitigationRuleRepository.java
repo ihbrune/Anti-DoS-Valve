@@ -23,7 +23,7 @@ public class MitigationRuleRepository {
 		this.jdbcTemplate = jdbcTemplate;
 	}
 
-	private static final RowMapper<MitigationRule> RULE_MAPPER = (rs, rowNum) -> new MitigationRule(
+	public static final RowMapper<MitigationRule> RULE_MAPPER = (rs, rowNum) -> new MitigationRule(
 			rs.getLong("id"),
 			rs.getString("cidr"),
 			rs.getInt("ip_version"),
@@ -46,7 +46,7 @@ public class MitigationRuleRepository {
 			rs.getString("deterrence_state") != null ? rs.getString("deterrence_state") : MitigationRule.DETERRENCE_OBSERVING
 	);
 
-	private static final RowMapper<MitigationAuditEntry> AUDIT_MAPPER = (rs, rowNum) -> new MitigationAuditEntry(
+	public static final RowMapper<MitigationAuditEntry> AUDIT_MAPPER = (rs, rowNum) -> new MitigationAuditEntry(
 			rs.getLong("id"),
 			rs.getObject("rule_id") != null ? rs.getLong("rule_id") : null,
 			rs.getString("cidr"),
@@ -230,5 +230,24 @@ public class MitigationRuleRepository {
 				LIMIT ?
 				""",
 				AUDIT_MAPPER, sinceId, Math.max(1, limit));
+	}
+
+	public List<MitigationRule> findRulesCreatedBetween(Instant start, Instant end) {
+		return jdbcTemplate.query("""
+				SELECT id, cidr, ip_version, prefix_length, target_scope, status, source, batch_id, reason,
+				       asn, asn_organization, created_at, updated_at, expires_at, revoked_at, revoked_reason,
+				       total_blocked_hits, peak_distinct_ips, last_hit_at, deterrence_state
+				FROM mitigation_rules
+				WHERE created_at >= ? AND created_at < ?
+				ORDER BY total_blocked_hits DESC, created_at DESC
+				""", RULE_MAPPER, Timestamp.from(start), Timestamp.from(end));
+	}
+
+	public List<MitigationAuditEntry> findAuditEntriesBetween(Instant start, Instant end) {
+		return jdbcTemplate.query("""
+				SELECT * FROM mitigation_audit_log
+				WHERE created_at >= ? AND created_at < ?
+				ORDER BY created_at ASC, id ASC
+				""", AUDIT_MAPPER, Timestamp.from(start), Timestamp.from(end));
 	}
 }

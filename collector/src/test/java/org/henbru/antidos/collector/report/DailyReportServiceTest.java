@@ -9,10 +9,13 @@ import java.util.Optional;
 
 import org.henbru.antidos.collector.model.DailyReport;
 import org.henbru.antidos.collector.model.DailyReportNote;
+import org.henbru.antidos.collector.model.MitigationAuditEntry;
+import org.henbru.antidos.collector.model.MitigationRule;
 import org.henbru.antidos.collector.model.MonitoredValve;
 import org.henbru.antidos.collector.model.PollEventLog;
 import org.henbru.antidos.collector.model.SlotSnapshot;
 import org.henbru.antidos.collector.storage.DailyReportRepository;
+import org.henbru.antidos.collector.storage.MitigationRuleRepository;
 import org.henbru.antidos.collector.storage.MonitoredValveRepository;
 import org.henbru.antidos.collector.storage.PollEventLogRepository;
 import org.henbru.antidos.collector.storage.SlotSnapshotRepository;
@@ -47,6 +50,9 @@ class DailyReportServiceTest {
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
+
+	@Autowired(required = false)
+	private MitigationRuleRepository mitigationRuleRepository;
 
 	private final LocalDate testDate = LocalDate.of(2026, 10, 20);
 
@@ -679,5 +685,94 @@ class DailyReportServiceTest {
 		assertTrue(md.contains("203.0.113.0/24"));
 		assertTrue(md.contains("Surging Partner AS"));
 		assertTrue(md.contains("2,500"));
+	}
+
+	@Test
+	void testDailyReportWithDynamicMitigationsAndDryRun() {
+		LocalDate mitDate = LocalDate.of(2026, 11, 2);
+		dailyReportRepository.deleteByReportDate(mitDate.toString());
+		jdbcTemplate.update("DELETE FROM mitigation_rules WHERE cidr IN ('198.51.100.0/24', '203.0.113.0/24')");
+		jdbcTemplate.update("DELETE FROM mitigation_audit_log WHERE cidr IN ('198.51.100.0/24', '203.0.113.0/24', 'ALL')");
+		jdbcTemplate.update("DELETE FROM client_subnet_rollups WHERE server_id = 'SRV-MIT-TEST'");
+		jdbcTemplate.update("DELETE FROM slot_snapshots WHERE server_id = 'SRV-MIT-TEST'");
+		jdbcTemplate.update("DELETE FROM monitored_valves WHERE server_id = 'SRV-MIT-TEST'");
+
+		ZonedDateTime startDay = mitDate.atStartOfDay(ZoneId.systemDefault());
+		Instant h10 = startDay.plusHours(10).toInstant();
+		Instant h11 = startDay.plusHours(11).toInstant();
+
+		monitoredValveRepository.upsert(new MonitoredValve(
+				"SRV-MIT-TEST", "PRIMARY", "Primary Mit Valve", 1, "BLOCKING", false, false,
+				429, 200, 60, 5, 0.5f, 24, 64, 10000, 5000, "", "", "", "", "/status", "*", "auto",
+				false, "_adv",
+				false, "NONE", "", "", 3600, 1000,
+				"ALL", 0,
+				true, "http://srv-mit/antidos-mitigation", 2, 850L, 1L,
+				Instant.now(), 4444, true
+		));
+
+		slotSnapshotRepository.upsert(new SlotSnapshot(
+				null, "SRV-MIT-TEST", "PRIMARY", 88001L, h10, h10.plus(60, ChronoUnit.SECONDS),
+				30000L, 200, 50, 0, true, h10.plus(60, ChronoUnit.SECONDS)
+		));
+
+		// 1. Dynamic Rule 1: Active, Deterred
+		mitigationRuleRepository.upsertRule(new MitigationRule(
+				null, "198.51.100.0/24", 4, 24, "ALL", MitigationRule.STATUS_ACTIVE,
+				"AUTO", "batch-101", "Carpet attack from ASN 64496", 64496L, "BadBot Cloud LLC",
+				h10, h10, h10.plus(2, ChronoUnit.HOURS), null, null,
+				650L, 30, h10.plus(15, ChronoUnit.MINUTES), MitigationRule.DETERRENCE_DETERRED
+		));
+
+		// 2. Audit Entry 1: AUTO_BLOCK
+		mitigationRuleRepository.insertAuditEntry(new MitigationAuditEntry(
+				null, null, "198.51.100.0/24", "batch-101", "AUTO_BLOCK",
+				"AUTO_MITIGATION", 7200, "Autonomous rule created for carpet attack", h10
+		));
+
+		// 3. Audit Entry 2: Dry-Run Simulation (AUTO_WOULD_BLOCK)
+		mitigationRuleRepository.insertAuditEntry(new MitigationAuditEntry(
+				null, null, "ALL", "sim-batch-202", "AUTO_WOULD_BLOCK",
+				"AUTO_MITIGATION", 1800,
+				"[DRY-RUN SIMULATION] Would block 1 subnets ([203.0.113.0/24]). Carpet attack from ASN 64497 (HostProvider Corp): 1 subnets, 1,200 reqs, returning ratio 88%",
+				h11
+		));
+
+		// Rollup data for 203.0.113.0/24 to verify 0 auth collateral damage
+		jdbcTemplate.update("""
+				INSERT INTO client_subnet_rollups (
+					bucket_start, bucket_end, bucket_minutes, server_id, valve_name, subnet_group,
+					total_requests, active_requests, blocked_requests, distinct_clients, distinct_user_agents,
+					asn, as_org, country_code, client_type, created_at,
+					authenticated_requests, returning_requests
+				) VALUES (?, ?, 60, 'SRV-MIT-TEST', 'PRIMARY', '203.0.113.0/24',
+					1200, 1100, 100, 15, 2, 64497, 'HostProvider Corp', 'US', 'DATACENTER', ?,
+					0, 50)
+				""", java.sql.Timestamp.from(h11), java.sql.Timestamp.from(h11.plus(1, ChronoUnit.HOURS)), java.sql.Timestamp.from(h11));
+
+		DailyReport report = dailyReportService.generateDailyReport(mitDate);
+		assertNotNull(report);
+		assertEquals("ATTACK_MITIGATED", report.status());
+
+		String md = report.reportMarkdown();
+		assertNotNull(md);
+
+		// Section 1 Executive Summary should reflect dynamic mitigations
+		assertTrue(md.contains("Dynamic CIDR Deflections") || md.contains("Dynamic Rules Enforced"));
+		assertTrue(md.contains("650"));
+
+		// Section 6 Dedicated Mitigation & Autonomous Defense Audit
+		assertTrue(md.contains("## 🛡️ 6. Dynamic Mitigation & Autonomous Defense Audit"));
+		assertTrue(md.contains("198.51.100.0/24"));
+		assertTrue(md.contains("BadBot Cloud LLC"));
+		assertTrue(md.contains("DETERRED"));
+
+		// Dry-Run Simulation Impact Analysis
+		assertTrue(md.contains("Dry-Run Simulation Impact Analysis"));
+		assertTrue(md.contains("AUTO_WOULD_BLOCK"));
+		assertTrue(md.contains("203.0.113.0/24"));
+		assertTrue(md.contains("HostProvider Corp"));
+		assertTrue(md.contains("0 authenticated users"));
+		assertTrue(md.contains("1,200"));
 	}
 }
