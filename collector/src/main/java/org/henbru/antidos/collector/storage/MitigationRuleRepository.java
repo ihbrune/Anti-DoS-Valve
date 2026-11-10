@@ -250,4 +250,118 @@ public class MitigationRuleRepository {
 				ORDER BY created_at ASC, id ASC
 				""", AUDIT_MAPPER, Timestamp.from(start), Timestamp.from(end));
 	}
+
+	public List<MitigationRule> findHistoricalRulesFiltered(String search, String status, int offset, int limit) {
+		StringBuilder sql = new StringBuilder("SELECT * FROM mitigation_rules WHERE status IN ('EXPIRED', 'REVOKED')");
+		List<Object> params = new java.util.ArrayList<>();
+
+		if (status != null && !status.isBlank() && !"ALL".equalsIgnoreCase(status)) {
+			sql.append(" AND status = ?");
+			params.add(status.trim().toUpperCase());
+		}
+
+		if (search != null && !search.isBlank()) {
+			String term = "%" + search.trim().toLowerCase() + "%";
+			sql.append(" AND (LOWER(cidr) LIKE ? OR LOWER(COALESCE(asn_organization, '')) LIKE ? OR LOWER(COALESCE(batch_id, '')) LIKE ? OR LOWER(COALESCE(reason, '')) LIKE ? OR CAST(asn AS TEXT) LIKE ?)");
+			params.add(term);
+			params.add(term);
+			params.add(term);
+			params.add(term);
+			params.add("%" + search.trim() + "%");
+		}
+
+		sql.append(" ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?");
+		params.add(Math.max(1, limit));
+		params.add(Math.max(0, offset));
+
+		return jdbcTemplate.query(sql.toString(), RULE_MAPPER, params.toArray());
+	}
+
+	public long countHistoricalRulesFiltered(String search, String status) {
+		StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM mitigation_rules WHERE status IN ('EXPIRED', 'REVOKED')");
+		List<Object> params = new java.util.ArrayList<>();
+
+		if (status != null && !status.isBlank() && !"ALL".equalsIgnoreCase(status)) {
+			sql.append(" AND status = ?");
+			params.add(status.trim().toUpperCase());
+		}
+
+		if (search != null && !search.isBlank()) {
+			String term = "%" + search.trim().toLowerCase() + "%";
+			sql.append(" AND (LOWER(cidr) LIKE ? OR LOWER(COALESCE(asn_organization, '')) LIKE ? OR LOWER(COALESCE(batch_id, '')) LIKE ? OR LOWER(COALESCE(reason, '')) LIKE ? OR CAST(asn AS TEXT) LIKE ?)");
+			params.add(term);
+			params.add(term);
+			params.add(term);
+			params.add(term);
+			params.add("%" + search.trim() + "%");
+		}
+
+		Long count = jdbcTemplate.queryForObject(sql.toString(), Long.class, params.toArray());
+		return count != null ? count : 0L;
+	}
+
+	public List<MitigationAuditEntry> findAuditEntriesFiltered(String search, String action, String actor, int offset, int limit) {
+		StringBuilder sql = new StringBuilder("SELECT * FROM mitigation_audit_log WHERE 1=1");
+		List<Object> params = new java.util.ArrayList<>();
+
+		if (action != null && !action.isBlank() && !"ALL".equalsIgnoreCase(action)) {
+			if ("SIMULATION".equalsIgnoreCase(action)) {
+				sql.append(" AND action IN ('AUTO_WOULD_BLOCK', 'AUTO_WOULD_EXTEND')");
+			} else {
+				sql.append(" AND action = ?");
+				params.add(action.trim().toUpperCase());
+			}
+		}
+
+		if (actor != null && !actor.isBlank() && !"ALL".equalsIgnoreCase(actor)) {
+			sql.append(" AND actor = ?");
+			params.add(actor.trim().toUpperCase());
+		}
+
+		if (search != null && !search.isBlank()) {
+			String term = "%" + search.trim().toLowerCase() + "%";
+			sql.append(" AND (LOWER(COALESCE(cidr, '')) LIKE ? OR LOWER(COALESCE(batch_id, '')) LIKE ? OR LOWER(COALESCE(details, '')) LIKE ? OR LOWER(COALESCE(actor, '')) LIKE ?)");
+			params.add(term);
+			params.add(term);
+			params.add(term);
+			params.add(term);
+		}
+
+		sql.append(" ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?");
+		params.add(Math.max(1, limit));
+		params.add(Math.max(0, offset));
+
+		return jdbcTemplate.query(sql.toString(), AUDIT_MAPPER, params.toArray());
+	}
+
+	public long countAuditEntriesFiltered(String search, String action, String actor) {
+		StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM mitigation_audit_log WHERE 1=1");
+		List<Object> params = new java.util.ArrayList<>();
+
+		if (action != null && !action.isBlank() && !"ALL".equalsIgnoreCase(action)) {
+			if ("SIMULATION".equalsIgnoreCase(action)) {
+				sql.append(" AND action IN ('AUTO_WOULD_BLOCK', 'AUTO_WOULD_EXTEND')");
+			} else {
+				sql.append(" AND action = ?");
+				params.add(action.trim().toUpperCase());
+			}
+		}
+
+		if (actor != null && !actor.isBlank() && !"ALL".equalsIgnoreCase(actor)) {
+			sql.append(" AND actor = ?");
+			params.add(actor.trim().toUpperCase());
+		}
+
+		if (search != null && !search.isBlank()) {
+			String term = "%" + search.trim().toLowerCase() + "%";
+			sql.append(" AND (LOWER(COALESCE(cidr, '')) LIKE ? OR LOWER(COALESCE(batch_id, '')) LIKE ? OR LOWER(COALESCE(details, '')) LIKE ? OR LOWER(COALESCE(actor, '')) LIKE ?)");
+			params.add(term);
+			params.add(term);
+			params.add(term);
+			params.add(term);
+		}
+
+		Long count = jdbcTemplate.queryForObject(sql.toString(), Long.class, params.toArray());
+		return count != null ? count : 0L;
+	}
 }

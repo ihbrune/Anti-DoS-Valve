@@ -219,6 +219,11 @@ class DashboardControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("Top Offender Analytics &amp; Subnet Rollup")));
 
+		mockMvc.perform(get("/offenders")
+						.param("search", "198.51.100.0/24"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("value=\"198.51.100.0/24\"")));
+
 		mockMvc.perform(get("/fragments/offenders-table")
 						.param("groupBy", "SUBNET")
 						.param("limit", "25"))

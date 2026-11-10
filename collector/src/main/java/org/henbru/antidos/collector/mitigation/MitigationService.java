@@ -1213,6 +1213,22 @@ public class MitigationService {
 		return ruleRepository.findRecentRules(limit);
 	}
 
+	public List<MitigationRule> getHistoricalRulesFiltered(String search, String status, int offset, int limit) {
+		return ruleRepository.findHistoricalRulesFiltered(search, status, offset, limit);
+	}
+
+	public long countHistoricalRulesFiltered(String search, String status) {
+		return ruleRepository.countHistoricalRulesFiltered(search, status);
+	}
+
+	public List<MitigationAuditEntry> getAuditEntriesFiltered(String search, String action, String actor, int offset, int limit) {
+		return ruleRepository.findAuditEntriesFiltered(search, action, actor, offset, limit);
+	}
+
+	public long countAuditEntriesFiltered(String search, String action, String actor) {
+		return ruleRepository.countAuditEntriesFiltered(search, action, actor);
+	}
+
 	public List<MitigationAuditEntry> getRecentAuditEntries(int limit) {
 		return ruleRepository.findRecentAuditEntries(limit);
 	}

@@ -41,5 +41,34 @@ public record MitigationAuditEntry(
 	public Integer getTtlSeconds() { return ttlSeconds; }
 	public String getDetails() { return details; }
 	public Instant getCreatedAt() { return createdAt; }
+
+	/**
+	 * Extracts the target ASN number from cidr (e.g. ASN-64496), batchId (e.g. AUTO-ASN-64496-...)
+	 * or details (e.g. ASN 64496), or null if no ASN is associated.
+	 */
+	public Long getAsn() {
+		if (cidr != null && cidr.startsWith("ASN-")) {
+			try {
+				return Long.parseLong(cidr.substring(4).trim());
+			} catch (Exception ignored) {}
+		}
+		if (batchId != null) {
+			java.util.regex.Matcher m = java.util.regex.Pattern.compile("ASN-(\\d+)").matcher(batchId);
+			if (m.find()) {
+				try {
+					return Long.parseLong(m.group(1));
+				} catch (Exception ignored) {}
+			}
+		}
+		if (details != null) {
+			java.util.regex.Matcher m = java.util.regex.Pattern.compile("ASN\\s+(\\d+)").matcher(details);
+			if (m.find()) {
+				try {
+					return Long.parseLong(m.group(1));
+				} catch (Exception ignored) {}
+			}
+		}
+		return null;
+	}
 }
 

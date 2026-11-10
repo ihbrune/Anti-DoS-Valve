@@ -423,4 +423,27 @@ class MitigationServiceTest {
 		assertEquals(1, preview.candidates().size());
 		assertTrue(preview.candidates().getFirst().isAnonOnlyScope(), "Candidate must be flagged as anonOnlyScope = true");
 	}
+
+	@Test
+	void testMitigationAuditEntryExtractsAsn() {
+		// 1. From cidr ASN-17621
+		MitigationAuditEntry entry1 = new MitigationAuditEntry(
+				1L, null, "ASN-17621", null, "AUTO_BLOCK", "AUTO_ENGINE", 3600, "Blocked ASN", Instant.now());
+		assertEquals(17621L, entry1.getAsn());
+
+		// 2. From batchId AUTO-ASN-7922-123456
+		MitigationAuditEntry entry2 = new MitigationAuditEntry(
+				2L, 10L, "198.51.100.0/24", "AUTO-ASN-7922-123456", "CREATE", "admin", 3600, "Manual Block", Instant.now());
+		assertEquals(7922L, entry2.getAsn());
+
+		// 3. From details "Carpet attack from ASN 64496 (Hosting Corp)"
+		MitigationAuditEntry entry3 = new MitigationAuditEntry(
+				3L, null, "ALL", null, "AUTO_WOULD_BLOCK", "AUTO_ENGINE", 3600, "Carpet attack from ASN 64496 (Hosting Corp)", Instant.now());
+		assertEquals(64496L, entry3.getAsn());
+
+		// 4. No ASN present
+		MitigationAuditEntry entry4 = new MitigationAuditEntry(
+				4L, 11L, "203.0.113.0/24", null, "CREATE", "admin", 1800, "Single subnet block", Instant.now());
+		org.junit.jupiter.api.Assertions.assertNull(entry4.getAsn());
+	}
 }

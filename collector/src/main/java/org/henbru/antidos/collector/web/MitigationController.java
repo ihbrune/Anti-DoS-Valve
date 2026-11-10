@@ -57,6 +57,16 @@ public class MitigationController {
 
 	@GetMapping("/mitigation")
 	public String mitigationPage(
+			@RequestParam(value = "tab", defaultValue = "active") String tab,
+			@RequestParam(value = "historySearch", required = false) String historySearch,
+			@RequestParam(value = "historyStatus", defaultValue = "ALL") String historyStatus,
+			@RequestParam(value = "historyPage", defaultValue = "1") int historyPage,
+			@RequestParam(value = "historyLimit", defaultValue = "50") int historyLimit,
+			@RequestParam(value = "auditSearch", required = false) String auditSearch,
+			@RequestParam(value = "auditAction", defaultValue = "ALL") String auditAction,
+			@RequestParam(value = "auditActor", defaultValue = "ALL") String auditActor,
+			@RequestParam(value = "auditPage", defaultValue = "1") int auditPage,
+			@RequestParam(value = "auditLimit", defaultValue = "50") int auditLimit,
 			@RequestParam(value = "cidr", required = false) String prefillCidr,
 			@RequestParam(value = "asn", required = false) Long prefillAsn,
 			@RequestParam(value = "reason", required = false) String prefillReason,
@@ -64,7 +74,8 @@ public class MitigationController {
 			@RequestParam(value = "source", required = false) String prefillSource,
 			Model model) {
 
-		populateMitigationModel(model, null, null);
+		populateMitigationModel(model, tab, historySearch, historyStatus, historyPage, historyLimit,
+				auditSearch, auditAction, auditActor, auditPage, auditLimit, null, null);
 		int defaultTtl = (prefillTtlMinutes != null && prefillTtlMinutes > 0)
 				? prefillTtlMinutes
 				: properties.getDefaultMitigationTtlMinutes();
@@ -86,8 +97,20 @@ public class MitigationController {
 	}
 
 	@GetMapping("/fragments/mitigation-content")
-	public String mitigationContentFragment(Model model) {
-		populateMitigationModel(model, null, null);
+	public String mitigationContentFragment(
+			@RequestParam(value = "tab", defaultValue = "active") String tab,
+			@RequestParam(value = "historySearch", required = false) String historySearch,
+			@RequestParam(value = "historyStatus", defaultValue = "ALL") String historyStatus,
+			@RequestParam(value = "historyPage", defaultValue = "1") int historyPage,
+			@RequestParam(value = "historyLimit", defaultValue = "50") int historyLimit,
+			@RequestParam(value = "auditSearch", required = false) String auditSearch,
+			@RequestParam(value = "auditAction", defaultValue = "ALL") String auditAction,
+			@RequestParam(value = "auditActor", defaultValue = "ALL") String auditActor,
+			@RequestParam(value = "auditPage", defaultValue = "1") int auditPage,
+			@RequestParam(value = "auditLimit", defaultValue = "50") int auditLimit,
+			Model model) {
+		populateMitigationModel(model, tab, historySearch, historyStatus, historyPage, historyLimit,
+				auditSearch, auditAction, auditActor, auditPage, auditLimit, null, null);
 		return "fragments/mitigation-content :: mitigationDashboard";
 	}
 
@@ -196,14 +219,16 @@ public class MitigationController {
 	public String extendRule(
 			@PathVariable("id") long id,
 			@RequestParam(value = "additionalMinutes", defaultValue = "60") int additionalMinutes,
+			@RequestParam(value = "tab", defaultValue = "active") String tab,
 			Model model) {
 		var updated = mitigationService.extendBlock(id, additionalMinutes, "ADMIN");
 		if (updated.isPresent()) {
-			populateMitigationModel(model,
+			populateMitigationModel(model, tab, null, "ALL", 1, 50, null, "ALL", "ALL", 1, 50,
 					"Extended dynamic block " + updated.get().cidr() + " by +" + additionalMinutes + " minutes.",
 					null);
 		} else {
-			populateMitigationModel(model, null, "Rule #" + id + " not found.");
+			populateMitigationModel(model, tab, null, "ALL", 1, 50, null, "ALL", "ALL", 1, 50,
+					null, "Rule #" + id + " not found.");
 		}
 		return "fragments/mitigation-content :: mitigationDashboard";
 	}
@@ -212,14 +237,16 @@ public class MitigationController {
 	public String revokeRule(
 			@PathVariable("id") long id,
 			@RequestParam(value = "reason", required = false) String reason,
+			@RequestParam(value = "tab", defaultValue = "active") String tab,
 			Model model) {
 		var revoked = mitigationService.revokeBlock(id, reason, "ADMIN");
 		if (revoked.isPresent()) {
-			populateMitigationModel(model,
+			populateMitigationModel(model, tab, null, "ALL", 1, 50, null, "ALL", "ALL", 1, 50,
 					"Revoked dynamic block " + revoked.get().cidr() + " and removed from fleet.",
 					null);
 		} else {
-			populateMitigationModel(model, null, "Rule #" + id + " not found.");
+			populateMitigationModel(model, tab, null, "ALL", 1, 50, null, "ALL", "ALL", 1, 50,
+					null, "Rule #" + id + " not found.");
 		}
 		return "fragments/mitigation-content :: mitigationDashboard";
 	}
@@ -423,16 +450,23 @@ public class MitigationController {
 		return ResponseEntity.ok(body);
 	}
 
-	private void populateMitigationModel(Model model, String feedbackSuccess, String feedbackError) {
+	private void populateMitigationModel(
+			Model model,
+			String tab,
+			String historySearch,
+			String historyStatus,
+			int historyPage,
+			int historyLimit,
+			String auditSearch,
+			String auditAction,
+			String auditActor,
+			int auditPage,
+			int auditLimit,
+			String feedbackSuccess,
+			String feedbackError) {
 		Instant now = Instant.now();
 		mitigationService.refreshDeterrenceMetrics();
 		List<MitigationRule> activeRules = mitigationService.getActiveRules();
-		List<MitigationRule> recentRules = mitigationService.getRecentRules(100);
-		List<MitigationRule> historicalRules = recentRules.stream()
-				.filter(r -> !r.isCurrentlyActive(now))
-				.limit(50)
-				.toList();
-		List<MitigationAuditEntry> auditEntries = mitigationService.getRecentAuditEntries(60);
 		List<MonitoredValve> mitigationValves = mitigationService.getMitigationCapableValves();
 
 		long persistentCount = activeRules.stream()
@@ -462,10 +496,64 @@ public class MitigationController {
 			}
 		}
 
+		String effectiveTab = (tab != null && (tab.equalsIgnoreCase("history") || tab.equalsIgnoreCase("audit")))
+				? tab.toLowerCase()
+				: "active";
+
+		// Global counts for tab badges and teasers
+		long totalHistoricalCount = mitigationService.countHistoricalRulesFiltered(null, "ALL");
+		long totalAuditCount = mitigationService.countAuditEntriesFiltered(null, "ALL", "ALL");
+
+		List<MitigationRule> teaserHistoricalRules = mitigationService.getHistoricalRulesFiltered(null, "ALL", 0, 5);
+		List<MitigationAuditEntry> teaserAuditEntries = mitigationService.getAuditEntriesFiltered(null, "ALL", "ALL", 0, 5);
+
+		// History tab pagination & filtering
+		int hPage = Math.max(1, historyPage);
+		int hLimit = (historyLimit > 0 && historyLimit <= 500) ? historyLimit : 50;
+		int hOffset = (hPage - 1) * hLimit;
+		long filteredHistoryCount = mitigationService.countHistoricalRulesFiltered(historySearch, historyStatus);
+		List<MitigationRule> historicalRules = mitigationService.getHistoricalRulesFiltered(historySearch, historyStatus, hOffset, hLimit);
+		int totalHistoryPages = Math.max(1, (int) Math.ceil((double) filteredHistoryCount / hLimit));
+
+		// Audit tab pagination & filtering
+		int aPage = Math.max(1, auditPage);
+		int aLimit = (auditLimit > 0 && auditLimit <= 500) ? auditLimit : 50;
+		int aOffset = (aPage - 1) * aLimit;
+		long filteredAuditCount = mitigationService.countAuditEntriesFiltered(auditSearch, auditAction, auditActor);
+		List<MitigationAuditEntry> auditEntries = mitigationService.getAuditEntriesFiltered(auditSearch, auditAction, auditActor, aOffset, aLimit);
+		int totalAuditPages = Math.max(1, (int) Math.ceil((double) filteredAuditCount / aLimit));
+
 		model.addAttribute("now", now);
+		model.addAttribute("activeTab", effectiveTab);
 		model.addAttribute("activeRules", activeRules);
+		model.addAttribute("teaserHistoricalRules", teaserHistoricalRules);
+		model.addAttribute("teaserAuditEntries", teaserAuditEntries);
+		model.addAttribute("totalHistoricalCount", totalHistoricalCount);
+		model.addAttribute("totalAuditCount", totalAuditCount);
+
+		// History tab attributes
 		model.addAttribute("historicalRules", historicalRules);
+		model.addAttribute("historySearch", historySearch != null ? historySearch.trim() : "");
+		model.addAttribute("historyStatus", historyStatus != null ? historyStatus.trim().toUpperCase() : "ALL");
+		model.addAttribute("historyPage", hPage);
+		model.addAttribute("historyLimit", hLimit);
+		model.addAttribute("historyTotalCount", filteredHistoryCount);
+		model.addAttribute("historyTotalPages", totalHistoryPages);
+		model.addAttribute("historyHasPrev", hPage > 1);
+		model.addAttribute("historyHasNext", hPage < totalHistoryPages);
+
+		// Audit tab attributes
 		model.addAttribute("auditEntries", auditEntries);
+		model.addAttribute("auditSearch", auditSearch != null ? auditSearch.trim() : "");
+		model.addAttribute("auditAction", auditAction != null ? auditAction.trim().toUpperCase() : "ALL");
+		model.addAttribute("auditActor", auditActor != null ? auditActor.trim().toUpperCase() : "ALL");
+		model.addAttribute("auditPage", aPage);
+		model.addAttribute("auditLimit", aLimit);
+		model.addAttribute("auditTotalCount", filteredAuditCount);
+		model.addAttribute("auditTotalPages", totalAuditPages);
+		model.addAttribute("auditHasPrev", aPage > 1);
+		model.addAttribute("auditHasNext", aPage < totalAuditPages);
+
 		model.addAttribute("mitigationValves", mitigationValves);
 		model.addAttribute("expectedRevision", mitigationService.getExpectedRevision(now));
 		model.addAttribute("persistentCount", persistentCount);
@@ -477,6 +565,10 @@ public class MitigationController {
 		model.addAttribute("notificationSettings", notificationService != null ? notificationService.getEffectiveSettings() : null);
 		model.addAttribute("feedbackSuccess", feedbackSuccess);
 		model.addAttribute("feedbackError", feedbackError);
+	}
+
+	private void populateMitigationModel(Model model, String feedbackSuccess, String feedbackError) {
+		populateMitigationModel(model, "active", null, "ALL", 1, 50, null, "ALL", "ALL", 1, 50, feedbackSuccess, feedbackError);
 	}
 
 	public record ActiveBatchSummary(

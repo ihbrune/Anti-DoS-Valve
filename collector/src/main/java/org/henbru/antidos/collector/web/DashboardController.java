@@ -325,6 +325,7 @@ public class DashboardController {
 			@RequestParam(name = "from", required = false) String fromStr,
 			@RequestParam(name = "to", required = false) String toStr,
 			@RequestParam(name = "clientQuery", required = false) String clientQuery,
+			@RequestParam(name = "search", required = false) String search,
 			@RequestParam(name = "clientTypes", required = false) List<String> clientTypes,
 			@RequestParam(name = "asn", required = false) String asn,
 			@RequestParam(name = "status", required = false) String status,
@@ -334,7 +335,8 @@ public class DashboardController {
 			@RequestParam(name = "sortBy", required = false) String sortBy,
 			@RequestParam(name = "limit", defaultValue = "25") int limit,
 			Model model) {
-		populateOffendersModel(servers, valves, fromStr, toStr, clientQuery, clientTypes, asn, status, groupBy, activityPattern, minRequests, sortBy, limit, model);
+		String effectiveClientQuery = (clientQuery != null && !clientQuery.isBlank()) ? clientQuery : search;
+		populateOffendersModel(servers, valves, fromStr, toStr, effectiveClientQuery, clientTypes, asn, status, groupBy, activityPattern, minRequests, sortBy, limit, model);
 		return "offenders";
 	}
 
@@ -345,6 +347,7 @@ public class DashboardController {
 			@RequestParam(name = "from", required = false) String fromStr,
 			@RequestParam(name = "to", required = false) String toStr,
 			@RequestParam(name = "clientQuery", required = false) String clientQuery,
+			@RequestParam(name = "search", required = false) String search,
 			@RequestParam(name = "clientTypes", required = false) List<String> clientTypes,
 			@RequestParam(name = "asn", required = false) String asn,
 			@RequestParam(name = "status", required = false) String status,
@@ -354,7 +357,8 @@ public class DashboardController {
 			@RequestParam(name = "sortBy", required = false) String sortBy,
 			@RequestParam(name = "limit", defaultValue = "25") int limit,
 			Model model) {
-		populateOffendersModel(servers, valves, fromStr, toStr, clientQuery, clientTypes, asn, status, groupBy, activityPattern, minRequests, sortBy, limit, model);
+		String effectiveClientQuery = (clientQuery != null && !clientQuery.isBlank()) ? clientQuery : search;
+		populateOffendersModel(servers, valves, fromStr, toStr, effectiveClientQuery, clientTypes, asn, status, groupBy, activityPattern, minRequests, sortBy, limit, model);
 		return "fragments/offenders-table :: offenderTable";
 	}
 
