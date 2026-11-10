@@ -56,6 +56,10 @@ collector:
   surge-min-requests: ${COLLECTOR_SURGE_MIN_REQUESTS:1000}
   surge-multiplier-alert: ${COLLECTOR_SURGE_MULTIPLIER_ALERT:5.0}
   slow-poll-threshold-ms: 1000
+  max-catch-up-slots-per-poll: ${COLLECTOR_MAX_CATCH_UP_SLOTS_PER_POLL:2}
+  max-catch-up-lag-slots: ${COLLECTOR_MAX_CATCH_UP_LAG_SLOTS:6}
+  endpoint-poll-timeout-ms: ${COLLECTOR_ENDPOINT_POLL_TIMEOUT_MS:25000}
+  host-concurrency-timeout-seconds: ${COLLECTOR_HOST_CONCURRENCY_TIMEOUT_SECONDS:15}
   demo-mode: ${COLLECTOR_DEMO_MODE:false}
   demo-instance-count: ${COLLECTOR_DEMO_INSTANCE_COUNT:1}
   enrichment:

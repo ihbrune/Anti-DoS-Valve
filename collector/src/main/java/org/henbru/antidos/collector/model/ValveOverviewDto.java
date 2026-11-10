@@ -10,8 +10,29 @@ import java.util.List;
 public record ValveOverviewDto(
 		String serverTime,
 		List<ValveSummaryDto> valves,
-		String error
+		String error,
+		Long serverGenerationMs,
+		Long payloadBytes
 ) {
+	public ValveOverviewDto(String serverTime, List<ValveSummaryDto> valves, String error) {
+		this(serverTime, valves, error, null, null);
+	}
+
+	public ValveOverviewDto(String serverTime, List<ValveSummaryDto> valves, String error, Long serverGenerationMs) {
+		this(serverTime, valves, error, serverGenerationMs, null);
+	}
+
+	public ValveOverviewDto withPayloadBytes(long bytes) {
+		return new ValveOverviewDto(serverTime, valves, error, serverGenerationMs, bytes);
+	}
+
+	public long payloadBytesOrDefault() {
+		return payloadBytes != null ? payloadBytes : 0L;
+	}
+
+	public int serverGenerationMsOrDefault() {
+		return serverGenerationMs != null ? serverGenerationMs.intValue() : 0;
+	}
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	public record ValveSummaryDto(
 			String monitorName,

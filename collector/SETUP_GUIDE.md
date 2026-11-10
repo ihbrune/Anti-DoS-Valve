@@ -560,6 +560,10 @@ All parameters can be configured via `collector-config.yaml` or overridden via e
 | `poll-interval-seconds` | `COLLECTOR_POLL_INTERVAL_SECONDS` | `15` | Default polling interval in seconds across all monitored endpoints. |
 | `parallel-fleet-polling` | `COLLECTOR_PARALLEL_FLEET_POLLING` | `true` | Concurrently poll fleet endpoints in parallel using Java 21 Virtual Threads. |
 | `slow-poll-threshold-ms` | `COLLECTOR_SLOW_POLL_THRESHOLD_MS` | `1000` | Endpoint response time threshold in ms before triggering a `WARNING` poll log entry. |
+| `max-catch-up-slots-per-poll` | `COLLECTOR_MAX_CATCH_UP_SLOTS_PER_POLL` | `2` | Maximum missed slots a valve is permitted to backfill per poll cycle to prevent request avalanches on lagging servers. |
+| `max-catch-up-lag-slots` | `COLLECTOR_MAX_CATCH_UP_LAG_SLOTS` | `6` | Maximum backlog horizon before ancient missed slots are safely dropped during recovery. |
+| `endpoint-poll-timeout-ms` | `COLLECTOR_ENDPOINT_POLL_TIMEOUT_MS` | `25000` | Hard deadline in ms for polling all valves on a single endpoint node before skipping remaining valves. |
+| `host-concurrency-timeout-seconds` | `COLLECTOR_HOST_CONCURRENCY_TIMEOUT_SECONDS` | `15` | Maximum wait time in seconds for the host-level semaphore ensuring at most 1 active request per host. |
 | `retention-days` | `COLLECTOR_RETENTION_DAYS` | `30` | Retention horizon (in days) for security incidents (`BLOCKED`/`MARKED` events) and completed slot snapshots. |
 | `active-event-retention-hours` | `COLLECTOR_ACTIVE_EVENT_RETENTION_HOURS` | `24` | Short-term retention (in hours) for high-volume benign `ACTIVE` client events. |
 | `active-event-cleanup-cron` | `COLLECTOR_ACTIVE_EVENT_CLEANUP_CRON` | `0 15 * * * *` | Cron schedule for the hourly purge of expired `ACTIVE` events. |
@@ -761,7 +765,7 @@ The database separates real-time transient telemetry, persistent subnet aggregat
 11. **`intel_source` & `intel_range`:** Threat intelligence directory containing verified CIDR blocks from search engine bots, commercial AI scrapers, and Tor exit relays.
 12. **`asn_info`:** Autonomous System catalog caching organization names and datacenter / hosting provider classifications.
 13. **`crawler_feeds` & `bot_ip_ranges`:** Automatic synchronization catalog for official bot feeds (Googlebot, Bingbot, OpenAI, Anthropic) with versioning and orphan pruning.
-14. **`poll_event_log`:** Diagnostic audit trail tracking background ingestion cycles (`blocked_events_ingested`, `marked_events_ingested`, `events_ingested`), communication latency, warnings, and recovery gap-fills.
+14. **`poll_event_log`:** Diagnostic audit trail tracking background ingestion cycles (`blocked_events_ingested`, `marked_events_ingested`, `events_ingested`), wire data transfer volume (`payload_bytes`), server-side JSON rendering time (`server_generation_ms`), communication latency, warnings, and recovery gap-fills.
 15. **`mitigation_rules` & `mitigation_audit_log`:** Persistent dynamic CIDR block rules (`cidr`, `status`, `source`, `batch_id`, `expires_at`, `total_blocked_hits`, `peak_distinct_ips`, `deterrence_state`) and full operator/batch audit history (`CREATE`, `EXTEND`, `REVOKE`, `BATCH_CREATE`, `BATCH_REVOKE`).
 
 ---

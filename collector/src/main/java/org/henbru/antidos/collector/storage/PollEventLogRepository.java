@@ -29,6 +29,16 @@ public class PollEventLogRepository {
 			markedEvents = rs.getInt("marked_events_ingested");
 		} catch (java.sql.SQLException ignored) {
 		}
+		long payloadBytes = 0L;
+		try {
+			payloadBytes = rs.getLong("payload_bytes");
+		} catch (java.sql.SQLException ignored) {
+		}
+		int serverGenerationMs = 0;
+		try {
+			serverGenerationMs = rs.getInt("server_generation_ms");
+		} catch (java.sql.SQLException ignored) {
+		}
 		return new PollEventLog(
 				rs.getLong("id"),
 				rs.getString("server_id"),
@@ -43,7 +53,9 @@ public class PollEventLogRepository {
 				rs.getInt("blocked_events_ingested"),
 				markedEvents,
 				rs.getString("details"),
-				rs.getString("error_message")
+				rs.getString("error_message"),
+				payloadBytes,
+				serverGenerationMs
 		);
 	};
 
@@ -52,8 +64,9 @@ public class PollEventLogRepository {
 				INSERT INTO poll_event_log (
 				    server_id, url, poll_time, status, http_status_code,
 				    response_time_ms, valves_polled, slots_ingested, events_ingested,
-				    blocked_events_ingested, marked_events_ingested, details, error_message
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				    blocked_events_ingested, marked_events_ingested, details, error_message,
+				    payload_bytes, server_generation_ms
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				""";
 
 		StorageRetryUtil.executeWithRetry("PollEventLogRepository.insert", () -> {
@@ -71,7 +84,9 @@ public class PollEventLogRepository {
 					log.blockedEventsIngested(),
 					log.markedEventsIngested(),
 					log.details(),
-					log.errorMessage()
+					log.errorMessage(),
+					log.payloadBytes(),
+					log.serverGenerationMs()
 			);
 		});
 	}
@@ -85,8 +100,9 @@ public class PollEventLogRepository {
 				INSERT INTO poll_event_log (
 				    server_id, url, poll_time, status, http_status_code,
 				    response_time_ms, valves_polled, slots_ingested, events_ingested,
-				    blocked_events_ingested, marked_events_ingested, details, error_message
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				    blocked_events_ingested, marked_events_ingested, details, error_message,
+				    payload_bytes, server_generation_ms
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				""";
 
 		StorageRetryUtil.executeWithRetry("PollEventLogRepository.batchInsert", () -> {
@@ -107,6 +123,8 @@ public class PollEventLogRepository {
 					ps.setInt(11, log.markedEventsIngested());
 					ps.setString(12, log.details());
 					ps.setString(13, log.errorMessage());
+					ps.setLong(14, log.payloadBytes());
+					ps.setInt(15, log.serverGenerationMs());
 				}
 
 				@Override

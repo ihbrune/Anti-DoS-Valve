@@ -32,6 +32,11 @@
                   th:text="${e.responseTimeMs} + ' ms'">
                 45 ms
             </span>
+            <div th:if="${e.serverGenerationMs > 0}"
+                 style="font-size: 11px; color: var(--text-muted); font-family: ui-monospace, monospace; margin-top: 2px;"
+                 th:text="'(gen: ' + ${e.serverGenerationMs} + ' ms)'">
+                (gen: 12 ms)
+            </div>
         </td>
 
         <td style="white-space: nowrap; font-size: 12px; color: var(--text-secondary);">
@@ -45,6 +50,11 @@
                   class="badge badge-active-metric"
                   style="font-size: 10px; margin-left: 4px;"
                   th:text="${e.activeEventsIngested} + ' active'">1 active</span>
+            <div th:if="${e.payloadBytes > 0}"
+                 style="font-size: 11px; color: var(--text-muted); font-family: ui-monospace, monospace; margin-top: 2px;"
+                 th:text="'payload: ' + ${e.formattedPayloadSize()}">
+                payload: 12.4 KB
+            </div>
         </td>
 
         <td style="font-size: 12px;">

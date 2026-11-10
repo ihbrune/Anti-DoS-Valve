@@ -9,9 +9,15 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Locale;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.config.EndpointConfig;
 import org.henbru.antidos.collector.model.ValveDetailsDto;
 import org.henbru.antidos.collector.model.ValveOverviewDto;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -22,13 +28,21 @@ public class ValveStatusClient {
 
 	private final HttpClient httpClient;
 	private final ObjectMapper objectMapper;
+	private final CollectorProperties properties;
+	private final ConcurrentHashMap<String, Semaphore> hostSemaphores = new ConcurrentHashMap<>();
 
-	public ValveStatusClient(ObjectMapper objectMapper) {
+	@Autowired
+	public ValveStatusClient(ObjectMapper objectMapper, @Autowired(required = false) CollectorProperties properties) {
 		this.objectMapper = objectMapper;
+		this.properties = properties != null ? properties : new CollectorProperties();
 		this.httpClient = HttpClient.newBuilder()
 				.connectTimeout(Duration.ofSeconds(5))
 				.followRedirects(HttpClient.Redirect.NORMAL)
 				.build();
+	}
+
+	public ValveStatusClient(ObjectMapper objectMapper) {
+		this(objectMapper, null);
 	}
 
 	public ValveOverviewDto fetchOverview(EndpointConfig endpoint) throws IOException, InterruptedException {
@@ -151,85 +165,163 @@ public class ValveStatusClient {
 			String mitigationToken,
 			String valveName,
 			java.util.Map<String, String> formParams) throws IOException, InterruptedException {
-		String base = cleanBaseUrl(targetUrl);
-		StringBuilder body = new StringBuilder();
-		if (valveName != null && !valveName.isBlank()) {
-			body.append("valve=").append(URLEncoder.encode(valveName.trim(), StandardCharsets.UTF_8));
-		}
-		if (formParams != null) {
-			for (java.util.Map.Entry<String, String> entry : formParams.entrySet()) {
-				if (entry.getKey() == null || entry.getValue() == null) {
-					continue;
-				}
-				if (body.length() > 0) {
-					body.append('&');
-				}
-				body.append(URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8))
-						.append('=')
-						.append(URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8));
+		String hostKey = extractHostKey(targetUrl);
+		Semaphore semaphore = hostSemaphores.computeIfAbsent(hostKey, k -> new Semaphore(1, true));
+		int timeoutSeconds = properties != null ? properties.getHostConcurrencyTimeoutSeconds() : 15;
+		boolean acquired = false;
+		if (timeoutSeconds > 0) {
+			acquired = semaphore.tryAcquire(timeoutSeconds, TimeUnit.SECONDS);
+			if (!acquired) {
+				throw new IOException("Host concurrency limit reached: Another request is currently in-flight to host '"
+						+ hostKey + "' (waited " + timeoutSeconds + "s)");
 			}
 		}
 
-		HttpRequest.Builder builder = HttpRequest.newBuilder()
-				.uri(URI.create(base))
-				.timeout(Duration.ofSeconds(10))
-				.header("Accept", "application/json")
-				.header("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8");
+		try {
+			String base = cleanBaseUrl(targetUrl);
+			StringBuilder body = new StringBuilder();
+			if (valveName != null && !valveName.isBlank()) {
+				body.append("valve=").append(URLEncoder.encode(valveName.trim(), StandardCharsets.UTF_8));
+			}
+			if (formParams != null) {
+				for (java.util.Map.Entry<String, String> entry : formParams.entrySet()) {
+					if (entry.getKey() == null || entry.getValue() == null) {
+						continue;
+					}
+					if (body.length() > 0) {
+						body.append('&');
+					}
+					body.append(URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8))
+							.append('=')
+							.append(URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8));
+				}
+			}
 
-		if (mitigationToken != null && !mitigationToken.trim().isEmpty()) {
-			builder.header("Authorization", "Bearer " + mitigationToken.trim());
-		}
+			HttpRequest.Builder builder = HttpRequest.newBuilder()
+					.uri(URI.create(base))
+					.timeout(Duration.ofSeconds(10))
+					.header("Accept", "application/json")
+					.header("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8");
 
-		HttpRequest request = builder.POST(HttpRequest.BodyPublishers.ofString(body.toString(), StandardCharsets.UTF_8)).build();
-		HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+			if (mitigationToken != null && !mitigationToken.trim().isEmpty()) {
+				builder.header("Authorization", "Bearer " + mitigationToken.trim());
+			}
 
-		if (response.statusCode() == 401 || response.statusCode() == 403) {
-			throw new IOException("HTTP " + response.statusCode() + " Unauthorized: Invalid or missing mitigation token for " + base);
-		}
-		if (response.statusCode() == 404) {
-			throw new IOException("HTTP 404 Not Found: Mitigation endpoint unavailable or blocked by IP filter at " + base);
-		}
-		if (response.statusCode() == 400) {
-			String msg = response.body() != null && !response.body().isBlank() ? ": " + response.body().trim() : "";
-			throw new IOException("HTTP 400 Bad Request from " + base + msg);
-		}
-		if (response.statusCode() == 409) {
-			String msg = response.body() != null && !response.body().isBlank() ? ": " + response.body().trim() : "";
-			throw new IOException("HTTP 409 Conflict from " + base + " (capacity limit reached)" + msg);
-		}
-		if (response.statusCode() != 200) {
-			String msg = response.body() != null && !response.body().isBlank() ? ": " + response.body().trim() : "";
-			throw new IOException("HTTP " + response.statusCode() + " response from " + base + msg);
-		}
+			HttpRequest request = builder.POST(HttpRequest.BodyPublishers.ofString(body.toString(), StandardCharsets.UTF_8)).build();
+			HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
-		return objectMapper.readValue(response.body(), MitigationCommandResponse.class);
+			if (response.statusCode() == 401 || response.statusCode() == 403) {
+				throw new IOException("HTTP " + response.statusCode() + " Unauthorized: Invalid or missing mitigation token for " + base);
+			}
+			if (response.statusCode() == 404) {
+				throw new IOException("HTTP 404 Not Found: Mitigation endpoint unavailable or blocked by IP filter at " + base);
+			}
+			if (response.statusCode() == 400) {
+				String msg = response.body() != null && !response.body().isBlank() ? ": " + response.body().trim() : "";
+				throw new IOException("HTTP 400 Bad Request from " + base + msg);
+			}
+			if (response.statusCode() == 409) {
+				String msg = response.body() != null && !response.body().isBlank() ? ": " + response.body().trim() : "";
+				throw new IOException("HTTP 409 Conflict from " + base + " (capacity limit reached)" + msg);
+			}
+			if (response.statusCode() != 200) {
+				String msg = response.body() != null && !response.body().isBlank() ? ": " + response.body().trim() : "";
+				throw new IOException("HTTP " + response.statusCode() + " response from " + base + msg);
+			}
+
+			return objectMapper.readValue(response.body(), MitigationCommandResponse.class);
+		} finally {
+			if (acquired) {
+				semaphore.release();
+			}
+		}
 	}
 
 	private <T> T executeGet(EndpointConfig endpoint, String url, Class<T> targetClass)
 			throws IOException, InterruptedException {
-		HttpRequest.Builder builder = HttpRequest.newBuilder()
-				.uri(URI.create(url))
-				.timeout(Duration.ofSeconds(10))
-				.header("Accept", "application/json");
-
-		if (endpoint.getToken() != null && !endpoint.getToken().trim().isEmpty()) {
-			builder.header("Authorization", "Bearer " + endpoint.getToken().trim());
+		String hostKey = extractHostKey(url);
+		Semaphore semaphore = hostSemaphores.computeIfAbsent(hostKey, k -> new Semaphore(1, true));
+		int timeoutSeconds = properties != null ? properties.getHostConcurrencyTimeoutSeconds() : 15;
+		boolean acquired = false;
+		if (timeoutSeconds > 0) {
+			acquired = semaphore.tryAcquire(timeoutSeconds, TimeUnit.SECONDS);
+			if (!acquired) {
+				throw new IOException("Host concurrency limit reached: Another request is currently in-flight to host '"
+						+ hostKey + "' (waited " + timeoutSeconds + "s)");
+			}
 		}
 
-		HttpRequest request = builder.GET().build();
-		HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+		try {
+			HttpRequest.Builder builder = HttpRequest.newBuilder()
+					.uri(URI.create(url))
+					.timeout(Duration.ofSeconds(10))
+					.header("Accept", "application/json");
 
-		if (response.statusCode() == 401 || response.statusCode() == 403) {
-			throw new IOException("HTTP " + response.statusCode() + " Unauthorized: Invalid or missing token for " + endpoint.getName());
-		}
-		if (response.statusCode() == 404) {
-			throw new IOException("HTTP 404 Not Found: Status endpoint unavailable or blocked by IP filter for " + endpoint.getName());
-		}
-		if (response.statusCode() != 200) {
-			throw new IOException("HTTP " + response.statusCode() + " response from " + endpoint.getName());
-		}
+			if (endpoint != null && endpoint.getToken() != null && !endpoint.getToken().trim().isEmpty()) {
+				builder.header("Authorization", "Bearer " + endpoint.getToken().trim());
+			}
 
-		return objectMapper.readValue(response.body(), targetClass);
+			HttpRequest request = builder.GET().build();
+			HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+
+			String endpointName = endpoint != null ? endpoint.getName() : hostKey;
+			if (response.statusCode() == 401 || response.statusCode() == 403) {
+				throw new IOException("HTTP " + response.statusCode() + " Unauthorized: Invalid or missing token for " + endpointName);
+			}
+			if (response.statusCode() == 404) {
+				throw new IOException("HTTP 404 Not Found: Status endpoint unavailable or blocked by IP filter for " + endpointName);
+			}
+			if (response.statusCode() != 200) {
+				throw new IOException("HTTP " + response.statusCode() + " response from " + endpointName);
+			}
+
+			String body = response.body();
+			long payloadBytes = body != null ? body.getBytes(StandardCharsets.UTF_8).length : 0L;
+			T result = objectMapper.readValue(body, targetClass);
+
+			if (result instanceof ValveOverviewDto overview) {
+				@SuppressWarnings("unchecked")
+				T enriched = (T) overview.withPayloadBytes(payloadBytes);
+				return enriched;
+			} else if (result instanceof ValveDetailsDto details) {
+				@SuppressWarnings("unchecked")
+				T enriched = (T) details.withPayloadBytes(payloadBytes);
+				return enriched;
+			}
+			return result;
+		} finally {
+			if (acquired) {
+				semaphore.release();
+			}
+		}
+	}
+
+	public String extractHostKey(String url) {
+		if (url == null || url.isBlank()) {
+			return "default";
+		}
+		try {
+			String clean = cleanBaseUrl(url);
+			URI uri = URI.create(clean);
+			String host = uri.getHost();
+			int port = uri.getPort();
+			if (host != null) {
+				int effectivePort = port > 0 ? port : ("https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80);
+				return host.toLowerCase(Locale.ROOT) + ":" + effectivePort;
+			}
+		} catch (Exception ignored) {
+		}
+		return url.toLowerCase(Locale.ROOT);
+	}
+
+	public void resetHostSemaphores() {
+		this.hostSemaphores.clear();
+	}
+
+	public int getAvailableHostPermits(String url) {
+		String key = extractHostKey(url);
+		Semaphore sem = hostSemaphores.get(key);
+		return sem != null ? sem.availablePermits() : 1;
 	}
 
 	private static String cleanBaseUrl(String url) {

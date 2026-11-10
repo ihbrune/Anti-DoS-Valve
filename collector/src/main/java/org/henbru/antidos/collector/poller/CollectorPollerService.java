@@ -196,6 +196,8 @@ public class CollectorPollerService {
 		int blockedEventsIngested = 0;
 		int markedEventsIngested = 0;
 		long totalNetworkMs = 0;
+		long totalPayloadBytes = 0;
+		int totalServerGenerationMs = 0;
 		List<String> warnings = new ArrayList<>();
 
 		try {
@@ -203,6 +205,8 @@ public class CollectorPollerService {
 			ValveOverviewDto overview = statusClient.fetchOverview(endpoint);
 			long overviewDuration = System.currentTimeMillis() - overviewStart;
 			totalNetworkMs += overviewDuration;
+			totalPayloadBytes += overview.payloadBytesOrDefault();
+			totalServerGenerationMs += overview.serverGenerationMsOrDefault();
 
 			int valveCount = overview.valves() != null
 					? (int) overview.valves().stream().filter(v -> endpoint.isValveIncluded(v.monitorName())).count()
@@ -219,12 +223,23 @@ public class CollectorPollerService {
 			));
 
 			java.util.Set<String> activeIncludedValveNames = new java.util.HashSet<>();
+			long endpointTimeoutMs = properties.getEndpointPollTimeoutMs();
 			if (overview.valves() != null && !overview.valves().isEmpty()) {
 				for (ValveOverviewDto.ValveSummaryDto v : overview.valves()) {
 					if (!endpoint.isValveIncluded(v.monitorName())) {
 						log.debug("Skipping valve '{}' on '{}' (excluded by endpoint configuration)", v.monitorName(), endpoint.getName());
 						continue;
 					}
+
+					long elapsed = System.currentTimeMillis() - start;
+					if (elapsed > endpointTimeoutMs) {
+						String timeoutWarning = "Endpoint poll deadline exceeded (" + elapsed + " ms > "
+								+ endpointTimeoutMs + " ms): skipping remaining valve(s)";
+						log.warn("Aborting poll on '{}': {}", endpoint.getName(), timeoutWarning);
+						warnings.add(timeoutWarning);
+						break;
+					}
+
 					activeIncludedValveNames.add(v.monitorName());
 					valvesPolled++;
 					updateValveConfigIfChanged(endpoint.getName(), v, now);
@@ -250,6 +265,8 @@ public class CollectorPollerService {
 					markedEventsIngested += result.markedEventsIngested();
 					warnings.addAll(result.warnings());
 					totalNetworkMs += result.networkDurationMs();
+					totalPayloadBytes += result.payloadBytes();
+					totalServerGenerationMs += result.serverGenerationMs();
 				}
 			}
 			if (monitoredValveRepository != null) {
@@ -306,7 +323,9 @@ public class CollectorPollerService {
 					blockedEventsIngested,
 					markedEventsIngested,
 					details,
-					errorMsg
+					errorMsg,
+					totalPayloadBytes,
+					totalServerGenerationMs
 			));
 
 		} catch (IOException | InterruptedException | RuntimeException e) {
@@ -337,8 +356,11 @@ public class CollectorPollerService {
 					0,
 					0,
 					0,
+					0,
 					"Connection failed: " + errorMsg,
-					errorMsg
+					errorMsg,
+					0L,
+					0
 			));
 		}
 	}
@@ -352,7 +374,10 @@ public class CollectorPollerService {
 		int blockedEvents = 0;
 		int markedEvents = 0;
 		long networkMs = 0;
+		long payloadBytes = 0;
+		int serverGenerationMs = 0;
 		List<String> warnings = new ArrayList<>();
+		boolean catchUpFailed = false;
 
 		// 1. Check for missed slots (catch-up recovery)
 		Optional<Long> latestCompletedKey = slotSnapshotRepository.findLatestCompletedSlotKey(endpoint.getName(), valveName);
@@ -361,48 +386,80 @@ public class CollectorPollerService {
 			int ringBufferCapacity = summary.numberOfSlots() > 0 ? summary.numberOfSlots() : 5;
 			long earliestRetrievableKey = Math.max(0, summary.currentSlotKey() - ringBufferCapacity);
 
-			long catchUpStart = Math.max(lastStored + 1, earliestRetrievableKey);
+			// Safeguard against ancient lag: drop slots older than maxCatchUpLagSlots
+			int maxLag = Math.max(1, properties.getMaxCatchUpLagSlots());
+			long lagCutoffKey = Math.max(0, lastCompletedKey - maxLag);
+			long catchUpStart = Math.max(lastStored + 1, Math.max(earliestRetrievableKey, lagCutoffKey));
+
+			if (catchUpStart > lastStored + 1) {
+				long droppedCount = catchUpStart - (lastStored + 1);
+				log.warn("Catch-up gap recovery on '{}/{}': dropped {} expired slots (lag exceeded buffer/limit, starting at key {})",
+						endpoint.getName(), valveName, droppedCount, catchUpStart);
+			}
+
+			int maxSlotsPerPoll = Math.max(1, properties.getMaxCatchUpSlotsPerPoll());
+			int slotsAttemptedInCatchUp = 0;
+
 			for (long k = catchUpStart; k < lastCompletedKey; k++) {
+				if (slotsAttemptedInCatchUp >= maxSlotsPerPoll) {
+					log.info("Throttling catch-up for '{}/{}': processed max {} slot(s) this cycle (remaining lag: {} slot(s))",
+							endpoint.getName(), valveName, slotsAttemptedInCatchUp, lastCompletedKey - k);
+					break;
+				}
+
 				SlotIngestResult r = fetchAndStoreSlot(endpoint, valveName, String.valueOf(k), true, pollTime, isMarkingOrSim);
 				slots += r.slotsCount();
 				events += r.eventsCount();
 				blockedEvents += r.blockedEventsCount();
 				markedEvents += r.markedEventsCount();
 				networkMs += r.networkDurationMs();
+				payloadBytes += r.payloadBytes();
+				serverGenerationMs += r.serverGenerationMs();
+
 				if (r.warning() != null) {
 					warnings.add(r.warning());
+					log.warn("Fast-fail circuit breaker triggered for '{}/{}' on slot key {}: aborting catch-up loop",
+							endpoint.getName(), valveName, k);
+					catchUpFailed = true;
+					break;
 				}
+				slotsAttemptedInCatchUp++;
 			}
 		}
 
 		// 2. Poll the finalized previous slot (normal flow)
-		// Completed slots are immutable; only fetch if this finalized slot has not been ingested yet
-		if (lastCompletedKey > 0 && (latestCompletedKey.isEmpty() || latestCompletedKey.get() < lastCompletedKey)) {
+		// Completed slots are immutable; only fetch if this finalized slot has not been ingested yet and catch-up did not fail
+		if (!catchUpFailed && lastCompletedKey > 0 && (latestCompletedKey.isEmpty() || latestCompletedKey.get() < lastCompletedKey)) {
 			SlotIngestResult r = fetchAndStoreSlot(endpoint, valveName, "previous", true, pollTime, isMarkingOrSim);
 			slots += r.slotsCount();
 			events += r.eventsCount();
 			blockedEvents += r.blockedEventsCount();
 			markedEvents += r.markedEventsCount();
 			networkMs += r.networkDurationMs();
+			payloadBytes += r.payloadBytes();
+			serverGenerationMs += r.serverGenerationMs();
 			if (r.warning() != null) {
 				warnings.add(r.warning());
+				catchUpFailed = true;
 			}
 		}
 
 		// 3. Optional: Poll intermediate snapshot of current in-progress slot
-		if (endpoint.isPollIntermediateSlots()) {
+		if (!catchUpFailed && endpoint.isPollIntermediateSlots()) {
 			SlotIngestResult r = fetchAndStoreSlot(endpoint, valveName, "current", false, pollTime, isMarkingOrSim);
 			slots += r.slotsCount();
 			events += r.eventsCount();
 			blockedEvents += r.blockedEventsCount();
 			markedEvents += r.markedEventsCount();
 			networkMs += r.networkDurationMs();
+			payloadBytes += r.payloadBytes();
+			serverGenerationMs += r.serverGenerationMs();
 			if (r.warning() != null) {
 				warnings.add(r.warning());
 			}
 		}
 
-		return new IngestResult(slots, events, blockedEvents, markedEvents, warnings, networkMs);
+		return new IngestResult(slots, events, blockedEvents, markedEvents, warnings, networkMs, payloadBytes, serverGenerationMs);
 	}
 
 	private SlotIngestResult fetchAndStoreSlot(EndpointConfig endpoint, String valveName, String slotParam, boolean completed, Instant pollTime, boolean isMarkingOrSim) {
@@ -417,8 +474,10 @@ public class CollectorPollerService {
 					? statusClient.fetchSlotDetails(endpoint, valveName, slotParam, "all", "all", activeLimitParam, null, null, activeMinCountParam)
 					: statusClient.fetchSlotDetails(endpoint, valveName, slotParam, "all", "all", activeLimitParam);
 			long netDuration = System.currentTimeMillis() - netStart;
-			if (details.selectedSlot() == null) {
-				return new SlotIngestResult(0, 0, 0, 0, null, netDuration);
+			long payloadBytes = details != null ? details.payloadBytesOrDefault() : 0L;
+			int serverGenMs = details != null ? details.serverGenerationMsOrDefault() : 0;
+			if (details == null || details.selectedSlot() == null) {
+				return new SlotIngestResult(0, 0, 0, 0, null, netDuration, payloadBytes, serverGenMs);
 			}
 
 			ValveDetailsDto.SelectedSlotDto slot = details.selectedSlot();
@@ -560,14 +619,14 @@ public class CollectorPollerService {
 				eventsCount = events.size();
 			}
 
-			return new SlotIngestResult(1, eventsCount, blockedCount, markedCount, null, netDuration);
+			return new SlotIngestResult(1, eventsCount, blockedCount, markedCount, null, netDuration, payloadBytes, serverGenMs);
 
 		} catch (IOException | InterruptedException | RuntimeException e) {
 			long netDuration = System.currentTimeMillis() - netStart;
 			String err = "Valve '" + valveName + "' slot '" + slotParam + "' failed: " + ValveStatusClient.formatErrorMessage(e);
 			log.warn("Could not fetch slot '{}' for valve '{}' on '{}': {}",
 					slotParam, valveName, endpoint.getName(), ValveStatusClient.formatErrorMessage(e));
-			return new SlotIngestResult(0, 0, 0, 0, err, netDuration);
+			return new SlotIngestResult(0, 0, 0, 0, err, netDuration, 0L, 0);
 		}
 	}
 
@@ -660,8 +719,8 @@ public class CollectorPollerService {
 		this.knownConfigHashes.remove(serverId + "#" + valveName);
 	}
 
-	private record SlotIngestResult(int slotsCount, int eventsCount, int blockedEventsCount, int markedEventsCount, String warning, long networkDurationMs) {}
-	private record IngestResult(int slotsIngested, int eventsIngested, int blockedEventsIngested, int markedEventsIngested, List<String> warnings, long networkDurationMs) {}
+	private record SlotIngestResult(int slotsCount, int eventsCount, int blockedEventsCount, int markedEventsCount, String warning, long networkDurationMs, long payloadBytes, int serverGenerationMs) {}
+	private record IngestResult(int slotsIngested, int eventsIngested, int blockedEventsIngested, int markedEventsIngested, List<String> warnings, long networkDurationMs, long payloadBytes, int serverGenerationMs) {}
 
 	private static Instant parseInstantOrFallback(String str, Instant fallback) {
 		if (str == null || str.trim().isEmpty()) {

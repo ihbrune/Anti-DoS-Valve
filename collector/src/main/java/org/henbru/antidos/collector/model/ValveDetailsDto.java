@@ -22,15 +22,58 @@ public record ValveDetailsDto(
 		Long sinceActiveOrder,
 		Integer activeMinCount,
 		List<ActiveClientDto> topActiveClients,
-		String error
+		String error,
+		Long serverGenerationMs,
+		Long payloadBytes
 ) {
+	/**
+	 * Backward-compatible constructor for previous 15-parameter signature.
+	 */
+	public ValveDetailsDto(
+			String serverTime,
+			ValveHeaderDto valve,
+			SelectedSlotDto selectedSlot,
+			int totalBlockedClients,
+			String blockedLimit,
+			Long maxBlockedOrder,
+			Long sinceBlockedOrder,
+			List<BlockedClientDto> blockedClients,
+			int totalActiveClients,
+			String activeLimit,
+			Long maxActiveOrder,
+			Long sinceActiveOrder,
+			Integer activeMinCount,
+			List<ActiveClientDto> topActiveClients,
+			String error
+	) {
+		this(serverTime, valve, selectedSlot, totalBlockedClients, blockedLimit,
+				maxBlockedOrder, sinceBlockedOrder, blockedClients, totalActiveClients,
+				activeLimit, maxActiveOrder, sinceActiveOrder, activeMinCount,
+				topActiveClients, error, null, null);
+	}
+
 	/**
 	 * Backward-compatible constructor for previous 7-parameter signature.
 	 */
 	public ValveDetailsDto(String serverTime, ValveHeaderDto valve, SelectedSlotDto selectedSlot,
 			int totalBlockedClients, String blockedLimit, List<BlockedClientDto> blockedClients, String error) {
 		this(serverTime, valve, selectedSlot, totalBlockedClients, blockedLimit, null, null,
-				blockedClients, 0, null, null, null, null, null, error);
+				blockedClients, 0, null, null, null, null, null, error, null, null);
+	}
+
+	public ValveDetailsDto withPayloadBytes(long bytes) {
+		return new ValveDetailsDto(serverTime, valve, selectedSlot, totalBlockedClients, blockedLimit,
+				maxBlockedOrder, sinceBlockedOrder, blockedClients, totalActiveClients,
+				activeLimit, maxActiveOrder, sinceActiveOrder, activeMinCount,
+				topActiveClients, error, serverGenerationMs, bytes);
+	}
+
+	public long payloadBytesOrDefault() {
+		return payloadBytes != null ? payloadBytes : 0L;
+	}
+
+	public int serverGenerationMsOrDefault() {
+		return serverGenerationMs != null ? serverGenerationMs.intValue() : 0;
 	}
 
 	@JsonIgnoreProperties(ignoreUnknown = true)

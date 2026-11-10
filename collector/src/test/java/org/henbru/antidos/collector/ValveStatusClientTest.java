@@ -281,4 +281,60 @@ class ValveStatusClientTest {
 		assertEquals(7200, v.mitigationMaxTtlSecondsOrDefault());
 		assertEquals(250, v.mitigationMaxActiveBlocksOrDefault());
 	}
+
+	@Test
+	void testParseOverviewAndDetailsWithServerGenerationMs() throws Exception {
+		String overviewJson = """
+				{
+				  "serverTime": "2026-11-10T12:00:00Z",
+				  "serverGenerationMs": 14,
+				  "valves": []
+				}
+				""";
+		ValveOverviewDto overviewDto = objectMapper.readValue(overviewJson, ValveOverviewDto.class);
+		assertNotNull(overviewDto);
+		assertEquals(14, overviewDto.serverGenerationMsOrDefault());
+		assertEquals(0L, overviewDto.payloadBytesOrDefault());
+
+		ValveOverviewDto enrichedOverview = overviewDto.withPayloadBytes(512L);
+		assertEquals(512L, enrichedOverview.payloadBytesOrDefault());
+		assertEquals(14, enrichedOverview.serverGenerationMsOrDefault());
+
+		String detailsJson = """
+				{
+				  "serverTime": "2026-11-10T12:00:00Z",
+				  "serverGenerationMs": 42,
+				  "selectedSlot": {
+				    "slotKey": 100,
+				    "type": "previous",
+				    "totalRequests": 10
+				  }
+				}
+				""";
+		ValveDetailsDto detailsDto = objectMapper.readValue(detailsJson, ValveDetailsDto.class);
+		assertNotNull(detailsDto);
+		assertEquals(42, detailsDto.serverGenerationMsOrDefault());
+		assertEquals(0L, detailsDto.payloadBytesOrDefault());
+
+		ValveDetailsDto enrichedDetails = detailsDto.withPayloadBytes(4096L);
+		assertEquals(4096L, enrichedDetails.payloadBytesOrDefault());
+		assertEquals(42, enrichedDetails.serverGenerationMsOrDefault());
+	}
+
+	@Test
+	void testExtractHostKey() {
+		ValveStatusClient client = new ValveStatusClient(objectMapper);
+		assertEquals("localhost:8080", client.extractHostKey("http://localhost:8080/antidos-status?format=json"));
+		assertEquals("pub04.corp.internal:443", client.extractHostKey("https://pub04.corp.internal/antidos-status"));
+		assertEquals("pub04.corp.internal:80", client.extractHostKey("http://pub04.corp.internal/antidos-status"));
+		assertEquals("pub04.corp.internal:8443", client.extractHostKey("https://pub04.corp.internal:8443/antidos-status"));
+		assertEquals("default", client.extractHostKey(""));
+	}
+
+	@Test
+	void testHostPermitTracking() {
+		ValveStatusClient client = new ValveStatusClient(objectMapper);
+		String url = "http://node-1.corp.internal:8080/antidos-status";
+		assertEquals(1, client.getAvailableHostPermits(url));
+	}
 }

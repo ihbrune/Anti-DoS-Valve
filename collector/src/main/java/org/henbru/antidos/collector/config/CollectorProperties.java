@@ -23,6 +23,10 @@ public class CollectorProperties {
 	private int pollLogRetentionDays = 1;
 	private int entityRetentionDays = 60;
 	private int slowPollThresholdMs = 1000;
+	private int maxCatchUpSlotsPerPoll = 2;
+	private int maxCatchUpLagSlots = 6;
+	private long endpointPollTimeoutMs = 25_000L;
+	private int hostConcurrencyTimeoutSeconds = 15;
 	private boolean demoMode = false;
 	private int demoInstanceCount = 1;
 	private boolean parallelFleetPolling = true;
@@ -126,6 +130,38 @@ public class CollectorProperties {
 
 	public void setSlowPollThresholdMs(int slowPollThresholdMs) {
 		this.slowPollThresholdMs = slowPollThresholdMs;
+	}
+
+	public int getMaxCatchUpSlotsPerPoll() {
+		return maxCatchUpSlotsPerPoll;
+	}
+
+	public void setMaxCatchUpSlotsPerPoll(int maxCatchUpSlotsPerPoll) {
+		this.maxCatchUpSlotsPerPoll = Math.max(1, maxCatchUpSlotsPerPoll);
+	}
+
+	public int getMaxCatchUpLagSlots() {
+		return maxCatchUpLagSlots;
+	}
+
+	public void setMaxCatchUpLagSlots(int maxCatchUpLagSlots) {
+		this.maxCatchUpLagSlots = Math.max(1, maxCatchUpLagSlots);
+	}
+
+	public long getEndpointPollTimeoutMs() {
+		return endpointPollTimeoutMs;
+	}
+
+	public void setEndpointPollTimeoutMs(long endpointPollTimeoutMs) {
+		this.endpointPollTimeoutMs = Math.max(1000L, endpointPollTimeoutMs);
+	}
+
+	public int getHostConcurrencyTimeoutSeconds() {
+		return hostConcurrencyTimeoutSeconds;
+	}
+
+	public void setHostConcurrencyTimeoutSeconds(int hostConcurrencyTimeoutSeconds) {
+		this.hostConcurrencyTimeoutSeconds = hostConcurrencyTimeoutSeconds;
 	}
 
 	public boolean isDemoMode() {

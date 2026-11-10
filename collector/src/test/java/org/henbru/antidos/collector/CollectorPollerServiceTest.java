@@ -54,6 +54,9 @@ class CollectorPollerServiceTest {
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
 
+	@Autowired
+	private org.henbru.antidos.collector.config.CollectorProperties properties;
+
 	@BeforeEach
 	void setUp() {
 		jdbcTemplate.update("DELETE FROM client_events");
@@ -820,6 +823,172 @@ class CollectorPollerServiceTest {
 		assertTrue(updatedOpt.isPresent());
 		assertEquals("UNAUTHENTICATED_ONLY", updatedOpt.get().relevantAuthScope());
 		assertEquals("badge-warning", updatedOpt.get().relevantAuthScopeBadgeClass());
+	}
+
+	@Test
+	void testCatchUpThrottledToMaxSlotsPerPoll() throws Exception {
+		EndpointConfig endpoint = new EndpointConfig("THROTTLE-NODE", "http://localhost:8080/antidos-status", "tok", false, true);
+
+		// Seed previous completed slot 100 in DB
+		slotSnapshotRepository.upsert(new org.henbru.antidos.collector.model.SlotSnapshot(
+				null, "THROTTLE-NODE", "THROTTLE_VALVE", 100L,
+				Instant.now().minusSeconds(60), Instant.now().minusSeconds(50),
+				100L, 5, 0, 0, true, Instant.now()
+		));
+
+		// Valve summary reports currentSlotKey=106, lastCompletedSlotKey=105
+		// Missed slots are: 101, 102, 103, 104
+		ValveOverviewDto.ValveSummaryDto summary = new ValveOverviewDto.ValveSummaryDto(
+				"THROTTLE_VALVE", 1, "BLOCKING", false, false, 50, 10, 10, 5, 1,
+				106L, 105L, 5000L, 450L, 10, 0
+		);
+		when(statusClient.fetchOverview(any())).thenReturn(new ValveOverviewDto("2026-11-10T12:00:00Z", List.of(summary), null));
+
+		ValveDetailsDto.SelectedSlotDto slot101 = new ValveDetailsDto.SelectedSlotDto(
+				"101", 1, 101L, false, "2026-11-10T11:59:10Z", "2026-11-10T11:59:20Z", 100L, 5, 0
+		);
+		ValveDetailsDto.SelectedSlotDto slot102 = new ValveDetailsDto.SelectedSlotDto(
+				"102", 2, 102L, false, "2026-11-10T11:59:20Z", "2026-11-10T11:59:30Z", 100L, 5, 0
+		);
+
+		when(statusClient.fetchSlotDetails(any(), eq("THROTTLE_VALVE"), eq("101"), any(), any(), any()))
+				.thenReturn(new ValveDetailsDto("2026-11-10T12:00:00Z", null, slot101, 0, "all", List.of(), null));
+		when(statusClient.fetchSlotDetails(any(), eq("THROTTLE_VALVE"), eq("102"), any(), any(), any()))
+				.thenReturn(new ValveDetailsDto("2026-11-10T12:00:00Z", null, slot102, 0, "all", List.of(), null));
+
+		properties.setMaxCatchUpSlotsPerPoll(2);
+
+		pollerService.pollEndpoint(endpoint);
+
+		// Must have fetched slot 101 and 102
+		verify(statusClient, times(1)).fetchSlotDetails(any(), eq("THROTTLE_VALVE"), eq("101"), any(), any(), any());
+		verify(statusClient, times(1)).fetchSlotDetails(any(), eq("THROTTLE_VALVE"), eq("102"), any(), any(), any());
+
+		// Must NOT have fetched slot 103 or 104 in this cycle due to maxCatchUpSlotsPerPoll = 2
+		verify(statusClient, never()).fetchSlotDetails(any(), eq("THROTTLE_VALVE"), eq("103"), any(), any(), any());
+		verify(statusClient, never()).fetchSlotDetails(any(), eq("THROTTLE_VALVE"), eq("104"), any(), any(), any());
+
+		// Latest completed key in snapshot repo should now be 102
+		Optional<Long> latest = slotSnapshotRepository.findLatestCompletedSlotKey("THROTTLE-NODE", "THROTTLE_VALVE");
+		assertTrue(latest.isPresent());
+		assertEquals(102L, latest.get());
+	}
+
+	@Test
+	void testCatchUpFastFailCircuitBreaker() throws Exception {
+		EndpointConfig endpoint = new EndpointConfig("CB-NODE", "http://localhost:8080/antidos-status", "tok", false, true);
+
+		// Seed previous completed slot 100 in DB
+		slotSnapshotRepository.upsert(new org.henbru.antidos.collector.model.SlotSnapshot(
+				null, "CB-NODE", "CB_VALVE", 100L,
+				Instant.now().minusSeconds(60), Instant.now().minusSeconds(50),
+				100L, 5, 0, 0, true, Instant.now()
+		));
+
+		// Valve summary reports currentSlotKey=106, lastCompletedSlotKey=105
+		ValveOverviewDto.ValveSummaryDto summary = new ValveOverviewDto.ValveSummaryDto(
+				"CB_VALVE", 1, "BLOCKING", false, false, 50, 10, 10, 5, 1,
+				106L, 105L, 5000L, 450L, 10, 0
+		);
+		when(statusClient.fetchOverview(any())).thenReturn(new ValveOverviewDto("2026-11-10T12:00:00Z", List.of(summary), null));
+
+		// Slot 101 times out
+		when(statusClient.fetchSlotDetails(any(), eq("CB_VALVE"), eq("101"), any(), any(), any()))
+				.thenThrow(new java.net.http.HttpTimeoutException("request timed out"));
+
+		properties.setMaxCatchUpSlotsPerPoll(5);
+
+		pollerService.pollEndpoint(endpoint);
+
+		// Must have attempted slot 101
+		verify(statusClient, times(1)).fetchSlotDetails(any(), eq("CB_VALVE"), eq("101"), any(), any(), any());
+
+		// Circuit breaker must immediately abort: no slots 102..104 and no "previous"
+		verify(statusClient, never()).fetchSlotDetails(any(), eq("CB_VALVE"), eq("102"), any(), any(), any());
+		verify(statusClient, never()).fetchSlotDetails(any(), eq("CB_VALVE"), eq("103"), any(), any(), any());
+		verify(statusClient, never()).fetchSlotDetails(any(), eq("CB_VALVE"), eq("previous"), any(), any(), any());
+
+		// Poll log status should be WARNING with error details
+		var pollLogs = pollEventLogRepository.findRecent(null, "ALL", "CB-NODE", 5);
+		assertFalse(pollLogs.isEmpty());
+		assertEquals("WARNING", pollLogs.getFirst().status());
+		assertTrue(pollLogs.getFirst().errorMessage().contains("slot '101' failed"));
+	}
+
+	@Test
+	void testCatchUpDropsAncientSlotsBeyondMaxLag() throws Exception {
+		EndpointConfig endpoint = new EndpointConfig("LAG-NODE", "http://localhost:8080/antidos-status", "tok", false, true);
+
+		// Seed previous completed slot 50 in DB
+		slotSnapshotRepository.upsert(new org.henbru.antidos.collector.model.SlotSnapshot(
+				null, "LAG-NODE", "LAG_VALVE", 50L,
+				Instant.now().minusSeconds(600), Instant.now().minusSeconds(590),
+				100L, 5, 0, 0, true, Instant.now()
+		));
+
+		// Server advanced to lastCompletedSlotKey = 100, numberOfSlots = 20
+		// Total missing = 50 slots!
+		ValveOverviewDto.ValveSummaryDto summary = new ValveOverviewDto.ValveSummaryDto(
+				"LAG_VALVE", 1, "BLOCKING", false, false, 50, 10, 20, 5, 1,
+				101L, 100L, 5000L, 450L, 10, 0
+		);
+		when(statusClient.fetchOverview(any())).thenReturn(new ValveOverviewDto("2026-11-10T12:00:00Z", List.of(summary), null));
+
+		// Set max lag to 4 slots (100 - 4 = 96) and max catch up slots to 2
+		properties.setMaxCatchUpLagSlots(4);
+		properties.setMaxCatchUpSlotsPerPoll(2);
+
+		ValveDetailsDto.SelectedSlotDto slot96 = new ValveDetailsDto.SelectedSlotDto(
+				"96", 1, 96L, false, "2026-11-10T11:59:10Z", "2026-11-10T11:59:20Z", 100L, 5, 0
+		);
+		ValveDetailsDto.SelectedSlotDto slot97 = new ValveDetailsDto.SelectedSlotDto(
+				"97", 2, 97L, false, "2026-11-10T11:59:20Z", "2026-11-10T11:59:30Z", 100L, 5, 0
+		);
+
+		when(statusClient.fetchSlotDetails(any(), eq("LAG_VALVE"), eq("96"), any(), any(), any()))
+				.thenReturn(new ValveDetailsDto("2026-11-10T12:00:00Z", null, slot96, 0, "all", List.of(), null));
+		when(statusClient.fetchSlotDetails(any(), eq("LAG_VALVE"), eq("97"), any(), any(), any()))
+				.thenReturn(new ValveDetailsDto("2026-11-10T12:00:00Z", null, slot97, 0, "all", List.of(), null));
+
+		pollerService.pollEndpoint(endpoint);
+
+		// Slots 51..95 were dropped! Must start at 96
+		verify(statusClient, never()).fetchSlotDetails(any(), eq("LAG_VALVE"), eq("51"), any(), any(), any());
+		verify(statusClient, times(1)).fetchSlotDetails(any(), eq("LAG_VALVE"), eq("96"), any(), any(), any());
+		verify(statusClient, times(1)).fetchSlotDetails(any(), eq("LAG_VALVE"), eq("97"), any(), any(), any());
+	}
+
+	@Test
+	void testPayloadBytesAndServerGenerationMsPersisted() throws Exception {
+		EndpointConfig endpoint = new EndpointConfig("TELEMETRY-NODE", "http://localhost:8080/antidos-status", "tok", false, true);
+
+		ValveOverviewDto.ValveSummaryDto summary = new ValveOverviewDto.ValveSummaryDto(
+				"TEL_VALVE", 1, "BLOCKING", false, false, 50, 60, 5, 5, 1, 500L, 499L, 2000L, 200L, 10, 0
+		);
+		// Overview with 12ms server generation and 1024 bytes
+		ValveOverviewDto overview = new ValveOverviewDto("2026-11-10T12:00:00Z", List.of(summary), null, 12L)
+				.withPayloadBytes(1024L);
+		when(statusClient.fetchOverview(any())).thenReturn(overview);
+
+		ValveDetailsDto.SelectedSlotDto slotDto = new ValveDetailsDto.SelectedSlotDto(
+				"previous", 4, 499L, false, "2026-11-10T11:59:00Z", "2026-11-10T12:00:00Z", 200L, 10, 0
+		);
+		// Details with 38ms server generation and 5120 bytes
+		ValveDetailsDto details = new ValveDetailsDto(
+				"2026-11-10T12:00:00Z", null, slotDto, 0, "all", null, null,
+				List.of(), 0, null, null, null, null, null, null, 38L, 5120L
+		);
+		when(statusClient.fetchSlotDetails(any(), eq("TEL_VALVE"), eq("previous"), any(), any(), any())).thenReturn(details);
+
+		pollerService.pollEndpoint(endpoint);
+
+		var pollLogs = pollEventLogRepository.findRecent(null, "ALL", "TELEMETRY-NODE", 5);
+		assertFalse(pollLogs.isEmpty());
+		var log = pollLogs.getFirst();
+		assertEquals("SUCCESS", log.status());
+		assertEquals(6144L, log.payloadBytes()); // 1024 + 5120
+		assertEquals(50, log.serverGenerationMs()); // 12 + 38
+		assertEquals("6.0 KB", log.formattedPayloadSize());
 	}
 }
 
