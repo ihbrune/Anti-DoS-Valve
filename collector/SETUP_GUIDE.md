@@ -329,9 +329,10 @@ The interaction between Tomcat Valves and the Collector is decoupled and asynchr
  |   |                                                                       |   |
  |   |  * Scheduled Telemetry Evaluation (every 2m)                          |   |
  |   |  * Carpet Attack Detection (Multi-subnet ASN flood analysis)           |   |
- |   |  * 7 Deterministic Safety Guardrails (Zero auth, returning ratio, etc)|   |
+ |   |  * 8 Deterministic Safety Guardrails (Zero auth, returning ratio, etc)|   |
  |   |  * In-Memory / Database Rule Management (system_settings dominance)   |   |
  |   |  * Browser Notifications (HTML5 Desktop & In-App Toast Alerts)        |   |
+ |   |  * Webhook & Slack Alert Notifications (Async Non-Blocking HTTP POST) |   |
  |   +-----------------------------------------------------------------------+   |
  |            |                                                                  |
  |            v                                                                  |
@@ -531,6 +532,22 @@ Deploying autonomous defense follows a structured verification path:
 
 ---
 
+### 5. Webhook Alerting (Slack, Teams, Discord, Generic SIEM)
+
+The Collector includes a built-in asynchronous notification dispatcher (`AlertNotificationService`) that dispatches real-time security alerts to external collaboration channels and monitoring pipelines:
+
+* **Zero Third-Party SDK Dependencies:** Built natively using Java 21 `HttpClient` and non-blocking asynchronous dispatch (`sendAsync`). Even if the remote webhook endpoint is slow or unreachable, Collector polling and mitigation pipelines remain completely non-blocking.
+* **Universal Standard Format:** Payloads include standard Markdown / mrkdwn formatted `text` as well as structured JSON metadata (`event`, `asn`, `subnets`, `batchId`, `reason`, `timestamp`). This format works natively out-of-the-box with:
+  * **Slack:** Via standard Incoming Webhooks.
+  * **Mattermost & Rocket.Chat:** 100% Slack-compatible.
+  * **Discord:** By appending `/slack` to standard Discord webhook URLs.
+  * **Microsoft Teams:** Via Incoming Webhooks or modern Power Automate / Workflows.
+  * **SIEM / Generic Receivers:** n8n, Zapier, Splunk, Elastic, Alertmanager.
+* **Sensitive Token Masking:** Target URLs with private tokens (such as Slack webhook secrets) are automatically masked in log files (e.g. `https://hooks.slack.com/services/T00000000/...`).
+* **Live In-App Testing & Overrides:** Webhook URL and notification switches can be configured live in the `/mitigation` dashboard. Click **Send Test Notification** to immediately verify delivery with instantaneous HTTP status feedback.
+
+---
+
 ## Configuration Reference (`application.yaml` & `collector-config.yaml`)
 
 All parameters can be configured via `collector-config.yaml` or overridden via environment variables:
@@ -584,6 +601,17 @@ All parameters can be configured via `collector-config.yaml` or overridden via e
 | `auto-mitigation.default-ttl-minutes` | `COLLECTOR_AUTO_MITIGATION_DEFAULT_TTL_MINUTES` | `60` | Initial block lease duration (in minutes) assigned to autonomous dynamic CIDR blocks. |
 | `auto-mitigation.auto-extend-persistent` | `COLLECTOR_AUTO_MITIGATION_AUTO_EXTEND_PERSISTENT` | `true` | Proactively extends persistent attackers (`PERSISTENT` deterrence state) near expiration. |
 | `auto-mitigation.max-extension-hours` | `COLLECTOR_AUTO_MITIGATION_MAX_EXTENSION_HOURS` | `12` | Maximum cumulative lifetime cap (in hours) permitted for an autonomously extended rule. |
+
+### Alerting & Webhook Notifications (`collector.notification.*`)
+
+| YAML Property (`collector.*`) | Environment Variable | Default | Description |
+|---|---|---|---|
+| `notification.enabled` | `COLLECTOR_NOTIFICATION_ENABLED` | `false` | Master switch for dispatching outgoing HTTP webhook alert notifications. |
+| `notification.webhook-url` | `COLLECTOR_NOTIFICATION_WEBHOOK_URL` | `null` | Target Webhook URL (Slack Incoming Webhook, Microsoft Teams Workflow, Discord `/slack`, Mattermost, or generic HTTP endpoint). |
+| `notification.notify-on-dry-run` | `COLLECTOR_NOTIFICATION_NOTIFY_ON_DRY_RUN` | `true` | Send alert notifications when the Autonomous Defense Engine detects an attack in Simulation / Dry-Run mode. |
+| `notification.notify-on-auto-block` | `COLLECTOR_NOTIFICATION_NOTIFY_ON_AUTO_BLOCK` | `true` | Send alert notifications when live dynamic CIDR blocks are pushed to the fleet. |
+| `notification.notify-on-emergency-flush` | `COLLECTOR_NOTIFICATION_NOTIFY_ON_EMERGENCY_FLUSH` | `true` | Send alert notifications when an operator triggers a fleet-wide emergency flush. |
+| `notification.notify-on-circuit-breaker` | `COLLECTOR_NOTIFICATION_NOTIFY_ON_CIRCUIT_BREAKER` | `true` | Send alert notifications when the concurrent auto-mitigation circuit breaker cap is reached. |
 
 ### SQLite Storage Maintenance & Compaction
 

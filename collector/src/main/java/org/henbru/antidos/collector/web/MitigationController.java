@@ -13,6 +13,8 @@ import org.henbru.antidos.collector.mitigation.MitigationService;
 import org.henbru.antidos.collector.model.MitigationAuditEntry;
 import org.henbru.antidos.collector.model.MitigationRule;
 import org.henbru.antidos.collector.model.MonitoredValve;
+import org.henbru.antidos.collector.notification.AlertNotificationService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -31,15 +33,26 @@ public class MitigationController {
 
 	private final MitigationService mitigationService;
 	private final AutoMitigationService autoMitigationService;
+	private final AlertNotificationService notificationService;
 	private final CollectorProperties properties;
+
+	@Autowired
+	public MitigationController(
+			MitigationService mitigationService,
+			AutoMitigationService autoMitigationService,
+			@Autowired(required = false) AlertNotificationService notificationService,
+			CollectorProperties properties) {
+		this.mitigationService = mitigationService;
+		this.autoMitigationService = autoMitigationService;
+		this.notificationService = notificationService;
+		this.properties = properties;
+	}
 
 	public MitigationController(
 			MitigationService mitigationService,
 			AutoMitigationService autoMitigationService,
 			CollectorProperties properties) {
-		this.mitigationService = mitigationService;
-		this.autoMitigationService = autoMitigationService;
-		this.properties = properties;
+		this(mitigationService, autoMitigationService, null, properties);
 	}
 
 	@GetMapping("/mitigation")
@@ -264,6 +277,10 @@ public class MitigationController {
 			@RequestParam(value = "defaultTtlMinutes", defaultValue = "60") int defaultTtlMinutes,
 			@RequestParam(value = "autoExtendPersistent", defaultValue = "false") boolean autoExtendPersistent,
 			@RequestParam(value = "maxExtensionHours", defaultValue = "24") int maxExtensionHours,
+			@RequestParam(value = "webhookEnabled", defaultValue = "false") boolean webhookEnabled,
+			@RequestParam(value = "webhookUrl", required = false) String webhookUrl,
+			@RequestParam(value = "notifyOnDryRun", defaultValue = "false") boolean notifyOnDryRun,
+			@RequestParam(value = "notifyOnEmergencyFlush", defaultValue = "false") boolean notifyOnEmergencyFlush,
 			Model model) {
 		try {
 			autoMitigationService.updateSettings(
@@ -271,11 +288,33 @@ public class MitigationController {
 					carpetWindowHours, protectedAsns,
 					maxReturningRatioPct, maxActiveRules, defaultTtlMinutes,
 					autoExtendPersistent, maxExtensionHours, "ADMIN");
-			populateMitigationModel(model, "Autonomous defense engine settings saved to system_settings.", null);
+			if (notificationService != null) {
+				notificationService.updateSettings(webhookEnabled, webhookUrl, notifyOnDryRun, notifyOnEmergencyFlush, "ADMIN");
+			}
+			populateMitigationModel(model, "Autonomous defense and notification settings saved to system_settings.", null);
 		} catch (Exception e) {
 			populateMitigationModel(model, null, "Failed to update autonomous defense settings: " + e.getMessage());
 		}
 		return "fragments/mitigation-content :: mitigationDashboard";
+	}
+
+	public String updateAutoMitigationSettings(
+			boolean enabled,
+			boolean dryRun,
+			int carpetMinSubnets,
+			long carpetMinRequests,
+			int carpetWindowHours,
+			String protectedAsns,
+			double maxReturningRatioPct,
+			int maxActiveRules,
+			int defaultTtlMinutes,
+			boolean autoExtendPersistent,
+			int maxExtensionHours,
+			Model model) {
+		return updateAutoMitigationSettings(
+				enabled, dryRun, carpetMinSubnets, carpetMinRequests, carpetWindowHours,
+				protectedAsns, maxReturningRatioPct, maxActiveRules, defaultTtlMinutes,
+				autoExtendPersistent, maxExtensionHours, false, null, false, false, model);
 	}
 
 	@PostMapping("/mitigation/auto/toggle")
@@ -307,9 +346,27 @@ public class MitigationController {
 	public String resetAutoMitigationSettings(Model model) {
 		try {
 			autoMitigationService.resetToDefaults("ADMIN");
-			populateMitigationModel(model, "Autonomous defense settings reset to application.yaml defaults.", null);
+			if (notificationService != null) {
+				notificationService.resetToDefaults("ADMIN");
+			}
+			populateMitigationModel(model, "Autonomous defense and notification settings reset to application.yaml defaults.", null);
 		} catch (Exception e) {
 			populateMitigationModel(model, null, "Failed to reset settings: " + e.getMessage());
+		}
+		return "fragments/mitigation-content :: mitigationDashboard";
+	}
+
+	@PostMapping("/mitigation/webhook/test")
+	public String testWebhook(Model model) {
+		if (notificationService != null) {
+			AlertNotificationService.TestResult res = notificationService.sendTestNotification();
+			if (res.success()) {
+				populateMitigationModel(model, res.message(), null);
+			} else {
+				populateMitigationModel(model, null, res.message());
+			}
+		} else {
+			populateMitigationModel(model, null, "AlertNotificationService is not available.");
 		}
 		return "fragments/mitigation-content :: mitigationDashboard";
 	}
@@ -417,6 +474,7 @@ public class MitigationController {
 		model.addAttribute("activeBatches", activeBatches.values());
 		model.addAttribute("defaultTtlMinutes", properties.getDefaultMitigationTtlMinutes());
 		model.addAttribute("autoSettings", autoMitigationService.getEffectiveSettings());
+		model.addAttribute("notificationSettings", notificationService != null ? notificationService.getEffectiveSettings() : null);
 		model.addAttribute("feedbackSuccess", feedbackSuccess);
 		model.addAttribute("feedbackError", feedbackError);
 	}

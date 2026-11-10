@@ -28,6 +28,7 @@ import org.henbru.antidos.collector.model.MitigationRule;
 import org.henbru.antidos.collector.model.MonitoredValve;
 import org.henbru.antidos.collector.model.NetworkEntity;
 import org.henbru.antidos.collector.model.ValveOverviewDto;
+import org.henbru.antidos.collector.notification.AlertNotificationService;
 import org.henbru.antidos.collector.poller.ValveStatusClient;
 import org.henbru.antidos.collector.storage.MitigationRuleRepository;
 import org.henbru.antidos.collector.storage.MonitoredValveRepository;
@@ -56,6 +57,7 @@ public class MitigationService {
 	private final MonitoredValveRepository valveRepository;
 	private final ValveStatusClient statusClient;
 	private final EntityResolver entityResolver;
+	private final AlertNotificationService notificationService;
 	private final JdbcTemplate jdbcTemplate;
 
 	private final AtomicBoolean deterrenceRefreshPending = new AtomicBoolean(false);
@@ -68,13 +70,25 @@ public class MitigationService {
 			MonitoredValveRepository valveRepository,
 			ValveStatusClient statusClient,
 			@Autowired(required = false) EntityResolver entityResolver,
+			@Autowired(required = false) AlertNotificationService notificationService,
 			JdbcTemplate jdbcTemplate) {
 		this.properties = properties;
 		this.ruleRepository = ruleRepository;
 		this.valveRepository = valveRepository;
 		this.statusClient = statusClient;
 		this.entityResolver = entityResolver;
+		this.notificationService = notificationService;
 		this.jdbcTemplate = jdbcTemplate;
+	}
+
+	public MitigationService(
+			CollectorProperties properties,
+			MitigationRuleRepository ruleRepository,
+			MonitoredValveRepository valveRepository,
+			ValveStatusClient statusClient,
+			EntityResolver entityResolver,
+			JdbcTemplate jdbcTemplate) {
+		this(properties, ruleRepository, valveRepository, statusClient, entityResolver, null, jdbcTemplate);
 	}
 
 	// =========================================================================
@@ -858,6 +872,9 @@ public class MitigationService {
 				now
 		));
 		syncFleetMitigations();
+		if (notificationService != null) {
+			notificationService.sendEmergencyFlushAlert(count, safeRevokeReason, actor);
+		}
 		return count;
 	}
 

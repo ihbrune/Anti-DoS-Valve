@@ -40,6 +40,7 @@ public class CollectorProperties {
 	private String mitigationToken; // Optional fleet-wide default write token for dynamic CIDR mitigation
 	private int defaultMitigationTtlMinutes = 60;
 	private AutoMitigationConfig autoMitigation = new AutoMitigationConfig();
+	private NotificationConfig notification = new NotificationConfig();
 	private List<EndpointConfig> endpoints = new ArrayList<>();
 	private EnrichmentConfig enrichment = new EnrichmentConfig();
 
@@ -277,6 +278,39 @@ public class CollectorProperties {
 
 	public void setAutoMitigation(AutoMitigationConfig autoMitigation) {
 		this.autoMitigation = autoMitigation != null ? autoMitigation : new AutoMitigationConfig();
+	}
+
+	public NotificationConfig getNotification() {
+		return notification;
+	}
+
+	public void setNotification(NotificationConfig notification) {
+		this.notification = notification != null ? notification : new NotificationConfig();
+	}
+
+	/**
+	 * Configuration properties for alert and webhook notifications (Slack, Teams, Discord, Generic).
+	 */
+	public static class NotificationConfig {
+		private boolean enabled = false;
+		private String webhookUrl;
+		private boolean notifyOnDryRun = true;
+		private boolean notifyOnAutoBlock = true;
+		private boolean notifyOnEmergencyFlush = true;
+		private boolean notifyOnCircuitBreaker = true;
+
+		public boolean isEnabled() { return enabled; }
+		public void setEnabled(boolean enabled) { this.enabled = enabled; }
+		public String getWebhookUrl() { return webhookUrl; }
+		public void setWebhookUrl(String webhookUrl) { this.webhookUrl = webhookUrl; }
+		public boolean isNotifyOnDryRun() { return notifyOnDryRun; }
+		public void setNotifyOnDryRun(boolean notifyOnDryRun) { this.notifyOnDryRun = notifyOnDryRun; }
+		public boolean isNotifyOnAutoBlock() { return notifyOnAutoBlock; }
+		public void setNotifyOnAutoBlock(boolean notifyOnAutoBlock) { this.notifyOnAutoBlock = notifyOnAutoBlock; }
+		public boolean isNotifyOnEmergencyFlush() { return notifyOnEmergencyFlush; }
+		public void setNotifyOnEmergencyFlush(boolean notifyOnEmergencyFlush) { this.notifyOnEmergencyFlush = notifyOnEmergencyFlush; }
+		public boolean isNotifyOnCircuitBreaker() { return notifyOnCircuitBreaker; }
+		public void setNotifyOnCircuitBreaker(boolean notifyOnCircuitBreaker) { this.notifyOnCircuitBreaker = notifyOnCircuitBreaker; }
 	}
 
 	/**

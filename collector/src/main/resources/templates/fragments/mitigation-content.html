@@ -289,21 +289,65 @@
                                th:value="${autoSettings.protectedAsns}"
                                style="width: 100%; background: var(--bg-input, rgba(0,0,0,0.3)); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 6px 10px; font-size: 12.5px; font-family: ui-monospace, monospace;">
                     </div>
+
+                    <!-- Webhook & Slack Alerting Settings -->
+                    <div style="grid-column: 1 / -1; margin-top: 8px; padding-top: 14px; border-top: 1px dashed var(--border-color);" th:if="${notificationSettings != null}">
+                        <div style="font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                            <span><span>&#x1F4E3;</span> Webhook &amp; Slack Alerting</span>
+                            <button type="button" class="btn"
+                                    hx-post="/mitigation/webhook/test"
+                                    hx-target="#mitigation-dashboard-container"
+                                    hx-swap="outerHTML show:top"
+                                    style="font-size: 11.5px; padding: 4px 12px;"
+                                    title="Send a sample test notification to the configured webhook URL">
+                                <span>&#x1F514;</span> Send Test Notification
+                            </button>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px;">
+                            <div style="grid-column: 1 / -1;">
+                                <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
+                                    Webhook Target URL (Slack, Microsoft Teams, Discord, Mattermost, or Generic Webhook)
+                                </label>
+                                <input type="url" name="webhookUrl"
+                                       placeholder="https://hooks.slack.com/services/..."
+                                       th:value="${notificationSettings.webhookUrl}"
+                                       style="width: 100%; background: var(--bg-input, rgba(0,0,0,0.3)); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 6px 10px; font-size: 12.5px; font-family: ui-monospace, monospace;">
+                            </div>
+                            <div>
+                                <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-primary); cursor: pointer;">
+                                    <input type="checkbox" name="webhookEnabled" value="true" th:checked="${notificationSettings.enabled}">
+                                    <span>Enable Webhook Alerts</span>
+                                </label>
+                            </div>
+                            <div>
+                                <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-primary); cursor: pointer;">
+                                    <input type="checkbox" name="notifyOnDryRun" value="true" th:checked="${notificationSettings.notifyOnDryRun}">
+                                    <span>Alert on Dry-Run Simulations</span>
+                                </label>
+                            </div>
+                            <div>
+                                <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-primary); cursor: pointer;">
+                                    <input type="checkbox" name="notifyOnEmergencyFlush" value="true" th:checked="${notificationSettings.notifyOnEmergencyFlush}">
+                                    <span>Alert on Emergency Flush</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
                     <div style="font-size: 11.5px; color: var(--text-muted);">
-                        <span th:if="${autoSettings.hasDatabaseOverrides}">
+                        <span th:if="${autoSettings.hasDatabaseOverrides or (notificationSettings != null and notificationSettings.hasDatabaseOverrides)}">
                             &#x2139;&#xFE0F; Currently using runtime overrides from <code>system_settings</code>.
                         </span>
-                        <span th:if="${!autoSettings.hasDatabaseOverrides}">
+                        <span th:if="${!autoSettings.hasDatabaseOverrides and (notificationSettings == null or !notificationSettings.hasDatabaseOverrides)}">
                             &#x2139;&#xFE0F; Currently using default values from <code>application.yaml</code>.
                         </span>
                     </div>
 
                     <div style="display: flex; gap: 10px; align-items: center;">
                         <button type="button" class="btn btn-secondary"
-                                th:if="${autoSettings.hasDatabaseOverrides}"
+                                th:if="${autoSettings.hasDatabaseOverrides or (notificationSettings != null and notificationSettings.hasDatabaseOverrides)}"
                                 hx-post="/mitigation/auto/reset"
                                 hx-target="#mitigation-dashboard-container"
                                 hx-swap="outerHTML show:top"

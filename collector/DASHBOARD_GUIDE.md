@@ -791,6 +791,13 @@ Outside business hours or during high-rate overnight waves, the Autonomous Defen
 * **Auto-Extension for Persistent Attackers:** When enabled (`autoExtendPersistent = true`), rules whose attackers remain in `PERSISTENT` deterrence state near expiration are autonomously extended by +60 minutes up to a configurable maximum lifetime cap (`maxExtensionHours`, default `24h`).
 * **Runtime Database Overrides (`system_settings`):** Thresholds and mode switches can be adjusted live in the `/mitigation` dashboard. Runtime overrides are stored in the `system_settings` database table, taking immediate precedence over `application.yaml` defaults, with a **Reset to Defaults** button to revert at any time.
 
+### 7. Webhook & Slack Alerting
+Operators can connect the active mitigation control plane to collaboration channels (Slack, Microsoft Teams, Discord, Mattermost) or generic SIEM pipelines:
+* **Configuration:** Expand the configuration drawer in `/mitigation` to set the **Webhook Target URL**, enable/disable alerting, and choose whether to receive notifications for Simulation (Dry-Run) discoveries and Emergency Flushes.
+* **Instant Delivery Testing:** Click **Send Test Notification** to trigger an immediate live probe. The dashboard reports instantaneous delivery status (HTTP 200 or connection errors).
+* **Alert Format:** Dispatches rich Markdown messages formatted for chat feeds (`text`) along with structured JSON fields (`event`, `asn`, `subnets`, `batchId`, `reason`) for automated security pipelines.
+* **Zero Overhead:** Webhook requests are dispatched asynchronously using Java 21 non-blocking I/O with a strict 6-second timeout, ensuring zero latency impact on request processing and fleet polling.
+
 ---
 
 ## Threat Intelligence Badges & Classifications Reference

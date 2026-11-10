@@ -10,9 +10,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.model.MitigationAuditEntry;
 import org.henbru.antidos.collector.model.MitigationRule;
+import org.henbru.antidos.collector.notification.AlertNotificationService;
 import org.henbru.antidos.collector.storage.SystemSettingsRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -46,9 +48,25 @@ public class AutoMitigationService {
 	private final CollectorProperties properties;
 	private final SystemSettingsRepository settingsRepository;
 	private final MitigationService mitigationService;
+	private final AlertNotificationService notificationService;
 	private final JdbcTemplate jdbcTemplate;
 
 	private final AtomicBoolean scanRunning = new AtomicBoolean(false);
+
+	@Autowired
+	public AutoMitigationService(
+			CollectorProperties properties,
+			SystemSettingsRepository settingsRepository,
+			MitigationService mitigationService,
+			@Autowired(required = false) AlertNotificationService notificationService,
+			JdbcTemplate jdbcTemplate
+	) {
+		this.properties = properties;
+		this.settingsRepository = settingsRepository;
+		this.mitigationService = mitigationService;
+		this.notificationService = notificationService;
+		this.jdbcTemplate = jdbcTemplate;
+	}
 
 	public AutoMitigationService(
 			CollectorProperties properties,
@@ -56,10 +74,7 @@ public class AutoMitigationService {
 			MitigationService mitigationService,
 			JdbcTemplate jdbcTemplate
 	) {
-		this.properties = properties;
-		this.settingsRepository = settingsRepository;
-		this.mitigationService = mitigationService;
-		this.jdbcTemplate = jdbcTemplate;
+		this(properties, settingsRepository, mitigationService, null, jdbcTemplate);
 	}
 
 	/**
@@ -246,6 +261,9 @@ public class AutoMitigationService {
 				mitigationService.recordAudit(null, "ASN-" + c.asn(), "AUTO_CIRCUIT_BREAKER",
 						"Circuit breaker limit of " + config.maxActiveRules() + " active auto rules reached. Skipped ASN " + c.asn() + " (" + c.activeSubnets() + " subnets).",
 						0, "AUTO_ENGINE");
+				if (notificationService != null) {
+					notificationService.sendCircuitBreakerAlert(currentAutoCount, config.maxActiveRules(), c.asn(), c.activeSubnets());
+				}
 				break;
 			}
 
@@ -273,6 +291,9 @@ public class AutoMitigationService {
 						"[DRY-RUN SIMULATION] Would block " + targetSubnets.size() + " subnets ("
 								+ String.join(", ", targetSubnets) + "). " + reason,
 						config.defaultTtlMinutes() * 60, "AUTO_ENGINE");
+				if (notificationService != null) {
+					notificationService.sendDryRunAlert(c.asn(), c.asOrg(), targetSubnets, batchId, config.defaultTtlMinutes(), reason);
+				}
 			} else {
 				log.warn("[AUTO-BLOCK] Blocking {} subnets for ASN {} (Batch: {}, TTL: {}m). Reason: {}",
 						targetSubnets.size(), c.asn(), batchId, config.defaultTtlMinutes(), reason);
@@ -285,6 +306,9 @@ public class AutoMitigationService {
 						"AUTO_ENGINE"
 				);
 				currentAutoCount += created.size();
+				if (notificationService != null) {
+					notificationService.sendAutoBlockAlert(c.asn(), c.asOrg(), targetSubnets, batchId, config.defaultTtlMinutes(), reason);
+				}
 			}
 		}
 
@@ -391,6 +415,10 @@ public class AutoMitigationService {
 				return list.getFirst();
 			}
 		} catch (Exception ignored) {}
+		if (asn == 8075L) return "Microsoft Azure";
+		if (asn == 16509L || asn == 14618L) return "Amazon AWS";
+		if (asn == 15169L) return "Google Cloud";
+		if (asn == 13335L) return "Cloudflare";
 		return (fallbackOrg != null && !fallbackOrg.isBlank()) ? fallbackOrg : "AS" + asn;
 	}
 
