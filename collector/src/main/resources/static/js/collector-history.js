@@ -267,11 +267,10 @@
             }
 
             listContainer.innerHTML = '';
-            for (var j = 0; j < filtered.length; j++) {
-                (function(item) {
-                    var card = document.createElement('div');
-                    card.className = 'history-card';
-                    card.setAttribute('data-id', item.id);
+            filtered.forEach(function(item) {
+                var card = document.createElement('div');
+                card.className = 'history-card';
+                card.setAttribute('data-id', item.id);
 
                     // Header
                     var header = document.createElement('div');
@@ -377,8 +376,7 @@
 
                     card.appendChild(actions);
                     listContainer.appendChild(card);
-                })(item);
-            }
+            });
         }
     };
 
