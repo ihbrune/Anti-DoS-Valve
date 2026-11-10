@@ -414,7 +414,7 @@ public class DashboardController {
 		return "redirect:/profiles";
 	}
 
-	@GetMapping("/server/{serverId}")
+	@GetMapping({"/server/{serverId}", "/servers/{serverId}"})
 	public String serverDetails(
 			@PathVariable(name = "serverId") String serverId,
 			@RequestParam(name = "valve", required = false) String valve,

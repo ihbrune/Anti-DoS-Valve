@@ -81,7 +81,7 @@
                  style="padding: 10px 14px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: var(--radius-sm); display: flex; justify-content: space-between; align-items: center; gap: 8px;">
                 <div>
                     <div style="font-size: 13px; font-weight: 700; color: var(--text-primary);">
-                        <a th:href="@{/servers/{id}(id=${mv.serverId})}" style="color: var(--color-primary); text-decoration: none;" th:text="${mv.serverId}">Node</a>
+                        <a th:href="@{/server/{id}(id=${mv.serverId})}" style="color: var(--color-primary); text-decoration: none;" th:text="${mv.serverId}">Node</a>
                         <span style="color: var(--text-muted);">/</span>
                         <span th:text="${mv.valveName}">Valve</span>
                     </div>
