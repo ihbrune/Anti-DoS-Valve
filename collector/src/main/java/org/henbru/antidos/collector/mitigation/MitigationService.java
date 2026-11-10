@@ -135,13 +135,25 @@ public class MitigationService {
 			long totalRequests,
 			long blockedRequests,
 			int distinctIps,
-			boolean alreadyBlocked
+			boolean alreadyBlocked,
+			boolean anonOnlyScope
 	) {
+		public AsnSubnetCandidate(
+				String subnetCidr,
+				long totalRequests,
+				long blockedRequests,
+				int distinctIps,
+				boolean alreadyBlocked
+		) {
+			this(subnetCidr, totalRequests, blockedRequests, distinctIps, alreadyBlocked, false);
+		}
+
 		public String getSubnetCidr() { return subnetCidr; }
 		public long getTotalRequests() { return totalRequests; }
 		public long getBlockedRequests() { return blockedRequests; }
 		public int getDistinctIps() { return distinctIps; }
 		public boolean isAlreadyBlocked() { return alreadyBlocked; }
+		public boolean isAnonOnlyScope() { return anonOnlyScope; }
 	}
 
 	public record AsnBatchPreview(
@@ -441,6 +453,35 @@ public class MitigationService {
 							"CRITICAL",
 							norm.canonicalCidr(),
 							"Collateral Damage Risk: " + auths + " authenticated user request(s) observed from this subnet in the last 24h."));
+				} else if (reqs > 0 && valveRepository != null) {
+					try {
+						List<Map<String, Object>> reportingValves = jdbcTemplate.queryForList("""
+								SELECT DISTINCT server_id, valve_name
+								FROM client_subnet_rollups
+								WHERE (subnet_group = ? OR subnet_group = ?)
+								  AND bucket_start >= ?
+								""", norm.canonicalCidr(), subnetGroup, Timestamp.from(cutoff24h));
+						if (!reportingValves.isEmpty()) {
+							boolean allAnonOnly = true;
+							for (Map<String, Object> rv : reportingValves) {
+								String sid = (String) rv.get("server_id");
+								String vn = (String) rv.get("valve_name");
+								var mvOpt = valveRepository.findByServerIdAndValveName(sid, vn);
+								if (mvOpt.isEmpty() || !mvOpt.get().isUnauthenticatedOnly()) {
+									allAnonOnly = false;
+									break;
+								}
+							}
+							if (allAnonOnly) {
+								warnings.add(new PreflightWarning(
+										"WARNING",
+										norm.canonicalCidr(),
+										"Auth Scope Notice: Observed 24h traffic (" + reqs + " reqs) originated exclusively from valve(s) with 'relevantAuthScope=UNAUTHENTICATED_ONLY'. Authenticated users bypass these valves, so 0 recorded authenticated requests cannot rule out collateral damage on active user sessions."));
+							}
+						}
+					} catch (Exception e) {
+						log.debug("Auth scope check skipped for {}: {}", norm.canonicalCidr(), e.getMessage());
+					}
 				}
 				if (isSe > 0) {
 					warnings.add(new PreflightWarning(
@@ -649,6 +690,31 @@ public class MitigationService {
 				skippedAuth[0]++;
 				return;
 			}
+			boolean isAnonOnly = false;
+			if (valveRepository != null) {
+				try {
+					List<Map<String, Object>> reportingValves = jdbcTemplate.queryForList("""
+							SELECT DISTINCT server_id, valve_name
+							FROM client_subnet_rollups
+							WHERE subnet_group = ? AND bucket_start >= ?
+							""", subnet, Timestamp.from(cutoff));
+					if (!reportingValves.isEmpty()) {
+						boolean allAnon = true;
+						for (Map<String, Object> rv : reportingValves) {
+							String sid = (String) rv.get("server_id");
+							String vn = (String) rv.get("valve_name");
+							var mvOpt = valveRepository.findByServerIdAndValveName(sid, vn);
+							if (mvOpt.isEmpty() || !mvOpt.get().isUnauthenticatedOnly()) {
+								allAnon = false;
+								break;
+							}
+						}
+						isAnonOnly = allAnon;
+					}
+				} catch (Exception e) {
+					log.debug("ASN preview auth scope check skipped for {}: {}", subnet, e.getMessage());
+				}
+			}
 			try {
 				NormalizedCidr norm = normalizeAndValidateCidr(subnet);
 				candidates.add(new AsnSubnetCandidate(
@@ -656,7 +722,8 @@ public class MitigationService {
 						totReq,
 						blkReq,
 						maxIps,
-						currentlyBlocked.contains(norm.canonicalCidr())
+						currentlyBlocked.contains(norm.canonicalCidr()),
+						isAnonOnly
 				));
 				totalCandidateReqs[0] += totReq;
 			} catch (IllegalArgumentException ignored) {

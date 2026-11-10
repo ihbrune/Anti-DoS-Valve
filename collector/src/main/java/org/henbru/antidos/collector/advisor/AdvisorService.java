@@ -622,12 +622,17 @@ public class AdvisorService {
 			ValveConfigInfo valveInfo = resolveValveConfig(serverId, valveName);
 			AdvisorSeverity severity = (totalReq >= 50000) ? AdvisorSeverity.CRITICAL : AdvisorSeverity.WARNING;
 
+			boolean isAnonOnly = "UNAUTHENTICATED_ONLY".equalsIgnoreCase(valveInfo.relevantAuthScope());
+			String authText = isAnonOnly
+					? "Traffic had 0% authenticated sessions (expected: valve scope is UNAUTHENTICATED_ONLY; authenticated sessions bypass this valve)"
+					: "Traffic had virtually 0% authenticated sessions";
+
 			String explanation = String.format(
 					"Autonomous System %s (ASN %d, %s) generated %s requests across %d distinct /24 subnets on valve '%s' on node '%s', " +
 					"yet only %d requests (%.1f%%) were blocked. " +
-					"Traffic had virtually 0%% authenticated sessions and %.1f%% returning visitors. " +
+					"%s and %.1f%% returning visitors. " +
 					"The source is horizontally distributing traffic across multiple IP blocks to evade individual rate-limit thresholds.",
-					entityName, asn, country, String.format("%,d", totalReq), subnets, valveName, serverId, blockedReq, blockPct, retPct);
+					entityName, asn, country, String.format("%,d", totalReq), subnets, valveName, serverId, blockedReq, blockPct, authText, retPct);
 
 			String recommendation = String.format(
 					"This horizontal carpet attack evades local single-client rate limits. Recommended actions:\n" +
@@ -950,14 +955,15 @@ public class AdvisorService {
 					return new ValveConfigInfo(
 							v.allowedRequestsPerSlot() >= 0 ? v.allowedRequestsPerSlot() : null,
 							v.slotLength() > 0 ? v.slotLength() : null,
-							v.alwaysAllowedIPs()
+							v.alwaysAllowedIPs(),
+							v.relevantAuthScope()
 					);
 				}
 			} catch (Exception e) {
 				log.debug("Could not resolve valve config for {}/{}: {}", serverId, valveName, e.getMessage());
 			}
 		}
-		return new ValveConfigInfo(null, null, null);
+		return new ValveConfigInfo(null, null, null, "ALL");
 	}
 
 	private static String sanitizeId(String s) {
@@ -972,5 +978,5 @@ public class AdvisorService {
 		return slotLength != null ? String.valueOf(slotLength) : "N/A";
 	}
 
-	private record ValveConfigInfo(Integer allowedRequestsPerSlot, Integer slotLength, String alwaysAllowedIps) {}
+	private record ValveConfigInfo(Integer allowedRequestsPerSlot, Integer slotLength, String alwaysAllowedIps, String relevantAuthScope) {}
 }

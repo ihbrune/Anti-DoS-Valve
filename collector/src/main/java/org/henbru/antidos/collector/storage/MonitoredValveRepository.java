@@ -5,10 +5,13 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.henbru.antidos.collector.model.MonitoredValve;
+import org.henbru.antidos.collector.model.ValveScopeRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -233,6 +236,28 @@ public class MonitoredValveRepository {
 		return jdbcTemplate.query(
 				"SELECT * FROM monitored_valves WHERE is_active = ? ORDER BY server_id ASC, pipeline_order ASC, valve_name ASC",
 				ROW_MAPPER, true);
+	}
+
+	/**
+	 * Builds an in-memory lookup map of valve authentication scopes for all active valves.
+	 * Keyed by "serverId:valveName" as well as "valveName" alone.
+	 */
+	public Map<String, String> getActiveValveScopeMap() {
+		List<MonitoredValve> valves = findAllActive();
+		Map<String, String> map = new HashMap<>();
+		for (MonitoredValve v : valves) {
+			String scope = v.relevantAuthScope();
+			map.put(v.serverId() + ":" + v.valveName(), scope);
+			map.putIfAbsent(v.valveName(), scope);
+		}
+		return map;
+	}
+
+	/**
+	 * Builds a ValveScopeRegistry for all active valves across the fleet.
+	 */
+	public ValveScopeRegistry getValveScopeRegistry() {
+		return new ValveScopeRegistry(getActiveValveScopeMap());
 	}
 
 	public List<String> findDistinctValveNames() {

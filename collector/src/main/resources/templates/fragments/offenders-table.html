@@ -271,8 +271,15 @@
                             </td>
                             <td>
                                 <div style="font-weight: 600;" th:text="${rollup.serverId()}">Demo-Edge-EU</div>
-                                <div style="font-size: 11px; color: var(--text-muted);" th:text="${rollup.valveName()}">
-                                    Main-Rate-Limiter</div>
+                                <div style="font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+                                    <span th:text="${rollup.valveName()}">Main-Rate-Limiter</span>
+                                    <span th:if="${valveScopes != null and valveScopes.isUnauthenticatedOnly(rollup.serverId(), rollup.valveName())}"
+                                        class="badge badge-warning" style="font-size: 8.5px; padding: 0 4px;"
+                                        title="Valve scope is UNAUTHENTICATED_ONLY: Rate limits apply exclusively to anonymous requests; authenticated sessions bypass this Valve">ANON ONLY</span>
+                                    <span th:if="${valveScopes != null and valveScopes.isAuthenticatedOnly(rollup.serverId(), rollup.valveName())}"
+                                        class="badge badge-success" style="font-size: 8.5px; padding: 0 4px;"
+                                        title="Valve scope is AUTHENTICATED_ONLY: Rate limits apply exclusively to authenticated requests; anonymous requests bypass this Valve">AUTH ONLY</span>
+                                </div>
                             </td>
                             <td>
                                 <div style="display: flex; flex-direction: column; gap: 3px;">
@@ -388,15 +395,22 @@
                                                     th:text="${#numbers.formatDecimal(rollup.returningRatio(), 1, 0)} + '% Cookies'"></span></span>
                                         </th:block>
                                         <th:block th:if="${rollup.isAuthenticatedTracked()}">
-                                            <span th:if="${rollup.authenticatedRequests() == 0}"
-                                                class="badge badge-secondary" style="font-size: 10px; padding: 1px 5px;"
-                                                title="0% authenticated requests in this window (unauthenticated traffic)">🔐
-                                                0% Auth</span>
-                                            <span th:if="${rollup.authenticatedRequests() > 0}"
-                                                class="badge badge-success" style="font-size: 10px; padding: 1px 5px;"
-                                                th:title="${rollup.authenticatedRequests()} + ' of ' + ${rollup.authenticatedTrackedRequests()} + ' requests carried a valid login session'">🔐
-                                                <span
-                                                    th:text="${#numbers.formatDecimal(rollup.authenticatedRatio(), 1, 0)} + '% Auth'"></span></span>
+                                            <th:block th:if="${valveScopes != null and valveScopes.isUnauthenticatedOnly(rollup.serverId(), rollup.valveName()) and rollup.authenticatedRequests() == 0}">
+                                                <span class="badge badge-secondary" style="font-size: 10px; padding: 1px 5px; border: 1px dashed rgba(245, 158, 11, 0.5);"
+                                                    title="0% authenticated requests recorded. Note: Valve scope is UNAUTHENTICATED_ONLY — authenticated sessions bypass this Valve.">🔐
+                                                    0% Auth (Anon-only)</span>
+                                            </th:block>
+                                            <th:block th:unless="${valveScopes != null and valveScopes.isUnauthenticatedOnly(rollup.serverId(), rollup.valveName()) and rollup.authenticatedRequests() == 0}">
+                                                <span th:if="${rollup.authenticatedRequests() == 0}"
+                                                    class="badge badge-secondary" style="font-size: 10px; padding: 1px 5px;"
+                                                    title="0% authenticated requests in this window (unauthenticated traffic)">🔐
+                                                    0% Auth</span>
+                                                <span th:if="${rollup.authenticatedRequests() > 0}"
+                                                    class="badge badge-success" style="font-size: 10px; padding: 1px 5px;"
+                                                    th:title="${rollup.authenticatedRequests()} + ' of ' + ${rollup.authenticatedTrackedRequests()} + ' requests carried a valid login session'">🔐
+                                                    <span
+                                                        th:text="${#numbers.formatDecimal(rollup.authenticatedRatio(), 1, 0)} + '% Auth'"></span></span>
+                                            </th:block>
                                         </th:block>
                                     </div>
                             </td>

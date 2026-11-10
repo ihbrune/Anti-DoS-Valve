@@ -504,6 +504,32 @@ public record MonitoredValve(
 		};
 	}
 
+	public boolean isUnauthenticatedOnly() {
+		return "UNAUTHENTICATED_ONLY".equalsIgnoreCase(relevantAuthScope());
+	}
+
+	public boolean isAuthenticatedOnly() {
+		return "AUTHENTICATED_ONLY".equalsIgnoreCase(relevantAuthScope());
+	}
+
+	public String relevantAuthScopeLabel() {
+		String scope = relevantAuthScope().toUpperCase();
+		return switch (scope) {
+			case "AUTHENTICATED_ONLY" -> "AUTH ONLY";
+			case "UNAUTHENTICATED_ONLY" -> "ANON ONLY";
+			default -> "ALL";
+		};
+	}
+
+	public String relevantAuthScopeTooltip() {
+		String scope = relevantAuthScope().toUpperCase();
+		return switch (scope) {
+			case "AUTHENTICATED_ONLY" -> "Valve scope is AUTHENTICATED_ONLY: Evaluates only authenticated requests; unauthenticated requests bypass this valve.";
+			case "UNAUTHENTICATED_ONLY" -> "Valve scope is UNAUTHENTICATED_ONLY: Evaluates only unauthenticated requests; authenticated sessions bypass this valve.";
+			default -> "Valve scope is ALL: Evaluates all incoming requests regardless of authentication state.";
+		};
+	}
+
 	public boolean hasPathFilters() {
 		return (relevantPaths != null && !relevantPaths.isBlank())
 				|| (nonRelevantPaths != null && !nonRelevantPaths.isBlank());

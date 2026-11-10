@@ -372,4 +372,55 @@ class MitigationServiceTest {
 		List<?> polled = (List<?>) pollResp.getBody().get("alerts");
 		assertEquals(1, polled.size());
 	}
+
+	@Test
+	void testPreflightWarnsOnTrafficFromUnauthenticatedOnlyValve() {
+		Instant now = Instant.now();
+		// Register a valve configured as UNAUTHENTICATED_ONLY
+		org.henbru.antidos.collector.model.MonitoredValve anonValve = new org.henbru.antidos.collector.model.MonitoredValve(
+				"Node-Anon", "ANON_VALVE", "Anon-only valve", 1, "BLOCKING",
+				false, true, 429, 60, 60, 5, 0.8f, 24, 64,
+				1000, 1000, null, null, null, null,
+				"/antidos-status", null, "auto", false, "_adv",
+				false, "OFF", null, null, 900, 50000,
+				"UNAUTHENTICATED_ONLY", 0, false, null, 0, 0L, 0L,
+				now, 12345, true
+		);
+		valveRepository.upsert(anonValve);
+		assertTrue(anonValve.isUnauthenticatedOnly());
+		assertFalse(anonValve.isAuthenticatedOnly());
+		assertEquals("ANON ONLY", anonValve.relevantAuthScopeLabel());
+
+		// Insert rollup telemetry from ANON_VALVE with 0 authenticated requests
+		jdbcTemplate.update("""
+				INSERT INTO client_subnet_rollups (
+				    bucket_start, bucket_end, bucket_minutes, server_id, valve_name, subnet_group,
+				    asn, as_org, country_code, client_type, total_requests, active_requests,
+				    blocked_requests, marked_requests, distinct_clients, min_requests_per_client,
+				    max_requests_per_client, returning_requests,
+				    returning_tracked_requests, authenticated_requests
+				) VALUES (?, ?, 60, 'Node-Anon', 'ANON_VALVE', '198.51.200.0/24', 64512, 'Anon Target Corp.', 'DE',
+				          'DATACENTER', 1500, 1500, 0, 0, 25, 10, 80, 0, 1500, 0)
+				""", Timestamp.from(now.minus(Duration.ofMinutes(30))), Timestamp.from(now));
+
+		// Evaluate preflight: 0 authenticated requests, but valve is UNAUTHENTICATED_ONLY
+		MitigationService.PreflightCheckResult res = mitigationService.evaluatePreflight(List.of("198.51.200.0/24"));
+		// Must remain safe to proceed without override (WARNING, not CRITICAL)
+		assertTrue(res.safeToProceedWithoutOverride());
+		assertFalse(res.hasCriticalWarnings());
+		assertEquals(0L, res.totalAuthenticatedRequests24h());
+		assertEquals(1500L, res.totalObservedRequests24h());
+
+		// Must contain the explanatory Auth Scope Notice warning
+		boolean foundAuthScopeNotice = res.warnings().stream()
+				.anyMatch(w -> "WARNING".equalsIgnoreCase(w.severity())
+						&& w.message().contains("Auth Scope Notice")
+						&& w.message().contains("UNAUTHENTICATED_ONLY"));
+		assertTrue(foundAuthScopeNotice, "Expected Auth Scope Notice warning in preflight result: " + res.warnings());
+
+		// ASN preview must flag the candidate subnet as anonOnlyScope = true
+		MitigationService.AsnBatchPreview preview = mitigationService.previewAsnBatch(64512, 24);
+		assertEquals(1, preview.candidates().size());
+		assertTrue(preview.candidates().getFirst().isAnonOnlyScope(), "Candidate must be flagged as anonOnlyScope = true");
+	}
 }

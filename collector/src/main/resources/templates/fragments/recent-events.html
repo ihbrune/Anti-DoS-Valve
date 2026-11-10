@@ -32,8 +32,17 @@
                             <strong th:text="${event.serverId}">Web-Node-1</strong>
                         </a>
                     </td>
-                    <td><span class="badge" th:classappend="${event.isHoneypot() ? 'badge-warning' : 'badge-info'}"
-                            th:text="${(event.isHoneypot() ? '&#x1F36F; ' : '') + event.valveName}">API LIMITER</span>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+                            <span class="badge" th:classappend="${event.isHoneypot() ? 'badge-warning' : 'badge-info'}"
+                                th:text="${(event.isHoneypot() ? '&#x1F36F; ' : '') + event.valveName}">API LIMITER</span>
+                            <span th:if="${valveScopes != null and valveScopes.isUnauthenticatedOnly(event.serverId, event.valveName)}"
+                                class="badge badge-warning" style="font-size: 9px; padding: 1px 5px;"
+                                title="Valve scope is UNAUTHENTICATED_ONLY: Evaluates only unauthenticated requests; authenticated requests bypass this valve">ANON ONLY</span>
+                            <span th:if="${valveScopes != null and valveScopes.isAuthenticatedOnly(event.serverId, event.valveName)}"
+                                class="badge badge-success" style="font-size: 9px; padding: 1px 5px;"
+                                title="Valve scope is AUTHENTICATED_ONLY: Evaluates only authenticated requests; unauthenticated requests bypass this valve">AUTH ONLY</span>
+                        </div>
                     </td>
                     <td>
                         <div style="display: flex; flex-direction: column; gap: 4px;">

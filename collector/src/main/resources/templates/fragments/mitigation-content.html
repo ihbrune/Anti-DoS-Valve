@@ -80,10 +80,14 @@
             <div th:each="mv : ${mitigationValves}"
                  style="padding: 10px 14px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: var(--radius-sm); display: flex; justify-content: space-between; align-items: center; gap: 8px;">
                 <div>
-                    <div style="font-size: 13px; font-weight: 700; color: var(--text-primary);">
+                    <div style="font-size: 13px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                         <a th:href="@{/server/{id}(id=${mv.serverId})}" style="color: var(--color-primary); text-decoration: none;" th:text="${mv.serverId}">Node</a>
                         <span style="color: var(--text-muted);">/</span>
                         <span th:text="${mv.valveName}">Valve</span>
+                        <span th:if="${mv.isUnauthenticatedOnly()}" class="badge badge-warning" style="font-size: 9.5px; padding: 1px 5px;"
+                              title="Valve scope is UNAUTHENTICATED_ONLY: Rate limits apply exclusively to anonymous requests; authenticated sessions bypass this Valve">ANON ONLY</span>
+                        <span th:if="${mv.isAuthenticatedOnly()}" class="badge badge-success" style="font-size: 9.5px; padding: 1px 5px;"
+                              title="Valve scope is AUTHENTICATED_ONLY: Rate limits apply exclusively to authenticated requests; anonymous requests bypass this Valve">AUTH ONLY</span>
                     </div>
                     <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
                         <span th:text="${mv.dynamicBlocksActiveCount} + ' active rules'">0 active rules</span>
@@ -780,10 +784,13 @@
             </div>
 
             <div th:if="${!preflightResult.warnings.isEmpty()}" style="margin-top: 6px;">
-                <div th:each="w : ${preflightResult.warnings}" style="color: var(--color-danger); font-weight: 600; margin-bottom: 4px;">
-                    &#x26A0;&#xFE0F; <span th:text="${w.cidr} + ': ' + ${w.message}">Warning</span>
+                <div th:each="w : ${preflightResult.warnings}"
+                     th:styleappend="${w.severity == 'WARNING' ? 'color: var(--color-warning);' : 'color: var(--color-danger);'}"
+                     style="font-weight: 600; margin-bottom: 4px;">
+                    <span th:text="${w.severity == 'WARNING' ? '&#x26A0;&#xFE0F;' : '&#x274C;'}">&#x26A0;&#xFE0F;</span>
+                    <span th:text="${w.cidr} + ': ' + ${w.message}">Warning</span>
                 </div>
-                <label style="display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; font-weight: 700; color: var(--text-primary); cursor: pointer;">
+                <label th:if="${preflightResult.hasCriticalWarnings()}" style="display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; font-weight: 700; color: var(--text-primary); cursor: pointer;">
                     <input type="checkbox" name="confirmOverride" value="true">
                     <span>Override Pre-Flight Safety Warning (I understand the collateral damage risk)</span>
                 </label>
@@ -813,9 +820,11 @@
         </div>
         <div th:if="${!asnPreview.candidates.isEmpty()}" style="display: flex; gap: 6px; flex-wrap: wrap; max-height: 95px; overflow-y: auto; margin-top: 6px;">
             <span th:each="c : ${asnPreview.candidates}"
-                  class="badge badge-secondary"
+                  class="badge"
+                  th:classappend="${c.anonOnlyScope ? 'badge-warning' : 'badge-secondary'}"
                   style="font-family: ui-monospace, monospace; font-size: 11px;"
-                  th:text="${c.subnetCidr} + ' (' + ${#numbers.formatInteger(c.totalRequests, 1, 'COMMA')} + ')'">
+                  th:title="${c.anonOnlyScope ? 'Traffic originated from UNAUTHENTICATED_ONLY valve (authenticated users bypass that valve)' : 'Traffic carried 0 authenticated requests'}"
+                  th:text="${c.subnetCidr} + ' (' + ${#numbers.formatInteger(c.totalRequests, 1, 'COMMA')} + ')' + (${c.anonOnlyScope ? ' [ANON]' : ''})">
                 198.51.100.0/24 (1,200)
             </span>
         </div>

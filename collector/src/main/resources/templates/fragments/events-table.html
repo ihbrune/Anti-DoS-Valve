@@ -34,8 +34,17 @@
                                 <strong th:text="${event.serverId}">Web-01</strong>
                             </a>
                         </td>
-                        <td><span class="badge" th:classappend="${event.isHoneypot() ? 'badge-warning' : 'badge-info'}"
-                                th:text="${(event.isHoneypot() ? '&#x1F36F; ' : '') + event.valveName}">API-LIMITER</span>
+                        <td>
+                            <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+                                <span class="badge" th:classappend="${event.isHoneypot() ? 'badge-warning' : 'badge-info'}"
+                                    th:text="${(event.isHoneypot() ? '&#x1F36F; ' : '') + event.valveName}">API-LIMITER</span>
+                                <span th:if="${valveScopes != null and valveScopes.isUnauthenticatedOnly(event.serverId, event.valveName)}"
+                                    class="badge badge-warning" style="font-size: 9px; padding: 1px 5px;"
+                                    title="Valve scope is UNAUTHENTICATED_ONLY: Evaluates only unauthenticated requests; authenticated requests bypass this valve">ANON ONLY</span>
+                                <span th:if="${valveScopes != null and valveScopes.isAuthenticatedOnly(event.serverId, event.valveName)}"
+                                    class="badge badge-success" style="font-size: 9px; padding: 1px 5px;"
+                                    title="Valve scope is AUTHENTICATED_ONLY: Evaluates only authenticated requests; unauthenticated requests bypass this valve">AUTH ONLY</span>
+                            </div>
                         </td>
                         <td>
                             <div style="display: flex; flex-direction: column; gap: 4px;">
@@ -211,10 +220,18 @@
                                     <span
                                         th:text="${#numbers.formatDecimal(event.returningRatio(), 1, 0)} + '%'"></span>
                                     (<span th:text="${event.returningCount}"></span>)</span>
-                                <span th:if="${event.authenticatedCount != null and event.authenticatedCount == 0}"
-                                    class="badge badge-secondary" style="font-size: 10px; padding: 1px 6px;"
-                                    th:title="'0 of ' + ${event.requestCount} + ' requests were authenticated (unauthenticated traffic)'">🔐
-                                    0% (0/<span th:text="${event.requestCount}"></span>)</span>
+                                <th:block th:if="${valveScopes != null and valveScopes.isUnauthenticatedOnly(event.serverId, event.valveName)}">
+                                    <span th:if="${event.authenticatedCount != null and event.authenticatedCount == 0}"
+                                        class="badge badge-secondary" style="font-size: 10px; padding: 1px 6px; border: 1px dashed rgba(245, 158, 11, 0.5);"
+                                        th:title="'0 of ' + ${event.requestCount} + ' requests were authenticated. Note: Valve scope is UNAUTHENTICATED_ONLY — authenticated sessions bypass this valve and are not tracked here.'">🔐
+                                        0% (Anon-only Valve)</span>
+                                </th:block>
+                                <th:block th:unless="${valveScopes != null and valveScopes.isUnauthenticatedOnly(event.serverId, event.valveName)}">
+                                    <span th:if="${event.authenticatedCount != null and event.authenticatedCount == 0}"
+                                        class="badge badge-secondary" style="font-size: 10px; padding: 1px 6px;"
+                                        th:title="'0 of ' + ${event.requestCount} + ' requests were authenticated (unauthenticated traffic)'">🔐
+                                        0% (0/<span th:text="${event.requestCount}"></span>)</span>
+                                </th:block>
                                 <span th:if="${event.authenticatedCount != null and event.authenticatedCount > 0}"
                                     class="badge badge-info" style="font-size: 10px; padding: 1px 6px;"
                                     th:title="${event.authenticatedCount} + ' of ' + ${event.requestCount} + ' requests were authenticated'">🔐
