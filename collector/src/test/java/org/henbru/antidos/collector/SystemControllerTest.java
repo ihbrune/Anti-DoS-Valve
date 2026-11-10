@@ -33,6 +33,8 @@ class SystemControllerTest {
 				.andExpect(content().string(containsString("Data Retention &amp; Housekeeping")))
 				.andExpect(content().string(containsString("Database Storage &amp; Internals")))
 				.andExpect(content().string(containsString("Fleet &amp; Polling Configuration")))
+				.andExpect(content().string(containsString("server-node-link")))
+				.andExpect(content().string(containsString("/server/")))
 				.andExpect(content().string(containsString("Telemetry &amp; Active Tracking (3-Tier Cascade)")))
 				.andExpect(content().string(containsString("Threat Intelligence &amp; Enrichment State")))
 				.andExpect(content().string(containsString("Runtime &amp; Environment")))

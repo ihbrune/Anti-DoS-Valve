@@ -234,163 +234,190 @@
             </div>
         </div>
 
-        <!-- Layout Grid Row 2: Fleet & Polling Configuration + Telemetry Cascade Rules -->
-        <div class="sys-layout-grid">
-            <!-- Card 3: Fleet & Polling Configuration -->
-            <div class="sys-card">
-                <div class="sys-card-header">
-                    <div class="sys-card-title">
-                        <span>&#x1F6A1;</span> Fleet &amp; Polling Configuration
-                    </div>
+        <!-- Full-Width Card: Fleet & Polling Configuration -->
+        <div class="sys-card" style="margin-bottom: 28px;">
+            <div class="sys-card-header">
+                <div class="sys-card-title">
+                    <span>&#x1F6A1;</span> Fleet &amp; Polling Configuration
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
                     <span th:if="${status.config.parallelFleetPolling}" class="badge badge-success">Virtual
                         Threads</span>
                     <span th:unless="${status.config.parallelFleetPolling}"
                         class="badge badge-secondary">Sequential</span>
                 </div>
+            </div>
 
-                <div class="sys-prop-list" style="margin-bottom: 18px;">
-                    <div class="sys-prop-row">
-                        <span class="sys-prop-key">Polling Interval</span>
-                        <span class="sys-prop-val" th:text="${status.config.pollIntervalSeconds} + ' seconds'">15
-                            seconds</span>
-                    </div>
-                    <div class="sys-prop-row">
-                        <span class="sys-prop-key">Parallel Fleet Polling</span>
-                        <span class="sys-prop-val"
-                            th:text="${status.config.parallelFleetPolling ? 'Enabled (Virtual Threads)' : 'Disabled'}">Enabled</span>
-                    </div>
-                    <div class="sys-prop-row">
-                        <span class="sys-prop-key">Slow Poll Warning Threshold</span>
-                        <span class="sys-prop-val" th:text="${status.config.slowPollThresholdMs} + ' ms'">1000 ms</span>
-                    </div>
-                    <div class="sys-prop-row">
-                        <span class="sys-prop-key">Active Config File Location</span>
-                        <span class="sys-prop-val" style="font-size: 11px;"
-                            th:text="${status.config.configFile}">collector-config.yaml</span>
-                    </div>
+            <!-- Top Config Properties Grid -->
+            <div class="sys-prop-grid">
+                <div class="sys-stat-chip">
+                    <span class="sys-prop-key" style="font-size: 11.5px;">Polling Interval</span>
+                    <span class="sys-prop-val" style="font-size: 13px; font-weight: 700; color: var(--text-primary); text-align: left;"
+                        th:text="${status.config.pollIntervalSeconds} + ' seconds'">15 seconds</span>
                 </div>
-
-                <div style="font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">
-                    Monitored Server Endpoints:
+                <div class="sys-stat-chip">
+                    <span class="sys-prop-key" style="font-size: 11.5px;">Parallel Fleet Polling</span>
+                    <span class="sys-prop-val" style="font-size: 13px; font-weight: 700; text-align: left;"
+                        th:classappend="${status.config.parallelFleetPolling ? 'text-success' : 'text-secondary'}"
+                        th:text="${status.config.parallelFleetPolling ? 'Enabled (Virtual Threads)' : 'Disabled (Sequential)'}">Enabled</span>
                 </div>
-                <div class="table-container" style="margin-top: 4px;">
-                    <table class="table" style="font-size: 12px;">
-                        <thead>
-                            <tr>
-                                <th>Server Node</th>
-                                <th>Status</th>
-                                <th>URL</th>
-                                <th>Auth</th>
-                                <th>Valves</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr th:each="ep : ${status.config.endpoints}">
-                                <td style="font-weight: 600;" th:text="${ep.name}">Local-Tomcat</td>
-                                <td>
-                                    <span th:if="${ep.enabled}" class="badge badge-success"
-                                        style="font-size: 10px; padding: 2px 6px;">Enabled</span>
-                                    <span th:unless="${ep.enabled}" class="badge badge-secondary"
-                                        style="font-size: 10px; padding: 2px 6px;">Disabled</span>
-                                </td>
-                                <td style="font-family: ui-monospace, monospace; font-size: 11px;" th:text="${ep.url}">
-                                    http://...</td>
-                                <td>
-                                    <span th:if="${ep.hasToken}" class="badge badge-info"
-                                        style="font-size: 10px; padding: 2px 6px;">Token Set</span>
-                                    <span th:unless="${ep.hasToken}"
-                                        style="color: var(--text-muted); font-size: 11px;">None</span>
-                                </td>
-                                <td style="color: var(--text-secondary); font-size: 11px;">
-                                    <span th:if="${ep.valves != null and !ep.valves.isEmpty()}"
-                                        th:text="${#strings.listJoin(ep.valves, ', ')}">All</span>
-                                    <span th:if="${ep.valves == null or ep.valves.isEmpty()}"
-                                        style="color: var(--text-muted); font-style: italic;">All Valves</span>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <div class="sys-stat-chip">
+                    <span class="sys-prop-key" style="font-size: 11.5px;">Slow Poll Warning</span>
+                    <span class="sys-prop-val" style="font-size: 13px; font-weight: 700; color: var(--text-primary); text-align: left;"
+                        th:text="${status.config.slowPollThresholdMs} + ' ms'">1000 ms</span>
+                </div>
+                <div class="sys-stat-chip">
+                    <span class="sys-prop-key" style="font-size: 11.5px;">Active Config File</span>
+                    <span class="sys-prop-val" style="font-size: 11.5px; font-family: ui-monospace, monospace; color: var(--text-secondary); word-break: break-all; text-align: left;"
+                        th:text="${status.config.configFile}">collector-config.yaml</span>
                 </div>
             </div>
 
-            <!-- Card 4: Telemetry & Active Tracking Cascade -->
-            <div class="sys-card">
-                <div class="sys-card-header">
-                    <div class="sys-card-title">
-                        <span>&#x1F39B;&#xFE0F;</span> Telemetry &amp; Active Tracking (3-Tier Cascade)
-                    </div>
-                    <span class="badge badge-purple">3-Tier Cascade</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <div style="font-size: 13px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                    <span>&#x1F5A5;&#xFE0F;</span> Monitored Server Endpoints:
                 </div>
+                <span style="font-size: 11.5px; color: var(--text-muted);"
+                    th:text="${status.config.endpoints != null ? status.config.endpoints.size() : 0} + ' configured nodes'">
+                    2 configured nodes
+                </span>
+            </div>
+            <div class="table-container" style="margin-top: 4px; overflow-x: auto;">
+                <table class="table" style="font-size: 12.5px; width: 100%;">
+                    <thead>
+                        <tr>
+                            <th style="min-width: 160px;">Server Node</th>
+                            <th style="width: 100px;">Status</th>
+                            <th>Status URL</th>
+                            <th style="width: 120px;">Auth Token</th>
+                            <th>Monitored Valves</th>
+                            <th style="text-align: right; width: 100px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="ep : ${status.config.endpoints}">
+                            <td>
+                                <a th:href="@{'/server/' + ${ep.name}}" class="server-node-link"
+                                    title="Open server node details, active valves &amp; telemetry">
+                                    <span>&#x1F5A5;&#xFE0F;</span>
+                                    <span th:text="${ep.name}">Local-Tomcat</span>
+                                </a>
+                            </td>
+                            <td>
+                                <span th:if="${ep.enabled}" class="badge badge-success"
+                                    style="font-size: 10px; padding: 2px 7px;">Enabled</span>
+                                <span th:unless="${ep.enabled}" class="badge badge-secondary"
+                                    style="font-size: 10px; padding: 2px 7px;">Disabled</span>
+                            </td>
+                            <td style="font-family: ui-monospace, monospace; font-size: 11.5px;" th:text="${ep.url}">
+                                http://...</td>
+                            <td>
+                                <span th:if="${ep.hasToken}" class="badge badge-info"
+                                    style="font-size: 10px; padding: 2px 7px;">Token Set</span>
+                                <span th:unless="${ep.hasToken}"
+                                    style="color: var(--text-muted); font-size: 11.5px;">None</span>
+                            </td>
+                            <td style="color: var(--text-secondary); font-size: 11.5px;">
+                                <span th:if="${ep.valves != null and !ep.valves.isEmpty()}"
+                                    th:text="${#strings.listJoin(ep.valves, ', ')}">All</span>
+                                <span th:if="${ep.valves == null or ep.valves.isEmpty()}"
+                                    style="color: var(--text-muted); font-style: italic;">All Valves (Auto-Discovery)</span>
+                            </td>
+                            <td style="text-align: right;">
+                                <a th:href="@{'/server/' + ${ep.name}}" class="btn btn-sm"
+                                    style="font-size: 11px; padding: 3px 10px; text-decoration: none;"
+                                    title="Inspect server node">
+                                    Inspect &rarr;
+                                </a>
+                            </td>
+                        </tr>
+                        <tr th:if="${status.config.endpoints == null or status.config.endpoints.isEmpty()}">
+                            <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 14px;">
+                                No server endpoints configured. Add endpoints in collector-config.yaml.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-                <div style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 14px; line-height: 1.4;">
-                    Active tracking collects high-volume in-flight IPs and subnets before slot completion.
-                    Configuration cascades from <strong>Global Default</strong> &rarr; <strong>Named Valve
-                        Rules</strong> &rarr; <strong>Endpoint Overrides</strong>.
+        <!-- Full-Width Card: Telemetry & Active Tracking Cascade -->
+        <div class="sys-card" style="margin-bottom: 28px;">
+            <div class="sys-card-header">
+                <div class="sys-card-title">
+                    <span>&#x1F39B;&#xFE0F;</span> Telemetry &amp; Active Tracking (3-Tier Cascade)
                 </div>
+                <span class="badge badge-purple">3-Tier Cascade</span>
+            </div>
 
-                <div
-                    style="margin-bottom: 16px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                    <div style="font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">
-                        Tier 1: Global Fleet Default Rule
-                    </div>
-                    <div style="display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px;">
-                        <div>
-                            <span style="color: var(--text-muted);">Collect Active:</span>
-                            <strong th:text="${status.config.defaultValveRules.collectActive ? 'YES' : 'NO'}"
-                                th:class="${status.config.defaultValveRules.collectActive ? 'text-success' : 'text-danger'}">NO</strong>
-                        </div>
-                        <div>
-                            <span style="color: var(--text-muted);">Active Min Count:</span>
-                            <strong th:text="${status.config.defaultValveRules.activeMinCount}">10</strong>
-                        </div>
-                        <div>
-                            <span style="color: var(--text-muted);">Active Limit:</span>
-                            <strong th:text="${status.config.defaultValveRules.activeLimit}">1000</strong>
-                        </div>
-                    </div>
-                </div>
+            <div style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 14px; line-height: 1.4;">
+                Active tracking collects high-volume in-flight IPs and subnets before slot completion.
+                Configuration cascades from <strong>Global Default</strong> &rarr; <strong>Named Valve
+                    Rules</strong> &rarr; <strong>Endpoint Overrides</strong>.
+            </div>
 
-                <div style="font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">
-                    Tier 2: Global Named Valve Rules:
+            <div
+                style="margin-bottom: 16px; padding: 12px 16px; background: rgba(125,125,125,0.07); border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                <div style="font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">
+                    Tier 1: Global Fleet Default Rule
                 </div>
-                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">
-                    Matches valve names case-insensitively and relaxed (ignoring whitespace and hyphens).
-                    To preserve exact spaces in YAML map keys, enclose the key in brackets:
-                    <code>"[SUBNET MONITORING]"</code>.
+                <div style="display: flex; gap: 24px; flex-wrap: wrap; font-size: 12px;">
+                    <div>
+                        <span style="color: var(--text-muted);">Collect Active:</span>
+                        <strong th:text="${status.config.defaultValveRules.collectActive ? 'YES' : 'NO'}"
+                            th:class="${status.config.defaultValveRules.collectActive ? 'text-success' : 'text-danger'}">NO</strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-muted);">Active Min Count:</span>
+                        <strong th:text="${status.config.defaultValveRules.activeMinCount}">10</strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-muted);">Active Limit:</span>
+                        <strong th:text="${status.config.defaultValveRules.activeLimit}">1000</strong>
+                    </div>
                 </div>
-                <div class="table-container">
-                    <table class="table" style="font-size: 12px;">
-                        <thead>
-                            <tr>
-                                <th>Valve Name</th>
-                                <th>Collect Active</th>
-                                <th>Min Count</th>
-                                <th>Safety Limit</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr th:each="entry : ${status.config.valveRules}">
-                                <td style="font-weight: 600;" th:text="${entry.key}">Subnet-24-Limiter</td>
-                                <td>
-                                    <span th:if="${entry.value.collectActive}" class="badge badge-success"
-                                        style="font-size: 10px; padding: 2px 6px;">Enabled</span>
-                                    <span th:unless="${entry.value.collectActive}" class="badge badge-secondary"
-                                        style="font-size: 10px; padding: 2px 6px;">Disabled</span>
-                                </td>
-                                <td
-                                    th:text="${entry.value.activeMinCount != null ? entry.value.activeMinCount : 'Default'}">
-                                    1</td>
-                                <td th:text="${entry.value.activeLimit != null ? entry.value.activeLimit : 'Default'}">
-                                    1000</td>
-                            </tr>
-                            <tr th:if="${status.config.valveRules == null or status.config.valveRules.isEmpty()}">
-                                <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 12px;">
-                                    No valve-specific overrides configured (all valves inherit Tier 1 default).
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+            </div>
+
+            <div style="font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">
+                Tier 2: Global Named Valve Rules:
+            </div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">
+                Matches valve names case-insensitively and relaxed (ignoring whitespace and hyphens).
+                To preserve exact spaces in YAML map keys, enclose the key in brackets:
+                <code>"[SUBNET MONITORING]"</code>.
+            </div>
+            <div class="table-container">
+                <table class="table" style="font-size: 12px; width: 100%;">
+                    <thead>
+                        <tr>
+                            <th>Valve Name</th>
+                            <th>Collect Active</th>
+                            <th>Min Count</th>
+                            <th>Safety Limit</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="entry : ${status.config.valveRules}">
+                            <td style="font-weight: 600;" th:text="${entry.key}">Subnet-24-Limiter</td>
+                            <td>
+                                <span th:if="${entry.value.collectActive}" class="badge badge-success"
+                                    style="font-size: 10px; padding: 2px 6px;">Enabled</span>
+                                <span th:unless="${entry.value.collectActive}" class="badge badge-secondary"
+                                    style="font-size: 10px; padding: 2px 6px;">Disabled</span>
+                            </td>
+                            <td
+                                th:text="${entry.value.activeMinCount != null ? entry.value.activeMinCount : 'Default'}">
+                                1</td>
+                            <td th:text="${entry.value.activeLimit != null ? entry.value.activeLimit : 'Default'}">
+                                1000</td>
+                        </tr>
+                        <tr th:if="${status.config.valveRules == null or status.config.valveRules.isEmpty()}">
+                            <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 12px;">
+                                No valve-specific overrides configured (all valves inherit Tier 1 default).
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
