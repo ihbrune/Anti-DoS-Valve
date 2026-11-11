@@ -97,7 +97,10 @@
                 </div>
                 <div>
                     <span th:if="${mv.dynamicRulesRevision == expectedRevision}" class="badge badge-success" title="Valve rule revision matches Collector">IN SYNC</span>
-                    <span th:if="${mv.dynamicRulesRevision != expectedRevision}" class="badge badge-warning" title="Will reconcile on next sync or poll">PENDING SYNC</span>
+                    <span th:if="${mv.dynamicRulesRevision != expectedRevision and valveCircuitBreakers != null and valveCircuitBreakers.get(mv.serverId + '/' + mv.valveName)}"
+                          class="badge badge-danger" title="Auto-sync suspended by Circuit Breaker (revision mismatch detected). Will retry if rule set changes or backoff expires.">DESYNC / BREAKER</span>
+                    <span th:if="${mv.dynamicRulesRevision != expectedRevision and (valveCircuitBreakers == null or !valveCircuitBreakers.get(mv.serverId + '/' + mv.valveName))}"
+                          class="badge badge-warning" title="Will reconcile on next sync or poll">PENDING SYNC</span>
                 </div>
             </div>
         </div>
@@ -879,7 +882,9 @@
                                 <span th:if="${a.action == 'EXTEND' or a.action == 'AUTO_EXTEND'}" class="badge badge-warning" th:text="${a.action}">EXTEND</span>
                                 <span th:if="${a.action == 'REVOKE' or a.action == 'BATCH_REVOKE'}" class="badge badge-info" th:text="${a.action}">REVOKE</span>
                                 <span th:if="${a.action == 'AUTO_WOULD_BLOCK' or a.action == 'AUTO_WOULD_EXTEND'}" class="badge badge-purple">SIMULATION</span>
-                                <span th:if="${a.action != 'CREATE' and a.action != 'AUTO_BLOCK' and a.action != 'EXTEND' and a.action != 'AUTO_EXTEND' and a.action != 'REVOKE' and a.action != 'BATCH_REVOKE' and a.action != 'AUTO_WOULD_BLOCK' and a.action != 'AUTO_WOULD_EXTEND'}"
+                                <span th:if="${a.action == 'SYNC_CIRCUIT_BREAKER' or a.action == 'AUTO_CIRCUIT_BREAKER'}" class="badge badge-danger" th:text="${a.action}">CIRCUIT BREAKER</span>
+                                <span th:if="${a.action == 'FLEET_SYNC' or a.action == 'SYNC_RECOVERED'}" class="badge badge-success" th:text="${a.action}">FLEET SYNC</span>
+                                <span th:if="${a.action != 'CREATE' and a.action != 'AUTO_BLOCK' and a.action != 'EXTEND' and a.action != 'AUTO_EXTEND' and a.action != 'REVOKE' and a.action != 'BATCH_REVOKE' and a.action != 'AUTO_WOULD_BLOCK' and a.action != 'AUTO_WOULD_EXTEND' and a.action != 'SYNC_CIRCUIT_BREAKER' and a.action != 'AUTO_CIRCUIT_BREAKER' and a.action != 'FLEET_SYNC' and a.action != 'SYNC_RECOVERED'}"
                                       class="badge badge-secondary" th:text="${a.action}">ACTION</span>
                             </td>
                             <td style="font-family: ui-monospace, monospace; font-weight: 600;">
@@ -1250,6 +1255,8 @@
                         <option value="REVOKE" th:selected="${auditAction == 'REVOKE'}">REVOKE</option>
                         <option value="BATCH_REVOKE" th:selected="${auditAction == 'BATCH_REVOKE'}">BATCH_REVOKE</option>
                         <option value="EMERGENCY_FLUSH" th:selected="${auditAction == 'EMERGENCY_FLUSH'}">EMERGENCY_FLUSH</option>
+                        <option value="SYNC_CIRCUIT_BREAKER" th:selected="${auditAction == 'SYNC_CIRCUIT_BREAKER'}">SYNC_CIRCUIT_BREAKER</option>
+                        <option value="FLEET_SYNC" th:selected="${auditAction == 'FLEET_SYNC'}">FLEET_SYNC</option>
                     </select>
                 </div>
                 <div>
@@ -1304,9 +1311,10 @@
                                 <span th:if="${a.action == 'EXTEND' or a.action == 'AUTO_EXTEND'}" class="badge badge-warning" th:text="${a.action}">EXTEND</span>
                                 <span th:if="${a.action == 'REVOKE' or a.action == 'BATCH_REVOKE'}" class="badge badge-info" th:text="${a.action}">REVOKE</span>
                                 <span th:if="${a.action == 'AUTO_WOULD_BLOCK' or a.action == 'AUTO_WOULD_EXTEND'}" class="badge badge-purple" th:text="${a.action}">SIMULATION</span>
-                                <span th:if="${a.action == 'AUTO_CIRCUIT_BREAKER'}" class="badge badge-warning" th:text="${a.action}">CIRCUIT_BREAKER</span>
+                                <span th:if="${a.action == 'AUTO_CIRCUIT_BREAKER' or a.action == 'SYNC_CIRCUIT_BREAKER'}" class="badge badge-danger" th:text="${a.action}">CIRCUIT_BREAKER</span>
+                                <span th:if="${a.action == 'FLEET_SYNC' or a.action == 'SYNC_RECOVERED'}" class="badge badge-success" th:text="${a.action}">FLEET_SYNC</span>
                                 <span th:if="${a.action == 'EMERGENCY_FLUSH'}" class="badge badge-danger" th:text="${a.action}">EMERGENCY_FLUSH</span>
-                                <span th:if="${a.action != 'CREATE' and a.action != 'AUTO_BLOCK' and a.action != 'EXTEND' and a.action != 'AUTO_EXTEND' and a.action != 'REVOKE' and a.action != 'BATCH_REVOKE' and a.action != 'AUTO_WOULD_BLOCK' and a.action != 'AUTO_WOULD_EXTEND' and a.action != 'AUTO_CIRCUIT_BREAKER' and a.action != 'EMERGENCY_FLUSH'}"
+                                <span th:if="${a.action != 'CREATE' and a.action != 'AUTO_BLOCK' and a.action != 'EXTEND' and a.action != 'AUTO_EXTEND' and a.action != 'REVOKE' and a.action != 'BATCH_REVOKE' and a.action != 'AUTO_WOULD_BLOCK' and a.action != 'AUTO_WOULD_EXTEND' and a.action != 'AUTO_CIRCUIT_BREAKER' and a.action != 'SYNC_CIRCUIT_BREAKER' and a.action != 'FLEET_SYNC' and a.action != 'SYNC_RECOVERED' and a.action != 'EMERGENCY_FLUSH'}"
                                       class="badge badge-secondary" th:text="${a.action}">ACTION</span>
                             </td>
                             <td>

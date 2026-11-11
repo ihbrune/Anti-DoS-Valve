@@ -74,6 +74,7 @@ public record ValveOverviewDto(
 			Integer dynamicBlocksActiveCount,
 			Long dynamicBlocksBlockedRequests,
 			Long dynamicRulesRevision,
+			Integer dynamicRulesHashVersion,
 			Integer mitigationMinPrefixV4,
 			Integer mitigationMinPrefixV6,
 			Integer mitigationMaxTtlSeconds,
@@ -93,6 +94,89 @@ public record ValveOverviewDto(
 			boolean isStatusHost,
 			boolean isCurrentHost
 	) {
+		/**
+		 * Overloaded constructor without dynamicRulesHashVersion for backwards compatibility.
+		 */
+		public ValveSummaryDto(
+				String monitorName,
+				String description,
+				int pipelineOrder,
+				String monitorMode,
+				boolean simulationMode,
+				boolean serverWideBlocking,
+				int httpStatusCode,
+				int allowedRequestsPerSlot,
+				int slotLength,
+				int numberOfSlots,
+				float shareOfRetainedFormerRequests,
+				int ipv4SubnetMask,
+				int ipv6SubnetMask,
+				int maxIPCacheSize,
+				int maxBlockedIPCacheSize,
+				String relevantPaths,
+				String nonRelevantPaths,
+				String alwaysAllowedIPs,
+				String alwaysForbiddenIPs,
+				String statusUri,
+				String statusAllowedIPs,
+				String collectorIntegration,
+				boolean visitorCookieEnabled,
+				String visitorCookieName,
+				boolean authTrackingEnabled,
+				String authTrackingMode,
+				String authCookieName,
+				String authLoginPaths,
+				int authSessionTtlSeconds,
+				int maxAuthCacheSize,
+				int activeAuthSessions,
+				String relevantAuthScope,
+				Integer activeSampleThreshold,
+				Boolean dynamicMitigationEnabled,
+				String mitigationUri,
+				String mitigationAllowedIPs,
+				Integer dynamicBlocksActiveCount,
+				Long dynamicBlocksBlockedRequests,
+				Long dynamicRulesRevision,
+				Integer mitigationMinPrefixV4,
+				Integer mitigationMinPrefixV6,
+				Integer mitigationMaxTtlSeconds,
+				Integer mitigationMaxActiveBlocks,
+				long alwaysForbiddenBlockedRequests,
+				int currentActiveCounters,
+				int currentBlockedCounters,
+				long currentSlotKey,
+				long lastCompletedSlotKey,
+				long totalRequests,
+				long totalAuthenticatedRequests,
+				long previousTotalRequests,
+				long previousAuthenticatedRequests,
+				int previousActiveCounters,
+				int previousBlockedCounters,
+				int activeSlots,
+				boolean isStatusHost,
+				boolean isCurrentHost
+		) {
+			this(
+					monitorName, description, pipelineOrder, monitorMode, simulationMode, serverWideBlocking,
+					httpStatusCode, allowedRequestsPerSlot, slotLength, numberOfSlots,
+					shareOfRetainedFormerRequests, ipv4SubnetMask, ipv6SubnetMask, maxIPCacheSize,
+					maxBlockedIPCacheSize, relevantPaths, nonRelevantPaths, alwaysAllowedIPs,
+					alwaysForbiddenIPs, statusUri, statusAllowedIPs, collectorIntegration,
+					visitorCookieEnabled, visitorCookieName,
+					authTrackingEnabled, authTrackingMode, authCookieName, authLoginPaths,
+					authSessionTtlSeconds, maxAuthCacheSize, activeAuthSessions,
+					relevantAuthScope, activeSampleThreshold,
+					dynamicMitigationEnabled, mitigationUri, mitigationAllowedIPs,
+					dynamicBlocksActiveCount, dynamicBlocksBlockedRequests, dynamicRulesRevision,
+					1,
+					mitigationMinPrefixV4, mitigationMinPrefixV6, mitigationMaxTtlSeconds, mitigationMaxActiveBlocks,
+					alwaysForbiddenBlockedRequests, currentActiveCounters, currentBlockedCounters,
+					currentSlotKey, lastCompletedSlotKey, totalRequests, totalAuthenticatedRequests,
+					previousTotalRequests, previousAuthenticatedRequests,
+					previousActiveCounters, previousBlockedCounters, activeSlots, isStatusHost, isCurrentHost
+			);
+		}
+
 		/**
 		 * Overloaded constructor without mitigation guardrail fields for backwards compatibility.
 		 */
@@ -163,7 +247,7 @@ public record ValveOverviewDto(
 					relevantAuthScope, activeSampleThreshold,
 					dynamicMitigationEnabled, mitigationUri, mitigationAllowedIPs,
 					dynamicBlocksActiveCount, dynamicBlocksBlockedRequests, dynamicRulesRevision,
-					16, 32, 86400, 5000,
+					1, 16, 32, 86400, 5000,
 					alwaysForbiddenBlockedRequests, currentActiveCounters, currentBlockedCounters,
 					currentSlotKey, lastCompletedSlotKey, totalRequests, totalAuthenticatedRequests,
 					previousTotalRequests, previousAuthenticatedRequests,
@@ -622,6 +706,10 @@ public record ValveOverviewDto(
 
 		public long dynamicRulesRevisionOrDefault() {
 			return dynamicRulesRevision != null ? Math.max(0L, dynamicRulesRevision) : 0L;
+		}
+
+		public int dynamicRulesHashVersionOrDefault() {
+			return dynamicRulesHashVersion != null && dynamicRulesHashVersion > 0 ? dynamicRulesHashVersion : 1;
 		}
 
 		public int mitigationMinPrefixV4OrDefault() {

@@ -3147,6 +3147,7 @@ class AntiDoSValveTest {
 		valve.invoke(upsertReq, upsertResp);
 		assertEquals(200, upsertResp.getStatus());
 		assertTrue(upsertResp.getOutput().contains("\"dynamicBlocksActiveCount\": 1"));
+		assertTrue(upsertResp.getOutput().contains("\"dynamicRulesHashVersion\": 1"));
 
 		// 5. Request from 198.51.100.11 to an UNMONITORED path (/public/home) and nonRelevantPath (/api/health)
 		// must be blocked immediately (serverWideBlocking effect of dynamic blocks)

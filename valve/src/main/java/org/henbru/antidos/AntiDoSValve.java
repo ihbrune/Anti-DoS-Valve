@@ -246,6 +246,11 @@ public class AntiDoSValve extends ValveBase {
 	public static final int DEFAULT_MITIGATION_MAX_TTL_SECONDS = 86400;
 	/** Default maximum number of simultaneously active dynamic blocks */
 	public static final int DEFAULT_MITIGATION_MAX_ACTIVE_BLOCKS = 5000;
+	/**
+	 * Revision hash version for dynamic rules synchronization with Anti-DoS Collector.
+	 * Version 1: 53-bit FNV-1a positive hash over sorted canonical CIDRs.
+	 */
+	public static final int DYNAMIC_RULES_HASH_VERSION = 1;
 	private volatile int mitigationMinPrefixV4 = DEFAULT_MITIGATION_MIN_PREFIX_V4;
 	private volatile int mitigationMinPrefixV6 = DEFAULT_MITIGATION_MIN_PREFIX_V6;
 	private volatile int mitigationMaxTtlSeconds = DEFAULT_MITIGATION_MAX_TTL_SECONDS;
@@ -2682,6 +2687,7 @@ public class AntiDoSValve extends ValveBase {
 				+ "  \"action\": \"" + AntiDoSStatusRenderer.escapeJson(action) + "\",\n"
 				+ "  \"dynamicBlocksActiveCount\": " + activeCount + ",\n"
 				+ "  \"dynamicRulesRevision\": " + revision + ",\n"
+				+ "  \"dynamicRulesHashVersion\": " + DYNAMIC_RULES_HASH_VERSION + ",\n"
 				+ "  \"dynamicBlocksBlockedRequests\": " + totalBlocked + ",\n"
 				+ "  \"ttlCappedCount\": " + ttlCappedCount + ",\n"
 				+ "  \"mitigationMaxTtlSeconds\": " + mitigationMaxTtlSeconds + ",\n"

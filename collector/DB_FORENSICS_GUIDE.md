@@ -506,6 +506,40 @@ sqlite3 -header -column antidos-collector.db \
 | **`client_subnet_rollups`** | `bucket_start`, `bucket_end` | `total_requests`, `active_requests`, `blocked_requests`, `marked_requests`, `returning_requests`, `authenticated_requests` | `subnet_group`, `asn`, `as_org`, `country_code`, `client_type`, `distinct_clients`, `distinct_user_agents` |
 | **`slot_snapshots`** | `start_time`, `end_time` | `total_requests`, `active_counters`, `blocked_counters`, `marked_counters` | `server_id`, `valve_name`, `slot_key`, `is_completed` |
 | **`daily_reports`** | `report_date`, `created_at` | `total_requests`, `total_blocked`, `total_marked`, `peak_requests_per_sec`, `peak_blocked_per_sec`, `peak_marked_per_sec` | `status`, `peak_server_id`, `peak_valve_name`, `server_count`, `incident_count`, `report_markdown` |
-| **`monitored_valves`** | `last_updated_at` | `allowed_requests_per_slot`, `slot_length`, `number_of_slots`, `active_sample_threshold` | `server_id`, `valve_name`, `monitor_mode`, `relevant_auth_scope`, `collector_integration`, `is_active` |
+| **`monitored_valves`** | `last_updated_at` | `allowed_requests_per_slot`, `slot_length`, `number_of_slots`, `active_sample_threshold` | `server_id`, `valve_name`, `monitor_mode`, `relevant_auth_scope`, `collector_integration`, `is_active`, `dynamic_rules_hash_version` |
 | **`network_annotations`** | `updated_at`, `created_at` | *(metadata)* | `target_type` (`ASN`/`SUBNET`), `target_key`, `verdict`, `note_markdown` |
 | **`poll_event_log`** | `poll_time` | `response_time_ms`, `server_generation_ms`, `payload_bytes`, `valves_polled`, `slots_ingested`, `events_ingested` | `server_id`, `url`, `status` (`SUCCESS`/`WARNING`/`ERROR`), `http_status_code`, `details`, `error_message` |
+| **`mitigation_rules`** | `created_at`, `updated_at`, `expires_at` | `total_blocked_hits`, `peak_distinct_ips` | `cidr`, `status` (`ACTIVE`/`EXPIRED`/`REVOKED`), `source`, `batch_id`, `reason`, `deterrence_state` |
+| **`mitigation_audit_log`** | `created_at` | *(counter in details)* | `action` (`CREATE`/`EXTEND`/`REVOKE`/`FLEET_SYNC`/`SYNC_CIRCUIT_BREAKER`/`SYNC_RECOVERED`/`SYNC_FAILED`/`SYNC_VERSION_MISMATCH`), `cidr`, `actor`, `details` |
+
+---
+
+### 6.4 Post-Mortem Forensics: Auditing Dynamic Blocklist Synchronization
+
+When investigating synchronization issues, revision mismatches, or circuit breaker suppressions between the Collector and Valve instances, query `mitigation_audit_log`:
+
+```sql
+-- Track recent dynamic rule synchronization events, desyncs, and circuit breakers
+SELECT 
+    created_at,
+    action,
+    cidr,
+    actor,
+    details
+FROM mitigation_audit_log
+WHERE action IN ('SYNC_CIRCUIT_BREAKER', 'FLEET_SYNC', 'SYNC_RECOVERED', 'SYNC_FAILED', 'SYNC_VERSION_MISMATCH')
+ORDER BY created_at DESC
+LIMIT 50;
+
+-- Analyze frequency of circuit breaker activations by server
+SELECT 
+    actor AS server_and_valve,
+    action,
+    COUNT(*) AS event_count,
+    MIN(created_at) AS first_event,
+    MAX(created_at) AS last_event
+FROM mitigation_audit_log
+WHERE action IN ('SYNC_CIRCUIT_BREAKER', 'SYNC_FAILED', 'SYNC_VERSION_MISMATCH')
+GROUP BY actor, action
+ORDER BY event_count DESC;
+```

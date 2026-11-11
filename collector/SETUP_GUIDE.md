@@ -766,7 +766,7 @@ The database separates real-time transient telemetry, persistent subnet aggregat
 12. **`asn_info`:** Autonomous System catalog caching organization names and datacenter / hosting provider classifications.
 13. **`crawler_feeds` & `bot_ip_ranges`:** Automatic synchronization catalog for official bot feeds (Googlebot, Bingbot, OpenAI, Anthropic) with versioning and orphan pruning.
 14. **`poll_event_log`:** Diagnostic audit trail tracking background ingestion cycles (`blocked_events_ingested`, `marked_events_ingested`, `events_ingested`), wire data transfer volume (`payload_bytes`), server-side JSON rendering time (`server_generation_ms`), communication latency, warnings, and recovery gap-fills.
-15. **`mitigation_rules` & `mitigation_audit_log`:** Persistent dynamic CIDR block rules (`cidr`, `status`, `source`, `batch_id`, `expires_at`, `total_blocked_hits`, `peak_distinct_ips`, `deterrence_state`) and full operator/batch audit history (`CREATE`, `EXTEND`, `REVOKE`, `BATCH_CREATE`, `BATCH_REVOKE`).
+15. **`mitigation_rules` & `mitigation_audit_log`:** Persistent dynamic CIDR block rules (`cidr`, `status`, `source`, `batch_id`, `expires_at`, `total_blocked_hits`, `peak_distinct_ips`, `deterrence_state`) and full operator/batch and valve synchronization audit history (`CREATE`, `EXTEND`, `REVOKE`, `BATCH_CREATE`, `BATCH_REVOKE`, `FLEET_SYNC`, `SYNC_CIRCUIT_BREAKER`, `SYNC_RECOVERED`, `SYNC_FAILED`, `SYNC_VERSION_MISMATCH`).
 
 ---
 

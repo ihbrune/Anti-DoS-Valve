@@ -20,6 +20,7 @@ import org.henbru.antidos.collector.model.ValveOverviewDto;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -106,20 +107,36 @@ public class ValveStatusClient {
 		return sb.toString();
 	}
 
-	@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+	@JsonIgnoreProperties(ignoreUnknown = true)
 	public record MitigationCommandResponse(
 			String status,
 			String valve,
 			String action,
 			int dynamicBlocksActiveCount,
 			long dynamicRulesRevision,
+			Integer dynamicRulesHashVersion,
 			long dynamicBlocksBlockedRequests,
 			Integer ttlCappedCount,
 			Integer mitigationMaxTtlSeconds,
 			Integer mitigationMaxActiveBlocks
 	) {
 		public MitigationCommandResponse(String status, String action, String valve, int activeCount, long revision, String error) {
-			this(status, valve, action, activeCount, revision, 0L, 0, 86400, 5000);
+			this(status, valve, action, activeCount, revision, 1, 0L, 0, 86400, 5000);
+		}
+
+		public MitigationCommandResponse(
+				String status,
+				String valve,
+				String action,
+				int dynamicBlocksActiveCount,
+				long dynamicRulesRevision,
+				long dynamicBlocksBlockedRequests,
+				Integer ttlCappedCount,
+				Integer mitigationMaxTtlSeconds,
+				Integer mitigationMaxActiveBlocks
+		) {
+			this(status, valve, action, dynamicBlocksActiveCount, dynamicRulesRevision, 1,
+					dynamicBlocksBlockedRequests, ttlCappedCount, mitigationMaxTtlSeconds, mitigationMaxActiveBlocks);
 		}
 
 		public int activeCount() {
@@ -128,6 +145,10 @@ public class ValveStatusClient {
 
 		public long revision() {
 			return dynamicRulesRevision;
+		}
+
+		public int dynamicRulesHashVersionOrDefault() {
+			return dynamicRulesHashVersion != null && dynamicRulesHashVersion > 0 ? dynamicRulesHashVersion : 1;
 		}
 
 		public int ttlCappedCountOrDefault() {

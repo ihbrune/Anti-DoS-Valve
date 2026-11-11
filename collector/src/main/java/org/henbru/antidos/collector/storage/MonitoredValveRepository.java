@@ -1,5 +1,7 @@
 package org.henbru.antidos.collector.storage;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -73,6 +75,7 @@ public class MonitoredValveRepository {
 			rs.getInt("dynamic_blocks_active_count"),
 			rs.getLong("dynamic_blocks_blocked_requests"),
 			rs.getLong("dynamic_rules_revision"),
+			getIntSafe(rs, "dynamic_rules_hash_version", 1),
 			rs.getInt("mitigation_min_prefix_v4") > 0 ? rs.getInt("mitigation_min_prefix_v4") : 16,
 			rs.getInt("mitigation_min_prefix_v6") > 0 ? rs.getInt("mitigation_min_prefix_v6") : 32,
 			rs.getInt("mitigation_max_ttl_seconds") > 0 ? rs.getInt("mitigation_max_ttl_seconds") : 86400,
@@ -84,6 +87,15 @@ public class MonitoredValveRepository {
 
 	private static Instant toInstant(Timestamp ts) {
 		return ts != null ? ts.toInstant() : null;
+	}
+
+	private static int getIntSafe(ResultSet rs, String colName, int defaultVal) {
+		try {
+			int val = rs.getInt(colName);
+			return val > 0 ? val : defaultVal;
+		} catch (SQLException ignored) {
+			return defaultVal;
+		}
 	}
 
 	public void upsert(MonitoredValve v) {
@@ -100,12 +112,12 @@ public class MonitoredValveRepository {
 				    auth_session_ttl_seconds, max_auth_cache_size,
 				    relevant_auth_scope, active_sample_threshold,
 				    dynamic_mitigation_enabled, mitigation_uri, dynamic_blocks_active_count,
-				    dynamic_blocks_blocked_requests, dynamic_rules_revision,
+				    dynamic_blocks_blocked_requests, dynamic_rules_revision, dynamic_rules_hash_version,
 				    mitigation_min_prefix_v4, mitigation_min_prefix_v6,
 				    mitigation_max_ttl_seconds, mitigation_max_active_blocks,
 				    last_updated_at, config_hash, is_active
 				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (server_id, valve_name) DO UPDATE SET
 				    description = EXCLUDED.description,
 				    pipeline_order = EXCLUDED.pipeline_order,
@@ -143,6 +155,7 @@ public class MonitoredValveRepository {
 				    dynamic_blocks_active_count = EXCLUDED.dynamic_blocks_active_count,
 				    dynamic_blocks_blocked_requests = EXCLUDED.dynamic_blocks_blocked_requests,
 				    dynamic_rules_revision = EXCLUDED.dynamic_rules_revision,
+				    dynamic_rules_hash_version = EXCLUDED.dynamic_rules_hash_version,
 				    mitigation_min_prefix_v4 = EXCLUDED.mitigation_min_prefix_v4,
 				    mitigation_min_prefix_v6 = EXCLUDED.mitigation_min_prefix_v6,
 				    mitigation_max_ttl_seconds = EXCLUDED.mitigation_max_ttl_seconds,
@@ -191,6 +204,7 @@ public class MonitoredValveRepository {
 				v.dynamicBlocksActiveCount(),
 				v.dynamicBlocksBlockedRequests(),
 				v.dynamicRulesRevision(),
+				v.dynamicRulesHashVersionOrDefault(),
 				v.mitigationMinPrefixV4(),
 				v.mitigationMinPrefixV6(),
 				v.mitigationMaxTtlSeconds(),
@@ -202,15 +216,25 @@ public class MonitoredValveRepository {
 	}
 
 	public void updateDynamicMitigationStats(String serverId, String valveName, boolean enabled, String mitigationUri,
-			int activeCount, long blockedRequests, long revision) {
+			int activeCount, long blockedRequests, long revision, int hashVersion) {
 		jdbcTemplate.update(
-				"UPDATE monitored_valves SET dynamic_mitigation_enabled = ?, mitigation_uri = ?, dynamic_blocks_active_count = ?, dynamic_blocks_blocked_requests = ?, dynamic_rules_revision = ? WHERE server_id = ? AND valve_name = ?",
-				enabled, mitigationUri, activeCount, blockedRequests, revision, serverId, valveName);
+				"UPDATE monitored_valves SET dynamic_mitigation_enabled = ?, mitigation_uri = ?, dynamic_blocks_active_count = ?, dynamic_blocks_blocked_requests = ?, dynamic_rules_revision = ?, dynamic_rules_hash_version = ? WHERE server_id = ? AND valve_name = ?",
+				enabled, mitigationUri, activeCount, blockedRequests, revision, hashVersion, serverId, valveName);
+	}
+
+	public void updateDynamicMitigationStats(String serverId, String valveName, boolean enabled, String mitigationUri,
+			int activeCount, long blockedRequests, long revision, int hashVersion, Instant now) {
+		updateDynamicMitigationStats(serverId, valveName, enabled, mitigationUri, activeCount, blockedRequests, revision, hashVersion);
+	}
+
+	public void updateDynamicMitigationStats(String serverId, String valveName, boolean enabled, String mitigationUri,
+			int activeCount, long blockedRequests, long revision) {
+		updateDynamicMitigationStats(serverId, valveName, enabled, mitigationUri, activeCount, blockedRequests, revision, 1);
 	}
 
 	public void updateDynamicMitigationStats(String serverId, String valveName, boolean enabled, String mitigationUri,
 			int activeCount, long blockedRequests, long revision, Instant now) {
-		updateDynamicMitigationStats(serverId, valveName, enabled, mitigationUri, activeCount, blockedRequests, revision);
+		updateDynamicMitigationStats(serverId, valveName, enabled, mitigationUri, activeCount, blockedRequests, revision, 1);
 	}
 
 	public List<MonitoredValve> findByServerId(String serverId) {

@@ -237,6 +237,7 @@ class ValveStatusClientTest {
 		assertEquals(3, resp.activeCount());
 		assertEquals(123456789L, resp.revision());
 		assertEquals(42L, resp.dynamicBlocksBlockedRequests());
+		assertEquals(1, resp.dynamicRulesHashVersionOrDefault(), "Missing dynamicRulesHashVersion must fallback to 1");
 		assertEquals(1, resp.ttlCappedCountOrDefault());
 		assertEquals(3600, resp.mitigationMaxTtlSecondsOrDefault());
 		assertEquals(100, resp.mitigationMaxActiveBlocksOrDefault());

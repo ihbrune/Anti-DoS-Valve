@@ -1774,6 +1774,7 @@ public class AntiDoSStatusRenderer {
 					.append("      \"dynamicBlocksActiveCount\": ").append(v.isDynamicMitigationEnabled() ? v.getDynamicBlockRegistry().getActiveCount(getTimeInMillis()) : 0).append(",\n")
 					.append("      \"dynamicBlocksBlockedRequests\": ").append(v.isDynamicMitigationEnabled() ? v.getDynamicBlockRegistry().getTotalBlockedRequests() : 0).append(",\n")
 					.append("      \"dynamicRulesRevision\": ").append(v.isDynamicMitigationEnabled() ? v.getDynamicBlockRegistry().getRevision(getTimeInMillis()) : 0).append(",\n")
+					.append("      \"dynamicRulesHashVersion\": ").append(AntiDoSValve.DYNAMIC_RULES_HASH_VERSION).append(",\n")
 					.append("      \"statusConcurrencyTimeoutMs\": ").append(v.getStatusConcurrencyTimeoutMs()).append(",\n")
 					.append("      \"httpStatusCode\": ").append(v.getHttpStatusCode()).append("\n")
 					.append("    }");
@@ -1905,6 +1906,7 @@ public class AntiDoSStatusRenderer {
 				.append("    \"dynamicBlocksActiveCount\": ").append(target.isDynamicMitigationEnabled() ? target.getDynamicBlockRegistry().getActiveCount(getTimeInMillis()) : 0).append(",\n")
 				.append("    \"dynamicBlocksBlockedRequests\": ").append(target.isDynamicMitigationEnabled() ? target.getDynamicBlockRegistry().getTotalBlockedRequests() : 0).append(",\n")
 				.append("    \"dynamicRulesRevision\": ").append(target.isDynamicMitigationEnabled() ? target.getDynamicBlockRegistry().getRevision(getTimeInMillis()) : 0).append(",\n")
+				.append("    \"dynamicRulesHashVersion\": ").append(AntiDoSValve.DYNAMIC_RULES_HASH_VERSION).append(",\n")
 				.append("    \"statusConcurrencyTimeoutMs\": ").append(target.getStatusConcurrencyTimeoutMs()).append(",\n")
 				.append("    \"httpStatusCode\": ").append(target.getHttpStatusCode()).append("\n")
 				.append("  },\n");

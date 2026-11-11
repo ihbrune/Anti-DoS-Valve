@@ -565,8 +565,15 @@ public class MitigationController {
 		model.addAttribute("auditHasPrev", aPage > 1);
 		model.addAttribute("auditHasNext", aPage < totalAuditPages);
 
+		long expectedRevision = mitigationService.getExpectedRevision(now);
 		model.addAttribute("mitigationValves", mitigationValves);
-		model.addAttribute("expectedRevision", mitigationService.getExpectedRevision(now));
+		model.addAttribute("expectedRevision", expectedRevision);
+		Map<String, Boolean> valveCircuitBreakers = new LinkedHashMap<>();
+		for (MonitoredValve mv : mitigationValves) {
+			boolean suppressed = mitigationService.isValveSyncSuppressed(mv.serverId(), mv.valveName(), expectedRevision, now);
+			valveCircuitBreakers.put(mv.serverId() + "/" + mv.valveName(), suppressed);
+		}
+		model.addAttribute("valveCircuitBreakers", valveCircuitBreakers);
 		model.addAttribute("persistentCount", persistentCount);
 		model.addAttribute("deterredCount", deterredCount);
 		model.addAttribute("totalDynamicHits", totalDynamicHits);

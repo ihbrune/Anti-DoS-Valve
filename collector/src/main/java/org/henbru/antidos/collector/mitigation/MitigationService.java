@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.henbru.antidos.collector.config.CollectorProperties;
@@ -50,7 +51,25 @@ public class MitigationService {
 
 	public static final int MIN_IPV4_PREFIX = 16;
 	public static final int MIN_IPV6_PREFIX = 32;
+	public static final int CURRENT_HASH_VERSION = 1;
 	private static final long DETERRENCE_WINDOW_SECONDS = 600L; // 10 minutes
+
+	public record ValveSyncState(
+			long attemptedExpectedRevision,
+			long resultingValveRevision,
+			int consecutiveMismatches,
+			Instant lastSyncAttemptAt,
+			Instant backoffUntil,
+			String lastReason
+	) {
+		public boolean isSuppressed(long currentExpectedRevision, Instant now) {
+			return attemptedExpectedRevision == currentExpectedRevision
+					&& backoffUntil != null
+					&& now.isBefore(backoffUntil);
+		}
+	}
+
+	private final ConcurrentHashMap<String, ValveSyncState> valveSyncStates = new ConcurrentHashMap<>();
 
 	private final CollectorProperties properties;
 	private final MitigationRuleRepository ruleRepository;
@@ -976,6 +995,7 @@ public class MitigationService {
 		List<String> errors = new ArrayList<>();
 
 		for (MonitoredValve valve : mitigationValves) {
+			String valveKey = valve.serverId() + "/" + valve.valveName();
 			EndpointConfig ep = endpointsByName.get(valve.serverId());
 			if (ep == null) {
 				continue;
@@ -1001,9 +1021,23 @@ public class MitigationService {
 						resp.activeCount(),
 						valve.dynamicBlocksBlockedRequests(),
 						resp.revision(),
+						resp.dynamicRulesHashVersionOrDefault(),
 						now
 				);
 				syncedCount++;
+
+				if (resp.revision() == expectedRevision) {
+					valveSyncStates.remove(valveKey);
+				} else {
+					String reason = "Revision mismatch after fleet sync: expected " + expectedRevision + ", but valve reported " + resp.revision();
+					Instant backoffUntil = now.plus(Duration.ofMinutes(15));
+					valveSyncStates.put(valveKey, new ValveSyncState(expectedRevision, resp.revision(), 1, now, backoffUntil, reason));
+					recordAudit(null, valveKey, "SYNC_CIRCUIT_BREAKER",
+							"Fleet sync completed but resulting revision (" + resp.revision() + ") differs from expected ("
+									+ expectedRevision + "). Active rules: " + resp.activeCount() + ". Auto-sync suspended for 15m to prevent loop.",
+							0, "ADMIN");
+				}
+
 				if (resp.ttlCappedCountOrDefault() > 0) {
 					log.info("Valve '{}/{}' capped TTL for {} dynamic block(s) to mitigationMaxTtlSeconds={}s",
 							valve.serverId(), valve.valveName(), resp.ttlCappedCountOrDefault(), resp.mitigationMaxTtlSecondsOrDefault());
@@ -1012,7 +1046,17 @@ public class MitigationService {
 				String err = valve.serverId() + "/" + valve.valveName() + ": " + ValveStatusClient.formatErrorMessage(e);
 				log.warn("Failed to sync dynamic mitigations to '{}': {}", valve.serverId() + "/" + valve.valveName(), e.getMessage());
 				errors.add(err);
+				Instant backoffUntil = now.plus(Duration.ofMinutes(5));
+				valveSyncStates.put(valveKey, new ValveSyncState(expectedRevision, valve.dynamicRulesRevision(), 1, now, backoffUntil, err));
 			}
+		}
+
+		if (targetCount > 0) {
+			recordAudit(null, "FLEET", "FLEET_SYNC",
+					"Fleet sync completed: " + syncedCount + "/" + targetCount + " valve(s) synced, "
+							+ activeRules.size() + " active rule(s), expected revision: " + expectedRevision
+							+ (errors.isEmpty() ? "" : ", errors: " + errors.size()),
+					0, "ADMIN");
 		}
 
 		return new FleetSyncResult(targetCount, syncedCount, activeRules.size(), expectedRevision, errors);
@@ -1022,14 +1066,50 @@ public class MitigationService {
 	 * Called during the poller cycle when a Valve advertises {@code dynamicMitigationEnabled = true}.
 	 * Automatically reconciles the Valve's in-memory registry if its {@code dynamicRulesRevision}
 	 * differs from the Collector's expected revision (e.g. after a Tomcat restart).
+	 * <p>
+	 * Protected by a smart revision-scoped circuit breaker to prevent infinite update loops
+	 * across divergent hash versions or guardrail rejections.
 	 */
 	public void syncValveIfNeeded(EndpointConfig endpoint, ValveOverviewDto.ValveSummaryDto valveSummary, Instant now) {
 		if (endpoint == null || valveSummary == null || !valveSummary.dynamicMitigationEnabledOrDefault()) {
 			return;
 		}
+		String valveKey = endpoint.getName() + "/" + valveSummary.monitorName();
 		long expectedRevision = getExpectedRevision(now);
 		long valveRevision = valveSummary.dynamicRulesRevisionOrDefault();
+		int valveHashVersion = valveSummary.dynamicRulesHashVersionOrDefault();
+
 		if (valveRevision == expectedRevision) {
+			ValveSyncState prev = valveSyncStates.remove(valveKey);
+			if (prev != null && prev.consecutiveMismatches() > 0) {
+				log.info("Dynamic rule revision converged for '{}/{}' (revision: {})",
+						endpoint.getName(), valveSummary.monitorName(), expectedRevision);
+				recordAudit(null, valveKey, "SYNC_RECOVERED",
+						"Dynamic rules revision converged with Collector (revision: " + expectedRevision + ")",
+						0, "AUTO_POLLER");
+			}
+			return;
+		}
+
+		// 1. Check Circuit Breaker suppression:
+		// Only suppress if the rule set hasn't changed (attemptedExpectedRevision == expectedRevision)
+		// and we are still in the backoff window.
+		ValveSyncState existingState = valveSyncStates.get(valveKey);
+		if (existingState != null && existingState.isSuppressed(expectedRevision, now)) {
+			if (log.isDebugEnabled()) {
+				log.debug("Auto-sync to '{}/{}' suppressed by circuit breaker until {} (expectedRevision: {}, valveRevision: {})",
+						endpoint.getName(), valveSummary.monitorName(), existingState.backoffUntil(), expectedRevision, valveRevision);
+			}
+			return;
+		}
+
+		// 2. Hash version compatibility check:
+		if (valveHashVersion != CURRENT_HASH_VERSION) {
+			String reason = "Incompatible hash version: Valve reports " + valveHashVersion + " but Collector expects " + CURRENT_HASH_VERSION;
+			log.warn("Auto-sync skipped for '{}/{}': {}", endpoint.getName(), valveSummary.monitorName(), reason);
+			Instant backoffUntil = now.plus(Duration.ofMinutes(15));
+			valveSyncStates.put(valveKey, new ValveSyncState(expectedRevision, valveRevision, 1, now, backoffUntil, reason));
+			recordAudit(null, valveKey, "SYNC_VERSION_MISMATCH", reason, 0, "AUTO_POLLER");
 			return;
 		}
 
@@ -1057,17 +1137,73 @@ public class MitigationService {
 					resp.activeCount(),
 					valveSummary.dynamicBlocksBlockedRequestsOrDefault(),
 					resp.revision(),
+					resp.dynamicRulesHashVersionOrDefault(),
 					now
 			);
-			log.info("Auto-synchronized {} dynamic CIDR rule(s) to '{}/{}' (revision {} -> {})",
-					resp.activeCount(), endpoint.getName(), valveSummary.monitorName(), valveRevision, resp.revision());
+
+			if (resp.revision() == expectedRevision) {
+				ValveSyncState prev = valveSyncStates.remove(valveKey);
+				if (prev != null && prev.consecutiveMismatches() > 0) {
+					recordAudit(null, valveKey, "SYNC_RECOVERED",
+							"Dynamic rules revision converged with Collector (revision: " + expectedRevision + ")",
+							0, "AUTO_POLLER");
+				}
+				log.info("Auto-synchronized {} dynamic CIDR rule(s) to '{}/{}' (revision {} -> {})",
+						resp.activeCount(), endpoint.getName(), valveSummary.monitorName(), valveRevision, resp.revision());
+			} else {
+				// Divergence detected immediately after replace!
+				int consecutive = (existingState != null ? existingState.consecutiveMismatches() : 0) + 1;
+				long backoffMinutes = consecutive == 1 ? 5L : 15L;
+				Instant backoffUntil = now.plus(Duration.ofMinutes(backoffMinutes));
+				String reason = "Revision mismatch after sync: expected " + expectedRevision + ", but valve reported " + resp.revision();
+				valveSyncStates.put(valveKey, new ValveSyncState(expectedRevision, resp.revision(), consecutive, now, backoffUntil, reason));
+
+				log.warn("Dynamic rule revision mismatch for valve '{}/{}' after auto-sync (expected {}, valve reported {}). "
+						+ "Suspected hash algorithm or version mismatch. Auto-sync suspended for {}m for this rule set.",
+						endpoint.getName(), valveSummary.monitorName(), expectedRevision, resp.revision(), backoffMinutes);
+
+				recordAudit(null, valveKey, "SYNC_CIRCUIT_BREAKER",
+						"Auto-sync completed but resulting revision (" + resp.revision() + ") differs from expected ("
+								+ expectedRevision + "). Active rules: " + resp.activeCount() + ". Auto-sync suspended for "
+								+ backoffMinutes + "m to prevent loop.",
+						0, "AUTO_POLLER");
+			}
+
 			if (resp.ttlCappedCountOrDefault() > 0) {
 				log.info("Valve '{}/{}' capped TTL for {} dynamic block(s) to mitigationMaxTtlSeconds={}s",
 						endpoint.getName(), valveSummary.monitorName(), resp.ttlCappedCountOrDefault(), resp.mitigationMaxTtlSecondsOrDefault());
 			}
 		} catch (Exception e) {
-			log.warn("Auto-sync of dynamic CIDR rules to '{}/{}' failed: {}",
-					endpoint.getName(), valveSummary.monitorName(), ValveStatusClient.formatErrorMessage(e));
+			int consecutive = (existingState != null ? existingState.consecutiveMismatches() : 0) + 1;
+			long backoffMinutes = consecutive == 1 ? 2L : 10L;
+			Instant backoffUntil = now.plus(Duration.ofMinutes(backoffMinutes));
+			String errMsg = ValveStatusClient.formatErrorMessage(e);
+			valveSyncStates.put(valveKey, new ValveSyncState(expectedRevision, valveRevision, consecutive, now, backoffUntil, errMsg));
+
+			log.warn("Auto-sync of dynamic CIDR rules to '{}/{}' failed: {}. Retries suspended for {}m.",
+					endpoint.getName(), valveSummary.monitorName(), errMsg, backoffMinutes);
+
+			recordAudit(null, valveKey, "SYNC_FAILED",
+					"Auto-sync failed: " + errMsg + ". Retries suspended for " + backoffMinutes + "m.",
+					0, "AUTO_POLLER");
+		}
+	}
+
+	public boolean isValveSyncSuppressed(String serverId, String valveName, long currentExpectedRevision, Instant now) {
+		String key = serverId + "/" + valveName;
+		ValveSyncState state = valveSyncStates.get(key);
+		return state != null && state.isSuppressed(currentExpectedRevision, now);
+	}
+
+	public Optional<ValveSyncState> getValveSyncState(String serverId, String valveName) {
+		return Optional.ofNullable(valveSyncStates.get(serverId + "/" + valveName));
+	}
+
+	public void resetCircuitBreaker(String serverId, String valveName) {
+		if (serverId != null && valveName != null) {
+			valveSyncStates.remove(serverId + "/" + valveName);
+		} else {
+			valveSyncStates.clear();
 		}
 	}
 

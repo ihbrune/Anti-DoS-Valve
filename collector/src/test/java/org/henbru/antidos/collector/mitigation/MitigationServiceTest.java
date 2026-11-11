@@ -5,6 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.nio.file.Path;
 import java.sql.Timestamp;
@@ -14,8 +20,10 @@ import java.util.List;
 
 import org.flywaydb.core.Flyway;
 import org.henbru.antidos.collector.config.CollectorProperties;
+import org.henbru.antidos.collector.config.EndpointConfig;
 import org.henbru.antidos.collector.model.MitigationAuditEntry;
 import org.henbru.antidos.collector.model.MitigationRule;
+import org.henbru.antidos.collector.model.ValveOverviewDto;
 import org.henbru.antidos.collector.poller.ValveStatusClient;
 import org.henbru.antidos.collector.storage.MitigationRuleRepository;
 import org.henbru.antidos.collector.storage.MonitoredValveRepository;
@@ -445,5 +453,122 @@ class MitigationServiceTest {
 		MitigationAuditEntry entry4 = new MitigationAuditEntry(
 				4L, 11L, "203.0.113.0/24", null, "CREATE", "admin", 1800, "Single subnet block", Instant.now());
 		org.junit.jupiter.api.Assertions.assertNull(entry4.getAsn());
+	}
+
+	@Test
+	void testCircuitBreakerPreventsInfiniteSyncLoopOnRevisionMismatch() throws Exception {
+		Instant now = Instant.now();
+		ValveStatusClient mockClient = mock(ValveStatusClient.class);
+		CollectorProperties props = new CollectorProperties();
+		MitigationService testService = new MitigationService(
+				props, ruleRepository, valveRepository, mockClient, null, jdbcTemplate);
+
+		// 1. Add active rule
+		ruleRepository.upsertRule(new MitigationRule(
+				null, "198.51.100.0/24", 4, 24, "ALL", "ACTIVE", "MANUAL", null,
+				"Test Block", null, null, now, now, now.plusSeconds(3600), null, null,
+				0L, 0, null, "OBSERVING"
+		));
+		long expectedRevision = testService.getExpectedRevision(now);
+		assertTrue(expectedRevision > 0L);
+
+		EndpointConfig ep = new EndpointConfig();
+		ep.setName("test-node");
+		ep.setUrl("http://localhost:8080/antidos-status");
+
+		ValveOverviewDto.ValveSummaryDto valveSummary = new ValveOverviewDto.ValveSummaryDto(
+				"ROOT", "Root Valve", 1, "BLOCKING", false, true,
+				429, 60, 60, 5, 0.8f, 24, 64, 1000, 1000,
+				null, null, null, null, "/antidos-status", null, "auto",
+				false, "_adv", false, "OFF", null, null, 900, 50000,
+				0, "ALL", null, true, "/antidos-mitigate", null,
+				0, 0L, 99999L, 16, 32, 86400, 5000,
+				0L, 0, 0, 0L, 0L, 0L, 0L, 0L, 0L, 0, 0, 0, true, true
+		);
+		assertEquals(1, valveSummary.dynamicRulesHashVersionOrDefault());
+
+		// Mock valve returning divergent revision 99999L (does not match expectedRevision)
+		when(mockClient.sendMitigationCommand(any(), any(), eq("ROOT"), eq("replace"), any(), any(), any(), any()))
+				.thenReturn(new ValveStatusClient.MitigationCommandResponse(
+						"OK", "ROOT", "replace", 1, 99999L, 1, 0L, 0, 86400, 5000));
+
+		// Call 1: Must trigger sync, detect mismatch, and trip circuit breaker
+		testService.syncValveIfNeeded(ep, valveSummary, now);
+		verify(mockClient, times(1)).sendMitigationCommand(any(), any(), eq("ROOT"), eq("replace"), any(), any(), any(), any());
+		assertTrue(testService.isValveSyncSuppressed("test-node", "ROOT", expectedRevision, now),
+				"Circuit breaker must suppress future syncs for this unchanged expectedRevision");
+
+		// Check audit log for SYNC_CIRCUIT_BREAKER
+		List<MitigationAuditEntry> audits = ruleRepository.findRecentAuditEntries(5);
+		assertTrue(audits.stream().anyMatch(a -> "SYNC_CIRCUIT_BREAKER".equals(a.getAction())),
+				"Must record SYNC_CIRCUIT_BREAKER audit event");
+
+		// Call 2 (simulating next 15s poll cycle): Rule set is unchanged -> MUST BE SUPPRESSED!
+		testService.syncValveIfNeeded(ep, valveSummary, now.plusSeconds(15));
+		verify(mockClient, times(1)).sendMitigationCommand(any(), any(), eq("ROOT"), eq("replace"), any(), any(), any(), any());
+
+		// 2. Add second rule -> expectedRevision changes -> Circuit breaker must IMMEDIATELY RESET!
+		ruleRepository.upsertRule(new MitigationRule(
+				null, "203.0.113.0/24", 4, 24, "ALL", "ACTIVE", "MANUAL", null,
+				"Second Block", null, null, now, now, now.plusSeconds(3600), null, null,
+				0L, 0, null, "OBSERVING"
+		));
+		long newExpectedRevision = testService.getExpectedRevision(now);
+		assertFalse(expectedRevision == newExpectedRevision);
+		assertFalse(testService.isValveSyncSuppressed("test-node", "ROOT", newExpectedRevision, now),
+				"Circuit breaker must immediately clear when expectedRevision changes");
+
+		// Mock valve now converging to newExpectedRevision
+		when(mockClient.sendMitigationCommand(any(), any(), eq("ROOT"), eq("replace"), any(), any(), any(), any()))
+				.thenReturn(new ValveStatusClient.MitigationCommandResponse(
+						"OK", "ROOT", "replace", 2, newExpectedRevision, 1, 0L, 0, 86400, 5000));
+
+		// Call 3: Sync is allowed and converges
+		testService.syncValveIfNeeded(ep, valveSummary, now.plusSeconds(30));
+		verify(mockClient, times(2)).sendMitigationCommand(any(), any(), eq("ROOT"), eq("replace"), any(), any(), any(), any());
+		assertFalse(testService.isValveSyncSuppressed("test-node", "ROOT", newExpectedRevision, now.plusSeconds(30)));
+	}
+
+	@Test
+	void testHashVersionFallbackAndIncompatibility() throws Exception {
+		Instant now = Instant.now();
+		ValveStatusClient mockClient = mock(ValveStatusClient.class);
+		CollectorProperties props = new CollectorProperties();
+		MitigationService testService = new MitigationService(
+				props, ruleRepository, valveRepository, mockClient, null, jdbcTemplate);
+
+		// Add rule
+		ruleRepository.upsertRule(new MitigationRule(
+				null, "198.51.100.0/24", 4, 24, "ALL", "ACTIVE", "MANUAL", null,
+				"Test Block", null, null, now, now, now.plusSeconds(3600), null, null,
+				0L, 0, null, "OBSERVING"
+		));
+
+		EndpointConfig ep = new EndpointConfig();
+		ep.setName("test-node-incompatible");
+		ep.setUrl("http://localhost:8080/antidos-status");
+
+		// Valve reporting incompatible future hash version 2
+		ValveOverviewDto.ValveSummaryDto v2Summary = new ValveOverviewDto.ValveSummaryDto(
+				"V2_MONITOR", "Future Valve", 1, "BLOCKING", false, true,
+				429, 60, 60, 5, 0.8f, 24, 64, 1000, 1000,
+				null, null, null, null, "/antidos-status", null, "auto",
+				false, "_adv", false, "OFF", null, null, 900, 50000,
+				0, "ALL", null, true, "/antidos-mitigate", null,
+				0, 0L, 77777L,
+				2, // dynamicRulesHashVersion = 2 (incompatible with Collector's v1)
+				16, 32, 86400, 5000,
+				0L, 0, 0, 0L, 0L, 0L, 0L, 0L, 0L, 0, 0, 0, true, true
+		);
+		assertEquals(2, v2Summary.dynamicRulesHashVersionOrDefault());
+
+		testService.syncValveIfNeeded(ep, v2Summary, now);
+		// Incompatible version must NOT send mitigation command
+		verify(mockClient, times(0)).sendMitigationCommand(any(), any(), any(), any(), any(), any(), any(), any());
+
+		// Verify audit entry for SYNC_VERSION_MISMATCH
+		List<MitigationAuditEntry> audits = ruleRepository.findRecentAuditEntries(5);
+		assertTrue(audits.stream().anyMatch(a -> "SYNC_VERSION_MISMATCH".equals(a.getAction())),
+				"Must record SYNC_VERSION_MISMATCH audit event when hash version is incompatible");
 	}
 }

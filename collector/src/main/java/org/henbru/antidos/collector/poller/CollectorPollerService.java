@@ -252,6 +252,7 @@ public class CollectorPollerService {
 								v.dynamicBlocksActiveCountOrDefault(),
 								v.dynamicBlocksBlockedRequestsOrDefault(),
 								v.dynamicRulesRevisionOrDefault(),
+								v.dynamicRulesHashVersionOrDefault(),
 								now
 						);
 					}
