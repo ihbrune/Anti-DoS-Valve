@@ -198,4 +198,98 @@ class AnalyticsServiceTest {
 		assertEquals(0L, pt.authenticatedRequests());
 		assertFalse(pt.hasLogins());
 	}
+
+	@Test
+	void testGetAsnDrilldownCalculation() {
+		Instant now = Instant.now();
+		List<org.henbru.antidos.collector.model.AsnHourlyPoint> mockPoints = List.of(
+				new org.henbru.antidos.collector.model.AsnHourlyPoint(
+						now.minus(1, ChronoUnit.HOURS), "11:00", 50000, 150, 12000, 24.0, 0, 500, 1.0, 0, 1200, List.of("Pub01")
+				),
+				new org.henbru.antidos.collector.model.AsnHourlyPoint(
+						now, "12:00", 30000, 100, 6000, 20.0, 0, 0, 0.0, 0, 800, List.of("Pub01", "Pub02")
+				)
+		);
+
+		List<org.henbru.antidos.collector.model.AsnSubnetSummary> mockSubnets = List.of(
+				new org.henbru.antidos.collector.model.AsnSubnetSummary(
+						"198.51.100.0/24", 25000, 200, 0, 6000, 24.0, 0, 500, "US", ClientType.DATACENTER
+				)
+		);
+
+		SubnetRollupRepository.AsnMeta mockMeta = new SubnetRollupRepository.AsnMeta(
+				"GTT Communications", "US", ClientType.DATACENTER
+		);
+
+		when(rollupRepository.findAsnHourlyPoints(eq(3257L), any(), any())).thenReturn(mockPoints);
+		when(rollupRepository.findAsnTopSubnets(eq(3257L), any(), any(), anyInt())).thenReturn(mockSubnets);
+		when(rollupRepository.findAsnMeta(3257L)).thenReturn(mockMeta);
+
+		org.henbru.antidos.collector.model.AsnDrilldownDto drilldown = analyticsService.getAsnDrilldown(3257L, 24);
+
+		assertNotNull(drilldown);
+		assertEquals(3257L, drilldown.asn());
+		assertEquals("GTT Communications", drilldown.asOrg());
+		assertEquals("US", drilldown.countryCode());
+		assertEquals(80000L, drilldown.totalRequests());
+		assertEquals(500L, drilldown.totalBlocked());
+		assertEquals(18000L, drilldown.totalReturning());
+		assertEquals(22.5, drilldown.overallReturningPct(), 0.1);
+		assertEquals(50000L, drilldown.peakHourRequests());
+		assertEquals(1, drilldown.topSubnets().size());
+		assertEquals(2, drilldown.hourlyPoints().size());
+		assertEquals(0, drilldown.distinctUserAgents());
+		assertTrue(drilldown.topUserAgents().isEmpty());
+	}
+
+	@Test
+	void testGetAsnDrilldownWithUserAgents() {
+		Instant now = Instant.now();
+		org.henbru.antidos.collector.storage.ClientEventRepository clientRepo = Mockito.mock(org.henbru.antidos.collector.storage.ClientEventRepository.class);
+		AnalyticsService service = new AnalyticsService(rollupRepository, rollupAggregationService, null, null, clientRepo);
+
+		List<org.henbru.antidos.collector.model.AsnHourlyPoint> mockPoints = List.of(
+				new org.henbru.antidos.collector.model.AsnHourlyPoint(
+						now, "12:00", 100000, 50, 0, 0.0, 0, 0, 0.0, 0, 1000, List.of("Pub01")
+				)
+		);
+		List<org.henbru.antidos.collector.model.AsnSubnetSummary> mockSubnets = List.of(
+				new org.henbru.antidos.collector.model.AsnSubnetSummary(
+						"198.51.100.0/24", 50000, 0, 0, 0, 0.0, 0, 500, "US", ClientType.DATACENTER
+				)
+		);
+		SubnetRollupRepository.AsnMeta mockMeta = new SubnetRollupRepository.AsnMeta(
+				"Attacking Hosting ASN", "US", ClientType.DATACENTER
+		);
+
+		List<org.henbru.antidos.collector.model.AsnUserAgentSummary> mockUas = List.of(
+				org.henbru.antidos.collector.model.AsnUserAgentSummary.of(
+						"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+						60000, 100000, 1500, 45
+				),
+				org.henbru.antidos.collector.model.AsnUserAgentSummary.of(
+						"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+						40000, 100000, 1000, 30
+				)
+		);
+
+		when(rollupRepository.findAsnHourlyPoints(eq(64496L), any(), any())).thenReturn(mockPoints);
+		when(rollupRepository.findAsnTopSubnets(eq(64496L), any(), any(), anyInt())).thenReturn(mockSubnets);
+		when(rollupRepository.findAsnMeta(64496L)).thenReturn(mockMeta);
+		when(clientRepo.countAsnDistinctUserAgents(eq(64496L), any(), any())).thenReturn(2);
+		when(clientRepo.findAsnTopUserAgents(eq(64496L), any(), any(), anyInt(), eq(100000L))).thenReturn(mockUas);
+
+		org.henbru.antidos.collector.model.AsnDrilldownDto drilldown = service.getAsnDrilldown(64496L, 24);
+
+		assertNotNull(drilldown);
+		assertEquals(2, drilldown.distinctUserAgents());
+		assertEquals(2, drilldown.topUserAgents().size());
+
+		org.henbru.antidos.collector.model.AsnUserAgentSummary topUa = drilldown.topUserAgents().get(0);
+		assertEquals(60000, topUa.totalRequests());
+		assertEquals(60.0, topUa.requestPct(), 0.1);
+		assertEquals("Chrome 149", topUa.browserFamily());
+		assertTrue(topUa.suspicious()); // Chrome >= 140 is suspicious/spoofed
+		assertEquals(45, topUa.distinctSubnets());
+	}
 }

@@ -529,6 +529,7 @@
                                 Total Requests
                             </th>
                             <th th:if="${groupBy == 'SUBNET' or groupBy == 'ASN'}">Rotating IPs</th>
+                            <th th:if="${groupBy == 'SUBNET' or groupBy == 'ASN'}">Returning (Cookies)</th>
                             <th>Targeted Servers</th>
                             <th>First Seen</th>
                             <th>Last Seen</th>
@@ -545,6 +546,11 @@
                                             style="text-decoration: underline; color: inherit; font-weight: 600;"
                                             title="Inspect all individual blocking events for this ASN"
                                             th:text="${offender.clientKey}">AS24940</a>
+                                        <button th:if="${groupBy == 'ASN' and offender.asn != null}" type="button" class="btn"
+                                            style="padding: 1px 5px; font-size: 10px; cursor: pointer;"
+                                            th:hx-get="@{/analytics/asn-drilldown(asn=${offender.asn})}"
+                                            hx-target="#asn-drilldown-modal-container"
+                                            title="Hourly ASN Drilldown &amp; Timeline">&#x1F4CA;</button>
                                         <a th:unless="${groupBy == 'ASN' and offender.asn != null}"
                                             th:href="@{/events(clientQuery=${offender.clientKey})}" class="ip-mono"
                                             style="text-decoration: underline; color: inherit; font-weight: 600;"
@@ -704,6 +710,22 @@
                                     1 IPs
                                 </span>
                             </td>
+                            <td th:if="${groupBy == 'SUBNET' or groupBy == 'ASN'}">
+                                <span th:if="${offender.hasReturningData() and offender.totalReturningRequests > 0}"
+                                    class="badge"
+                                    th:classappend="${offender.returningRatio() >= 30.0 ? 'badge-success' : (offender.returningRatio() <= 5.0 ? 'badge-danger' : 'badge-warning')}"
+                                    style="padding: 2px 7px; font-size: 11px;"
+                                    th:title="${#numbers.formatInteger(offender.totalReturningRequests, 1, 'POINT')} + ' of ' + ${#numbers.formatInteger(offender.totalRequests, 1, 'POINT')} + ' requests presented a valid visitor cookie (' + ${#numbers.formatDecimal(offender.returningRatio(), 1, 1)} + '%)'">
+                                    &#x1F36A; <span th:text="${#numbers.formatDecimal(offender.returningRatio(), 1, 1)} + '%'">24.3%</span>
+                                    <span style="opacity: 0.8; font-size: 10px;" th:text="'(' + ${#numbers.formatInteger(offender.totalReturningRequests, 1, 'POINT')} + ')'">(13,522)</span>
+                                </span>
+                                <span th:if="${offender.hasReturningData() and offender.totalReturningRequests == 0}"
+                                    class="badge badge-secondary" style="opacity: 0.7; font-size: 11px;"
+                                    title="Zero requests presented a valid visitor cookie (all first-contact requests)">
+                                    &#x1F36A; 0%
+                                </span>
+                                <span th:unless="${offender.hasReturningData()}" style="color: var(--text-muted); font-size: 11px;">-</span>
+                            </td>
                             <td>
                                 <span class="badge badge-info"
                                     th:text="${offender.distinctServersTargeted} + ' Nodes'">1 Nodes</span>
@@ -711,6 +733,13 @@
                             <td th:text="${#temporals.format(offender.firstSeen, 'dd.MM HH:mm')}">11.10 08:30</td>
                             <td th:text="${#temporals.format(offender.lastSeen, 'dd.MM HH:mm')}">11.10 09:45</td>
                             <td style="text-align: right;">
+                                <button th:if="${groupBy == 'ASN' and offender.asn != null}" type="button" class="btn"
+                                    style="padding: 2px 8px; font-size: 11px; margin-right: 4px;"
+                                    th:hx-get="@{/analytics/asn-drilldown(asn=${offender.asn})}"
+                                    hx-target="#asn-drilldown-modal-container"
+                                    title="Open Hourly ASN Deep-Dive &amp; Timeline">
+                                    <span>&#x1F4CA; Timeline</span>
+                                </button>
                                 <a th:if="${groupBy == 'ASN' and offender.asn != null}"
                                     th:href="@{/events(asn=${offender.asn})}" class="btn"
                                     style="padding: 2px 8px; font-size: 11px;"

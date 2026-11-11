@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.henbru.antidos.collector.config.CollectorProperties;
+import org.henbru.antidos.collector.model.CarpetRadarEntry;
 import org.henbru.antidos.collector.model.MitigationAuditEntry;
 import org.henbru.antidos.collector.model.MitigationRule;
 import org.henbru.antidos.collector.notification.AlertNotificationService;
@@ -466,5 +467,142 @@ public class AutoMitigationService {
 			}
 		}
 		return extendedCount;
+	}
+
+	/**
+	 * Scans recent telemetry across all active ASNs and evaluates each against the deterministic
+	 * auto-mitigation safety guardrails. Provides full transparency into why an ASN was qualified or suppressed.
+	 */
+	public List<CarpetRadarEntry> getCarpetRadar(int hours) {
+		EffectiveAutoSettings config = getEffectiveSettings();
+		int safeHours = Math.max(1, Math.min(hours, 720));
+		Instant cutoff = Instant.now().minus(Duration.ofHours(safeHours));
+
+		String sql = """
+				SELECT
+				    asn,
+				    MAX(as_org) AS as_org,
+				    MAX(country_code) AS country_code,
+				    COUNT(DISTINCT subnet_group) AS active_subnets,
+				    SUM(total_requests) AS total_requests,
+				    SUM(returning_requests) AS total_returning,
+				    SUM(authenticated_requests) AS total_authenticated
+				FROM client_subnet_rollups
+				WHERE bucket_start >= ?
+				  AND asn IS NOT NULL
+				  AND asn > 0
+				  AND (client_type IS NULL OR client_type NOT IN ('SEARCH_ENGINE', 'AI_CRAWLER', 'PRIVATE_NETWORK', 'INTERNAL_NETWORK'))
+				GROUP BY asn
+				HAVING COUNT(DISTINCT subnet_group) >= 2 OR SUM(total_requests) >= 500
+				ORDER BY total_requests DESC
+				LIMIT 40
+				""";
+
+		List<MitigationRule> activeRules = mitigationService.getActiveRules();
+		Set<Long> protectedAsns = config.getProtectedAsnSet();
+		List<CarpetRadarEntry> entries = new ArrayList<>();
+
+		jdbcTemplate.query(sql, rs -> {
+			long asn = rs.getLong("asn");
+			String rawAsOrg = rs.getString("as_org");
+			String asOrg = resolveAsnOrg(asn, rawAsOrg);
+			String countryCode = rs.getString("country_code");
+			int activeSubnets = rs.getInt("active_subnets");
+			long totalReq = rs.getLong("total_requests");
+			long returningReq = rs.getLong("total_returning");
+			long authReq = rs.getLong("total_authenticated");
+			double returningPct = totalReq > 0 ? (returningReq * 100.0 / totalReq) : 0.0;
+			returningPct = Math.round(returningPct * 10.0) / 10.0;
+
+			boolean isProtected = protectedAsns.contains(asn);
+			boolean hasActiveRule = activeRules.stream().anyMatch(r -> r.reason() != null && r.reason().contains("ASN " + asn));
+
+			List<String> topSubnets = findTopSubnetsForAsn(asn, safeHours, 5);
+
+			String status;
+			String statusReason;
+			String badgeClass;
+			String icon;
+
+			if (isProtected) {
+				status = "PROTECTED_ASN";
+				statusReason = "Protected ASN (exempt from automated mitigation: " + config.protectedAsns() + ")";
+				badgeClass = "badge-info";
+				icon = "🛡️";
+			} else if (hasActiveRule) {
+				status = "ACTIVE_MITIGATION";
+				statusReason = "ASN subnets are currently active dynamic mitigation rules";
+				badgeClass = "badge-success";
+				icon = "🔒";
+			} else if (authReq > 0) {
+				status = "SUPPRESSED_AUTH";
+				statusReason = "Suppressed: " + String.format("%,d", authReq) + " authenticated requests detected (human university sessions)";
+				badgeClass = "badge-warning";
+				icon = "👥";
+			} else if (activeSubnets >= config.carpetMinSubnets() && totalReq >= config.carpetMinRequests()) {
+				if (returningPct <= config.maxReturningRatioPct()) {
+					status = "QUALIFIED";
+					statusReason = config.dryRun()
+							? "QUALIFIED (Dry-Run): Meets all criteria! Would autonomously block " + activeSubnets + " subnets."
+							: "QUALIFIED (Live): Meets all criteria! Eligible for autonomous blocking.";
+					badgeClass = "badge-danger";
+					icon = "🚨";
+				} else {
+					status = "SUPPRESSED_RETURNING_RATIO";
+					statusReason = "Suppressed: Returning visitor ratio (" + String.format("%.1f%%", returningPct)
+							+ ") exceeds safety limit (" + String.format("%.1f%%", config.maxReturningRatioPct()) + ")";
+					badgeClass = "badge-warning";
+					icon = "🟡";
+				}
+			} else if (activeSubnets < config.carpetMinSubnets()) {
+				status = "BELOW_SUBNET_THRESHOLD";
+				statusReason = "Below threshold: " + activeSubnets + " / " + config.carpetMinSubnets() + " required subnets";
+				badgeClass = "badge-secondary";
+				icon = "ℹ️";
+			} else {
+				status = "BELOW_REQUEST_THRESHOLD";
+				statusReason = "Below threshold: " + String.format("%,d", totalReq) + " / " + String.format("%,d", config.carpetMinRequests()) + " required requests";
+				badgeClass = "badge-secondary";
+				icon = "ℹ️";
+			}
+
+			entries.add(new CarpetRadarEntry(
+					asn,
+					asOrg,
+					countryCode,
+					activeSubnets,
+					totalReq,
+					returningReq,
+					returningPct,
+					authReq,
+					isProtected,
+					hasActiveRule,
+					status,
+					statusReason,
+					badgeClass,
+					icon,
+					topSubnets
+			));
+		}, java.sql.Timestamp.from(cutoff));
+
+		return entries;
+	}
+
+	private List<String> findTopSubnetsForAsn(long asn, int hours, int limit) {
+		Instant cutoff = Instant.now().minus(Duration.ofHours(hours));
+		String sql = """
+				SELECT subnet_group
+				FROM client_subnet_rollups
+				WHERE bucket_start >= ? AND asn = ? AND subnet_group IS NOT NULL AND subnet_group != ''
+				GROUP BY subnet_group
+				ORDER BY SUM(total_requests) DESC
+				LIMIT ?
+				""";
+		try {
+			return jdbcTemplate.query(sql, (rs, rowNum) -> rs.getString("subnet_group"),
+					java.sql.Timestamp.from(cutoff), asn, Math.max(1, limit));
+		} catch (Exception e) {
+			return List.of();
+		}
 	}
 }

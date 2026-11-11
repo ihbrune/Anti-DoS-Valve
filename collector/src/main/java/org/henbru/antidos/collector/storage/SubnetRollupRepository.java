@@ -25,9 +25,24 @@ import org.springframework.stereotype.Repository;
 public class SubnetRollupRepository {
 
 	private final JdbcTemplate jdbcTemplate;
+	private final boolean isPostgres;
 
 	public SubnetRollupRepository(JdbcTemplate jdbcTemplate) {
 		this.jdbcTemplate = jdbcTemplate;
+		this.isPostgres = checkIsPostgres(jdbcTemplate);
+	}
+
+	private static boolean checkIsPostgres(JdbcTemplate jdbcTemplate) {
+		try {
+			if (jdbcTemplate != null && jdbcTemplate.getDataSource() != null) {
+				try (java.sql.Connection conn = jdbcTemplate.getDataSource().getConnection()) {
+					String productName = conn.getMetaData().getDatabaseProductName();
+					return productName != null && productName.toLowerCase().contains("postgres");
+				}
+			}
+		} catch (Exception ignored) {
+		}
+		return false;
 	}
 
 	@NonNull
@@ -642,6 +657,126 @@ public class SubnetRollupRepository {
 			sql.append(" AND SUM(COALESCE(authenticated_requests, 0)) = 0");
 		} else if ("WITH_LOGINS".equals(normalized) || "LOGINS_ONLY".equals(normalized)) {
 			sql.append(" AND SUM(COALESCE(authenticated_requests, 0)) > 0");
+		}
+	}
+
+	public List<org.henbru.antidos.collector.model.AsnHourlyPoint> findAsnHourlyPoints(long asn, Instant from, Instant to) {
+		String serverAgg = isPostgres ? "STRING_AGG(DISTINCT server_id, ',')" : "GROUP_CONCAT(DISTINCT server_id)";
+		String sql = """
+				SELECT
+				    bucket_start,
+				    COUNT(DISTINCT subnet_group) AS subnets,
+				    SUM(total_requests) AS total_reqs,
+				    SUM(blocked_requests) AS blocked_reqs,
+				    SUM(COALESCE(marked_requests, 0)) AS marked_reqs,
+				    SUM(COALESCE(returning_requests, 0)) AS ret_reqs,
+				    SUM(COALESCE(authenticated_requests, 0)) AS auth_reqs,
+				    SUM(COALESCE(distinct_clients, 1)) AS distinct_clients,
+				""" + "    " + serverAgg + """
+				     AS servers
+				FROM client_subnet_rollups
+				WHERE asn = ? AND bucket_start >= ? AND bucket_start <= ?
+				GROUP BY bucket_start
+				ORDER BY bucket_start DESC
+				""";
+
+		java.time.format.DateTimeFormatter dtf = java.time.format.DateTimeFormatter.ofPattern("dd.MM. HH:mm")
+				.withZone(java.time.ZoneId.systemDefault());
+
+		return jdbcTemplate.query(sql, (rs, rowNum) -> {
+			Instant bStart = rs.getTimestamp("bucket_start").toInstant();
+			long totalReqs = rs.getLong("total_reqs");
+			int subnets = rs.getInt("subnets");
+			long blockedReqs = rs.getLong("blocked_reqs");
+			long markedReqs = rs.getLong("marked_reqs");
+			long retReqs = rs.getLong("ret_reqs");
+			long authReqs = rs.getLong("auth_reqs");
+			long distinctClients = rs.getLong("distinct_clients");
+			String serversStr = rs.getString("servers");
+			List<String> serverList = (serversStr != null && !serversStr.isBlank())
+					? List.of(serversStr.split(","))
+					: List.of();
+
+			double retPct = totalReqs > 0 ? (retReqs * 100.0 / totalReqs) : 0.0;
+			double blockPct = totalReqs > 0 ? (blockedReqs * 100.0 / totalReqs) : 0.0;
+
+			return new org.henbru.antidos.collector.model.AsnHourlyPoint(
+					bStart,
+					dtf.format(bStart),
+					totalReqs,
+					subnets,
+					retReqs,
+					Math.round(retPct * 10.0) / 10.0,
+					authReqs,
+					blockedReqs,
+					Math.round(blockPct * 10.0) / 10.0,
+					markedReqs,
+					distinctClients,
+					serverList
+			);
+		}, asn, Timestamp.from(from), Timestamp.from(to));
+	}
+
+	public List<org.henbru.antidos.collector.model.AsnSubnetSummary> findAsnTopSubnets(long asn, Instant from, Instant to, int limit) {
+		String sql = """
+				SELECT
+				    subnet_group,
+				    MAX(country_code) AS country_code,
+				    MAX(client_type) AS client_type,
+				    SUM(total_requests) AS sub_total,
+				    SUM(blocked_requests) AS sub_blocked,
+				    SUM(COALESCE(marked_requests, 0)) AS sub_marked,
+				    SUM(COALESCE(returning_requests, 0)) AS sub_returning,
+				    SUM(COALESCE(authenticated_requests, 0)) AS sub_auth,
+				    SUM(COALESCE(distinct_clients, 1)) AS sub_clients
+				FROM client_subnet_rollups
+				WHERE asn = ? AND bucket_start >= ? AND bucket_start <= ?
+				GROUP BY subnet_group
+				ORDER BY sub_total DESC
+				LIMIT ?
+				""";
+
+		return jdbcTemplate.query(sql, (rs, rowNum) -> {
+			long total = rs.getLong("sub_total");
+			long ret = rs.getLong("sub_returning");
+			double retPct = total > 0 ? (ret * 100.0 / total) : 0.0;
+			String rawType = rs.getString("client_type");
+			ClientType ct = rawType != null ? ClientType.valueOf(rawType) : ClientType.UNKNOWN;
+
+			return new org.henbru.antidos.collector.model.AsnSubnetSummary(
+					rs.getString("subnet_group"),
+					total,
+					rs.getLong("sub_blocked"),
+					rs.getLong("sub_marked"),
+					ret,
+					Math.round(retPct * 10.0) / 10.0,
+					rs.getLong("sub_auth"),
+					rs.getLong("sub_clients"),
+					rs.getString("country_code"),
+					ct
+			);
+		}, asn, Timestamp.from(from), Timestamp.from(to), Math.max(1, limit));
+	}
+
+	public record AsnMeta(String asOrg, String countryCode, ClientType clientType) {}
+
+	public AsnMeta findAsnMeta(long asn) {
+		String sql = """
+				SELECT
+				    MAX(as_org) AS as_org,
+				    MAX(country_code) AS country_code,
+				    MAX(client_type) AS client_type
+				FROM client_subnet_rollups
+				WHERE asn = ?
+				""";
+		try {
+			return jdbcTemplate.queryForObject(sql, (rs, rowNum) -> {
+				String rawType = rs.getString("client_type");
+				ClientType ct = rawType != null ? ClientType.valueOf(rawType) : ClientType.UNKNOWN;
+				return new AsnMeta(rs.getString("as_org"), rs.getString("country_code"), ct);
+			}, asn);
+		} catch (Exception e) {
+			return new AsnMeta("Unknown ASN", null, ClientType.UNKNOWN);
 		}
 	}
 }

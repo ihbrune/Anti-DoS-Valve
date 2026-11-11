@@ -415,8 +415,36 @@
 
 <!-- Note View/Edit Modal Container -->
 <div id="note-modal-container"></div>
+<div id="asn-drilldown-modal-container"></div>
 
 <script>
+    function closeNoteModal(e) {
+        if (e) {
+            if (typeof e.stopPropagation === 'function') e.stopPropagation();
+            if (typeof e.preventDefault === 'function') e.preventDefault();
+        }
+        const c = document.getElementById('note-modal-container');
+        if (c) c.innerHTML = '';
+        document.querySelectorAll('.note-modal-overlay, #note-modal-wrapper').forEach(el => el.remove());
+    }
+
+    function closeAsnModal(e) {
+        if (e) {
+            if (typeof e.stopPropagation === 'function') e.stopPropagation();
+            if (typeof e.preventDefault === 'function') e.preventDefault();
+        }
+        const c = document.getElementById('asn-drilldown-modal-container');
+        if (c) c.innerHTML = '';
+        document.querySelectorAll('#asn-modal-wrapper').forEach(el => el.remove());
+    }
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            closeNoteModal(e);
+            closeAsnModal(e);
+        }
+    });
+
     function setPatternFilter(pattern) {
         const radios = document.querySelectorAll('input[name="activityPattern"]');
         radios.forEach(r => {

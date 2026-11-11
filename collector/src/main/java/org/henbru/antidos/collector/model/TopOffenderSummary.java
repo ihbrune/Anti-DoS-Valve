@@ -18,8 +18,42 @@ public record TopOffenderSummary(
 		String asOrg,
 		String countryCode,
 		ClientType clientType,
-		int distinctClientsCount
+		int distinctClientsCount,
+		Long totalReturningRequests
 ) {
+
+	public TopOffenderSummary(
+			String clientKey,
+			long totalBlockedRequests,
+			long totalMarkedRequests,
+			long totalRequests,
+			int distinctServersTargeted,
+			String serversList,
+			Instant firstSeen,
+			Instant lastSeen,
+			Long asn,
+			String asOrg,
+			String countryCode,
+			ClientType clientType,
+			int distinctClientsCount
+	) {
+		this(
+				clientKey,
+				totalBlockedRequests,
+				totalMarkedRequests,
+				totalRequests,
+				distinctServersTargeted,
+				serversList,
+				firstSeen,
+				lastSeen,
+				asn,
+				asOrg,
+				countryCode,
+				clientType,
+				distinctClientsCount,
+				null
+		);
+	}
 
 	public TopOffenderSummary(
 			String clientKey,
@@ -87,6 +121,16 @@ public record TopOffenderSummary(
 
 	public long totalMarkIncidents() {
 		return totalMarkedRequests;
+	}
+
+	public double returningRatio() {
+		return (totalReturningRequests != null && totalRequests > 0)
+				? (totalReturningRequests * 100.0 / totalRequests)
+				: 0.0;
+	}
+
+	public boolean hasReturningData() {
+		return totalReturningRequests != null;
 	}
 
 	/**

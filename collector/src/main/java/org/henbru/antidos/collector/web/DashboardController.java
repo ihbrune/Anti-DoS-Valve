@@ -216,6 +216,18 @@ public class DashboardController {
 		return "fragments/analytics-overview :: analyticsCard";
 	}
 
+	@GetMapping("/analytics/asn-drilldown")
+	public String asnDrilldownModal(
+			@RequestParam("asn") long asn,
+			@RequestParam(name = "hours", defaultValue = "24") int hours,
+			Model model) {
+		if (analyticsService != null) {
+			org.henbru.antidos.collector.model.AsnDrilldownDto drilldown = analyticsService.getAsnDrilldown(asn, hours);
+			model.addAttribute("drilldown", drilldown);
+		}
+		return "fragments/asn-drilldown-modal :: asnDrilldownModal";
+	}
+
 	private void populateAnalyticsModel(
 			List<String> servers,
 			List<String> valves,

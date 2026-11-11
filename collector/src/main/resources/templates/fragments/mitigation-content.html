@@ -117,6 +117,17 @@
                   th:text="${activeRules != null ? activeRules.size() : 0}">0</span>
         </button>
         <button type="button" class="btn"
+                th:classappend="${activeTab == 'radar' ? 'active btn-primary' : ''}"
+                style="font-size: 13px; padding: 7px 16px; display: inline-flex; align-items: center; gap: 8px;"
+                hx-get="/fragments/mitigation-content?tab=radar"
+                hx-target="#mitigation-dashboard-container"
+                hx-swap="outerHTML show:window:top"
+                hx-push-url="/mitigation?tab=radar">
+            <span>&#x1F4E1;</span> Carpet Attack Radar
+            <span class="badge" th:classappend="${carpetQualifiedCount != null and carpetQualifiedCount > 0 ? 'badge-danger' : 'badge-secondary'}"
+                  th:text="${carpetRadar != null ? carpetRadar.size() : 0}">0</span>
+        </button>
+        <button type="button" class="btn"
                 th:classappend="${activeTab == 'history' ? 'active btn-primary' : ''}"
                 style="font-size: 13px; padding: 7px 16px; display: inline-flex; align-items: center; gap: 8px;"
                 hx-get="/fragments/mitigation-content?tab=history"
@@ -199,6 +210,17 @@
                         style="font-size: 12px; padding: 6px 14px;"
                         title="Trigger immediate autonomous evaluation scan across telemetry">
                     <span>&#x1F50D;</span> Evaluate Now
+                </button>
+
+                <!-- Open Radar Tab Shortcut -->
+                <button type="button" class="btn btn-outline"
+                        hx-get="/fragments/mitigation-content?tab=radar"
+                        hx-target="#mitigation-dashboard-container"
+                        hx-swap="outerHTML show:window:top"
+                        hx-push-url="/mitigation?tab=radar"
+                        style="font-size: 12px; padding: 6px 14px;"
+                        title="Open Autonomous Carpet Attack Radar tab">
+                    <span>&#x1F4E1;</span> Open Radar (<span th:text="${carpetRadar != null ? carpetRadar.size() : 0}">0</span>)
                 </button>
             </div>
         </div>
@@ -893,6 +915,118 @@
     </div>
 
     </div> <!-- end activeTab == 'active' -->
+
+    <!-- TAB 2: Autonomous Carpet Attack Radar -->
+    <div th:if="${activeTab == 'radar'}">
+        <div th:fragment="carpetRadarSection" id="carpet-radar-container" class="sys-card" style="padding: 18px; margin-bottom: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; flex-wrap: wrap; gap: 12px;">
+                <div>
+                    <div style="font-size: 15px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                        <span>&#x1F4E1;</span> Autonomous Carpet Attack Radar &amp; Guardrails Inspector
+                        <span class="badge badge-secondary" style="font-size: 11px;"
+                              th:text="'Evaluation Window: Last ' + ${autoSettings.carpetWindowHours} + 'h'">Evaluation Window: Last 1h</span>
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 3px;">
+                        Real-time telemetry scan across active Autonomous Systems (ASNs), showing carpet attack metrics and safety guardrail evaluation results.
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button type="button" class="btn"
+                            hx-get="/mitigation/radar"
+                            hx-target="#carpet-radar-container"
+                            hx-swap="outerHTML"
+                            title="Re-scan recent telemetry for carpet attack candidates">
+                        <span>&#x21BB;</span> Refresh Radar
+                    </button>
+                </div>
+            </div>
+
+            <div th:if="${#lists.isEmpty(carpetRadar)}" class="empty-state" style="padding: 24px; text-align: center; color: var(--text-muted); background: rgba(0,0,0,0.1); border-radius: var(--radius-sm);">
+                No high-volume or multi-subnet ASN traffic waves detected in the current evaluation window (<span th:text="${autoSettings.carpetWindowHours}">1</span>h).
+            </div>
+
+            <div th:unless="${#lists.isEmpty(carpetRadar)}" class="table-responsive" style="border: 1px solid var(--border-color); border-radius: var(--radius-sm); max-height: 480px; overflow-y: auto;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 12.5px;">
+                    <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 2;">
+                        <tr>
+                            <th style="padding: 8px 12px; text-align: left;">Autonomous System (ASN)</th>
+                            <th style="padding: 8px 12px; text-align: right;">Total Requests</th>
+                            <th style="padding: 8px 12px; text-align: right;">Active Subnets</th>
+                            <th style="padding: 8px 12px; text-align: right;">Returning Visitors (Cookie)</th>
+                            <th style="padding: 8px 12px; text-align: right;">Auth Requests</th>
+                            <th style="padding: 8px 12px; text-align: left;">Auto-Mitigation Evaluation</th>
+                            <th style="padding: 8px 12px; text-align: right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="entry : ${carpetRadar}" style="border-top: 1px solid var(--border-color);">
+                            <td style="padding: 8px 12px;">
+                                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                    <a th:href="@{/events(asn=${entry.asn})}" class="ip-mono badge badge-info"
+                                       style="text-decoration: underline; color: inherit; font-weight: 600;"
+                                       th:text="'AS' + ${entry.asn}">AS3257</a>
+                                    <button type="button" class="btn" style="padding: 1px 5px; font-size: 10px; cursor: pointer;"
+                                            th:hx-get="@{/analytics/asn-drilldown(asn=${entry.asn})}"
+                                            hx-target="#asn-drilldown-modal-container"
+                                            title="Hourly ASN Timeline &amp; Forensics">&#x1F4CA;</button>
+                                    <span style="font-weight: 600; color: var(--text-primary);" th:text="${entry.asOrg}">GTT Communications</span>
+                                    <span th:if="${entry.countryCode != null}" class="badge badge-secondary" style="font-size: 10px;" th:text="${entry.countryCode}">US</span>
+                                </div>
+                                <div th:unless="${#lists.isEmpty(entry.topSubnets)}" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                                    Top subnets: <span th:each="sub, iterStat : ${entry.topSubnets}" th:text="${sub} + (${!iterStat.last} ? ', ' : '')" style="font-family: monospace;">74.0.157.0/24</span>
+                                </div>
+                            </td>
+                            <td style="padding: 8px 12px; text-align: right; font-weight: 700;">
+                                <span th:text="${#numbers.formatInteger(entry.totalRequests, 1, 'POINT')}">56,463</span>
+                                <div style="font-size: 10.5px; font-weight: normal; color: var(--text-muted);"
+                                     th:text="'(req threshold: &ge;' + ${#numbers.formatInteger(autoSettings.carpetMinRequests, 1, 'POINT')} + ')'">(&ge;3,000)</div>
+                            </td>
+                            <td style="padding: 8px 12px; text-align: right;">
+                                <strong th:text="${entry.activeSubnets}">195</strong>
+                                <div style="font-size: 10.5px; color: var(--text-muted);"
+                                     th:text="'(subnet req: &ge;' + ${autoSettings.carpetMinSubnets} + ')'">(&ge;3)</div>
+                            </td>
+                            <td style="padding: 8px 12px; text-align: right;">
+                                <span class="badge" style="padding: 2px 7px; font-size: 11px;"
+                                      th:classappend="${entry.returningRatioPct <= autoSettings.maxReturningRatioPct ? 'badge-danger' : 'badge-warning'}"
+                                      th:title="${#numbers.formatInteger(entry.returningRequests, 1, 'POINT')} + ' of ' + ${#numbers.formatInteger(entry.totalRequests, 1, 'POINT')} + ' requests carried a visitor cookie'">
+                                    &#x1F36A; <span th:text="${#numbers.formatDecimal(entry.returningRatioPct, 1, 1)} + '%'">24.0%</span>
+                                </span>
+                                <div style="font-size: 10.5px; color: var(--text-muted); margin-top: 2px;"
+                                     th:text="'(limit: &le;' + ${autoSettings.maxReturningRatioPct} + '%)'">(&le;5.0%)</div>
+                            </td>
+                            <td style="padding: 8px 12px; text-align: right;">
+                                <span th:if="${entry.authenticatedRequests > 0}" class="badge badge-info"
+                                      th:text="${#numbers.formatInteger(entry.authenticatedRequests, 1, 'POINT')}">22,018</span>
+                                <span th:if="${entry.authenticatedRequests == 0}" style="color: var(--color-success); font-weight: 600;">0 &#x2714;</span>
+                            </td>
+                            <td style="padding: 8px 12px;">
+                                <span class="badge" th:classappend="${entry.badgeClass}" style="padding: 3px 8px; font-size: 11px; font-weight: 600;">
+                                    <span th:text="${entry.icon}">🚨</span> <span th:text="${entry.status}">QUALIFIED</span>
+                                </span>
+                                <div style="font-size: 11px; color: var(--text-muted); margin-top: 3px; max-width: 340px; line-height: 1.3;"
+                                     th:text="${entry.statusReason}">Returning ratio 24.0% exceeds safety guardrail limit (5.0%)</div>
+                            </td>
+                            <td style="padding: 8px 12px; text-align: right;">
+                                <div style="display: flex; gap: 4px; justify-content: flex-end; align-items: center;">
+                                    <button type="button" class="btn" style="padding: 2px 7px; font-size: 11px;"
+                                            th:hx-get="@{/analytics/asn-drilldown(asn=${entry.asn})}"
+                                            hx-target="#asn-drilldown-modal-container"
+                                            title="Inspect hourly progression">
+                                        <span>&#x1F4CA;</span> Timeline
+                                    </button>
+                                    <a th:href="@{/mitigation(asn=${entry.asn})}" class="btn btn-warning" style="padding: 2px 7px; font-size: 11px;"
+                                       title="Pre-fill manual ASN batch mitigation">
+                                        <span>&#x1F6E1;&#xFE0F;</span> Block ASN
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 
     <!-- TAB 2: Historical Rules Explorer -->
     <div th:if="${activeTab == 'history'}">

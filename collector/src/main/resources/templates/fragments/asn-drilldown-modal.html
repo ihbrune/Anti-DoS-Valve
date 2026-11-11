@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<body>
+
+    <!-- Fragment: asnDrilldownModal -->
+    <div th:fragment="asnDrilldownModal" id="asn-modal-wrapper" class="note-modal-overlay" style="display: flex;">
+        <div class="note-modal-backdrop" onclick="closeAsnModal(event)"></div>
+
+        <div class="note-modal-dialog" style="max-width: 960px; width: 95%; max-height: 90vh; overflow-y: auto;" role="dialog" aria-modal="true">
+            <!-- Modal Header -->
+            <div class="note-modal-header" style="display: flex; justify-content: space-between; align-items: flex-start; padding: 16px 20px; border-bottom: 1px solid var(--border-color);">
+                <div>
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <span class="badge badge-info" style="font-size: 14px; font-weight: 700; font-family: monospace;"
+                            th:text="'AS' + ${drilldown.asn}">AS3257</span>
+                        <h3 style="margin: 0; font-size: 17px; font-weight: 700; color: var(--text-primary);"
+                            th:text="${drilldown.asOrg}">GTT Communications Inc.</h3>
+                        <span th:if="${drilldown.countryCode != null}" class="badge badge-secondary"
+                            style="font-size: 11px;" th:text="${drilldown.countryCode}">US</span>
+                        <span th:if="${drilldown.clientType != null and drilldown.clientType.name() != 'UNKNOWN'}"
+                            class="badge badge-secondary" style="font-size: 11px;"
+                            th:text="${drilldown.clientType.name()}">DATACENTER</span>
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                        <span>Telemetry lookback window: Last <strong th:text="${drilldown.lookbackHours}">24</strong> hours</span>
+                        &bull;
+                        <span>From <span th:text="${#temporals.format(drilldown.fromTime, 'dd.MM HH:mm')}">10.11 12:00</span> to <span th:text="${#temporals.format(drilldown.toTime, 'dd.MM HH:mm')}">11.11 12:00</span></span>
+                    </div>
+                </div>
+                <button type="button" class="drawer-close-btn" onclick="closeAsnModal(event)" aria-label="Close"
+                    title="Close (Esc)" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); line-height: 1;">&times;</button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="note-modal-body" style="padding: 20px;">
+                <!-- KPI Summary Cards -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px;">
+                    <div class="stat-card" style="padding: 12px 16px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                        <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Total Traffic</div>
+                        <div style="font-size: 20px; font-weight: 800; color: var(--text-primary); margin-top: 4px;"
+                            th:text="${#numbers.formatInteger(drilldown.totalRequests, 1, 'POINT')}">145,200</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                            <span th:if="${drilldown.totalBlocked > 0}" style="color: var(--color-danger);"
+                                th:text="${#numbers.formatInteger(drilldown.totalBlocked, 1, 'POINT')} + ' blocked (' + ${#numbers.formatDecimal(drilldown.overallBlockedPct(), 1, 1)} + '%)'">500 blocked</span>
+                            <span th:if="${drilldown.totalBlocked == 0}">0 blocked</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card" style="padding: 12px 16px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                        <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Peak Hour Volume</div>
+                        <div style="font-size: 20px; font-weight: 800; color: var(--text-primary); margin-top: 4px;"
+                            th:text="${#numbers.formatInteger(drilldown.peakHourRequests(), 1, 'POINT')}">89,854</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Highest single 1h bucket</div>
+                    </div>
+
+                    <div class="stat-card" style="padding: 12px 16px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                        <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Subnets &amp; Clients</div>
+                        <div style="font-size: 20px; font-weight: 800; color: var(--text-primary); margin-top: 4px;">
+                            <span th:text="${drilldown.distinctSubnets}">192</span> <span style="font-size: 13px; font-weight: normal; color: var(--text-muted);">/24 subnets</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;"
+                            th:text="'~' + ${#numbers.formatInteger(drilldown.totalDistinctClients, 1, 'POINT')} + ' distinct IPs seen'">~3,200 IPs seen</div>
+                    </div>
+
+                    <div class="stat-card" style="padding: 12px 16px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                        <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Returning Visitors</div>
+                        <div style="font-size: 20px; font-weight: 800; margin-top: 4px;"
+                            th:classappend="${drilldown.overallReturningPct >= 30.0 ? 'text-success' : (drilldown.overallReturningPct <= 5.0 ? 'text-danger' : 'text-warning')}">
+                            &#x1F36A; <span th:text="${#numbers.formatDecimal(drilldown.overallReturningPct, 1, 1)} + '%'">24.3%</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;"
+                            th:text="${#numbers.formatInteger(drilldown.totalReturning, 1, 'POINT')} + ' requests with cookie'">13,522 requests with cookie</div>
+                    </div>
+
+                    <div class="stat-card" style="padding: 12px 16px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                        <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">User-Agent Diversity</div>
+                        <div style="font-size: 20px; font-weight: 800; color: var(--text-primary); margin-top: 4px;">
+                            <span th:text="${drilldown.distinctUserAgents}">8</span> <span style="font-size: 13px; font-weight: normal; color: var(--text-muted);">signatures</span>
+                        </div>
+                        <div style="font-size: 11px; margin-top: 2px;">
+                            <span th:if="${drilldown.isSyntheticUaPool()}" class="badge badge-warning" style="font-size: 10px; padding: 1px 6px;"
+                                th:title="'Only ' + ${drilldown.distinctUserAgents} + ' User-Agents across ' + ${drilldown.distinctSubnets} + ' subnets (~' + ${#numbers.formatDecimal(drilldown.userAgentsPerSubnet(), 1, 2)} + ' UA/subnet)'">
+                                &#x26A0;&#xFE0F; Synthetic Bot Pool
+                            </span>
+                            <span th:if="${drilldown.isNaturalUserPool()}" class="badge badge-success" style="font-size: 10px; padding: 1px 6px;">
+                                &#x2714;&#xFE0F; Diverse Human Mix
+                            </span>
+                            <span th:if="${!drilldown.isSyntheticUaPool() and !drilldown.isNaturalUserPool() and drilldown.distinctUserAgents > 0}" style="color: var(--text-muted);"
+                                th:text="'~' + ${#numbers.formatDecimal(drilldown.userAgentsPerSubnet(), 1, 2)} + ' UAs / subnet'">~1.2 UAs / subnet</span>
+                            <span th:if="${drilldown.distinctUserAgents == 0}" style="color: var(--text-muted);">No UA samples</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section: Hourly Progression Table -->
+                <div style="margin-bottom: 24px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h4 style="margin: 0; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary);">
+                            &#x1F4CA; Hourly Telemetry Progression
+                        </h4>
+                        <span style="font-size: 11.5px; color: var(--text-muted);">
+                            <span th:text="${#lists.size(drilldown.hourlyPoints)}">24</span> hours recorded
+                        </span>
+                    </div>
+
+                    <div class="table-responsive" style="max-height: 320px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 12.5px;">
+                            <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 2;">
+                                <tr>
+                                    <th style="padding: 8px 12px; text-align: left;">Time (UTC/Local)</th>
+                                    <th style="padding: 8px 12px; text-align: right;">Total Requests</th>
+                                    <th style="padding: 8px 12px; text-align: right;">Subnets</th>
+                                    <th style="padding: 8px 12px; text-align: right;">Returning Visitors (Cookie)</th>
+                                    <th style="padding: 8px 12px; text-align: right;">Auth Users</th>
+                                    <th style="padding: 8px 12px; text-align: right;">Blocked</th>
+                                    <th style="padding: 8px 12px; text-align: right;">Unique IPs</th>
+                                    <th style="padding: 8px 12px; text-align: left;">Targeted Nodes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:if="${#lists.isEmpty(drilldown.hourlyPoints)}">
+                                    <td colspan="8" style="padding: 24px; text-align: center; color: var(--text-muted);">
+                                        No hourly telemetry recorded for this ASN in the selected window.
+                                    </td>
+                                </tr>
+                                <tr th:each="pt : ${drilldown.hourlyPoints}" style="border-top: 1px solid var(--border-color);">
+                                    <td style="padding: 6px 12px; font-family: monospace; font-weight: 600;" th:text="${pt.hourLabel}">11.11. 12:00</td>
+                                    <td style="padding: 6px 12px; text-align: right; font-weight: 700;">
+                                        <span th:text="${#numbers.formatInteger(pt.totalRequests, 1, 'POINT')}">80,974</span>
+                                    </td>
+                                    <td style="padding: 6px 12px; text-align: right;" th:text="${pt.activeSubnets}">191</td>
+                                    <td style="padding: 6px 12px; text-align: right;">
+                                        <span class="badge" style="padding: 1px 6px; font-size: 11px;"
+                                            th:classappend="${pt.returningRatioPct >= 30.0 ? 'badge-success' : (pt.returningRatioPct <= 5.0 ? 'badge-danger' : 'badge-warning')}"
+                                            th:title="${#numbers.formatInteger(pt.returningRequests, 1, 'POINT')} + ' requests carried a visitor cookie'">
+                                            &#x1F36A; <span th:text="${#numbers.formatDecimal(pt.returningRatioPct, 1, 1)} + '%'">38.6%</span>
+                                        </span>
+                                    </td>
+                                    <td style="padding: 6px 12px; text-align: right;">
+                                        <span th:if="${pt.authenticatedRequests > 0}" class="badge badge-info"
+                                            th:text="${#numbers.formatInteger(pt.authenticatedRequests, 1, 'POINT')}">15</span>
+                                        <span th:if="${pt.authenticatedRequests == 0}" style="color: var(--text-muted); opacity: 0.6;">0</span>
+                                    </td>
+                                    <td style="padding: 6px 12px; text-align: right;">
+                                        <span th:if="${pt.blockedRequests > 0}" class="badge badge-danger"
+                                            th:text="${#numbers.formatInteger(pt.blockedRequests, 1, 'POINT')} + ' (' + ${#numbers.formatDecimal(pt.blockedRatioPct, 1, 1)} + '%)'">50</span>
+                                        <span th:if="${pt.blockedRequests == 0}" style="color: var(--text-muted); opacity: 0.6;">0</span>
+                                    </td>
+                                    <td style="padding: 6px 12px; text-align: right;" th:text="${#numbers.formatInteger(pt.distinctClients, 1, 'POINT')}">3,002</td>
+                                    <td style="padding: 6px 12px;">
+                                        <span th:each="srv : ${pt.targetedServers}" class="badge badge-secondary"
+                                            style="padding: 1px 5px; font-size: 10px; margin-right: 2px;" th:text="${srv}">Pub03</span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Section: Observed User Agents & Client Signatures -->
+                <div th:unless="${#lists.isEmpty(drilldown.topUserAgents)}" style="margin-bottom: 24px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h4 style="margin: 0; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary);">
+                            &#x1F5A5;&#xFE0F; Observed User Agents &amp; Client Signatures
+                        </h4>
+                        <span style="font-size: 11.5px; color: var(--text-muted);">
+                            <span th:text="${drilldown.distinctUserAgents}">8</span> distinct signatures captured
+                        </span>
+                    </div>
+
+                    <div class="table-responsive" style="max-height: 280px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 12.5px;">
+                            <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 2;">
+                                <tr>
+                                    <th style="padding: 8px 12px; text-align: left;">User-Agent Signature</th>
+                                    <th style="padding: 8px 12px; text-align: left;">Detected Engine</th>
+                                    <th style="padding: 8px 12px; text-align: right;">Total Requests</th>
+                                    <th style="padding: 8px 12px; text-align: right;">Subnet Spread</th>
+                                    <th style="padding: 8px 12px; text-align: right;">Incidents</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:each="ua : ${drilldown.topUserAgents}" style="border-top: 1px solid var(--border-color);">
+                                    <td style="padding: 7px 12px; font-family: monospace; font-size: 11.5px; word-break: break-all; max-width: 440px;">
+                                        <span th:if="${ua.isCaptured()}" th:text="${ua.userAgent}" style="color: var(--text-primary);">Mozilla/5.0...</span>
+                                        <span th:unless="${ua.isCaptured()}" style="color: var(--text-muted); font-style: italic;" th:text="${ua.userAgent}">(No User-Agent captured)</span>
+                                    </td>
+                                    <td style="padding: 7px 12px;">
+                                        <span class="badge"
+                                            th:classappend="${ua.suspicious ? 'badge-danger' : (ua.browserFamily == 'Bot / Script' ? 'badge-warning' : 'badge-secondary')}"
+                                            style="font-size: 11px;">
+                                            <span th:if="${ua.suspicious}" title="Suspicious or unreleased browser version generated by scraper bot">&#x26A0;&#xFE0F; </span>
+                                            <span th:text="${ua.browserFamily}">Chrome 149</span>
+                                        </span>
+                                    </td>
+                                    <td style="padding: 7px 12px; text-align: right; font-weight: 600;">
+                                        <span th:text="${#numbers.formatInteger(ua.totalRequests, 1, 'POINT')}">123,966</span>
+                                        <span style="font-size: 11px; color: var(--text-muted); font-weight: normal; margin-left: 3px;"
+                                            th:text="'(' + ${#numbers.formatDecimal(ua.requestPct, 1, 1)} + '%)'">(42.5%)</span>
+                                    </td>
+                                    <td style="padding: 7px 12px; text-align: right;">
+                                        <span th:if="${ua.distinctSubnets >= 5}" class="badge badge-warning" style="font-size: 11px;"
+                                            th:title="'Sent across ' + ${ua.distinctSubnets} + ' different subnets, characteristic of distributed scraper clusters.'">
+                                            <span th:text="${ua.distinctSubnets} + ' subnets'">54 subnets</span>
+                                        </span>
+                                        <span th:if="${ua.distinctSubnets < 5}" style="color: var(--text-muted);"
+                                            th:text="${ua.distinctSubnets} + ' subnet' + (${ua.distinctSubnets == 1} ? '' : 's')">1 subnet</span>
+                                    </td>
+                                    <td style="padding: 7px 12px; text-align: right; color: var(--text-secondary);"
+                                        th:text="${#numbers.formatInteger(ua.eventCount, 1, 'POINT')}">3,304</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Section: Top Subnets Distribution -->
+                <div th:unless="${#lists.isEmpty(drilldown.topSubnets)}" style="margin-bottom: 12px;">
+                    <h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary);">
+                        &#x1F310; Top Active /24 Subnets Distribution
+                    </h4>
+
+                    <div class="table-responsive" style="border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 12.5px;">
+                            <thead>
+                                <tr style="background: var(--bg-card);">
+                                    <th style="padding: 8px 12px; text-align: left;">Subnet Group</th>
+                                    <th style="padding: 8px 12px; text-align: right;">Total Requests</th>
+                                    <th style="padding: 8px 12px; text-align: right;">Returning Ratio</th>
+                                    <th style="padding: 8px 12px; text-align: right;">Blocked</th>
+                                    <th style="padding: 8px 12px; text-align: right;">Unique IPs</th>
+                                    <th style="padding: 8px 12px; text-align: right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:each="sub : ${drilldown.topSubnets}" style="border-top: 1px solid var(--border-color);">
+                                    <td style="padding: 6px 12px;">
+                                        <a th:href="@{/events(clientQuery=${sub.subnetGroup})}" class="ip-mono badge badge-warning"
+                                            style="text-decoration: underline; color: inherit; font-weight: 600;"
+                                            th:text="${sub.subnetGroup}">74.0.157.0/24</a>
+                                    </td>
+                                    <td style="padding: 6px 12px; text-align: right; font-weight: 600;"
+                                        th:text="${#numbers.formatInteger(sub.totalRequests, 1, 'POINT')}">2,420</td>
+                                    <td style="padding: 6px 12px; text-align: right;">
+                                        <span class="badge" style="padding: 1px 6px; font-size: 11px;"
+                                            th:classappend="${sub.returningRatioPct >= 30.0 ? 'badge-success' : (sub.returningRatioPct <= 5.0 ? 'badge-danger' : 'badge-warning')}">
+                                            &#x1F36A; <span th:text="${#numbers.formatDecimal(sub.returningRatioPct, 1, 1)} + '%'">17.8%</span>
+                                        </span>
+                                    </td>
+                                    <td style="padding: 6px 12px; text-align: right;">
+                                        <span th:if="${sub.blockedRequests > 0}" class="badge badge-danger"
+                                            th:text="${#numbers.formatInteger(sub.blockedRequests, 1, 'POINT')}">12</span>
+                                        <span th:if="${sub.blockedRequests == 0}" style="color: var(--text-muted); opacity: 0.6;">0</span>
+                                    </td>
+                                    <td style="padding: 6px 12px; text-align: right;" th:text="${sub.distinctClients}">121</td>
+                                    <td style="padding: 6px 12px; text-align: right;">
+                                        <a th:href="@{/events(clientQuery=${sub.subnetGroup})}" class="btn"
+                                            style="padding: 2px 7px; font-size: 11px;" title="Inspect raw incidents for this subnet">
+                                            Events &rarr;
+                                        </a>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="note-modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-top: 1px solid var(--border-color); background: var(--bg-card);">
+                <div style="display: flex; gap: 8px;">
+                    <a th:href="@{/events(asn=${drilldown.asn})}" class="btn btn-outline" style="padding: 4px 12px; font-size: 12px;"
+                        title="Jump to Incident Explorer filtered for this ASN">
+                        <span>&#x1F4CB;</span> Incident Explorer
+                    </a>
+                    <a th:href="@{/mitigation(asn=${drilldown.asn})}" class="btn btn-warning" style="padding: 4px 12px; font-size: 12px;"
+                        title="Pre-fill ASN Batch Mitigation in Mitigation dashboard">
+                        <span>&#x1F6E1;&#xFE0F;</span> Mitigate Entire ASN
+                    </a>
+                    <button type="button" class="btn btn-outline" style="padding: 4px 12px; font-size: 12px;"
+                        th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${drilldown.asn}, context='table')}"
+                        hx-target="#note-modal-container"
+                        onclick="closeAsnModal(event)"
+                        title="Add or view notes for this ASN">
+                        <span>&#x1F4DD;</span> Add Note
+                    </button>
+                </div>
+                <button type="button" class="btn" onclick="closeAsnModal(event)" style="padding: 4px 16px; font-size: 12px;">Close</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
+

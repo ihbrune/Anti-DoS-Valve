@@ -139,6 +139,17 @@ public class MitigationController {
 		return "fragments/mitigation-content :: asnPreviewBox";
 	}
 
+	@GetMapping("/mitigation/radar")
+	public String carpetRadarFragment(
+			@RequestParam(value = "hours", required = false) Integer hours,
+			Model model) {
+		AutoMitigationService.EffectiveAutoSettings config = autoMitigationService.getEffectiveSettings();
+		int effectiveHours = (hours != null && hours > 0) ? hours : config.carpetWindowHours();
+		model.addAttribute("autoSettings", config);
+		model.addAttribute("carpetRadar", autoMitigationService.getCarpetRadar(effectiveHours));
+		return "fragments/mitigation-content :: carpetRadarSection";
+	}
+
 	@PostMapping("/mitigation/block")
 	public String createBlock(
 			@RequestParam("cidrInput") String cidrInput,
@@ -496,7 +507,7 @@ public class MitigationController {
 			}
 		}
 
-		String effectiveTab = (tab != null && (tab.equalsIgnoreCase("history") || tab.equalsIgnoreCase("audit")))
+		String effectiveTab = (tab != null && (tab.equalsIgnoreCase("history") || tab.equalsIgnoreCase("audit") || tab.equalsIgnoreCase("radar")))
 				? tab.toLowerCase()
 				: "active";
 
@@ -561,7 +572,12 @@ public class MitigationController {
 		model.addAttribute("totalDynamicHits", totalDynamicHits);
 		model.addAttribute("activeBatches", activeBatches.values());
 		model.addAttribute("defaultTtlMinutes", properties.getDefaultMitigationTtlMinutes());
-		model.addAttribute("autoSettings", autoMitigationService.getEffectiveSettings());
+		AutoMitigationService.EffectiveAutoSettings autoConfig = autoMitigationService.getEffectiveSettings();
+		model.addAttribute("autoSettings", autoConfig);
+		List<org.henbru.antidos.collector.model.CarpetRadarEntry> radar = autoMitigationService.getCarpetRadar(autoConfig.carpetWindowHours());
+		model.addAttribute("carpetRadar", radar);
+		long qualifiedCount = radar.stream().filter(r -> "QUALIFIED".equals(r.status())).count();
+		model.addAttribute("carpetQualifiedCount", qualifiedCount);
 		model.addAttribute("notificationSettings", notificationService != null ? notificationService.getEffectiveSettings() : null);
 		model.addAttribute("feedbackSuccess", feedbackSuccess);
 		model.addAttribute("feedbackError", feedbackError);

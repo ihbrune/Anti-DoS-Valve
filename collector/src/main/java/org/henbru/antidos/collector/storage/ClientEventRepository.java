@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.henbru.antidos.collector.model.AsnUserAgentSummary;
 import org.henbru.antidos.collector.model.ClientEvent;
 import org.henbru.antidos.collector.model.ClientType;
 import org.henbru.antidos.collector.model.EnrichmentStatus;
@@ -514,6 +515,7 @@ public class ClientEventRepository {
 				.append("SUM(CASE WHEN UPPER(status) = 'BLOCKED' THEN request_count ELSE 0 END) AS total_blocked_requests, ")
 				.append("SUM(CASE WHEN UPPER(status) = 'MARKED' THEN request_count ELSE 0 END) AS total_marked_requests, ")
 				.append("SUM(request_count) AS total_requests, ")
+				.append("SUM(COALESCE(returning_count, 0)) AS total_returning_requests, ")
 				.append("COUNT(DISTINCT server_id) AS distinct_servers, ")
 				.append("MIN(slot_time) AS first_seen, ")
 				.append("MAX(slot_time) AS last_seen ")
@@ -551,7 +553,8 @@ public class ClientEventRepository {
 					rs.getString("as_org"),
 					rs.getString("country_code"),
 					clientType,
-					rs.getInt("distinct_clients")
+					rs.getInt("distinct_clients"),
+					rs.getLong("total_returning_requests")
 			);
 		}, params.toArray());
 	}
@@ -851,6 +854,42 @@ public class ClientEventRepository {
 		String sql = "SELECT MAX(slot_time) FROM client_events";
 		Timestamp ts = jdbcTemplate.queryForObject(sql, Timestamp.class);
 		return ts != null ? Optional.of(ts.toInstant()) : Optional.empty();
+	}
+
+	public int countAsnDistinctUserAgents(long asn, Instant from, Instant to) {
+		String sql = """
+				SELECT COUNT(DISTINCT NULLIF(TRIM(sample_user_agent), ''))
+				FROM client_events
+				WHERE asn = ?
+				  AND slot_time >= ?
+				  AND slot_time <= ?
+				""";
+		Integer count = jdbcTemplate.queryForObject(sql, Integer.class, asn, Timestamp.from(from), Timestamp.from(to));
+		return count != null ? count : 0;
+	}
+
+	public List<AsnUserAgentSummary> findAsnTopUserAgents(long asn, Instant from, Instant to, int limit, long totalAsnRequests) {
+		String sql = """
+				SELECT 
+				    COALESCE(NULLIF(TRIM(sample_user_agent), ''), '(No User-Agent captured)') AS ua,
+				    SUM(request_count) AS total_requests,
+				    COUNT(*) AS event_count,
+				    COUNT(DISTINCT subnet_group) AS distinct_subnets
+				FROM client_events
+				WHERE asn = ?
+				  AND slot_time >= ?
+				  AND slot_time <= ?
+				GROUP BY ua
+				ORDER BY total_requests DESC
+				LIMIT ?
+				""";
+		return jdbcTemplate.query(sql, (rs, rowNum) -> {
+			String rawUa = rs.getString("ua");
+			long reqs = rs.getLong("total_requests");
+			int events = rs.getInt("event_count");
+			int subnets = rs.getInt("distinct_subnets");
+			return AsnUserAgentSummary.of(rawUa, reqs, totalAsnRequests, events, subnets);
+		}, asn, Timestamp.from(from), Timestamp.from(to), Math.max(1, limit));
 	}
 }
 

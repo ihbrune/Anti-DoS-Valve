@@ -379,6 +379,11 @@
                                        style="font-size: 12px; text-decoration: underline; color: inherit; font-weight: 600;"
                                        title="Filter offenders view for this Autonomous System"
                                        th:text="${pt.subnetGroup}">AS24940</a>
+                                    <button th:if="${scatterGroupBy == 'ASN' and pt.asn != null}" type="button" class="btn"
+                                       style="padding: 1px 5px; font-size: 10px; cursor: pointer;"
+                                       th:hx-get="@{/analytics/asn-drilldown(asn=${pt.asn})}"
+                                       hx-target="#asn-drilldown-modal-container"
+                                       title="Open Hourly ASN Deep-Dive &amp; Timeline">&#x1F4CA;</button>
                                     <!-- Subnet link if Subnet mode -->
                                     <a th:unless="${scatterGroupBy == 'ASN' and pt.asn != null}"
                                        th:href="@{/offenders(clientQuery=${pt.subnetGroup},groupBy='SUBNET')}"
@@ -427,6 +432,7 @@
                                     <span th:if="${pt.countryCode != null and pt.countryCode != '--'}" class="badge badge-secondary" style="padding: 1px 4px; font-size: 9px;" th:text="${pt.countryCode}">DE</span>
                                     <span th:if="${pt.asn != null and scatterGroupBy != 'ASN'}" style="display: inline-flex; align-items: center; gap: 3px;">
                                         <a th:href="@{/events(asn=${pt.asn})}" class="badge badge-info" style="padding: 1px 5px; font-size: 9px; text-decoration: none;" th:title="${pt.asOrg + ' - Click to filter incidents'}" th:text="'AS' + ${pt.asn}">AS24940</a>
+                                        <button type="button" class="btn" style="padding: 0px 4px; font-size: 8px; cursor: pointer; line-height: 1.2;" th:hx-get="@{/analytics/asn-drilldown(asn=${pt.asn})}" hx-target="#asn-drilldown-modal-container" title="Open Hourly ASN Deep-Dive &amp; Timeline">&#x1F4CA;</button>
                                         <th:block th:if="${pt.asnNoteVerdict != null}">
                                             <span class="badge-note"
                                                   th:classappend="${#strings.toLowerCase(pt.asnNoteVerdict) == 'suspicious' ? 'badge-warning' : (#strings.toLowerCase(pt.asnNoteVerdict) == 'malicious' ? 'badge-danger' : (#strings.toLowerCase(pt.asnNoteVerdict) == 'legitimate' ? 'badge-success' : 'badge-info'))}"

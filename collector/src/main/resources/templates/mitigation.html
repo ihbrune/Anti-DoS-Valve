@@ -107,7 +107,7 @@
             </div>
             <div style="display: flex; align-items: center; gap: 8px;">
                 <button type="button" class="btn"
-                        hx-get="/fragments/mitigation-content"
+                        th:attr="hx-get=@{/fragments/mitigation-content(tab=${activeTab})}"
                         hx-target="#mitigation-dashboard-container"
                         hx-swap="outerHTML"
                         title="Refresh active rules and deterrence metrics">
@@ -124,8 +124,40 @@
 
         <!-- Contextual Help Drawer -->
         <div th:replace="~{fragments/help-drawer :: helpDrawer}"></div>
+
+        <!-- Note & ASN Modals -->
+        <div id="note-modal-container"></div>
+        <div id="asn-drilldown-modal-container"></div>
     </div>
 
+    <script>
+        function closeNoteModal(e) {
+            if (e) {
+                if (typeof e.stopPropagation === 'function') e.stopPropagation();
+                if (typeof e.preventDefault === 'function') e.preventDefault();
+            }
+            const c = document.getElementById('note-modal-container');
+            if (c) c.innerHTML = '';
+            document.querySelectorAll('.note-modal-overlay, #note-modal-wrapper').forEach(el => el.remove());
+        }
+
+        function closeAsnModal(e) {
+            if (e) {
+                if (typeof e.stopPropagation === 'function') e.stopPropagation();
+                if (typeof e.preventDefault === 'function') e.preventDefault();
+            }
+            const c = document.getElementById('asn-drilldown-modal-container');
+            if (c) c.innerHTML = '';
+            document.querySelectorAll('#asn-modal-wrapper').forEach(el => el.remove());
+        }
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                closeNoteModal(e);
+                closeAsnModal(e);
+            }
+        });
+    </script>
 </body>
 </html>
 

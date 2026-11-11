@@ -394,6 +394,71 @@ class AutoMitigationServiceTest {
 		assertTrue(candidates.isEmpty(), "AI_CRAWLER rollups must be excluded from carpet attack detection");
 	}
 
+	@Test
+	void testCarpetRadarEvaluationAndStatusDiscrimination() {
+		Instant now = Instant.now();
+
+		// ASN 64496: Qualified candidate (6000 reqs, 3 subnets, 0 auth, 1.6% returning)
+		insertSubnetRollup("198.51.10.0/24", 64496L, "Attacking ISP", 2000, 30, 0, now.minus(Duration.ofMinutes(10)));
+		insertSubnetRollup("198.51.11.0/24", 64496L, "Attacking ISP", 2000, 30, 0, now.minus(Duration.ofMinutes(10)));
+		insertSubnetRollup("198.51.12.0/24", 64496L, "Attacking ISP", 2000, 40, 0, now.minus(Duration.ofMinutes(10)));
+
+		// ASN 64497: Suppressed by returning ratio (6000 reqs, 3 subnets, 0 auth, 33.3% returning)
+		insertSubnetRollup("203.0.113.10.0/24", 64497L, "Scraper Network", 2000, 700, 0, now.minus(Duration.ofMinutes(10)));
+		insertSubnetRollup("203.0.113.11.0/24", 64497L, "Scraper Network", 2000, 700, 0, now.minus(Duration.ofMinutes(10)));
+		insertSubnetRollup("203.0.113.12.0/24", 64497L, "Scraper Network", 2000, 600, 0, now.minus(Duration.ofMinutes(10)));
+
+		// ASN 64498: Suppressed by authenticated logins (6000 reqs, 3 subnets, 50 auth, 2% returning)
+		insertSubnetRollup("192.0.2.10.0/24", 64498L, "Campus Network", 2000, 40, 20, now.minus(Duration.ofMinutes(10)));
+		insertSubnetRollup("192.0.2.11.0/24", 64498L, "Campus Network", 2000, 40, 20, now.minus(Duration.ofMinutes(10)));
+		insertSubnetRollup("192.0.2.12.0/24", 64498L, "Campus Network", 2000, 40, 10, now.minus(Duration.ofMinutes(10)));
+
+		// ASN 8075: Protected ASN (Microsoft)
+		insertSubnetRollup("40.76.0.0/24", 8075L, "Microsoft Azure", 3000, 0, 0, now.minus(Duration.ofMinutes(10)));
+		insertSubnetRollup("40.76.1.0/24", 8075L, "Microsoft Azure", 3000, 0, 0, now.minus(Duration.ofMinutes(10)));
+		insertSubnetRollup("40.76.2.0/24", 8075L, "Microsoft Azure", 3000, 0, 0, now.minus(Duration.ofMinutes(10)));
+
+		List<org.henbru.antidos.collector.model.CarpetRadarEntry> radar = autoMitigationService.getCarpetRadar(1);
+		assertFalse(radar.isEmpty());
+
+		// Verify ASN 64496 is QUALIFIED
+		org.henbru.antidos.collector.model.CarpetRadarEntry qualified = radar.stream()
+				.filter(e -> e.asn() == 64496L)
+				.findFirst()
+				.orElseThrow();
+		assertEquals("QUALIFIED", qualified.status());
+		assertEquals("badge-danger", qualified.badgeClass());
+		assertTrue(qualified.isQualified());
+		assertFalse(qualified.isSuppressed());
+
+		// Verify ASN 64497 is SUPPRESSED_RETURNING_RATIO
+		org.henbru.antidos.collector.model.CarpetRadarEntry suppressedReturn = radar.stream()
+				.filter(e -> e.asn() == 64497L)
+				.findFirst()
+				.orElseThrow();
+		assertEquals("SUPPRESSED_RETURNING_RATIO", suppressedReturn.status());
+		assertEquals("badge-warning", suppressedReturn.badgeClass());
+		assertTrue(suppressedReturn.returningRatioPct() > 5.0);
+		assertTrue(suppressedReturn.isSuppressed());
+
+		// Verify ASN 64498 is SUPPRESSED_AUTH
+		org.henbru.antidos.collector.model.CarpetRadarEntry suppressedAuth = radar.stream()
+				.filter(e -> e.asn() == 64498L)
+				.findFirst()
+				.orElseThrow();
+		assertEquals("SUPPRESSED_AUTH", suppressedAuth.status());
+		assertEquals(50L, suppressedAuth.authenticatedRequests());
+		assertTrue(suppressedAuth.isSuppressed());
+
+		// Verify ASN 8075 is PROTECTED_ASN
+		org.henbru.antidos.collector.model.CarpetRadarEntry protectedAsn = radar.stream()
+				.filter(e -> e.asn() == 8075L)
+				.findFirst()
+				.orElseThrow();
+		assertEquals("PROTECTED_ASN", protectedAsn.status());
+		assertTrue(protectedAsn.isProtectedAsn());
+	}
+
 	private void insertSubnetRollup(
 			String subnetGroup,
 			long asn,

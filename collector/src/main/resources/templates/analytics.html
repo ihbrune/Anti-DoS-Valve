@@ -70,7 +70,8 @@
                         <span>&#x1F552;</span>
                         <span class="history-badge-count" style="display:none;"></span>
                     </button>
-                    <button type="button" class="nav-util-btn notification-toggle-btn" onclick="toggleNotificationPermission()"
+                    <button type="button" class="nav-util-btn notification-toggle-btn"
+                        onclick="toggleNotificationPermission()"
                         title="Desktop &amp; In-App Notifications for Autonomous Defense"
                         aria-label="Toggle Autonomous Defense Notifications">
                         <span>&#x1F514;</span>
@@ -123,9 +124,12 @@
             <input type="hidden" name="hours" id="filter-hours"
                 th:value="${selectedHours != null ? selectedHours : 24}">
             <input type="hidden" name="tab" id="filter-tab" th:value="${activeTab != null ? activeTab : 'charts'}">
-            <input type="hidden" name="scatterGroupBy" id="filter-scatter-group-by" th:value="${scatterGroupBy != null ? scatterGroupBy : 'SUBNET'}">
-            <input type="hidden" name="scatterTrafficFilter" id="filter-scatter-traffic" th:value="${scatterTrafficFilter != null ? scatterTrafficFilter : 'ALL'}">
-            <input type="hidden" name="scatterAuthFilter" id="filter-scatter-auth" th:value="${scatterAuthFilter != null ? scatterAuthFilter : 'ALL'}">
+            <input type="hidden" name="scatterGroupBy" id="filter-scatter-group-by"
+                th:value="${scatterGroupBy != null ? scatterGroupBy : 'SUBNET'}">
+            <input type="hidden" name="scatterTrafficFilter" id="filter-scatter-traffic"
+                th:value="${scatterTrafficFilter != null ? scatterTrafficFilter : 'ALL'}">
+            <input type="hidden" name="scatterAuthFilter" id="filter-scatter-auth"
+                th:value="${scatterAuthFilter != null ? scatterAuthFilter : 'ALL'}">
 
             <div class="filter-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">
                 <!-- 1. Target Servers -->
@@ -197,6 +201,9 @@
 
         <!-- Note Editor & Viewer Modal (loaded dynamically via HTMX) -->
         <div id="note-modal-container"></div>
+
+        <!-- ASN Hourly Drilldown Modal (loaded dynamically via HTMX) -->
+        <div id="asn-drilldown-modal-container"></div>
     </div>
 
     <script>
@@ -210,8 +217,21 @@
             document.querySelectorAll('.note-modal-overlay, #note-modal-wrapper').forEach(el => el.remove());
         }
 
+        function closeAsnModal(e) {
+            if (e) {
+                if (typeof e.stopPropagation === 'function') e.stopPropagation();
+                if (typeof e.preventDefault === 'function') e.preventDefault();
+            }
+            const c = document.getElementById('asn-drilldown-modal-container');
+            if (c) c.innerHTML = '';
+            document.querySelectorAll('#asn-modal-wrapper').forEach(el => el.remove());
+        }
+
         document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') closeNoteModal(e);
+            if (e.key === 'Escape') {
+                closeNoteModal(e);
+                closeAsnModal(e);
+            }
         });
 
         function toggleCheckboxes(className, check) {

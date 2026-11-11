@@ -27,25 +27,28 @@ public class AnalyticsService {
 	private final RollupAggregationService rollupAggregationService;
 	private final NetworkAnnotationService networkAnnotationService;
 	private final org.henbru.antidos.collector.advisor.AdvisorService advisorService;
+	private final org.henbru.antidos.collector.storage.ClientEventRepository clientEventRepository;
 
 	@Autowired
 	public AnalyticsService(
 			SubnetRollupRepository subnetRollupRepository,
 			RollupAggregationService rollupAggregationService,
 			@Autowired(required = false) NetworkAnnotationService networkAnnotationService,
-			@Autowired(required = false) org.henbru.antidos.collector.advisor.AdvisorService advisorService
+			@Autowired(required = false) org.henbru.antidos.collector.advisor.AdvisorService advisorService,
+			@Autowired(required = false) org.henbru.antidos.collector.storage.ClientEventRepository clientEventRepository
 	) {
 		this.subnetRollupRepository = subnetRollupRepository;
 		this.rollupAggregationService = rollupAggregationService;
 		this.networkAnnotationService = networkAnnotationService;
 		this.advisorService = advisorService;
+		this.clientEventRepository = clientEventRepository;
 	}
 
 	public AnalyticsService(
 			SubnetRollupRepository subnetRollupRepository,
 			RollupAggregationService rollupAggregationService
 	) {
-		this(subnetRollupRepository, rollupAggregationService, null, null);
+		this(subnetRollupRepository, rollupAggregationService, null, null, null);
 	}
 
 	public AnalyticsService(
@@ -53,7 +56,7 @@ public class AnalyticsService {
 			RollupAggregationService rollupAggregationService,
 			NetworkAnnotationService networkAnnotationService
 	) {
-		this(subnetRollupRepository, rollupAggregationService, networkAnnotationService, null);
+		this(subnetRollupRepository, rollupAggregationService, networkAnnotationService, null, null);
 	}
 
 	public AnalyticsDashboardDto getDashboardAnalytics(
@@ -309,5 +312,69 @@ public class AnalyticsService {
 			return firstLine.substring(0, maxLen - 1).trim() + "…";
 		}
 		return firstLine;
+	}
+
+	public org.henbru.antidos.collector.model.AsnDrilldownDto getAsnDrilldown(long asn, int hours) {
+		int safeHours = hours > 0 ? Math.min(hours, 720) : 24;
+		Instant to = Instant.now();
+		Instant from = to.minus(safeHours, ChronoUnit.HOURS);
+
+		List<org.henbru.antidos.collector.model.AsnHourlyPoint> points = subnetRollupRepository.findAsnHourlyPoints(asn, from, to);
+		List<org.henbru.antidos.collector.model.AsnSubnetSummary> topSubnets = subnetRollupRepository.findAsnTopSubnets(asn, from, to, 15);
+		SubnetRollupRepository.AsnMeta meta = subnetRollupRepository.findAsnMeta(asn);
+
+		long totalRequests = 0;
+		long totalBlocked = 0;
+		long totalMarked = 0;
+		long totalReturning = 0;
+		long totalAuthenticated = 0;
+		long totalClients = 0;
+		java.util.Set<String> allSubnets = new java.util.HashSet<>();
+
+		for (org.henbru.antidos.collector.model.AsnHourlyPoint pt : points) {
+			totalRequests += pt.totalRequests();
+			totalBlocked += pt.blockedRequests();
+			totalMarked += pt.markedRequests();
+			totalReturning += pt.returningRequests();
+			totalAuthenticated += pt.authenticatedRequests();
+			totalClients += pt.distinctClients();
+		}
+
+		for (org.henbru.antidos.collector.model.AsnSubnetSummary sub : topSubnets) {
+			if (sub.subnetGroup() != null) {
+				allSubnets.add(sub.subnetGroup());
+			}
+		}
+
+		double overallReturningPct = totalRequests > 0 ? (totalReturning * 100.0 / totalRequests) : 0.0;
+
+		int distinctUas = 0;
+		List<org.henbru.antidos.collector.model.AsnUserAgentSummary> topUserAgents = List.of();
+		if (clientEventRepository != null) {
+			distinctUas = clientEventRepository.countAsnDistinctUserAgents(asn, from, to);
+			topUserAgents = clientEventRepository.findAsnTopUserAgents(asn, from, to, 10, totalRequests);
+		}
+
+		return new org.henbru.antidos.collector.model.AsnDrilldownDto(
+				asn,
+				meta.asOrg() != null ? meta.asOrg() : ("AS" + asn),
+				meta.countryCode(),
+				meta.clientType(),
+				safeHours,
+				from,
+				to,
+				totalRequests,
+				totalBlocked,
+				totalMarked,
+				totalReturning,
+				Math.round(overallReturningPct * 10.0) / 10.0,
+				totalAuthenticated,
+				allSubnets.size(),
+				totalClients,
+				distinctUas,
+				points,
+				topSubnets,
+				topUserAgents
+		);
 	}
 }
