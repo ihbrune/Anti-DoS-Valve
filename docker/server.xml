@@ -150,6 +150,7 @@
                          description="Static blacklist and dynamic CIDR mitigation tracking blocked requests in monitor"
                          alwaysForbiddenIPs="198\.51\.100\..*"
                          alwaysAllowPrivateIPs="false"
+                         allowedRequestsPerSlot="0"
                          trackAlwaysForbiddenInMonitor="true"
                          mitigationUri="/antidos-mitigate"
                          mitigationAllowedIPs="192\.168\.\d+\.\d+|127\.0\.0\.1"
