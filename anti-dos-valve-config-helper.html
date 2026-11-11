@@ -1415,6 +1415,20 @@
               <input type="text" id="alwaysAllowedIPs" name="alwaysAllowedIPs" placeholder="e.g. 127\.0\.0\.1|10\..*">
             </div>
 
+            <!-- 3b. alwaysAllowPrivateIPs -->
+            <div class="field-group">
+              <div class="field-header">
+                <label for="alwaysAllowPrivateIPs" class="field-label">alwaysAllowPrivateIPs</label>
+                <span class="badge badge-optional">Optional</span>
+              </div>
+              <div class="field-desc">When enabled, requests originating from standard private, loopback, and link-local IP addresses (RFC 1918 <code>10.0.0.0/8</code>, <code>172.16.0.0/12</code>, <code>192.168.0.0/16</code>; RFC 4193 ULA <code>fc00::/7</code>; loopback <code>127.0.0.0/8</code>, <code>::1</code>; link-local <code>169.254.0.0/16</code>, <code>fe80::/10</code>) are unconditionally allowed without rate limiting, eliminating large regular expressions. Evaluated after <code>alwaysForbiddenIPs</code>. <strong>Security Notice:</strong> When running behind a reverse proxy, ensure Tomcat's <code>RemoteIpValve</code> is configured upstream so proxy IPs are not mistaken for client addresses.
+              </div>
+              <label class="checkbox-label">
+                <input type="checkbox" id="alwaysAllowPrivateIPs" name="alwaysAllowPrivateIPs">
+                <span>Always allow private and local IP addresses (<code>alwaysAllowPrivateIPs="true"</code>)</span>
+              </label>
+            </div>
+
             <!-- 4. relevantPaths -->
             <div class="field-group">
               <div class="field-header">
@@ -2722,6 +2736,7 @@
       { key: 'alwaysForbiddenIPs', isRequired: false, defaultVal: '' },
       { key: 'trackAlwaysForbiddenInMonitor', isRequired: false, defaultVal: false, isBoolean: true },
       { key: 'alwaysAllowedIPs', isRequired: false, defaultVal: '' },
+      { key: 'alwaysAllowPrivateIPs', isRequired: false, defaultVal: false, isBoolean: true },
       { key: 'relevantPaths', isRequired: false, defaultVal: '' },
       { key: 'nonRelevantPaths', isRequired: false, defaultVal: '' },
       { key: 'serverWideBlocking', isRequired: false, defaultVal: false, isBoolean: true },

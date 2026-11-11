@@ -86,6 +86,225 @@ class AntiDoSValveTest {
 	}
 
 	@Test
+	void testAlwaysAllowPrivateIPsBinding() {
+		AntiDoSValve valve = new AntiDoSValve();
+		assertFalse(valve.isAlwaysAllowPrivateIPs(), "Default must be false");
+
+		valve.setAlwaysAllowPrivateIPs(true);
+		assertTrue(valve.isAlwaysAllowPrivateIPs());
+
+		valve.setAlwaysAllowPrivateIPs("false");
+		assertFalse(valve.isAlwaysAllowPrivateIPs());
+
+		valve.setAlwaysAllowPrivateIPs("true");
+		assertTrue(valve.isAlwaysAllowPrivateIPs());
+
+		// When true, private IPs are in always-allowed
+		assertTrue(valve.isIPAddressInAlwaysAllowed("10.68.1.1"));
+		assertTrue(valve.isIPAddressInAlwaysAllowed("192.168.0.1"));
+		assertTrue(valve.isIPAddressInAlwaysAllowed("172.16.5.10"));
+		assertTrue(valve.isIPAddressInAlwaysAllowed("127.0.0.1"));
+		assertTrue(valve.isIPAddressInAlwaysAllowed("169.254.10.20"));
+		assertTrue(valve.isIPAddressInAlwaysAllowed("::1"));
+		assertTrue(valve.isIPAddressInAlwaysAllowed("fd12:3456:789a:1::1"));
+		assertTrue(valve.isIPAddressInAlwaysAllowed("fe80::1"));
+		assertTrue(valve.isIPAddressInAlwaysAllowed("::ffff:10.68.1.1"));
+
+		// Public IPv4 addresses must evaluate to false
+		assertFalse(valve.isIPAddressInAlwaysAllowed("8.8.8.8"));
+		assertFalse(valve.isIPAddressInAlwaysAllowed("1.1.1.1"));
+		assertFalse(valve.isIPAddressInAlwaysAllowed("9.255.255.255"));
+		assertFalse(valve.isIPAddressInAlwaysAllowed("11.0.0.1"));
+		assertFalse(valve.isIPAddressInAlwaysAllowed("172.15.255.255"));
+		assertFalse(valve.isIPAddressInAlwaysAllowed("172.32.0.1"));
+		assertFalse(valve.isIPAddressInAlwaysAllowed("192.167.255.255"));
+		assertFalse(valve.isIPAddressInAlwaysAllowed("192.169.0.1"));
+		assertFalse(valve.isIPAddressInAlwaysAllowed("203.0.113.42"));
+
+		// Public and IPv4-mapped public IPv6 addresses must evaluate to false
+		assertFalse(valve.isIPAddressInAlwaysAllowed("2001:db8::1"));
+		assertFalse(valve.isIPAddressInAlwaysAllowed("2607:f8b0:4005:805::200e"));
+		assertFalse(valve.isIPAddressInAlwaysAllowed("::ffff:8.8.8.8"));
+
+		// Invalid strings and null must evaluate to false
+		assertFalse(valve.isIPAddressInAlwaysAllowed(null));
+		assertFalse(valve.isIPAddressInAlwaysAllowed(""));
+		assertFalse(valve.isIPAddressInAlwaysAllowed("   "));
+		assertFalse(valve.isIPAddressInAlwaysAllowed("not-an-ip"));
+		assertFalse(valve.isIPAddressInAlwaysAllowed("10.0.0"));
+		assertFalse(valve.isIPAddressInAlwaysAllowed("10.0.0.0.0"));
+		assertFalse(valve.isIPAddressInAlwaysAllowed("256.0.0.1"));
+
+		// Combined with alwaysAllowedIPs regex:
+		valve.setAlwaysAllowedIPs("198\\.51\\.100\\.42");
+		assertTrue(valve.isIPAddressInAlwaysAllowed("198.51.100.42")); // matches regex
+		assertTrue(valve.isIPAddressInAlwaysAllowed("10.68.1.1"));     // matches private IP
+		assertFalse(valve.isIPAddressInAlwaysAllowed("198.51.100.43"));// matches neither
+		assertFalse(valve.isIPAddressInAlwaysAllowed("8.8.8.8"));      // matches neither
+
+		// When set back to false, private IPs are not unconditionally allowed
+		valve.setAlwaysAllowPrivateIPs(false);
+		valve.setAlwaysAllowedIPs(null);
+		assertFalse(valve.isIPAddressInAlwaysAllowed("10.68.1.1"));
+		assertFalse(valve.isIPAddressInAlwaysAllowed("192.168.0.1"));
+		assertFalse(valve.isIPAddressInAlwaysAllowed("172.16.5.10"));
+		assertFalse(valve.isIPAddressInAlwaysAllowed("127.0.0.1"));
+		assertFalse(valve.isIPAddressInAlwaysAllowed("169.254.10.20"));
+		assertFalse(valve.isIPAddressInAlwaysAllowed("::1"));
+		assertFalse(valve.isIPAddressInAlwaysAllowed("fd12:3456:789a:1::1"));
+		assertFalse(valve.isIPAddressInAlwaysAllowed("fe80::1"));
+		assertFalse(valve.isIPAddressInAlwaysAllowed("::ffff:10.68.1.1"));
+		assertFalse(valve.isIPAddressInAlwaysAllowed("8.8.8.8"));
+	}
+
+	@Test
+	void testIsPrivateOrLocalIPClassification() {
+		// RFC 1918 Class A: 10.0.0.0/8
+		assertTrue(AntiDoSValve.isPrivateOrLocalIP("10.0.0.1"));
+		assertTrue(AntiDoSValve.isPrivateOrLocalIP("10.68.12.34"));
+		assertTrue(AntiDoSValve.isPrivateOrLocalIP("10.255.255.255"));
+
+		// RFC 1918 Class B: 172.16.0.0/12
+		assertTrue(AntiDoSValve.isPrivateOrLocalIP("172.16.0.1"));
+		assertTrue(AntiDoSValve.isPrivateOrLocalIP("172.24.10.5"));
+		assertTrue(AntiDoSValve.isPrivateOrLocalIP("172.31.255.255"));
+		// Boundaries
+		assertFalse(AntiDoSValve.isPrivateOrLocalIP("172.15.255.255"));
+		assertFalse(AntiDoSValve.isPrivateOrLocalIP("172.32.0.1"));
+
+		// RFC 1918 Class C: 192.168.0.0/16
+		assertTrue(AntiDoSValve.isPrivateOrLocalIP("192.168.0.1"));
+		assertTrue(AntiDoSValve.isPrivateOrLocalIP("192.168.178.1"));
+		assertTrue(AntiDoSValve.isPrivateOrLocalIP("192.168.255.255"));
+		// Boundaries
+		assertFalse(AntiDoSValve.isPrivateOrLocalIP("192.167.255.255"));
+		assertFalse(AntiDoSValve.isPrivateOrLocalIP("192.169.0.1"));
+
+		// RFC 1122 Loopback IPv4: 127.0.0.0/8
+		assertTrue(AntiDoSValve.isPrivateOrLocalIP("127.0.0.1"));
+		assertTrue(AntiDoSValve.isPrivateOrLocalIP("127.1.2.3"));
+		assertTrue(AntiDoSValve.isPrivateOrLocalIP("127.255.255.255"));
+
+		// RFC 3927 Link-Local IPv4: 169.254.0.0/16
+		assertTrue(AntiDoSValve.isPrivateOrLocalIP("169.254.1.1"));
+		assertTrue(AntiDoSValve.isPrivateOrLocalIP("169.254.254.254"));
+
+		// Public IPv4
+		assertFalse(AntiDoSValve.isPrivateOrLocalIP("8.8.8.8"));
+		assertFalse(AntiDoSValve.isPrivateOrLocalIP("1.1.1.1"));
+		assertFalse(AntiDoSValve.isPrivateOrLocalIP("9.255.255.255"));
+		assertFalse(AntiDoSValve.isPrivateOrLocalIP("11.0.0.1"));
+		assertFalse(AntiDoSValve.isPrivateOrLocalIP("203.0.113.195"));
+
+		// IPv6 Loopback: ::1
+		assertTrue(AntiDoSValve.isPrivateOrLocalIP("::1"));
+		assertTrue(AntiDoSValve.isPrivateOrLocalIP("0:0:0:0:0:0:0:1"));
+
+		// RFC 4193 ULA: fc00::/7 (fc00:: and fd00::)
+		assertTrue(AntiDoSValve.isPrivateOrLocalIP("fc00::1"));
+		assertTrue(AntiDoSValve.isPrivateOrLocalIP("fd12:3456:789a:1::1"));
+
+		// RFC 4291 Link-Local IPv6: fe80::/10
+		assertTrue(AntiDoSValve.isPrivateOrLocalIP("fe80::1"));
+		assertTrue(AntiDoSValve.isPrivateOrLocalIP("fe80::200:5aee:feaa:20a2"));
+
+		// Public IPv6
+		assertFalse(AntiDoSValve.isPrivateOrLocalIP("2001:db8::1"));
+		assertFalse(AntiDoSValve.isPrivateOrLocalIP("2607:f8b0:4005:805::200e"));
+
+		// IPv4-mapped IPv6
+		assertTrue(AntiDoSValve.isPrivateOrLocalIP("::ffff:10.68.1.1"));
+		assertTrue(AntiDoSValve.isPrivateOrLocalIP("::ffff:192.168.1.1"));
+		assertTrue(AntiDoSValve.isPrivateOrLocalIP("::ffff:127.0.0.1"));
+		assertFalse(AntiDoSValve.isPrivateOrLocalIP("::ffff:8.8.8.8"));
+
+		// Invalid / null
+		assertFalse(AntiDoSValve.isPrivateOrLocalIP(null));
+		assertFalse(AntiDoSValve.isPrivateOrLocalIP(""));
+		assertFalse(AntiDoSValve.isPrivateOrLocalIP("   "));
+		assertFalse(AntiDoSValve.isPrivateOrLocalIP("invalid-ip"));
+		assertFalse(AntiDoSValve.isPrivateOrLocalIP("256.0.0.1"));
+		assertFalse(AntiDoSValve.isPrivateOrLocalIP("10.0.0"));
+		assertFalse(AntiDoSValve.isPrivateOrLocalIP("10.0.0.0.0"));
+	}
+
+	@Test
+	void testAlwaysAllowPrivateIPsBypassesRateLimiting() {
+		AntiDoSValve valve = new AntiDoSValve();
+		valve.setMonitorName("TEST_ALWAYS_ALLOW_PRIVATE");
+		valve.setMaxIPCacheSize(100);
+		valve.setRelevantPaths("/api/.*");
+		valve.setAllowedRequestsPerSlot(1);
+		valve.setSlotLength(60);
+		valve.setNumberOfSlots(5);
+		valve.setAlwaysAllowPrivateIPs(true);
+		assertNull(valve.reloadMonitor());
+
+		// Private IP (e.g. 10.68.1.5) should NEVER be blocked, even after exceeding threshold
+		for (int i = 0; i < 10; i++) {
+			assertTrue(valve.isRequestAllowed("10.68.1.5", "/api/test"),
+					"Request " + i + " from 10.68.1.5 should be allowed by alwaysAllowPrivateIPs");
+		}
+
+		// Loopback (127.0.0.1) should also never be blocked
+		for (int i = 0; i < 10; i++) {
+			assertTrue(valve.isRequestAllowed("127.0.0.1", "/api/test"),
+					"Request " + i + " from 127.0.0.1 should be allowed by alwaysAllowPrivateIPs");
+		}
+
+		// Public IP (203.0.113.10) is subject to rate limiting:
+		// 1st request allowed (allowedRequestsPerSlot = 1)
+		assertTrue(valve.isRequestAllowed("203.0.113.10", "/api/test"));
+		// 2nd request exceeded limit and must be blocked
+		assertFalse(valve.isRequestAllowed("203.0.113.10", "/api/test"));
+	}
+
+	@Test
+	void testAlwaysForbiddenOverridesAlwaysAllowPrivateIPs() {
+		AntiDoSValve valve = new AntiDoSValve();
+		valve.setMonitorName("TEST_ALWAYS_FORBIDDEN_OVERRIDE");
+		valve.setMaxIPCacheSize(100);
+		valve.setRelevantPaths("/api/.*");
+		valve.setAllowedRequestsPerSlot(10);
+		valve.setSlotLength(60);
+		valve.setNumberOfSlots(5);
+		valve.setAlwaysAllowPrivateIPs(true);
+		valve.setAlwaysForbiddenIPs("10\\.68\\.99\\.1");
+		assertNull(valve.reloadMonitor());
+
+		// Unblacklisted private IP is allowed
+		assertTrue(valve.isRequestAllowed("10.68.1.5", "/api/test"));
+
+		// Blacklisted private IP is blocked despite alwaysAllowPrivateIPs=true
+		assertFalse(valve.isRequestAllowed("10.68.99.1", "/api/test"));
+	}
+
+	@Test
+	void testStatusDashboardRendersAlwaysAllowPrivateIPs() {
+		AntiDoSValve valve = new AntiDoSValve();
+		valve.setMonitorName("TEST_STATUS_PRIVATE");
+		valve.setMaxIPCacheSize(100);
+		valve.setNumberOfSlots(5);
+		valve.setSlotLength(60);
+		valve.setAllowedRequestsPerSlot(10);
+		valve.setStatusUri("/antidos-status");
+		valve.setStatusPassword("mySecretStatusToken123");
+		valve.setAlwaysAllowPrivateIPs(true);
+		assertNull(valve.reloadMonitor());
+
+		AntiDoSStatusRenderer renderer = valve.getStatusRenderer();
+		String html = renderer.buildStatusHtml(null, "mySecretStatusToken123");
+		assertTrue(html.contains("Allow Private IPs"), "HTML dashboard should display Allow Private IPs row");
+		assertTrue(html.contains("ENABLED"), "HTML dashboard should indicate ENABLED");
+
+		String jsonSummary = renderer.buildStatusJson(null);
+		assertTrue(jsonSummary.contains("\"alwaysAllowPrivateIPs\": true"), "JSON summary should include alwaysAllowPrivateIPs");
+
+		String jsonDetail = renderer.buildStatusJsonDetails(null);
+		assertTrue(jsonDetail.contains("\"alwaysAllowPrivateIPs\": true"), "JSON detail should include alwaysAllowPrivateIPs");
+	}
+
+	@Test
 	void testAlwaysForbiddenIPs() {
 		AntiDoSValve valve = new AntiDoSValve();
 

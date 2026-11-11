@@ -356,6 +356,13 @@ public class AntiDoSValve extends ValveBase {
 	private volatile Pattern alwaysAllowedIPs = null;
 
 	/**
+	 * Controls whether requests originating from private, loopback, and link-local
+	 * IP addresses (RFC 1918, RFC 1122, RFC 3927, RFC 4193 ULA, RFC 4291) are
+	 * unconditionally allowed without rate limiting.
+	 */
+	private volatile boolean alwaysAllowPrivateIPs = false;
+
+	/**
 	 * Configuration value for the regular expression with IP addresses that are
 	 * never blocked. Probably not a valid {@link Pattern}.
 	 */
@@ -637,6 +644,35 @@ public class AntiDoSValve extends ValveBase {
 	 */
 	public boolean isAlwaysAllowedIPsValid() {
 		return alwaysAllowedIPsValid;
+	}
+
+	/**
+	 * @return <code>true</code> if private, loopback, and link-local IP addresses are unconditionally allowed
+	 */
+	public boolean isAlwaysAllowPrivateIPs() {
+		return alwaysAllowPrivateIPs;
+	}
+
+	/**
+	 * Controls whether requests originating from private, loopback, and link-local
+	 * IP addresses (RFC 1918, RFC 1122, RFC 3927, RFC 4193 ULA, RFC 4291) are
+	 * unconditionally allowed without rate limiting.
+	 *
+	 * @param alwaysAllowPrivateIPs <code>true</code> to unconditionally allow private and local IPs
+	 */
+	public void setAlwaysAllowPrivateIPs(boolean alwaysAllowPrivateIPs) {
+		this.alwaysAllowPrivateIPs = alwaysAllowPrivateIPs;
+	}
+
+	/**
+	 * String setter for {@link #setAlwaysAllowPrivateIPs(boolean)}.
+	 *
+	 * @param alwaysAllowPrivateIPs "true" or "false"
+	 */
+	public void setAlwaysAllowPrivateIPs(String alwaysAllowPrivateIPs) {
+		if (alwaysAllowPrivateIPs != null) {
+			this.alwaysAllowPrivateIPs = Boolean.parseBoolean(alwaysAllowPrivateIPs.trim());
+		}
 	}
 
 	/**
@@ -3295,8 +3331,13 @@ public class AntiDoSValve extends ValveBase {
 		}
 
 		if (isIPAddressInAlwaysAllowed(ip)) {
-			if (log.isDebugEnabled())
-				log.debug(name4logging + " Is in alwaysAllowedIPs: " + ip);
+			if (log.isDebugEnabled()) {
+				if (alwaysAllowPrivateIPs && isPrivateOrLocalIP(ip)) {
+					log.debug(name4logging + " Is private or local IP (alwaysAllowPrivateIPs): " + ip);
+				} else {
+					log.debug(name4logging + " Is in alwaysAllowedIPs: " + ip);
+				}
+			}
 
 			return true;
 		}
@@ -3666,16 +3707,196 @@ public class AntiDoSValve extends ValveBase {
 
 	/**
 	 * This method checks if an IP address is matched by the pattern in
-	 * {@link #getAlwaysAllowedIPsConfigValue()}. The method is public and can be
-	 * called by JMX
+	 * {@link #getAlwaysAllowedIPsConfigValue()} or is a private/local IP address
+	 * when {@link #isAlwaysAllowPrivateIPs()} is enabled. The method is public and can be
+	 * called by JMX.
 	 *
 	 * @param ip The IP address
 	 */
 	public boolean isIPAddressInAlwaysAllowed(String ip) {
+		if (alwaysAllowPrivateIPs && isPrivateOrLocalIP(ip)) {
+			return true;
+		}
 		// Local copy for thread safety
 		Pattern alwaysAllowed = this.alwaysAllowedIPs;
 
 		return alwaysAllowed != null && alwaysAllowed.matcher(ip).matches();
+	}
+
+	/**
+	 * Determines whether the specified IP address string is a private, loopback,
+	 * or link-local address (RFC 1918, RFC 1122, RFC 3927, RFC 4193 ULA, RFC 4291).
+	 *
+	 * @param ip IP address string (IPv4 or IPv6)
+	 * @return <code>true</code> if the IP is private, loopback, or link-local, <code>false</code> otherwise
+	 */
+	public static boolean isPrivateOrLocalIP(String ip) {
+		if (ip == null || ip.isEmpty()) {
+			return false;
+		}
+		if (ip.indexOf(':') < 0) {
+			return isPrivateOrLocalIPv4(ip);
+		}
+		return isPrivateOrLocalIPv6(ip);
+	}
+
+	/**
+	 * Tests whether the given IPv4 address string falls into RFC 1918, RFC 1122 (loopback),
+	 * or RFC 3927 (link-local) address ranges. Performs zero heap memory allocations.
+	 */
+	static boolean isPrivateOrLocalIPv4(String ip) {
+		if (ip == null) {
+			return false;
+		}
+		int len = ip.length();
+		if (len < 7 || len > 15) {
+			return false;
+		}
+		int octetCount = 0;
+		int curOctet = 0;
+		int digits = 0;
+		int addr = 0;
+		for (int i = 0; i < len; i++) {
+			char c = ip.charAt(i);
+			if (c >= '0' && c <= '9') {
+				curOctet = curOctet * 10 + (c - '0');
+				digits++;
+				if (digits > 3 || curOctet > 255) {
+					return false;
+				}
+			} else if (c == '.') {
+				if (digits == 0 || octetCount >= 3) {
+					return false;
+				}
+				addr = (addr << 8) | curOctet;
+				octetCount++;
+				curOctet = 0;
+				digits = 0;
+			} else {
+				return false;
+			}
+		}
+		if (digits == 0 || octetCount != 3) {
+			return false;
+		}
+		addr = (addr << 8) | curOctet;
+
+		return isPrivateOrLocalIPv4Int(addr);
+	}
+
+	/**
+	 * Bitwise check for IPv4 address int against RFC 1918, loopback (127.0.0.0/8), and link-local (169.254.0.0/16).
+	 */
+	static boolean isPrivateOrLocalIPv4Int(int addr) {
+		// 10.0.0.0/8 (RFC 1918)
+		if ((addr & 0xFF000000) == 0x0A000000) {
+			return true;
+		}
+		// 172.16.0.0/12 (RFC 1918)
+		if ((addr & 0xFFF00000) == 0xAC100000) {
+			return true;
+		}
+		// 192.168.0.0/16 (RFC 1918)
+		if ((addr & 0xFFFF0000) == 0xC0A80000) {
+			return true;
+		}
+		// 127.0.0.0/8 (Loopback RFC 1122)
+		if ((addr & 0xFF000000) == 0x7F000000) {
+			return true;
+		}
+		// 169.254.0.0/16 (Link-Local RFC 3927)
+		if ((addr & 0xFFFF0000) == 0xA9FE0000) {
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Tests whether the given IPv6 address string falls into loopback (::1),
+	 * unique local (fc00::/7 - RFC 4193 ULA), link-local (fe80::/10 - RFC 4291),
+	 * deprecated site-local (fec0::/10 - RFC 3513), or IPv4-mapped/compatible
+	 * private address ranges.
+	 */
+	static boolean isPrivateOrLocalIPv6(String ip) {
+		if (ip == null || ip.isEmpty()) {
+			return false;
+		}
+		// Fast-path for IPv4-mapped IPv6 formatted like ::ffff:192.168.1.1
+		int lastColon = ip.lastIndexOf(':');
+		if (lastColon >= 0 && lastColon < ip.length() - 1) {
+			String trailing = ip.substring(lastColon + 1);
+			if (trailing.indexOf('.') > 0 && isPrivateOrLocalIPv4(trailing)) {
+				String prefix = ip.substring(0, lastColon + 1);
+				if ("::ffff:".equalsIgnoreCase(prefix) || "::".equals(prefix) || ":0:0:0:0:0:ffff:".equalsIgnoreCase(prefix)) {
+					return true;
+				}
+			}
+		}
+
+		byte[] b;
+		try {
+			InetAddress addr = InetAddress.getByName(ip);
+			if (addr instanceof Inet6Address) {
+				b = addr.getAddress();
+			} else if (addr instanceof java.net.Inet4Address) {
+				return isPrivateOrLocalIPv4(addr.getHostAddress());
+			} else {
+				return false;
+			}
+		} catch (UnknownHostException e) {
+			return false;
+		}
+		if (b == null || b.length != 16) {
+			return false;
+		}
+		// Loopback (::1)
+		boolean loopback = true;
+		for (int i = 0; i < 15; i++) {
+			if (b[i] != 0) {
+				loopback = false;
+				break;
+			}
+		}
+		if (loopback && (b[15] & 0xFF) == 1) {
+			return true;
+		}
+		// Unique Local Addresses ULA (fc00::/7 - RFC 4193) -> covers fc00:: and fd00::
+		if (((b[0] & 0xFF) & 0xFE) == 0xFC) {
+			return true;
+		}
+		// Link-Local Unicast (fe80::/10 - RFC 4291)
+		if ((b[0] & 0xFF) == 0xFE && (b[1] & 0xC0) == 0x80) {
+			return true;
+		}
+		// Deprecated Site-Local (fec0::/10 - RFC 3513)
+		if ((b[0] & 0xFF) == 0xFE && (b[1] & 0xC0) == 0xC0) {
+			return true;
+		}
+		// IPv4-mapped IPv6 (::ffff:0:0/96)
+		boolean mapped = true;
+		for (int i = 0; i < 10; i++) {
+			if (b[i] != 0) {
+				mapped = false;
+				break;
+			}
+		}
+		if (mapped && (b[10] & 0xFF) == 0xFF && (b[11] & 0xFF) == 0xFF) {
+			int v4 = ((b[12] & 0xFF) << 24) | ((b[13] & 0xFF) << 16) | ((b[14] & 0xFF) << 8) | (b[15] & 0xFF);
+			return isPrivateOrLocalIPv4Int(v4);
+		}
+		// IPv4-compatible IPv6 (::0:0/96)
+		boolean compat = true;
+		for (int i = 0; i < 12; i++) {
+			if (b[i] != 0) {
+				compat = false;
+				break;
+			}
+		}
+		if (compat) {
+			int v4 = ((b[12] & 0xFF) << 24) | ((b[13] & 0xFF) << 16) | ((b[14] & 0xFF) << 8) | (b[15] & 0xFF);
+			return isPrivateOrLocalIPv4Int(v4);
+		}
+		return false;
 	}
 
 	/**

@@ -143,11 +143,13 @@
 
                     <!-- AntiDoSValve Hard Blacklist / Dynamic CIDR Mitigation demo configuration:
                          Permanently blocks static hostile CIDRs (alwaysForbiddenIPs) or accepts dynamic,
-                         TTL-based CIDR blocks pushed from the Anti-DoS Collector via mitigationPassword. -->
+                         TTL-based CIDR blocks pushed from the Anti-DoS Collector via mitigationPassword.
+                         Optionally set alwaysAllowPrivateIPs="true" to unconditionally allow private RFC 1918 subnets. -->
                     <Valve className="org.henbru.antidos.AntiDoSValve"
                          monitorName="BLACKLIST-FORENSIC-VALVE"
                          description="Static blacklist and dynamic CIDR mitigation tracking blocked requests in monitor"
                          alwaysForbiddenIPs="198\.51\.100\..*"
+                         alwaysAllowPrivateIPs="false"
                          trackAlwaysForbiddenInMonitor="true"
                          mitigationUri="/antidos-mitigate"
                          mitigationAllowedIPs="192\.168\.\d+\.\d+|127\.0\.0\.1"

@@ -777,6 +777,9 @@ public class AntiDoSStatusRenderer {
 			if (v.getAlwaysAllowedIPsConfigValue() != null) {
 				sb.append("    <tr><th>Always Allowed IPs</th><td><code>").append(escapeHtml(v.getAlwaysAllowedIPsConfigValue())).append("</code></td></tr>\n");
 			}
+			if (v.isAlwaysAllowPrivateIPs()) {
+				sb.append("    <tr><th>Allow Private IPs</th><td><span class=\"badge badge-success\">ENABLED</span> (RFC 1918, RFC 4193 ULA, loopback &amp; link-local)</td></tr>\n");
+			}
 			if (v.getAlwaysForbiddenIPsConfigValue() != null) {
 				sb.append("    <tr><th>Always Forbidden IPs</th><td><code>").append(escapeHtml(v.getAlwaysForbiddenIPsConfigValue())).append("</code></td></tr>\n");
 				sb.append("    <tr><th>Always Forbidden Blocks</th><td><strong>").append(v.getAlwaysForbiddenBlockedRequests()).append("</strong> requests rejected</td></tr>\n");
@@ -1074,6 +1077,9 @@ public class AntiDoSStatusRenderer {
 		}
 		if (target.getAlwaysAllowedIPsConfigValue() != null) {
 			sb.append("    <tr><th>Always Allowed IPs</th><td><code>").append(escapeHtml(target.getAlwaysAllowedIPsConfigValue())).append("</code></td></tr>\n");
+		}
+		if (target.isAlwaysAllowPrivateIPs()) {
+			sb.append("    <tr><th>Allow Private IPs</th><td><span class=\"badge badge-success\">ENABLED</span> (RFC 1918, RFC 4193 ULA, loopback &amp; link-local)</td></tr>\n");
 		}
 		if (target.getAlwaysForbiddenIPsConfigValue() != null) {
 			sb.append("    <tr><th>Always Forbidden IPs</th><td><code>").append(escapeHtml(target.getAlwaysForbiddenIPsConfigValue())).append("</code></td></tr>\n");
@@ -1714,6 +1720,7 @@ public class AntiDoSStatusRenderer {
 					.append("      \"relevantPaths\": ").append(v.getRelevantPathsConfigValue() != null ? "\"" + escapeJson(v.getRelevantPathsConfigValue()) + "\"" : "null").append(",\n")
 					.append("      \"nonRelevantPaths\": ").append(v.getNonRelevantPathsConfigValue() != null ? "\"" + escapeJson(v.getNonRelevantPathsConfigValue()) + "\"" : "null").append(",\n")
 					.append("      \"alwaysAllowedIPs\": ").append(v.getAlwaysAllowedIPsConfigValue() != null ? "\"" + escapeJson(v.getAlwaysAllowedIPsConfigValue()) + "\"" : "null").append(",\n")
+					.append("      \"alwaysAllowPrivateIPs\": ").append(v.isAlwaysAllowPrivateIPs()).append(",\n")
 					.append("      \"alwaysForbiddenIPs\": ").append(v.getAlwaysForbiddenIPsConfigValue() != null ? "\"" + escapeJson(v.getAlwaysForbiddenIPsConfigValue()) + "\"" : "null").append(",\n")
 					.append("      \"trackAlwaysForbiddenInMonitor\": ").append(v.isTrackAlwaysForbiddenInMonitor()).append(",\n")
 					.append("      \"allowedRequestsPerSlot\": ").append(v.getAllowedRequestsPerSlot()).append(",\n")
@@ -1848,6 +1855,7 @@ public class AntiDoSStatusRenderer {
 				.append("    \"relevantPaths\": ").append(target.getRelevantPathsConfigValue() != null ? "\"" + escapeJson(target.getRelevantPathsConfigValue()) + "\"" : "null").append(",\n")
 				.append("    \"nonRelevantPaths\": ").append(target.getNonRelevantPathsConfigValue() != null ? "\"" + escapeJson(target.getNonRelevantPathsConfigValue()) + "\"" : "null").append(",\n")
 				.append("    \"alwaysAllowedIPs\": ").append(target.getAlwaysAllowedIPsConfigValue() != null ? "\"" + escapeJson(target.getAlwaysAllowedIPsConfigValue()) + "\"" : "null").append(",\n")
+				.append("    \"alwaysAllowPrivateIPs\": ").append(target.isAlwaysAllowPrivateIPs()).append(",\n")
 				.append("    \"alwaysForbiddenIPs\": ").append(target.getAlwaysForbiddenIPsConfigValue() != null ? "\"" + escapeJson(target.getAlwaysForbiddenIPsConfigValue()) + "\"" : "null").append(",\n")
 				.append("    \"trackAlwaysForbiddenInMonitor\": ").append(target.isTrackAlwaysForbiddenInMonitor()).append(",\n")
 				.append("    \"allowedRequestsPerSlot\": ").append(target.getAllowedRequestsPerSlot()).append(",\n")

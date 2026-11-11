@@ -427,6 +427,10 @@ public final class AntiDoSOpenApiSpec {
             ],
             "description": "Regular expression pattern of whitelisted IPs that bypass rate limits."
           },
+          "alwaysAllowPrivateIPs": {
+            "type": "boolean",
+            "description": "Whether requests from RFC 1918, RFC 4193 ULA, loopback, and link-local addresses unconditionally bypass rate limits."
+          },
           "alwaysForbiddenIPs": {
             "type": [
               "string",

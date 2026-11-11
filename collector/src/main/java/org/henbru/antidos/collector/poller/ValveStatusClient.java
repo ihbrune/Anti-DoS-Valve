@@ -1,6 +1,5 @@
 package org.henbru.antidos.collector.poller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -13,12 +12,15 @@ import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+
 import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.config.EndpointConfig;
 import org.henbru.antidos.collector.model.ValveDetailsDto;
 import org.henbru.antidos.collector.model.ValveOverviewDto;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * HTTP client for fetching JSON status telemetry from AntiDoSValve endpoints.
@@ -66,9 +68,17 @@ public class ValveStatusClient {
 			String limitParam, String blockedLimitParam, String activeLimitParam,
 			Long sinceBlockedOrder, Long sinceActiveOrder, Integer activeMinCount)
 			throws IOException, InterruptedException {
-		String base = cleanBaseUrl(endpoint.getUrl());
+		String targetUrl = buildSlotDetailsUrl(endpoint.getUrl(), valveName, slotParam, limitParam,
+				blockedLimitParam, activeLimitParam, sinceBlockedOrder, sinceActiveOrder, activeMinCount);
+		return executeGet(endpoint, targetUrl, ValveDetailsDto.class);
+	}
+
+	public static String buildSlotDetailsUrl(String baseUrl, String valveName, String slotParam,
+			String limitParam, String blockedLimitParam, String activeLimitParam,
+			Long sinceBlockedOrder, Long sinceActiveOrder, Integer activeMinCount) {
+		String base = cleanBaseUrl(baseUrl);
 		StringBuilder sb = new StringBuilder(base);
-		sb.append("?view=details&format=json");
+		sb.append("?view=details&format=json&includeDynamicBlocks=false");
 		if (valveName != null && !valveName.trim().isEmpty()) {
 			sb.append("&valve=").append(URLEncoder.encode(valveName.trim(), StandardCharsets.UTF_8));
 		}
@@ -93,8 +103,7 @@ public class ValveStatusClient {
 		if (activeMinCount != null) {
 			sb.append("&activeMinCount=").append(activeMinCount);
 		}
-
-		return executeGet(endpoint, sb.toString(), ValveDetailsDto.class);
+		return sb.toString();
 	}
 
 	@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)

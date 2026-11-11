@@ -337,4 +337,15 @@ class ValveStatusClientTest {
 		String url = "http://node-1.corp.internal:8080/antidos-status";
 		assertEquals(1, client.getAvailableHostPermits(url));
 	}
+
+	@Test
+	void testBuildSlotDetailsUrlIncludesDynamicBlocksFalse() {
+		String url = ValveStatusClient.buildSlotDetailsUrl("http://localhost:8080/antidos-status",
+				"MY_VALVE", "previous", "all", "all", "0", null, null, null);
+		assertTrue(url.contains("includeDynamicBlocks=false"), "Slot details query must explicitly set includeDynamicBlocks=false");
+		assertTrue(url.contains("view=details"));
+		assertTrue(url.contains("format=json"));
+		assertTrue(url.contains("valve=MY_VALVE"));
+		assertTrue(url.contains("slot=previous"));
+	}
 }

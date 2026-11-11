@@ -163,7 +163,7 @@ When an incoming HTTP request reaches the valve, it is processed in two distinct
 
 1. **Static Blacklist (`alwaysForbiddenIPs`)**: Does the client IP address match the regular expression pattern? &rarr; **Block (HTTP error code)**.  
    *(Evaluated directly on the individual client IP address string; by default not counted in the dynamic rate monitor, or registered as BLOCKED with limit 0 when `trackAlwaysForbiddenInMonitor="true"`).*
-2. **Static Whitelist (`alwaysAllowedIPs`)**: Does the client IP address match the regular expression pattern? &rarr; **Allow**.  
+2. **Static Whitelist (`alwaysAllowedIPs` / `alwaysAllowPrivateIPs`)**: Does the client IP address match `alwaysAllowedIPs` or is `alwaysAllowPrivateIPs="true"` with a private/local IP address (RFC 1918, RFC 4193 ULA, loopback, link-local)? &rarr; **Allow**.  
    *(Evaluated directly on the individual client IP address string; request is not counted in the dynamic rate monitor).*
 2b. **Dynamic CIDR Mitigation Blocks (`mitigationPassword` / `dynamicBlockRegistry`)**: If dynamic mitigation is enabled on this Valve, does the client IP address match an active, unexpired dynamic CIDR block pushed by the Anti-DoS Collector or an administrator?
    * **Yes**: &rarr; **Block (HTTP error code, e.g. 429)**.  
@@ -238,6 +238,24 @@ An optional regular expression defining IP addresses that are always allowed acc
 This parameter can be used, for example, to whitelist your corporate intranet or VPN so internal users are never blocked. If a specific internal IP needs to be blocked later, that can still be done via *alwaysForbiddenIPs*.
 
 Both *alwaysForbiddenIPs* and *alwaysAllowedIPs* apply to all requests processed by the Tomcat host. Requests handled by these rules are not counted in the dynamic Anti-DoS Monitor slots.
+
+## alwaysAllowPrivateIPs (optional)
+
+Available since version 1.10.0 (default: `false`): When set to `true`, requests originating from private, loopback, and link-local IP addresses are unconditionally allowed without rate limiting and without being counted in the monitor slots.
+
+This provides an ultra-fast, convenient alternative to maintaining long, complex regular expressions in `alwaysAllowedIPs`. It covers:
+* **IPv4 Private Networks (RFC 1918):** `10.0.0.0/8`, `172.16.0.0/12`, and `192.168.0.0/16`
+* **IPv4 Loopback (RFC 1122):** `127.0.0.0/8`
+* **IPv4 Link-Local (RFC 3927):** `169.254.0.0/16`
+* **IPv6 Loopback (RFC 4291):** `::1`
+* **IPv6 Unique Local Addresses (RFC 4193 ULA):** `fc00::/7` (`fc00:...` to `fdff:...`)
+* **IPv6 Link-Local (RFC 4291):** `fe80::/10`
+* **IPv4-mapped / IPv4-compatible IPv6:** `::ffff:<private-ipv4>`
+
+Evaluated with high-performance bitwise matching (sub-nanosecond, zero heap allocations) immediately after `alwaysForbiddenIPs`. Like `alwaysAllowedIPs`, any client IP explicitly matched by `alwaysForbiddenIPs` remains blocked.
+
+> [!WARNING]
+> **Reverse Proxy Notice:** If your Tomcat server is deployed behind a reverse proxy or load balancer (e.g. Nginx, HAProxy, AWS ALB), ensure Tomcat's `RemoteIpValve` is configured upstream. Otherwise, Tomcat will see the private IP address of the reverse proxy itself as the client IP, causing all external traffic to bypass rate limits!
 
 ## relevantPaths
 
@@ -568,7 +586,7 @@ Finally, define your *relevantPaths* pattern. Ideally, this should cover only en
         
 This configuration is similar to the one used in the server farm where the valve was originally deployed. Those servers handled normal traffic of one to two million requests per day on dynamic (servlet-generated) content. Key aspects of this configuration:
 
-* *alwaysAllowedIPs*: Whitelists internal IP ranges so employees on corporate devices are never blocked.
+* *alwaysAllowedIPs*: Whitelists internal IP ranges so employees on corporate devices are never blocked. *(Tip: You can alternatively set `alwaysAllowPrivateIPs="true"` to automatically allow all internal RFC 1918 subnets including `10.*` without writing regular expressions).*
 * *alwaysForbiddenIPs*: In production, this contained several IP ranges that had caused repeated issues in the past.
 * *relevantPaths*: Matches only dynamic application endpoints. Static assets like CSS, JS, and images are excluded unless they place a heavy burden on the servers.
 * *maxIPCacheSize* to *shareOfRetainedFormerRequests*: These settings proved reliable and effective over several years of operation.
