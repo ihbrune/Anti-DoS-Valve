@@ -169,7 +169,7 @@ public class AnalyticsService {
 				classification = "TOR_ANONYMIZER";
 			} else if (c.clientType() == ClientType.DATACENTER) {
 				classification = "DATACENTER_CLUSTER";
-			} else if (c.clientType() == ClientType.PRIVATE_NETWORK) {
+			} else if (c.clientType() == ClientType.PRIVATE_NETWORK || c.clientType() == ClientType.INTERNAL_NETWORK) {
 				classification = "REGULAR_SUBNET";
 			} else if (isResidential && (distinctClients >= 5 || c.blockedRequests() > 0 || c.markedRequests() > 0)) {
 				classification = "HIGH_RISK_RESIDENTIAL";
@@ -274,6 +274,7 @@ public class AnalyticsService {
 			case TOR_EXIT_NODE -> "Tor Anonymizer Exit Nodes";
 			case PRIVACY_RELAY -> "Privacy Relays (iCloud Private Relay)";
 			case PRIVATE_NETWORK -> "Private / Internal RFC 1918";
+			case INTERNAL_NETWORK -> "Internal / Campus Network";
 			case UNKNOWN -> "Unclassified / Standard Clients";
 		};
 	}
@@ -289,6 +290,7 @@ public class AnalyticsService {
 			case TOR_EXIT_NODE -> "🧅";
 			case PRIVACY_RELAY -> "🛡️";
 			case PRIVATE_NETWORK -> "🔒";
+			case INTERNAL_NETWORK -> "🏛️";
 			case UNKNOWN -> "👤";
 		};
 	}

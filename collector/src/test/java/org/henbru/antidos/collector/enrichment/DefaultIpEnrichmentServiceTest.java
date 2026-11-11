@@ -98,4 +98,21 @@ class DefaultIpEnrichmentServiceTest {
 		assertEquals(ClientType.PRIVACY_RELAY, res.clientType());
 		assertEquals("Apple iCloud Private Relay", res.asOrg());
 	}
+
+	@Test
+	void testEnrichInternalNetwork() {
+		properties.getInternalNetworks().add(
+				new org.henbru.antidos.collector.config.InternalNetworkConfig(
+						"198.51.100.0/24", "Corporate Campus", "HQ Office"
+				)
+		);
+		InternalNetworkService internalNetService = new InternalNetworkService(properties);
+		DefaultIpEnrichmentService service = new DefaultIpEnrichmentService(
+				properties, asnClassifierService, botIpRangeRepository, null, internalNetService
+		);
+
+		IpEnrichmentResult res = service.enrich("198.51.100.42");
+		assertEquals(ClientType.INTERNAL_NETWORK, res.clientType());
+		assertEquals("Corporate Campus", res.asOrg());
+	}
 }

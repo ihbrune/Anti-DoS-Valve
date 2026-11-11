@@ -334,7 +334,7 @@ public class AutoMitigationService {
 				WHERE bucket_start >= ?
 				  AND asn IS NOT NULL
 				  AND asn > 0
-				  AND (client_type IS NULL OR client_type NOT IN ('SEARCH_ENGINE', 'AI_CRAWLER', 'PRIVATE_NETWORK'))
+				  AND (client_type IS NULL OR client_type NOT IN ('SEARCH_ENGINE', 'AI_CRAWLER', 'PRIVATE_NETWORK', 'INTERNAL_NETWORK'))
 				GROUP BY asn
 				HAVING COUNT(DISTINCT subnet_group) >= ?
 				   AND SUM(total_requests) >= ?
@@ -379,7 +379,7 @@ public class AutoMitigationService {
 				FROM client_subnet_rollups
 				WHERE bucket_start >= ?
 				  AND asn = ?
-				  AND (client_type IS NULL OR client_type NOT IN ('SEARCH_ENGINE', 'AI_CRAWLER', 'PRIVATE_NETWORK'))
+				  AND (client_type IS NULL OR client_type NOT IN ('SEARCH_ENGINE', 'AI_CRAWLER', 'PRIVATE_NETWORK', 'INTERNAL_NETWORK'))
 				GROUP BY subnet_group
 				HAVING SUM(authenticated_requests) = 0
 				ORDER BY sub_total DESC

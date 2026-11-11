@@ -105,6 +105,11 @@
                                         style="padding: 1px 6px; font-size: 9px; text-decoration: none;"
                                         title="Private Intranet / RFC 1918 / Local Network - Click to filter">&#x1F512;
                                         Private Net</a>
+                                    <a th:if="${event.clientType != null and event.clientType.name() == 'INTERNAL_NETWORK'}"
+                                        th:href="@{/events(clientTypes='INTERNAL_NETWORK')}" class="badge badge-info"
+                                        style="padding: 1px 6px; font-size: 9px; text-decoration: none;"
+                                        title="Configured Corporate / Campus Internal Network - Click to filter">&#x1F3DB;
+                                        Internal Net</a>
                                     <a th:if="${event.clientType != null and event.clientType.name() == 'PRIVACY_RELAY'}"
                                         th:href="@{/events(clientTypes='PRIVACY_RELAY')}" class="badge badge-info"
                                         style="padding: 1px 6px; font-size: 9px; text-decoration: none;"

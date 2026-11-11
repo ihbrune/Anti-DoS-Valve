@@ -129,6 +129,21 @@ collector:
     "Api-Overlapping-Limiter":
       collect-active: false
 
+  # ---------------------------------------------------------------------------
+  # Internal & Campus Networks (Optional)
+  # ---------------------------------------------------------------------------
+  # Defines corporate, campus, or intranet IP ranges that should be classified as
+  # INTERNAL_NETWORK (with custom names, badges, and strict protection against
+  # autonomous mitigation or block recommendations).
+  # Supports standard CIDR (e.g. 198.51.100.0/24) and wildcards (e.g. 198.51.100.*):
+  # internal-networks:
+  #   - cidr: "198.51.100.0/24"
+  #     name: "Corporate Campus"
+  #     description: "HQ Office, Campus WLAN & VPN"
+  #   - cidr: "203.0.113.0/24"
+  #     name: "Branch Office"
+  #     description: "Regional Office & Internal Services"
+
   # List of monitored Tomcat servers running AntiDoSValve
   endpoints:
     # Example 1: Local Tomcat instance - polls all valves by default using the rules above

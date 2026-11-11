@@ -5,6 +5,7 @@ import java.net.InetAddress;
 import java.util.Optional;
 import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.model.ClientType;
+import org.henbru.antidos.collector.model.InternalNetworkMatch;
 import org.henbru.antidos.collector.model.IpEnrichmentResult;
 import org.henbru.antidos.collector.storage.BotIpRangeRepository;
 import org.henbru.antidos.collector.storage.BotIpRangeRepository.BotMatch;
@@ -27,6 +28,7 @@ public class DefaultIpEnrichmentService implements IpEnrichmentService {
 	private final CollectorProperties properties;
 	private final AsnClassifierService asnClassifierService;
 	private final BotIpRangeRepository botIpRangeRepository;
+	private final InternalNetworkService internalNetworkService;
 	private MmdbEnrichmentProvider mmdbProvider;
 
 	@org.springframework.beans.factory.annotation.Autowired
@@ -34,18 +36,28 @@ public class DefaultIpEnrichmentService implements IpEnrichmentService {
 			CollectorProperties properties,
 			AsnClassifierService asnClassifierService,
 			BotIpRangeRepository botIpRangeRepository,
-			MmdbEnrichmentProvider mmdbProvider) {
+			MmdbEnrichmentProvider mmdbProvider,
+			InternalNetworkService internalNetworkService) {
 		this.properties = properties;
 		this.asnClassifierService = asnClassifierService;
 		this.botIpRangeRepository = botIpRangeRepository;
 		this.mmdbProvider = mmdbProvider;
+		this.internalNetworkService = internalNetworkService;
+	}
+
+	public DefaultIpEnrichmentService(
+			CollectorProperties properties,
+			AsnClassifierService asnClassifierService,
+			BotIpRangeRepository botIpRangeRepository,
+			MmdbEnrichmentProvider mmdbProvider) {
+		this(properties, asnClassifierService, botIpRangeRepository, mmdbProvider, new InternalNetworkService(properties));
 	}
 
 	public DefaultIpEnrichmentService(
 			CollectorProperties properties,
 			AsnClassifierService asnClassifierService,
 			BotIpRangeRepository botIpRangeRepository) {
-		this(properties, asnClassifierService, botIpRangeRepository, null);
+		this(properties, asnClassifierService, botIpRangeRepository, null, new InternalNetworkService(properties));
 		initMmdbProvider();
 	}
 
@@ -73,6 +85,25 @@ public class DefaultIpEnrichmentService implements IpEnrichmentService {
 		if (IpNetworkUtil.isPrivateOrLocal(cleanIp)) {
 			String desc = IpNetworkUtil.getPrivateNetworkDescription(cleanIp);
 			return new IpEnrichmentResult(null, desc != null ? desc : "Private Network", null, ClientType.PRIVATE_NETWORK);
+		}
+
+		// 1b. Check configured internal/campus networks
+		InternalNetworkMatch internalMatch = (internalNetworkService != null)
+				? internalNetworkService.findMatch(cleanIp) : null;
+		if (internalMatch != null) {
+			String label = internalMatch.effectiveName();
+			Long asn = null;
+			String countryCode = null;
+			if (mmdbProvider != null && mmdbProvider.isAvailable()) {
+				try {
+					InetAddress addr = InetAddress.getByName(cleanIp);
+					MmdbEnrichmentProvider.RawGeoAsn raw = mmdbProvider.lookup(addr);
+					asn = raw.asn();
+					countryCode = raw.countryCode();
+				} catch (Exception ignored) {
+				}
+			}
+			return new IpEnrichmentResult(asn, label, countryCode, ClientType.INTERNAL_NETWORK);
 		}
 
 		// 2. Check verified bot/crawler IP range table first

@@ -103,6 +103,10 @@
                                     class="badge badge-info" style="padding: 1px 6px; font-size: 9px;"
                                     title="Private Intranet / RFC 1918 / Local Network">&#x1F512; Private Net</span>
                                 <span
+                                    th:if="${event.clientType != null and event.clientType.name() == 'INTERNAL_NETWORK'}"
+                                    class="badge badge-info" style="padding: 1px 6px; font-size: 9px;"
+                                    title="Configured Corporate / Campus Internal Network">&#x1F3DB; Internal Net</span>
+                                <span
                                     th:if="${event.clientType != null and event.clientType.name() == 'PRIVACY_RELAY'}"
                                     class="badge badge-info" style="padding: 1px 6px; font-size: 9px;"
                                     title="Verified Privacy Relay (e.g. Apple iCloud Private Relay)">&#x1F6E1; Privacy Relay</span>

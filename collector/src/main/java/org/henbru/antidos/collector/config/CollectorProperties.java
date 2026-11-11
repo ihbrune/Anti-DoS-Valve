@@ -47,6 +47,7 @@ public class CollectorProperties {
 	private NotificationConfig notification = new NotificationConfig();
 	private List<EndpointConfig> endpoints = new ArrayList<>();
 	private EnrichmentConfig enrichment = new EnrichmentConfig();
+	private List<InternalNetworkConfig> internalNetworks = new ArrayList<>();
 
 	/**
 	 * Fleet-wide fallback rule for telemetry and active tracking.
@@ -202,6 +203,14 @@ public class CollectorProperties {
 
 	public void setEnrichment(EnrichmentConfig enrichment) {
 		this.enrichment = enrichment != null ? enrichment : new EnrichmentConfig();
+	}
+
+	public List<InternalNetworkConfig> getInternalNetworks() {
+		return internalNetworks;
+	}
+
+	public void setInternalNetworks(List<InternalNetworkConfig> internalNetworks) {
+		this.internalNetworks = internalNetworks != null ? internalNetworks : new ArrayList<>();
 	}
 
 	public ValveRuleConfig getDefaultValveRules() {

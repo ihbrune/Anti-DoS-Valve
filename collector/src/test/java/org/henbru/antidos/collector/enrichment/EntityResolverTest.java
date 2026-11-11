@@ -155,6 +155,14 @@ class EntityResolverTest {
 				EnrichmentStatus.ENRICHED, staleTime, null, staleTime, staleTime
 		);
 		assertFalse(entityResolver.isExpired(priv));
+
+		// Internal network entity never expires
+		NetworkEntity internal = new NetworkEntity(
+				4L, "198.51.100.42", 4, 32, 100L, 100L, null, null, "198.51.100.0/24",
+				null, null, "Corporate Campus", null, ClientType.INTERNAL_NETWORK, null,
+				EnrichmentStatus.ENRICHED, staleTime, null, staleTime, staleTime
+		);
+		assertFalse(entityResolver.isExpired(internal));
 	}
 
 	@Test

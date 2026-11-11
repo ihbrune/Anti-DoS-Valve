@@ -13,6 +13,7 @@ import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.model.ClientType;
 import org.henbru.antidos.collector.model.EnrichmentStatus;
 import org.henbru.antidos.collector.model.IntelRange;
+import org.henbru.antidos.collector.model.InternalNetworkMatch;
 import org.henbru.antidos.collector.model.IpNetworkInfo;
 import org.henbru.antidos.collector.model.NetworkEntity;
 import org.henbru.antidos.collector.storage.NetworkEntityRepository;
@@ -41,6 +42,7 @@ public class EntityResolver {
 	private final MmdbEnrichmentProvider mmdbProvider;
 	private final CollectorProperties properties;
 	private final JdbcTemplate jdbcTemplate;
+	private final InternalNetworkService internalNetworkService;
 
 	private final Map<String, NetworkEntity> entityCache = new ConcurrentHashMap<>(16_384);
 
@@ -51,13 +53,26 @@ public class EntityResolver {
 			AsnClassifierService asnClassifierService,
 			MmdbEnrichmentProvider mmdbProvider,
 			CollectorProperties properties,
-			JdbcTemplate jdbcTemplate) {
+			JdbcTemplate jdbcTemplate,
+			InternalNetworkService internalNetworkService) {
 		this.entityRepository = entityRepository;
 		this.intelRegistry = intelRegistry;
 		this.asnClassifierService = asnClassifierService;
 		this.mmdbProvider = mmdbProvider;
 		this.properties = properties;
 		this.jdbcTemplate = jdbcTemplate;
+		this.internalNetworkService = internalNetworkService;
+	}
+
+	public EntityResolver(
+			NetworkEntityRepository entityRepository,
+			IntelRegistry intelRegistry,
+			AsnClassifierService asnClassifierService,
+			MmdbEnrichmentProvider mmdbProvider,
+			CollectorProperties properties,
+			JdbcTemplate jdbcTemplate) {
+		this(entityRepository, intelRegistry, asnClassifierService, mmdbProvider, properties, jdbcTemplate,
+				new InternalNetworkService(properties));
 	}
 
 	/**
@@ -147,6 +162,48 @@ public class EntityResolver {
 					null,
 					ClientType.PRIVATE_NETWORK,
 					"PRIVATE_NETWORK",
+					EnrichmentStatus.ENRICHED,
+					now,
+					"v1",
+					entity.firstSeen(),
+					entity.lastSeen()
+			);
+			persistEnrichment(enriched, List.of());
+			return enriched;
+		}
+
+		// 1b. Configured Internal / Campus networks
+		InternalNetworkMatch internalMatch = (internalNetworkService != null)
+				? internalNetworkService.findMatch(cleanIp) : null;
+		if (internalMatch != null) {
+			String label = internalMatch.effectiveName();
+			Long asn = null;
+			String countryCode = null;
+			if (mmdbProvider != null && mmdbProvider.isAvailable() && properties.getEnrichment().isEnabled()) {
+				try {
+					InetAddress addr = InetAddress.getByName(cleanIp);
+					MmdbEnrichmentProvider.RawGeoAsn raw = mmdbProvider.lookup(addr);
+					asn = raw.asn();
+					countryCode = raw.countryCode();
+				} catch (Exception ignored) {
+				}
+			}
+			NetworkEntity enriched = new NetworkEntity(
+					entity.id(),
+					entity.clientKey(),
+					entity.ipVersion(),
+					entity.cidrPrefix(),
+					entity.ipV4Start(),
+					entity.ipV4End(),
+					entity.ipV6Start(),
+					entity.ipV6End(),
+					entity.subnetGroup(),
+					internalMatch.cidr(),
+					asn,
+					label,
+					countryCode,
+					ClientType.INTERNAL_NETWORK,
+					"INTERNAL_NETWORK",
 					EnrichmentStatus.ENRICHED,
 					now,
 					"v1",
@@ -281,7 +338,7 @@ public class EntityResolver {
 		if (entity == null || entity.enrichmentStatus() != EnrichmentStatus.ENRICHED) {
 			return false;
 		}
-		if (entity.clientType() == ClientType.PRIVATE_NETWORK) {
+		if (entity.clientType() == ClientType.PRIVATE_NETWORK || entity.clientType() == ClientType.INTERNAL_NETWORK) {
 			return false;
 		}
 		int ttlDays = properties != null && properties.getEnrichment() != null

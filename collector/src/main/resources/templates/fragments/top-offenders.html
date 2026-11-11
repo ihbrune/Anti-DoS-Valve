@@ -99,6 +99,9 @@
                         <span th:if="${offender.clientType != null and offender.clientType.name() == 'PRIVATE_NETWORK'}"
                             class="badge badge-info" title="Private Intranet / RFC 1918 / Local Network">&#x1F512;
                             Private Net</span>
+                        <span th:if="${offender.clientType != null and offender.clientType.name() == 'INTERNAL_NETWORK'}"
+                            class="badge badge-info" title="Configured Corporate / Campus Internal Network">&#x1F3DB;
+                            Internal Net</span>
                         <span th:if="${offender.clientType != null and offender.clientType.name() == 'PRIVACY_RELAY'}"
                             class="badge badge-info" title="Verified Privacy Relay (e.g. Apple iCloud Private Relay)">&#x1F6E1;
                             Privacy Relay</span>

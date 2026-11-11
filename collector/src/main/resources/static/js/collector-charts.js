@@ -201,6 +201,7 @@
             'PRIVACY_RELAY': { bg: '#14b8a6', label: 'Privacy Relay' },
             'TOR_EXIT_NODE': { bg: '#a855f7', label: 'Tor Anonymizer' },
             'PRIVATE_NETWORK': { bg: '#64748b', label: 'Private Network' },
+            'INTERNAL_NETWORK': { bg: '#0284c7', label: 'Internal / Campus' },
             'UNKNOWN': { bg: '#94a3b8', label: 'Standard / Unclassified' }
         };
 

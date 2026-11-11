@@ -584,7 +584,7 @@ public class AdvisorService {
 				    SUM(r.returning_requests) AS ret_req,
 				    SUM(r.returning_tracked_requests) AS ret_tracked
 				FROM client_subnet_rollups r
-				WHERE r.client_type NOT IN ('SEARCH_ENGINE', 'PRIVATE_NETWORK')
+				WHERE r.client_type NOT IN ('SEARCH_ENGINE', 'PRIVATE_NETWORK', 'INTERNAL_NETWORK')
 				  AND r.asn IS NOT NULL AND r.asn > 0
 				  AND r.bucket_start >= ?
 				""");
@@ -692,7 +692,7 @@ public class AdvisorService {
 				    SUM(r.returning_requests) AS ret_req,
 				    SUM(r.returning_tracked_requests) AS ret_tracked
 				FROM client_subnet_rollups r
-				WHERE r.client_type NOT IN ('SEARCH_ENGINE', 'PRIVATE_NETWORK')
+				WHERE r.client_type NOT IN ('SEARCH_ENGINE', 'PRIVATE_NETWORK', 'INTERNAL_NETWORK')
 				  AND r.distinct_user_agents >= 5
 				  AND r.bucket_start >= ?
 				""");

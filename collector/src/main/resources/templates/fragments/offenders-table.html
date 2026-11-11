@@ -95,6 +95,8 @@
                                     class="badge badge-info">&#x1F4F1; Mobile</span>
                                 <span th:if="${p.clientType() != null and p.clientType().name() == 'PRIVATE_NETWORK'}"
                                     class="badge badge-info">&#x1F512; Private Net</span>
+                                <span th:if="${p.clientType() != null and p.clientType().name() == 'INTERNAL_NETWORK'}"
+                                    class="badge badge-info">&#x1F3DB; Internal Net</span>
                                 <span th:if="${p.clientType() != null and p.clientType().name() == 'PRIVACY_RELAY'}"
                                     class="badge badge-info">&#x1F6E1; Privacy Relay</span>
                                 <span th:if="${p.clientType() != null and p.clientType().name() == 'TOR_EXIT_NODE'}"
@@ -354,6 +356,9 @@
                                 <span
                                     th:if="${rollup.clientType() != null and rollup.clientType().name() == 'PRIVATE_NETWORK'}"
                                     class="badge badge-info">&#x1F512; Private Net</span>
+                                <span
+                                    th:if="${rollup.clientType() != null and rollup.clientType().name() == 'INTERNAL_NETWORK'}"
+                                    class="badge badge-info">&#x1F3DB; Internal Net</span>
                                 <span
                                     th:if="${rollup.clientType() != null and rollup.clientType().name() == 'PRIVACY_RELAY'}"
                                     class="badge badge-info">&#x1F6E1; Privacy Relay</span>
@@ -645,6 +650,11 @@
                                     style="text-decoration: none;"
                                     title="Private Intranet / RFC 1918 / Local Network - Click to view incidents">&#x1F512;
                                     Private Net</a>
+                                <a th:if="${offender.clientType != null and offender.clientType.name() == 'INTERNAL_NETWORK'}"
+                                    th:href="@{/events(clientTypes='INTERNAL_NETWORK')}" class="badge badge-info"
+                                    style="text-decoration: none;"
+                                    title="Configured Corporate / Campus Internal Network - Click to view incidents">&#x1F3DB;
+                                    Internal Net</a>
                                 <a th:if="${offender.clientType != null and offender.clientType.name() == 'PRIVACY_RELAY'}"
                                     th:href="@{/events(clientTypes='PRIVACY_RELAY')}" class="badge badge-info"
                                     style="text-decoration: none;"

@@ -268,7 +268,7 @@ public class NetworkEntityRepository {
 				UPDATE network_entity
 				SET enrichment_status = 'PENDING'
 				WHERE enrichment_status = 'ENRICHED'
-				  AND client_type != 'PRIVATE_NETWORK'
+				  AND client_type NOT IN ('PRIVATE_NETWORK', 'INTERNAL_NETWORK')
 				  AND resolved_at < ?
 				""";
 		return jdbcTemplate.update(sql, Timestamp.from(resolvedBefore));

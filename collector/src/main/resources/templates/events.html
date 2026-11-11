@@ -228,6 +228,11 @@
                             <span>&#x1F512; Private Net</span>
                         </label>
                         <label class="pill-label">
+                            <input type="checkbox" name="clientTypes" value="INTERNAL_NETWORK" class="type-cb"
+                                th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'INTERNAL_NETWORK')}">
+                            <span>&#x1F3DB; Internal Net</span>
+                        </label>
+                        <label class="pill-label">
                             <input type="checkbox" name="clientTypes" value="PRIVACY_RELAY" class="type-cb"
                                 th:checked="${selectedTypes != null and #lists.contains(selectedTypes, 'PRIVACY_RELAY')}">
                             <span>&#x1F6E1; Privacy Relay</span>
