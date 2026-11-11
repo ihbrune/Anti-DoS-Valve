@@ -108,6 +108,8 @@ class AntiDoSStatusRendererTest {
 		assertTrue(jsonOverview.contains("\"visitorCookieEnabled\": true"));
 		assertTrue(jsonOverview.contains("\"visitorCookieName\": \"my_custom_cookie\""));
 		assertTrue(jsonOverview.contains("\"visitorCookieDomain\": \"example.com\""));
+		assertTrue(jsonOverview.contains("\"statusConcurrencyTimeoutMs\": 2000"));
+		assertTrue(jsonOverview.contains("\"serverGenerationMs\":"));
 
 		String jsonDetails = renderer.buildStatusJsonDetails("RENDERER_TEST");
 		assertNotNull(jsonDetails);
@@ -115,10 +117,42 @@ class AntiDoSStatusRendererTest {
 		assertTrue(jsonDetails.contains("\"visitorCookieEnabled\": true"));
 		assertTrue(jsonDetails.contains("\"visitorCookieName\": \"my_custom_cookie\""));
 		assertTrue(jsonDetails.contains("\"visitorCookieDomain\": \"example.com\""));
+		assertTrue(jsonDetails.contains("\"statusConcurrencyTimeoutMs\": 2000"));
 		assertTrue(jsonDetails.contains("\"slots\": ["));
 		assertTrue(jsonDetails.contains("\"totalRequests\":"));
 		assertTrue(jsonDetails.contains("\"blockedClients\": ["));
 		assertTrue(jsonDetails.contains("\"topActiveClients\": ["));
+		assertTrue(jsonDetails.contains("\"serverGenerationMs\":"));
+	}
+
+	@Test
+	void testDynamicBlocksOmissionAndServerGenerationMs() {
+		valve.setMitigationPassword("SecretToken123");
+		long now = System.currentTimeMillis();
+		valve.getDynamicBlockRegistry().upsertBlock("198.51.100.0/24", now + 60_000L, "abuse", now);
+
+		// Overview details without slotParam should include dynamicBlocks by default
+		String detailsNoSlot = renderer.buildStatusJsonDetails("RENDERER_TEST", null, 50, 50);
+		assertTrue(detailsNoSlot.contains("\"dynamicBlocks\": ["));
+		assertTrue(detailsNoSlot.contains("198.51.100.0/24"));
+		assertTrue(detailsNoSlot.contains("\"serverGenerationMs\":"));
+
+		// Specific slot query without includeDynamicBlocks should OMIT dynamicBlocks
+		String detailsSlotPrev = renderer.buildStatusJsonDetails("RENDERER_TEST", "previous", 50, 50);
+		assertFalse(detailsSlotPrev.contains("\"dynamicBlocks\": ["));
+		assertTrue(detailsSlotPrev.contains("\"slots\": ["));
+		assertTrue(detailsSlotPrev.contains("\"serverGenerationMs\":"));
+
+		// Specific slot query with includeDynamicBlocks=true should INCLUDE dynamicBlocks
+		String detailsExplicitTrue = renderer.buildStatusJsonDetails("RENDERER_TEST", "previous", 50, 50, null, null, null, Boolean.TRUE);
+		assertTrue(detailsExplicitTrue.contains("\"dynamicBlocks\": ["));
+		assertTrue(detailsExplicitTrue.contains("198.51.100.0/24"));
+		assertTrue(detailsExplicitTrue.contains("\"serverGenerationMs\":"));
+
+		// Query with includeDynamicBlocks=false should OMIT dynamicBlocks even when slotParam is null
+		String detailsExplicitFalse = renderer.buildStatusJsonDetails("RENDERER_TEST", null, 50, 50, null, null, null, Boolean.FALSE);
+		assertFalse(detailsExplicitFalse.contains("\"dynamicBlocks\": ["));
+		assertTrue(detailsExplicitFalse.contains("\"serverGenerationMs\":"));
 	}
 
 	@Test

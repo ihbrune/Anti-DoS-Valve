@@ -1544,7 +1544,8 @@
                 <code>0</code> (default) disables active request sampling (samples captured only on block/mark).
                 Recommended for subnet monitoring valves (e.g. <code>50</code>) to diagnose distributed stealth waves.
               </div>
-              <input type="number" id="activeSampleThreshold" name="activeSampleThreshold" min="0" step="1" value="0" placeholder="0 (Default: disabled)">
+              <input type="number" id="activeSampleThreshold" name="activeSampleThreshold" min="0" step="1" value="0"
+                placeholder="0 (Default: disabled)">
             </div>
 
             <!-- 10. slotLength -->
@@ -1678,8 +1679,7 @@
               </div>
 
               <!-- 19. statusPassword -->
-              <div class="field-group status-field-group"
-                style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
+              <div class="field-group status-field-group">
                 <div class="field-header">
                   <label for="statusPassword" class="field-label">statusPassword</label>
                   <span class="badge badge-optional">Optional</span>
@@ -1703,6 +1703,22 @@
                   </button>
                 </div>
                 <div id="hintStatusPassword" class="status-field-hint neutral"></div>
+              </div>
+
+              <!-- 20. statusConcurrencyTimeoutMs -->
+              <div class="field-group status-field-group"
+                style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
+                <div class="field-header">
+                  <label for="statusConcurrencyTimeoutMs" class="field-label">statusConcurrencyTimeoutMs</label>
+                  <span class="badge badge-optional">Optional</span>
+                </div>
+                <div class="field-desc">Maximum time in milliseconds to wait for status generation concurrency lock when
+                  multiple requests arrive (Default: <code>2000</code>). Prevents server memory exhaustion under heavy
+                  scraping. Use <code>0</code> for immediate rejection with HTTP 429 if busy, or <code>-1</code> to
+                  disable limiting.
+                </div>
+                <input type="number" id="statusConcurrencyTimeoutMs" name="statusConcurrencyTimeoutMs" min="-1"
+                  placeholder="2000 (Default: 2000 ms)">
               </div>
             </div>
 
@@ -2052,7 +2068,8 @@
                   <span class="badge badge-optional">Optional</span>
                 </div>
                 <div class="field-desc">Dedicated URI path for receiving <code>POST</code> mitigation commands (e.g.
-                  <code>/antidos-mitigate</code>). If empty, falls back to <code>statusUri</code>.</div>
+                  <code>/antidos-mitigate</code>). If empty, falls back to <code>statusUri</code>.
+                </div>
                 <input type="text" id="mitigationUri" name="mitigationUri"
                   placeholder="Defaults to statusUri if empty (e.g. /antidos-mitigate)">
               </div>
@@ -2075,7 +2092,8 @@
                   <label for="mitigationMinPrefixV4" class="field-label">mitigationMinPrefixV4</label>
                   <span class="badge badge-optional">Optional</span>
                 </div>
-                <div class="field-desc">Broadest allowed IPv4 prefix for remotely pushed dynamic blocks (1&ndash;32, default: <code>16</code>). Broader blocks (e.g. <code>/8</code>) are rejected with HTTP 400.</div>
+                <div class="field-desc">Broadest allowed IPv4 prefix for remotely pushed dynamic blocks (1&ndash;32,
+                  default: <code>16</code>). Broader blocks (e.g. <code>/8</code>) are rejected with HTTP 400.</div>
                 <input type="number" id="mitigationMinPrefixV4" name="mitigationMinPrefixV4" min="1" max="32" step="1"
                   placeholder="16">
               </div>
@@ -2086,7 +2104,8 @@
                   <label for="mitigationMinPrefixV6" class="field-label">mitigationMinPrefixV6</label>
                   <span class="badge badge-optional">Optional</span>
                 </div>
-                <div class="field-desc">Broadest allowed IPv6 prefix for remotely pushed dynamic blocks (1&ndash;128, default: <code>32</code>). Broader blocks (e.g. <code>/24</code>) are rejected with HTTP 400.</div>
+                <div class="field-desc">Broadest allowed IPv6 prefix for remotely pushed dynamic blocks (1&ndash;128,
+                  default: <code>32</code>). Broader blocks (e.g. <code>/24</code>) are rejected with HTTP 400.</div>
                 <input type="number" id="mitigationMinPrefixV6" name="mitigationMinPrefixV6" min="1" max="128" step="1"
                   placeholder="32">
               </div>
@@ -2097,18 +2116,22 @@
                   <label for="mitigationMaxTtlSeconds" class="field-label">mitigationMaxTtlSeconds</label>
                   <span class="badge badge-optional">Optional</span>
                 </div>
-                <div class="field-desc">Upper bound in seconds for the expiration of pushed dynamic blocks (default: <code>86400</code> = 24h). Longer expiration requests are automatically capped to this duration.</div>
+                <div class="field-desc">Upper bound in seconds for the expiration of pushed dynamic blocks (default:
+                  <code>86400</code> = 24h). Longer expiration requests are automatically capped to this duration.</div>
                 <input type="number" id="mitigationMaxTtlSeconds" name="mitigationMaxTtlSeconds" min="1" step="1"
                   placeholder="86400">
               </div>
 
               <!-- 43. mitigationMaxActiveBlocks -->
-              <div class="field-group status-field-group" style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
+              <div class="field-group status-field-group"
+                style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
                 <div class="field-header">
                   <label for="mitigationMaxActiveBlocks" class="field-label">mitigationMaxActiveBlocks</label>
                   <span class="badge badge-optional">Optional</span>
                 </div>
-                <div class="field-desc">Maximum number of simultaneously active dynamic blocks on this Valve (default: <code>5000</code>). Commands exceeding this limit are atomically rejected with HTTP 409 Conflict.</div>
+                <div class="field-desc">Maximum number of simultaneously active dynamic blocks on this Valve (default:
+                  <code>5000</code>). Commands exceeding this limit are atomically rejected with HTTP 409 Conflict.
+                </div>
                 <input type="number" id="mitigationMaxActiveBlocks" name="mitigationMaxActiveBlocks" min="1" step="1"
                   placeholder="5000">
               </div>
@@ -2718,6 +2741,7 @@
       { key: 'statusUri', isRequired: false, defaultVal: '' },
       { key: 'statusAllowedIPs', isRequired: false, defaultVal: '' },
       { key: 'statusPassword', isRequired: false, defaultVal: '' },
+      { key: 'statusConcurrencyTimeoutMs', isRequired: false, defaultVal: 2000 },
       { key: 'visitorCookieEnabled', isRequired: false, defaultVal: false, isBoolean: true },
       { key: 'visitorCookieName', isRequired: false, defaultVal: '_adv' },
       { key: 'visitorCookieSecret', isRequired: false, defaultVal: '' },
@@ -2872,7 +2896,8 @@
             if (param.key === 'ipv6SubnetMask' && (val === '128' || val === '-1')) return;
             if (param.key === 'collectorIntegration' && (val === 'auto' || val === '')) return;
             if (param.key === 'activeSampleThreshold' && (val === '0' || val === 0 || val === '')) return;
-            if ((param.key === 'statusAllowedIPs' || param.key === 'statusPassword') && !document.getElementById('statusUri').value.trim()) return;
+            if ((param.key === 'statusAllowedIPs' || param.key === 'statusPassword' || param.key === 'statusConcurrencyTimeoutMs') && !document.getElementById('statusUri').value.trim()) return;
+            if (param.key === 'statusConcurrencyTimeoutMs' && (val === '2000' || val === 2000 || val === '')) return;
             if (param.key === 'visitorCookieName' && val === '_adv') return;
             if (param.key === 'visitorCookieSecret' && val === '') return;
             if (param.key === 'visitorCookieTtlSeconds' && (val === '900' || val === 900 || parseInt(val, 10) === 900)) return;

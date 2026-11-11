@@ -433,6 +433,13 @@ public class AntiDoSStatusRenderer {
 	public void renderStatusJson(Response response, String filterValve, String view, String slotParam, String limitParam,
 			String blockedLimitParam, String activeLimitParam, String sinceBlockedOrderParam, String sinceActiveOrderParam,
 			String activeMinCountParam) throws IOException {
+		renderStatusJson(response, filterValve, view, slotParam, limitParam, blockedLimitParam, activeLimitParam,
+				sinceBlockedOrderParam, sinceActiveOrderParam, activeMinCountParam, null);
+	}
+
+	public void renderStatusJson(Response response, String filterValve, String view, String slotParam, String limitParam,
+			String blockedLimitParam, String activeLimitParam, String sinceBlockedOrderParam, String sinceActiveOrderParam,
+			String activeMinCountParam, Boolean includeDynamicBlocks) throws IOException {
 		response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
 		response.setHeader("Pragma", "no-cache");
 		response.setHeader("Referrer-Policy", "no-referrer");
@@ -451,7 +458,7 @@ public class AntiDoSStatusRenderer {
 			Long sinceBlockedOrder = parseLongParam(sinceBlockedOrderParam);
 			Long sinceActiveOrder = parseLongParam(sinceActiveOrderParam);
 			Integer activeMinCount = parseIntParam(activeMinCountParam);
-			out.write(buildStatusJsonDetails(filterValve, slotParam, blockedLimit, activeLimit, sinceBlockedOrder, sinceActiveOrder, activeMinCount));
+			out.write(buildStatusJsonDetails(filterValve, slotParam, blockedLimit, activeLimit, sinceBlockedOrder, sinceActiveOrder, activeMinCount, includeDynamicBlocks));
 		} else {
 			out.write(buildStatusJson(filterValve));
 		}
@@ -739,6 +746,13 @@ public class AntiDoSStatusRenderer {
 					sb.append("<code>").append(escapeHtml(v.getStatusAllowedIPs())).append("</code>");
 				} else {
 					sb.append("<em>all (unrestricted)</em>");
+				}
+				sb.append("</td></tr>\n");
+				sb.append("    <tr><th>Status Concurrency Protection</th><td>");
+				if (v.getStatusConcurrencyTimeoutMs() >= 0) {
+					sb.append("<span class=\"badge badge-success\">Max 1 active generation</span> &bull; Wait timeout: <code>").append(v.getStatusConcurrencyTimeoutMs()).append(" ms</code>");
+				} else {
+					sb.append("<span class=\"badge badge-warning\">Disabled</span> (unlimited concurrent generations)");
 				}
 				sb.append("</td></tr>\n");
 			} else {
@@ -1032,6 +1046,13 @@ public class AntiDoSStatusRenderer {
 				sb.append("<code>").append(escapeHtml(target.getStatusAllowedIPs())).append("</code>");
 			} else {
 				sb.append("<em>all (unrestricted)</em>");
+			}
+			sb.append("</td></tr>\n");
+			sb.append("    <tr><th>Status Concurrency Protection</th><td>");
+			if (target.getStatusConcurrencyTimeoutMs() >= 0) {
+				sb.append("<span class=\"badge badge-success\">Max 1 active generation</span> &bull; Wait timeout: <code>").append(target.getStatusConcurrencyTimeoutMs()).append(" ms</code>");
+			} else {
+				sb.append("<span class=\"badge badge-warning\">Disabled</span> (unlimited concurrent generations)");
 			}
 			sb.append("</td></tr>\n");
 		} else {
@@ -1646,6 +1667,7 @@ public class AntiDoSStatusRenderer {
 	}
 
 	public String buildStatusJson(String filterValve) {
+		long genStart = System.currentTimeMillis();
 		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
 		sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
 		String serverTime = sdf.format(new Date(getTimeInMillis()));
@@ -1745,11 +1767,12 @@ public class AntiDoSStatusRenderer {
 					.append("      \"dynamicBlocksActiveCount\": ").append(v.isDynamicMitigationEnabled() ? v.getDynamicBlockRegistry().getActiveCount(getTimeInMillis()) : 0).append(",\n")
 					.append("      \"dynamicBlocksBlockedRequests\": ").append(v.isDynamicMitigationEnabled() ? v.getDynamicBlockRegistry().getTotalBlockedRequests() : 0).append(",\n")
 					.append("      \"dynamicRulesRevision\": ").append(v.isDynamicMitigationEnabled() ? v.getDynamicBlockRegistry().getRevision(getTimeInMillis()) : 0).append(",\n")
+					.append("      \"statusConcurrencyTimeoutMs\": ").append(v.getStatusConcurrencyTimeoutMs()).append(",\n")
 					.append("      \"httpStatusCode\": ").append(v.getHttpStatusCode()).append("\n")
 					.append("    }");
 		}
 
-		sb.append("\n  ]\n}\n");
+		sb.append("\n  ],\n  \"serverGenerationMs\": ").append(System.currentTimeMillis() - genStart).append("\n}\n");
 		return sb.toString();
 	}
 
@@ -1767,6 +1790,12 @@ public class AntiDoSStatusRenderer {
 
 	public String buildStatusJsonDetails(String filterValve, String slotParam, Integer blockedLimit, Integer activeLimit,
 			Long sinceBlockedOrder, Long sinceActiveOrder, Integer activeMinCount) {
+		return buildStatusJsonDetails(filterValve, slotParam, blockedLimit, activeLimit, sinceBlockedOrder, sinceActiveOrder, activeMinCount, null);
+	}
+
+	public String buildStatusJsonDetails(String filterValve, String slotParam, Integer blockedLimit, Integer activeLimit,
+			Long sinceBlockedOrder, Long sinceActiveOrder, Integer activeMinCount, Boolean includeDynamicBlocks) {
+		long genStart = System.currentTimeMillis();
 		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
 		sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
 		String serverTime = sdf.format(new Date(getTimeInMillis()));
@@ -1790,7 +1819,9 @@ public class AntiDoSStatusRenderer {
 		}
 
 		if (target == null) {
-			return "{\n  \"serverTime\": \"" + serverTime + "\",\n  \"error\": \"Valve not found: " + escapeJson(filterValve) + "\"\n}\n";
+			return "{\n  \"serverTime\": \"" + serverTime + "\",\n  \"serverGenerationMs\": "
+					+ (System.currentTimeMillis() - genStart) + ",\n  \"error\": \"Valve not found: "
+					+ escapeJson(filterValve) + "\"\n}\n";
 		}
 
 		AntiDoSMonitor monitor = target.provideMonitor();
@@ -1866,10 +1897,14 @@ public class AntiDoSStatusRenderer {
 				.append("    \"dynamicBlocksActiveCount\": ").append(target.isDynamicMitigationEnabled() ? target.getDynamicBlockRegistry().getActiveCount(getTimeInMillis()) : 0).append(",\n")
 				.append("    \"dynamicBlocksBlockedRequests\": ").append(target.isDynamicMitigationEnabled() ? target.getDynamicBlockRegistry().getTotalBlockedRequests() : 0).append(",\n")
 				.append("    \"dynamicRulesRevision\": ").append(target.isDynamicMitigationEnabled() ? target.getDynamicBlockRegistry().getRevision(getTimeInMillis()) : 0).append(",\n")
+				.append("    \"statusConcurrencyTimeoutMs\": ").append(target.getStatusConcurrencyTimeoutMs()).append(",\n")
 				.append("    \"httpStatusCode\": ").append(target.getHttpStatusCode()).append("\n")
 				.append("  },\n");
 
-		if (target.isDynamicMitigationEnabled()) {
+		boolean renderDynBlocks = target.isDynamicMitigationEnabled() && (includeDynamicBlocks != null
+				? includeDynamicBlocks.booleanValue()
+				: (slotParam == null || slotParam.trim().isEmpty()));
+		if (renderDynBlocks) {
 			long nowMs = getTimeInMillis();
 			List<AntiDoSDynamicBlockRegistry.DynamicBlockEntry> dynEntries = target.getDynamicBlockRegistry().getActiveEntries(nowMs);
 			sb.append("  \"dynamicBlocks\": [\n");
@@ -2055,7 +2090,7 @@ public class AntiDoSStatusRenderer {
 			}
 			sb.append("    }");
 		}
-		sb.append("\n  ]\n}\n");
+		sb.append("\n  ],\n  \"serverGenerationMs\": ").append(System.currentTimeMillis() - genStart).append("\n}\n");
 		return sb.toString();
 	}
 

@@ -523,6 +523,10 @@ Optional regular expression restricting access to the status dashboard to specif
 
 Access password for the status dashboard. If explicitly configured, it must be at least 10 characters long. If left empty or omitted, a secure random token is automatically generated on server startup and printed to the logs.
 
+## statusConcurrencyTimeoutMs (optional)
+
+Maximum time in milliseconds to wait for the internal status generation lock when concurrent status or metrics requests arrive (default: `2000`). If another status request arrives while a previous status generation is already in progress, it will queue up to `statusConcurrencyTimeoutMs` milliseconds. If the timeout expires before the running generation finishes, the concurrent request is fast-failed with `HTTP 429 Too Many Requests` (`Retry-After: 2`) and does zero memory allocations, protecting Tomcat heap space and CPU under aggressive scraping or concurrent tool access. Set to `0` for immediate rejection if busy, or `-1` to disable concurrency limiting.
+
 ## mitigationPassword, mitigationUri, mitigationAllowedIPs (optional) — Dynamic CIDR Mitigation
 
 Available since version 1.9.0: Enables dynamic, TTL-based CIDR subnet blocking on a specific Valve instance, allowing the Anti-DoS Collector (or an operator) to push, extend, or revoke subnet blocks at runtime via HTTP `POST` without restarting Tomcat.
@@ -799,6 +803,7 @@ Exposing internal rate-limiting metrics over HTTP presents security risks (such 
 | `statusUri` | No | *(disabled)* | The URI path at which the dashboard is served (e.g. `/antidos-status`). If empty or omitted, the endpoint is disabled. |
 | `statusAllowedIPs` | No | *(all IPs allowed)* | Regular expression matching client IPs permitted to query the dashboard. Unauthorized IPs receive `404 Not Found`. |
 | `statusPassword` | No | *(auto-generated)* | Access password. If specified, must be at least 10 characters long. If omitted, a random 16–20 character HEX token is generated and printed to the console on startup. |
+| `statusConcurrencyTimeoutMs` | No | `2000` | Maximum milliseconds to wait for status generation semaphore before rejecting concurrent requests with HTTP 429. Set `0` for immediate rejection, `-1` to disable. |
 
 ## Configuration Example
 

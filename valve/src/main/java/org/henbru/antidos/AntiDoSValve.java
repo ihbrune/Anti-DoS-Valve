@@ -1,6 +1,7 @@
 package org.henbru.antidos;
 
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -17,10 +18,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.regex.Pattern;
+
+import javax.crypto.SecretKey;
 
 import org.apache.catalina.Container;
 import org.apache.catalina.LifecycleException;
@@ -31,13 +36,12 @@ import org.apache.catalina.connector.Response;
 import org.apache.catalina.valves.ValveBase;
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
+import org.henbru.antidos.AntiDoSVisitorTokenService.TokenData;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import javax.crypto.SecretKey;
-import org.henbru.antidos.AntiDoSVisitorTokenService.TokenData;
 
 /**
  * Copyright 2026 Henning Brune
@@ -218,6 +222,11 @@ public class AntiDoSValve extends ValveBase {
 
 	private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 	private static volatile String generatedStatusToken = null;
+
+	/** Default timeout in milliseconds to wait for the status generation semaphore (2 seconds) */
+	public static final int DEFAULT_STATUS_CONCURRENCY_TIMEOUT_MS = 2000;
+	private static final Semaphore STATUS_SEMAPHORE = new Semaphore(1, true);
+	private volatile int statusConcurrencyTimeoutMs = DEFAULT_STATUS_CONCURRENCY_TIMEOUT_MS;
 
 	private volatile String statusUri = null;
 	private volatile String statusAllowedIPsConfigValue = null;
@@ -1723,6 +1732,54 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
+	 * @return Timeout in milliseconds to wait for the status generation semaphore, or -1 if concurrency limiting is disabled
+	 */
+	public int getStatusConcurrencyTimeoutMs() {
+		return statusConcurrencyTimeoutMs;
+	}
+
+	/**
+	 * Sets the timeout in milliseconds to wait for the status generation semaphore before rejecting concurrent
+	 * status requests with HTTP 429 Too Many Requests. Default is 2000 ms.
+	 * Set to 0 for immediate rejection if busy, or -1 to disable concurrency limiting.
+	 *
+	 * @param statusConcurrencyTimeoutMs Concurrency wait timeout in milliseconds
+	 */
+	public void setStatusConcurrencyTimeoutMs(int statusConcurrencyTimeoutMs) {
+		this.statusConcurrencyTimeoutMs = statusConcurrencyTimeoutMs;
+	}
+
+	/**
+	 * Sets the timeout in milliseconds to wait for the status generation semaphore before rejecting concurrent
+	 * status requests with HTTP 429 Too Many Requests as string. Default is "2000".
+	 * Set to "0" for immediate rejection if busy, or "-1" to disable concurrency limiting.
+	 *
+	 * @param statusConcurrencyTimeoutMs Concurrency wait timeout in milliseconds
+	 */
+	public void setStatusConcurrencyTimeoutMs(String statusConcurrencyTimeoutMs) {
+		if (statusConcurrencyTimeoutMs == null || statusConcurrencyTimeoutMs.trim().isEmpty()) {
+			this.statusConcurrencyTimeoutMs = DEFAULT_STATUS_CONCURRENCY_TIMEOUT_MS;
+		} else {
+			this.statusConcurrencyTimeoutMs = Integer.parseInt(statusConcurrencyTimeoutMs.trim());
+		}
+	}
+
+	/**
+	 * Resets the static status generation semaphore. Primarily used in unit tests.
+	 */
+	public static void resetStatusSemaphore() {
+		STATUS_SEMAPHORE.drainPermits();
+		STATUS_SEMAPHORE.release();
+	}
+
+	/**
+	 * @return Available permits for the status generation semaphore
+	 */
+	public static int getAvailableStatusPermits() {
+		return STATUS_SEMAPHORE.availablePermits();
+	}
+
+	/**
 	 * @return The effective password used to protect the status dashboard (configured password or generated HEX token)
 	 */
 	public String getEffectiveStatusPassword() {
@@ -2360,6 +2417,9 @@ public class AntiDoSValve extends ValveBase {
 		String sinceBlockedOrder = request.getParameter("sinceBlockedOrder");
 		String sinceActiveOrder = request.getParameter("sinceActiveOrder");
 		String activeMinCount = request.getParameter("activeMinCount");
+		String includeDynamicBlocks = request.getParameter("includeDynamicBlocks");
+		Boolean incDynBlocks = (includeDynamicBlocks != null && !includeDynamicBlocks.trim().isEmpty())
+				? Boolean.valueOf(includeDynamicBlocks.trim()) : null;
 
 		boolean isOpenApi = "openapi".equalsIgnoreCase(format) || "openapi.json".equalsIgnoreCase(format) ||
 				"openapi".equalsIgnoreCase(view) || "openapi.json".equalsIgnoreCase(view) ||
@@ -2367,17 +2427,56 @@ public class AntiDoSValve extends ValveBase {
 
 		if (isOpenApi) {
 			statusRenderer.renderOpenApiJson(response);
-		} else if (isJson) {
-			touchCollectorLease();
-			for (AntiDoSValve v : getValvesToRender()) {
-				if (filterValve == null || filterValve.trim().isEmpty() || v.getMonitorName().equalsIgnoreCase(filterValve.trim())) {
-					v.touchCollectorLease();
+			return;
+		}
+
+		int timeoutMs = this.statusConcurrencyTimeoutMs;
+		boolean acquired = false;
+		try {
+			if (timeoutMs >= 0) {
+				try {
+					acquired = (timeoutMs == 0)
+							? STATUS_SEMAPHORE.tryAcquire()
+							: STATUS_SEMAPHORE.tryAcquire(timeoutMs, TimeUnit.MILLISECONDS);
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE, "Interrupted while waiting for status generation");
+					return;
+				}
+				if (!acquired) {
+					if (log.isWarnEnabled()) {
+						log.warn(name4logging + " Status request rejected: concurrency limit reached (another status generation in progress)");
+					}
+					response.setStatus(429);
+					response.setHeader("Retry-After", "2");
+					if (isJson) {
+						response.setContentType("application/json;charset=UTF-8");
+						PrintWriter out = response.getWriter();
+						out.write("{\n  \"error\": \"Status generation busy: another request is currently in progress. Please retry later.\"\n}\n");
+						out.flush();
+					} else {
+						response.sendError(429, "Status generation busy: another request is currently in progress");
+					}
+					return;
 				}
 			}
-			statusRenderer.renderStatusJson(response, filterValve, view, slot, limit, blockedLimit, activeLimit,
-					sinceBlockedOrder, sinceActiveOrder, activeMinCount);
-		} else {
-			statusRenderer.renderStatusHtml(response, filterValve, view, token, slot, limit, blockedLimit, activeLimit);
+
+			if (isJson) {
+				touchCollectorLease();
+				for (AntiDoSValve v : getValvesToRender()) {
+					if (filterValve == null || filterValve.trim().isEmpty() || v.getMonitorName().equalsIgnoreCase(filterValve.trim())) {
+						v.touchCollectorLease();
+					}
+				}
+				statusRenderer.renderStatusJson(response, filterValve, view, slot, limit, blockedLimit, activeLimit,
+						sinceBlockedOrder, sinceActiveOrder, activeMinCount, incDynBlocks);
+			} else {
+				statusRenderer.renderStatusHtml(response, filterValve, view, token, slot, limit, blockedLimit, activeLimit);
+			}
+		} finally {
+			if (acquired) {
+				STATUS_SEMAPHORE.release();
+			}
 		}
 	}
 
@@ -2822,6 +2921,12 @@ public class AntiDoSValve extends ValveBase {
 				sinceBlockedOrder, sinceActiveOrder, activeMinCount);
 	}
 
+	public String buildStatusJsonDetails(String filterValve, String slotParam, Integer blockedLimit, Integer activeLimit,
+			Long sinceBlockedOrder, Long sinceActiveOrder, Integer activeMinCount, Boolean includeDynamicBlocks) {
+		return statusRenderer.buildStatusJsonDetails(filterValve, slotParam, blockedLimit, activeLimit,
+				sinceBlockedOrder, sinceActiveOrder, activeMinCount, includeDynamicBlocks);
+	}
+
 	public static String buildDashboardUrl(String token, String valve, String view, String format) {
 		return AntiDoSStatusRenderer.buildDashboardUrl(token, valve, view, format);
 	}
@@ -2917,6 +3022,8 @@ public class AntiDoSValve extends ValveBase {
 			throw new LifecycleException(name4logging + ".monitorMode is invalid");
 		if (!isHttpStatusCodeValid())
 			throw new LifecycleException(name4logging + ".httpStatusCode is invalid: " + httpStatusCode);
+		if (statusConcurrencyTimeoutMs < -1)
+			throw new LifecycleException(name4logging + ".statusConcurrencyTimeoutMs must be >= -1: " + statusConcurrencyTimeoutMs);
 		if (!isIpv4SubnetMaskValid())
 			throw new LifecycleException(name4logging + ".ipv4SubnetMask is invalid: " + ipv4SubnetMask);
 		if (!isIpv6SubnetMaskValid())

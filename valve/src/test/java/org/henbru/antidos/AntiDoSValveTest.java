@@ -1050,6 +1050,40 @@ class AntiDoSValveTest {
 	}
 
 	@Test
+	void testStatusConcurrencyTimeoutMsConfigurationAndValidation() throws LifecycleException {
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "CONC_TIMEOUT_TEST");
+
+		// Default
+		assertEquals(2000, valve.getStatusConcurrencyTimeoutMs());
+
+		// Setter int
+		valve.setStatusConcurrencyTimeoutMs(5000);
+		assertEquals(5000, valve.getStatusConcurrencyTimeoutMs());
+
+		valve.setStatusConcurrencyTimeoutMs(0);
+		assertEquals(0, valve.getStatusConcurrencyTimeoutMs());
+
+		valve.setStatusConcurrencyTimeoutMs(-1);
+		assertEquals(-1, valve.getStatusConcurrencyTimeoutMs());
+
+		// Setter String
+		valve.setStatusConcurrencyTimeoutMs("3500");
+		assertEquals(3500, valve.getStatusConcurrencyTimeoutMs());
+
+		valve.setStatusConcurrencyTimeoutMs("");
+		assertEquals(2000, valve.getStatusConcurrencyTimeoutMs());
+
+		valve.setStatusConcurrencyTimeoutMs(null);
+		assertEquals(2000, valve.getStatusConcurrencyTimeoutMs());
+
+		// Lifecycle validation: < -1 throws LifecycleException
+		valve.setStatusConcurrencyTimeoutMs(-2);
+		LifecycleException thrown = assertThrows(LifecycleException.class, () -> valve.init());
+		assertTrue(thrown.getMessage().contains("statusConcurrencyTimeoutMs must be >= -1"));
+	}
+
+	@Test
 	void testActiveValvesLifecycle() throws LifecycleException {
 		AntiDoSValve.clearActiveValves();
 		AntiDoSValve valve1 = new AntiDoSValve();
@@ -1540,6 +1574,76 @@ class AntiDoSValveTest {
 		assertEquals(401, respUnauthorizedOpenApi.getErrorCode());
 
 		valve.stop();
+	}
+
+	@Test
+	void testStatusConcurrencyLimitingRejectsWith429WhenBusy() throws Exception {
+		AntiDoSValve.clearActiveValves();
+		AntiDoSValve.resetStatusSemaphore();
+		AntiDoSValve valve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(valve, "CONCURRENCY_STATUS_TEST");
+		valve.setStatusUri("/antidos-status");
+		valve.setStatusPassword("validSecretToken123");
+		valve.setStatusConcurrencyTimeoutMs(50);
+		valve.start();
+
+		String ip = "127.0.0.1";
+
+		// 1. Normal request when permit is available succeeds
+		TestRequest normalReq = new TestRequest("/antidos-status", ip);
+		normalReq.setParameter("token", "validSecretToken123");
+		normalReq.setParameter("format", "json");
+		TestResponse normalResp = new TestResponse();
+		valve.handleStatusRequest(normalReq, normalResp, ip);
+		assertEquals(200, normalResp.getStatus());
+		assertEquals(-1, normalResp.getErrorCode());
+		assertTrue(normalResp.getOutput().contains("\"serverGenerationMs\":"));
+
+		// 2. Simulate another thread holding the semaphore
+		assertEquals(1, AntiDoSValve.getAvailableStatusPermits());
+		java.lang.reflect.Field semField = AntiDoSValve.class.getDeclaredField("STATUS_SEMAPHORE");
+		semField.setAccessible(true);
+		java.util.concurrent.Semaphore sem = (java.util.concurrent.Semaphore) semField.get(null);
+		sem.acquire(); // holds permit
+
+		try {
+			assertEquals(0, AntiDoSValve.getAvailableStatusPermits());
+
+			// Concurrent JSON request arrives while permit is held -> fast fails with 429 after 50ms
+			TestRequest busyJsonReq = new TestRequest("/antidos-status", ip);
+			busyJsonReq.setParameter("token", "validSecretToken123");
+			busyJsonReq.setParameter("format", "json");
+			TestResponse busyJsonResp = new TestResponse();
+			valve.handleStatusRequest(busyJsonReq, busyJsonResp, ip);
+
+			assertEquals(429, busyJsonResp.getStatus());
+			assertEquals("2", busyJsonResp.getHeader("Retry-After"));
+			assertTrue(busyJsonResp.getOutput().contains("\"error\": \"Status generation busy:"));
+
+			// Concurrent HTML request arrives while permit is held -> fast fails with 429
+			TestRequest busyHtmlReq = new TestRequest("/antidos-status", ip);
+			busyHtmlReq.setParameter("token", "validSecretToken123");
+			TestResponse busyHtmlResp = new TestResponse();
+			valve.handleStatusRequest(busyHtmlReq, busyHtmlResp, ip);
+
+			assertEquals(429, busyHtmlResp.getErrorCode());
+			assertEquals("2", busyHtmlResp.getHeader("Retry-After"));
+
+			// With statusConcurrencyTimeoutMs = -1 (disabled), request does not try to acquire semaphore
+			valve.setStatusConcurrencyTimeoutMs(-1);
+			TestRequest disabledReq = new TestRequest("/antidos-status", ip);
+			disabledReq.setParameter("token", "validSecretToken123");
+			disabledReq.setParameter("format", "json");
+			TestResponse disabledResp = new TestResponse();
+			valve.handleStatusRequest(disabledReq, disabledResp, ip);
+			assertEquals(200, disabledResp.getStatus());
+			assertEquals(-1, disabledResp.getErrorCode());
+			assertTrue(disabledResp.getOutput().contains("\"serverGenerationMs\":"));
+		} finally {
+			sem.release();
+			AntiDoSValve.resetStatusSemaphore();
+			valve.stop();
+		}
 	}
 
 	@Test

@@ -67,6 +67,7 @@
                          description="Dedicated for status dashboard"
                          statusUri="/antidos-status"
                          statusAllowedIPs="192\.168\.\d+\.\d+"
+                         statusConcurrencyTimeoutMs="2000"
                          maxIPCacheSize="1000"
                          numberOfSlots="5"
                          slotLength="10"

@@ -178,6 +178,15 @@ public final class AntiDoSOpenApiSpec {
             }
           },
           {
+            "name": "includeDynamicBlocks",
+            "in": "query",
+            "description": "Whether to include dynamic CIDR blocks in slot details response (defaults to true if slot is omitted, false if a slot is specified).",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "token",
             "in": "query",
             "description": "Authentication token/password (alternative to Bearer Authorization header).",
@@ -311,6 +320,11 @@ public final class AntiDoSOpenApiSpec {
             "items": {
               "$ref": "#/components/schemas/ValveSummaryDto"
             }
+          },
+          "serverGenerationMs": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Time in milliseconds taken by the server to generate this JSON response."
           }
         }
       },
@@ -620,6 +634,10 @@ public final class AntiDoSOpenApiSpec {
             "format": "int64",
             "description": "Total requests rejected due to matching alwaysForbiddenIPs."
           },
+          "statusConcurrencyTimeoutMs": {
+            "type": "integer",
+            "description": "Timeout in milliseconds to wait for the status generation semaphore before returning HTTP 429."
+          },
           "httpStatusCode": {
             "type": "integer",
             "description": "HTTP status code sent when rejecting abusive requests (default: 429)."
@@ -725,6 +743,11 @@ public final class AntiDoSOpenApiSpec {
             "items": {
               "$ref": "#/components/schemas/ActiveCounterEntryDto"
             }
+          },
+          "serverGenerationMs": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Time in milliseconds taken by the server to generate this JSON response."
           }
         }
       },
