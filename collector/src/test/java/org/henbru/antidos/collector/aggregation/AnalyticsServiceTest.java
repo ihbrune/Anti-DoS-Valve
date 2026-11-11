@@ -7,6 +7,12 @@ import org.henbru.antidos.collector.model.AnalyticsDashboardDto;
 import org.henbru.antidos.collector.model.ClientType;
 import org.henbru.antidos.collector.model.SubnetScatterPoint;
 import org.henbru.antidos.collector.model.TimelinePoint;
+import org.henbru.antidos.collector.model.UserAgentAnalyticsDto;
+import org.henbru.antidos.collector.model.UserAgentFamily;
+import org.henbru.antidos.collector.model.UserAgentItemSummary;
+import org.henbru.antidos.collector.model.UserAgentOriginSummary;
+import org.henbru.antidos.collector.storage.ClientEventRepository;
+import org.henbru.antidos.collector.storage.MonitoredValveRepository;
 import org.henbru.antidos.collector.storage.SubnetRollupRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +20,7 @@ import org.mockito.Mockito;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class AnalyticsServiceTest {
@@ -291,5 +298,62 @@ class AnalyticsServiceTest {
 		assertEquals("Chrome 149", topUa.browserFamily());
 		assertTrue(topUa.suspicious()); // Chrome >= 140 is suspicious/spoofed
 		assertEquals(45, topUa.distinctSubnets());
+	}
+
+	@Test
+	void testGetUserAgentAnalytics() {
+		ClientEventRepository clientRepo = mock(ClientEventRepository.class);
+		MonitoredValveRepository valveRepo = mock(MonitoredValveRepository.class);
+		AnalyticsService service = new AnalyticsService(rollupRepository, rollupAggregationService, null, null, clientRepo, valveRepo);
+
+		ClientEventRepository.RawUserAgentAggregation pythonUa = new ClientEventRepository.RawUserAgentAggregation(
+				"python-requests/2.31.0", 5000L, 25, 20, 5, 0, 0, 5, 2, 25, 0
+		);
+		ClientEventRepository.RawUserAgentAggregation chromeUa = new ClientEventRepository.RawUserAgentAggregation(
+				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0.0.0 Safari/537.36", 15000L, 50, 0, 0, 50, 10, 15, 3, 5, 45
+		);
+
+		when(clientRepo.findUserAgentAggregations(any(), any(), any(), any(), anyInt()))
+				.thenReturn(List.of(pythonUa, chromeUa));
+
+		when(clientRepo.findUserAgentTopOrigins(eq("python-requests/2.31.0"), any(), any(), any(), any(), anyInt()))
+				.thenReturn(List.of(new UserAgentOriginSummary("198.51.100.0/24", 24940L, "Hetzner Online GmbH", 3000L, 15)));
+
+		when(clientRepo.findUserAgentTopOrigins(eq("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0.0.0 Safari/537.36"), any(), any(), any(), any(), anyInt()))
+				.thenReturn(List.of(new UserAgentOriginSummary("203.0.113.0/24", 3320L, "Deutsche Telekom", 10000L, 35)));
+
+		when(valveRepo.findAllActive()).thenReturn(List.of()); // No active valves -> low confidence
+
+		UserAgentAnalyticsDto dto = service.getUserAgentAnalytics(24, null, null, null, null);
+
+		assertNotNull(dto);
+		assertEquals(20000L, dto.totalSampledRequests());
+		assertEquals(75, dto.totalSampledEvents());
+		assertEquals(2, dto.distinctUserAgents());
+		assertEquals(2, dto.distinctFamilies());
+		assertEquals(20, dto.totalBlockedEvents());
+		assertEquals(5, dto.totalMarkedEvents());
+		assertEquals(50, dto.totalActiveEvents());
+		assertEquals(10, dto.totalAuthenticatedSamples());
+		assertTrue(dto.hasLowSamplingConfidence());
+
+		// Verify items
+		assertEquals(2, dto.userAgents().size());
+		UserAgentItemSummary pythonItem = dto.userAgents().get(0);
+		assertEquals("python-requests/2.31.0", pythonItem.userAgent());
+		assertEquals(UserAgentFamily.AUTOMATED_TOOL, pythonItem.family());
+		assertTrue(pythonItem.isSuspicious());
+		assertFalse(pythonItem.hasAuthenticatedTraffic());
+		assertEquals(1, pythonItem.topOrigins().size());
+		assertEquals(24940L, pythonItem.topOrigins().get(0).asn());
+
+		UserAgentItemSummary chromeItem = dto.userAgents().get(1);
+		assertEquals(UserAgentFamily.CHROME_DESKTOP, chromeItem.family());
+		assertFalse(chromeItem.isSuspicious());
+		assertTrue(chromeItem.hasAuthenticatedTraffic());
+		assertEquals(10, chromeItem.authenticatedCount());
+
+		// Verify families
+		assertEquals(2, dto.families().size());
 	}
 }

@@ -1362,11 +1362,16 @@ public class AntiDoSStatusRenderer {
 								: String.valueOf(allowedReqs));
 				sb.append("<td>").append(clientLimitStr).append("</td>");
 				if (e.sample() != null && e.sample().uri() != null) {
-					String sampleTitle = e.sample().userAgent() != null ? "User-Agent: " + escapeHtml(e.sample().userAgent()) : "";
+					String sampleTitle = (e.sample().userAgent() != null ? "User-Agent: " + escapeHtml(e.sample().userAgent()) : "")
+							+ (e.sample().authenticated() ? " [Authenticated Session]" : "");
 					sb.append("<td><code title=\"").append(sampleTitle).append("\">")
 							.append(e.sample().method() != null ? escapeHtml(e.sample().method()) + " " : "")
 							.append(escapeHtml(e.sample().uri()))
-							.append("</code></td>");
+							.append("</code>");
+					if (e.sample().authenticated()) {
+						sb.append(" <span style=\"font-size:10px; color:#22c55e; font-weight:600;\" title=\"Captured request sample was authenticated\">[Auth]</span>");
+					}
+					sb.append("</td>");
 				} else {
 					sb.append("<td style=\"color:var(--muted);\">-</td>");
 				}
@@ -1622,6 +1627,7 @@ public class AntiDoSStatusRenderer {
 				.append("      \"sampleMethod\": \"POST\",\n")
 				.append("      \"sampleUri\": \"/api/login\",\n")
 				.append("      \"sampleUserAgent\": \"python-requests/2.31.0\",\n")
+				.append("      \"sampleAuthenticated\": false,\n")
 				.append("      \"status\": \"BLOCKED\"\n")
 				.append("    }\n")
 				.append("  ],\n")
@@ -2037,11 +2043,13 @@ public class AntiDoSStatusRenderer {
 			if (e.sample() != null) {
 				sb.append("      \"sampleMethod\": ").append(e.sample().method() != null ? "\"" + escapeJson(e.sample().method()) + "\"" : "null").append(",\n")
 						.append("      \"sampleUri\": ").append(e.sample().uri() != null ? "\"" + escapeJson(e.sample().uri()) + "\"" : "null").append(",\n")
-						.append("      \"sampleUserAgent\": ").append(e.sample().userAgent() != null ? "\"" + escapeJson(e.sample().userAgent()) + "\"" : "null").append(",\n");
+						.append("      \"sampleUserAgent\": ").append(e.sample().userAgent() != null ? "\"" + escapeJson(e.sample().userAgent()) + "\"" : "null").append(",\n")
+						.append("      \"sampleAuthenticated\": ").append(e.sample().authenticated()).append(",\n");
 			} else {
 				sb.append("      \"sampleMethod\": null,\n")
 						.append("      \"sampleUri\": null,\n")
-						.append("      \"sampleUserAgent\": null,\n");
+						.append("      \"sampleUserAgent\": null,\n")
+						.append("      \"sampleAuthenticated\": null,\n");
 			}
 			sb.append("      \"status\": \"BLOCKED\"\n")
 					.append("    }");
@@ -2094,7 +2102,8 @@ public class AntiDoSStatusRenderer {
 				sb.append(",\n")
 						.append("      \"sampleMethod\": ").append(e.sample().method() != null ? "\"" + escapeJson(e.sample().method()) + "\"" : "null").append(",\n")
 						.append("      \"sampleUri\": ").append(e.sample().uri() != null ? "\"" + escapeJson(e.sample().uri()) + "\"" : "null").append(",\n")
-						.append("      \"sampleUserAgent\": ").append(e.sample().userAgent() != null ? "\"" + escapeJson(e.sample().userAgent()) + "\"" : "null").append("\n");
+						.append("      \"sampleUserAgent\": ").append(e.sample().userAgent() != null ? "\"" + escapeJson(e.sample().userAgent()) + "\"" : "null").append(",\n")
+						.append("      \"sampleAuthenticated\": ").append(e.sample().authenticated()).append("\n");
 			} else {
 				sb.append("\n");
 			}

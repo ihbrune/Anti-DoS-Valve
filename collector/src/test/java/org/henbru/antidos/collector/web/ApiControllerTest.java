@@ -145,4 +145,14 @@ class ApiControllerTest {
 				.andExpect(jsonPath("$.consolidatedAlwaysAllowedRegex").exists())
 				.andExpect(jsonPath("$.consolidatedServerXmlSnippet").exists());
 	}
+
+	@Test
+	void testGetAnalyticsUserAgentsApi() throws Exception {
+		mockMvc.perform(get("/api/v1/analytics/user-agents")
+						.param("hours", "24"))
+				.andExpect(status().isOk())
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+				.andExpect(jsonPath("$.userAgents").isArray())
+				.andExpect(jsonPath("$.families").isArray());
+	}
 }

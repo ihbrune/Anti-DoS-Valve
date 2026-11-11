@@ -3,8 +3,13 @@ package org.henbru.antidos.collector.aggregation;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+
+import org.henbru.antidos.collector.advisor.AdvisorReport;
 import org.henbru.antidos.collector.annotation.NetworkAnnotationService;
 import org.henbru.antidos.collector.model.AnalyticsDashboardDto;
 import org.henbru.antidos.collector.model.ClientType;
@@ -12,6 +17,13 @@ import org.henbru.antidos.collector.model.NetworkAnnotation;
 import org.henbru.antidos.collector.model.SubnetScatterPoint;
 import org.henbru.antidos.collector.model.TimelinePoint;
 import org.henbru.antidos.collector.model.TrafficCompositionPoint;
+import org.henbru.antidos.collector.model.UserAgentAnalyticsDto;
+import org.henbru.antidos.collector.model.UserAgentFamily;
+import org.henbru.antidos.collector.model.UserAgentFamilySummary;
+import org.henbru.antidos.collector.model.UserAgentItemSummary;
+import org.henbru.antidos.collector.model.UserAgentOriginSummary;
+import org.henbru.antidos.collector.storage.ClientEventRepository;
+import org.henbru.antidos.collector.storage.MonitoredValveRepository;
 import org.henbru.antidos.collector.storage.SubnetRollupRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -28,6 +40,7 @@ public class AnalyticsService {
 	private final NetworkAnnotationService networkAnnotationService;
 	private final org.henbru.antidos.collector.advisor.AdvisorService advisorService;
 	private final org.henbru.antidos.collector.storage.ClientEventRepository clientEventRepository;
+	private final MonitoredValveRepository monitoredValveRepository;
 
 	@Autowired
 	public AnalyticsService(
@@ -35,20 +48,32 @@ public class AnalyticsService {
 			RollupAggregationService rollupAggregationService,
 			@Autowired(required = false) NetworkAnnotationService networkAnnotationService,
 			@Autowired(required = false) org.henbru.antidos.collector.advisor.AdvisorService advisorService,
-			@Autowired(required = false) org.henbru.antidos.collector.storage.ClientEventRepository clientEventRepository
+			@Autowired(required = false) org.henbru.antidos.collector.storage.ClientEventRepository clientEventRepository,
+			@Autowired(required = false) MonitoredValveRepository monitoredValveRepository
 	) {
 		this.subnetRollupRepository = subnetRollupRepository;
 		this.rollupAggregationService = rollupAggregationService;
 		this.networkAnnotationService = networkAnnotationService;
 		this.advisorService = advisorService;
 		this.clientEventRepository = clientEventRepository;
+		this.monitoredValveRepository = monitoredValveRepository;
+	}
+
+	public AnalyticsService(
+			SubnetRollupRepository subnetRollupRepository,
+			RollupAggregationService rollupAggregationService,
+			NetworkAnnotationService networkAnnotationService,
+			org.henbru.antidos.collector.advisor.AdvisorService advisorService,
+			org.henbru.antidos.collector.storage.ClientEventRepository clientEventRepository
+	) {
+		this(subnetRollupRepository, rollupAggregationService, networkAnnotationService, advisorService, clientEventRepository, null);
 	}
 
 	public AnalyticsService(
 			SubnetRollupRepository subnetRollupRepository,
 			RollupAggregationService rollupAggregationService
 	) {
-		this(subnetRollupRepository, rollupAggregationService, null, null, null);
+		this(subnetRollupRepository, rollupAggregationService, null, null, null, null);
 	}
 
 	public AnalyticsService(
@@ -56,7 +81,7 @@ public class AnalyticsService {
 			RollupAggregationService rollupAggregationService,
 			NetworkAnnotationService networkAnnotationService
 	) {
-		this(subnetRollupRepository, rollupAggregationService, networkAnnotationService, null, null);
+		this(subnetRollupRepository, rollupAggregationService, networkAnnotationService, null, null, null);
 	}
 
 	public AnalyticsDashboardDto getDashboardAnalytics(
@@ -243,8 +268,10 @@ public class AnalyticsService {
 				? Math.round(((double) totalMarked / totalRequests) * 1000.0) / 10.0
 				: 0.0;
 
-		org.henbru.antidos.collector.advisor.AdvisorReport advisorReport = advisorService != null
+		AdvisorReport advisorReport = advisorService != null
 				? advisorService.generateReport(safeHours, servers, valves) : null;
+
+		UserAgentAnalyticsDto userAgents = getUserAgentAnalytics(safeHours, from, to, servers, valves);
 
 		return new AnalyticsDashboardDto(
 				from,
@@ -262,8 +289,176 @@ public class AnalyticsService {
 				advisorReport,
 				effectiveGroupBy,
 				effectiveTraffic,
-				effectiveAuth
+				effectiveAuth,
+				userAgents
 		);
+	}
+
+	public UserAgentAnalyticsDto getUserAgentAnalytics(
+			int hours,
+			Instant fromTime,
+			Instant toTime,
+			List<String> servers,
+			List<String> valves
+	) {
+		if (clientEventRepository == null) {
+			return UserAgentAnalyticsDto.empty(true, "ClientEventRepository is not available.");
+		}
+		int safeHours = hours > 0 ? hours : 24;
+		Instant to = toTime != null ? toTime : Instant.now();
+		Instant from = fromTime != null ? fromTime : to.minus(safeHours, ChronoUnit.HOURS);
+
+		List<ClientEventRepository.RawUserAgentAggregation> rawList =
+				clientEventRepository.findUserAgentAggregations(from, to, servers, valves, 50);
+
+		int totalSampledEvents = 0;
+		long totalSampledRequests = 0;
+		int totalBlockedEvents = 0;
+		int totalMarkedEvents = 0;
+		int totalActiveEvents = 0;
+		int totalAuthenticatedSamples = 0;
+
+		Map<UserAgentFamily, FamilyAggregator> familyMap = new EnumMap<>(UserAgentFamily.class);
+		List<UserAgentItemSummary> items = new ArrayList<>();
+
+		for (ClientEventRepository.RawUserAgentAggregation row : rawList) {
+			UserAgentFamily family = UserAgentClassifier.classify(row.userAgent());
+
+			totalSampledRequests += row.totalRequests();
+			totalSampledEvents += row.eventCount();
+			totalBlockedEvents += row.blockedCount();
+			totalMarkedEvents += row.markedCount();
+			totalActiveEvents += row.activeCount();
+			totalAuthenticatedSamples += row.authenticatedCount();
+
+			FamilyAggregator famAgg = familyMap.computeIfAbsent(family, FamilyAggregator::new);
+			famAgg.add(row.totalRequests(), row.eventCount(), row.blockedCount(), row.markedCount(), row.activeCount(), row.authenticatedCount());
+
+			// Suspicion heuristics:
+			boolean isSuspicious = false;
+			List<String> reasons = new ArrayList<>();
+
+			int totalIncidents = row.blockedCount() + row.markedCount();
+			double incidentRatio = row.eventCount() > 0 ? (totalIncidents * 100.0 / row.eventCount()) : 0.0;
+			int totalGeo = row.datacenterCount() + row.residentialCount();
+			double dcRatio = totalGeo > 0 ? (row.datacenterCount() * 100.0 / totalGeo) : 0.0;
+
+			if (family.isAutomated()) {
+				isSuspicious = true;
+				reasons.add(family == UserAgentFamily.BOT_CRAWLER ? "Crawler signature" : "Scraper / tool library signature");
+			}
+			if (incidentRatio >= 50.0 && totalIncidents >= 2) {
+				isSuspicious = true;
+				reasons.add(String.format(Locale.ROOT, "High incident rate (%.1f%% blocked/marked)", incidentRatio));
+			}
+			if (dcRatio >= 75.0 && row.datacenterCount() >= 2) {
+				isSuspicious = true;
+				reasons.add(String.format(Locale.ROOT, "Datacenter concentration (%.1f%%)", dcRatio));
+			}
+			if (family == UserAgentFamily.EMPTY) {
+				isSuspicious = true;
+				reasons.add("Empty User-Agent header");
+			}
+
+			// Top origins (subnets and ASNs)
+			List<UserAgentOriginSummary> origins = clientEventRepository.findUserAgentTopOrigins(
+					row.userAgent(), from, to, servers, valves, 4);
+
+			items.add(new UserAgentItemSummary(
+					row.userAgent(),
+					family,
+					row.totalRequests(),
+					row.eventCount(),
+					row.blockedCount(),
+					row.markedCount(),
+					row.activeCount(),
+					row.authenticatedCount(),
+					Math.round(incidentRatio * 10.0) / 10.0,
+					row.distinctSubnets(),
+					row.distinctAsns(),
+					row.datacenterCount(),
+					row.residentialCount(),
+					Math.round(dcRatio * 10.0) / 10.0,
+					isSuspicious,
+					String.join(" • ", reasons),
+					origins
+			));
+		}
+
+		// Family summaries
+		List<UserAgentFamilySummary> families = new ArrayList<>();
+		final long finalTotalRequests = totalSampledRequests;
+		for (Map.Entry<UserAgentFamily, FamilyAggregator> entry : familyMap.entrySet()) {
+			FamilyAggregator a = entry.getValue();
+			double share = finalTotalRequests > 0 ? (a.requests * 100.0 / finalTotalRequests) : 0.0;
+			int incidents = a.blocked + a.marked;
+			double ratio = a.events > 0 ? (incidents * 100.0 / a.events) : 0.0;
+			families.add(new UserAgentFamilySummary(
+					entry.getKey(),
+					a.requests,
+					a.events,
+					a.blocked,
+					a.marked,
+					a.active,
+					a.auth,
+					Math.round(ratio * 10.0) / 10.0,
+					Math.round(share * 10.0) / 10.0
+			));
+		}
+		families.sort(Comparator.comparingLong(UserAgentFamilySummary::totalRequests).reversed());
+
+		// Sampling confidence calculation
+		boolean hasLowConfidence = false;
+		String confidenceMessage = null;
+
+		boolean anyValveSamplingActive = monitoredValveRepository != null
+				&& monitoredValveRepository.findAllActive().stream().anyMatch(v -> v.activeSampleThreshold() > 0);
+
+		if (!anyValveSamplingActive && (totalBlockedEvents > 0 || totalMarkedEvents > 0)) {
+			hasLowConfidence = true;
+			confidenceMessage = "Limited Visibility (Incidents Only): Active sampling is disabled (activeSampleThreshold=\"0\") on your valves. Captured User-Agents exclusively reflect rate-limit blocking or marking incidents, causing an innate bias towards hostile clients. Configure activeSampleThreshold=\"50\" to establish a reliable baseline of legitimate user traffic.";
+		} else if (totalSampledEvents < 20) {
+			hasLowConfidence = true;
+			confidenceMessage = "Low Sample Volume: Only " + totalSampledEvents + " request sample(s) recorded in this time window. Statistical significance is limited; consider expanding the timeframe (e.g. 24h) or adjusting activeSampleThreshold.";
+		}
+
+		return new UserAgentAnalyticsDto(
+				totalSampledRequests,
+				totalSampledEvents,
+				items.size(),
+				families.size(),
+				totalBlockedEvents,
+				totalMarkedEvents,
+				totalActiveEvents,
+				totalAuthenticatedSamples,
+				hasLowConfidence,
+				confidenceMessage,
+				families,
+				items
+		);
+	}
+
+	private static class FamilyAggregator {
+		final UserAgentFamily family;
+		long requests = 0;
+		int events = 0;
+		int blocked = 0;
+		int marked = 0;
+		int active = 0;
+		int auth = 0;
+
+		FamilyAggregator(UserAgentFamily family) {
+			this.family = family;
+		}
+
+		void add(long r, int e, int b, int m, int a, int au) {
+			this.requests += r;
+			this.events += e;
+			this.blocked += b;
+			this.marked += m;
+			this.active += a;
+			this.auth += au;
+		}
 	}
 
 	private String getClientTypeLabel(ClientType type) {

@@ -1,367 +1,410 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
+
 <body>
 
-<!-- Telemetry Analytics Fragment -->
-<div th:fragment="analyticsCard" id="analytics-container" class="table-card" style="padding: 20px; margin-bottom: 28px;"
-     th:attr="data-selected-hours=${selectedHours},data-active-tab=${activeTab},data-scatter-group-by=${scatterGroupBy},data-scatter-traffic=${scatterTrafficFilter},data-scatter-auth=${scatterAuthFilter}">
-    <!-- Analytics Header & Control Bar -->
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 20px;">
-        <div>
-            <div style="font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
-                <span>&#x1F4CA;</span> Visual Telemetry &amp; Attack Forensics
-                <span th:if="${analytics != null and analytics.totalBlocked > 0}"
-                      class="badge" style="background: var(--color-danger-glow); color: var(--color-danger); border: 1px solid var(--color-danger); font-size: 11px;">
-                    <span th:text="${analytics.blockedRatioPercent} + '% Attacks Blocked'">12.4% Attacks Blocked</span>
-                </span>
+    <!-- Telemetry Analytics Fragment -->
+    <div th:fragment="analyticsCard" id="analytics-container" class="table-card"
+        style="padding: 20px; margin-bottom: 28px;"
+        th:attr="data-selected-hours=${selectedHours},data-active-tab=${activeTab},data-scatter-group-by=${scatterGroupBy},data-scatter-traffic=${scatterTrafficFilter},data-scatter-auth=${scatterAuthFilter}">
+        <!-- Analytics Header & Control Bar -->
+        <div
+            style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 20px;">
+            <div>
+                <div style="font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                    <span>&#x1F4CA;</span> Visual Telemetry &amp; Attack Forensics
+                    <span th:if="${analytics != null and analytics.totalBlocked > 0}" class="badge"
+                        style="background: var(--color-danger-glow); color: var(--color-danger); border: 1px solid var(--color-danger); font-size: 11px;">
+                        <span th:text="${analytics.blockedRatioPercent} + '% Attacks Blocked'">12.4% Attacks
+                            Blocked</span>
+                    </span>
+                </div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 3px;">
+                    Long-term aggregation and cluster analysis based on Subnet Rollups &amp; Telemetry Slots
+                </div>
             </div>
-            <div style="font-size: 12px; color: var(--text-muted); margin-top: 3px;">
-                Long-term aggregation and cluster analysis based on Subnet Rollups &amp; Telemetry Slots
-            </div>
-        </div>
 
-        <!-- Controls: Tab Switcher & Time Presets -->
-        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-            <!-- Tab Switcher -->
-            <div class="pills-group" style="margin-bottom: 0;">
-                <button type="button"
-                        class="btn"
-                        th:classappend="${activeTab == 'charts' ? 'btn-primary' : ''}"
+            <!-- Controls: Tab Switcher & Time Presets -->
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <!-- Tab Switcher -->
+                <div class="pills-group" style="margin-bottom: 0;">
+                    <button type="button" class="btn" th:classappend="${activeTab == 'charts' ? 'btn-primary' : ''}"
                         th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='charts',servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter})}"
-                        hx-target="#analytics-container"
-                        hx-swap="outerHTML"
+                        hx-target="#analytics-container" hx-swap="outerHTML"
                         style="padding: 5px 12px; font-size: 12px;">
-                    <span>&#x1F4CA;</span> Timeline &amp; Bot-Mix
-                </button>
-                <button type="button"
-                        class="btn"
-                        th:classappend="${activeTab == 'scatter' ? 'btn-primary' : ''}"
+                        <span>&#x1F4CA;</span> Timeline &amp; Bot-Mix
+                    </button>
+                    <button type="button" class="btn" th:classappend="${activeTab == 'scatter' ? 'btn-primary' : ''}"
                         th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter})}"
-                        hx-target="#analytics-container"
-                        hx-swap="outerHTML"
+                        hx-target="#analytics-container" hx-swap="outerHTML"
                         style="padding: 5px 12px; font-size: 12px;">
-                    <span>&#x1F3AF;</span> Cluster Scatterplot
-                </button>
-                <button type="button"
-                        class="btn"
-                        th:classappend="${activeTab == 'advisor' ? 'btn-primary' : ''}"
-                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='advisor',servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter})}"
-                        hx-target="#analytics-container"
-                        hx-swap="outerHTML"
+                        <span>&#x1F3AF;</span> Cluster Scatterplot
+                    </button>
+                    <button type="button" class="btn" th:classappend="${activeTab == 'useragents' ? 'btn-primary' : ''}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='useragents',servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter})}"
+                        hx-target="#analytics-container" hx-swap="outerHTML"
                         style="padding: 5px 12px; font-size: 12px; position: relative;">
-                    <span>&#x1F4A1;</span> Config Advisor
-                    <span th:if="${analytics != null and analytics.advisorReport != null and !analytics.advisorReport.findings.isEmpty()}"
-                          class="badge"
-                          th:classappend="${analytics.advisorReport.criticalCount > 0 ? 'badge-danger' : 'badge-warning'}"
-                          style="font-size: 10px; padding: 1px 6px; margin-left: 4px;"
-                          th:text="${analytics.advisorReport.findings.size()}">2</span>
-                </button>
-            </div>
+                        <span>&#x1F50D;</span> User-Agents
+                        <span
+                            th:if="${analytics != null and analytics.userAgents != null and analytics.userAgents.distinctUserAgents > 0}"
+                            class="badge"
+                            style="background: rgba(255, 255, 255, 0.15); font-size: 10px; padding: 1px 6px; margin-left: 4px;"
+                            th:text="${analytics.userAgents.distinctUserAgents}">12</span>
+                    </button>
+                    <button type="button" class="btn" th:classappend="${activeTab == 'advisor' ? 'btn-primary' : ''}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='advisor',servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter})}"
+                        hx-target="#analytics-container" hx-swap="outerHTML"
+                        style="padding: 5px 12px; font-size: 12px; position: relative;">
+                        <span>&#x1F4A1;</span> Config Advisor
+                        <span
+                            th:if="${analytics != null and analytics.advisorReport != null and !analytics.advisorReport.findings.isEmpty()}"
+                            class="badge"
+                            th:classappend="${analytics.advisorReport.criticalCount > 0 ? 'badge-danger' : 'badge-warning'}"
+                            style="font-size: 10px; padding: 1px 6px; margin-left: 4px;"
+                            th:text="${analytics.advisorReport.findings.size()}">2</span>
+                    </button>
+                </div>
 
-            <!-- Time Window Selector -->
-            <div style="display: flex; align-items: center; gap: 6px;">
-                <button type="button" class="btn"
-                        th:classappend="${selectedHours == 1 ? 'btn-primary' : ''}"
+                <!-- Time Window Selector -->
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <button type="button" class="btn" th:classappend="${selectedHours == 1 ? 'btn-primary' : ''}"
                         th:attr="hx-get=@{/fragments/analytics-overview(hours=1,tab=${activeTab},servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter})}"
-                        hx-target="#analytics-container"
-                        hx-swap="outerHTML"
+                        hx-target="#analytics-container" hx-swap="outerHTML"
                         style="padding: 4px 10px; font-size: 11px;">1h</button>
-                <button type="button" class="btn"
-                        th:classappend="${selectedHours == 6 ? 'btn-primary' : ''}"
+                    <button type="button" class="btn" th:classappend="${selectedHours == 6 ? 'btn-primary' : ''}"
                         th:attr="hx-get=@{/fragments/analytics-overview(hours=6,tab=${activeTab},servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter})}"
-                        hx-target="#analytics-container"
-                        hx-swap="outerHTML"
+                        hx-target="#analytics-container" hx-swap="outerHTML"
                         style="padding: 4px 10px; font-size: 11px;">6h</button>
-                <button type="button" class="btn"
-                        th:classappend="${selectedHours == 24 ? 'btn-primary' : ''}"
+                    <button type="button" class="btn" th:classappend="${selectedHours == 24 ? 'btn-primary' : ''}"
                         th:attr="hx-get=@{/fragments/analytics-overview(hours=24,tab=${activeTab},servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter})}"
-                        hx-target="#analytics-container"
-                        hx-swap="outerHTML"
+                        hx-target="#analytics-container" hx-swap="outerHTML"
                         style="padding: 4px 10px; font-size: 11px;">24h</button>
-                <button type="button" class="btn"
-                        th:classappend="${selectedHours == 168 ? 'btn-primary' : ''}"
+                    <button type="button" class="btn" th:classappend="${selectedHours == 168 ? 'btn-primary' : ''}"
                         th:attr="hx-get=@{/fragments/analytics-overview(hours=168,tab=${activeTab},servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter})}"
-                        hx-target="#analytics-container"
-                        hx-swap="outerHTML"
+                        hx-target="#analytics-container" hx-swap="outerHTML"
                         style="padding: 4px 10px; font-size: 11px;">7d</button>
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- Advisor Warning Banner (shown when configuration risks are detected and operator is on another tab) -->
-    <div th:if="${analytics != null and analytics.advisorReport != null and (analytics.advisorReport.criticalCount > 0 or analytics.advisorReport.warningCount > 0) and activeTab != 'advisor'}"
-         class="alert alert-warning"
-         style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 16px; border-radius: var(--radius-md); animation: fadeIn 0.3s ease-in-out;">
-        <div style="display: flex; align-items: center; gap: 10px;">
-            <span style="font-size: 18px;">&#x26A0;&#xFE0F;</span>
-            <div style="font-size: 12.5px; line-height: 1.4;">
-                <strong>Configuration &amp; False-Positive Advisor:</strong>
-                Detected <span th:text="${analytics.advisorReport.criticalCount}" style="font-weight: 700;">1</span> critical and
-                <span th:text="${analytics.advisorReport.warningCount}" style="font-weight: 700;">1</span> warning issue(s)
-                (e.g. verified search engines or internal RFC 1918 traffic being blocked).
+        <!-- Advisor Warning Banner (shown when configuration risks are detected and operator is on another tab) -->
+        <div th:if="${analytics != null and analytics.advisorReport != null and (analytics.advisorReport.criticalCount > 0 or analytics.advisorReport.warningCount > 0) and activeTab != 'advisor'}"
+            class="alert alert-warning"
+            style="margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 16px; border-radius: var(--radius-md); animation: fadeIn 0.3s ease-in-out;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 18px;">&#x26A0;&#xFE0F;</span>
+                <div style="font-size: 12.5px; line-height: 1.4;">
+                    <strong>Configuration &amp; False-Positive Advisor:</strong>
+                    Detected <span th:text="${analytics.advisorReport.criticalCount}" style="font-weight: 700;">1</span>
+                    critical and
+                    <span th:text="${analytics.advisorReport.warningCount}" style="font-weight: 700;">1</span> warning
+                    issue(s)
+                    (e.g. verified search engines or internal RFC 1918 traffic being blocked).
+                </div>
             </div>
-        </div>
-        <button type="button" class="btn btn-primary"
+            <button type="button" class="btn btn-primary"
                 th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='advisor',servers=${selectedServers},valves=${selectedValves})}"
-                hx-target="#analytics-container"
-                hx-swap="outerHTML"
+                hx-target="#analytics-container" hx-swap="outerHTML"
                 style="padding: 5px 12px; font-size: 11.5px; white-space: nowrap;">
-            <span>&#x1F4A1;</span> Review Recommendations &rarr;
-        </button>
-    </div>
-
-    <!-- Empty State -->
-    <div th:if="${analytics == null or (analytics.timeline.empty and analytics.composition.empty and analytics.scatterPoints.empty and (analytics.advisorReport == null or analytics.advisorReport.findings.empty))}"
-         style="text-align: center; padding: 40px 20px; color: var(--text-muted);">
-        <div style="font-size: 32px; margin-bottom: 8px;">&#x1F4BE;</div>
-        <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">No Aggregated Rollups Yet</div>
-        <div style="font-size: 12px; max-width: 480px; margin: 0 auto 16px auto;">
-            Subnet rollups are automatically aggregated in background windows. You can wait for the next scheduled cycle or trigger an immediate catch-up.
+                <span>&#x1F4A1;</span> Review Recommendations &rarr;
+            </button>
         </div>
-        <button type="button" class="btn btn-primary"
-                hx-post="/api/v1/rollups/subnets/aggregate?hours=24"
+
+        <!-- Empty State -->
+        <div th:if="${analytics == null or (analytics.timeline.empty and analytics.composition.empty and analytics.scatterPoints.empty and (analytics.advisorReport == null or analytics.advisorReport.findings.empty))}"
+            style="text-align: center; padding: 40px 20px; color: var(--text-muted);">
+            <div style="font-size: 32px; margin-bottom: 8px;">&#x1F4BE;</div>
+            <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">No
+                Aggregated Rollups Yet</div>
+            <div style="font-size: 12px; max-width: 480px; margin: 0 auto 16px auto;">
+                Subnet rollups are automatically aggregated in background windows. You can wait for the next scheduled
+                cycle or trigger an immediate catch-up.
+            </div>
+            <button type="button" class="btn btn-primary" hx-post="/api/v1/rollups/subnets/aggregate?hours=24"
                 hx-swap="none"
                 hx-on::after-request="htmx.ajax('GET', '/fragments/analytics-overview?hours=24', '#analytics-container')">
-            <span>&#x26A1;</span> Trigger Rollup Catch-Up
-        </button>
-    </div>
-
-    <!-- View A: Timeline & Bot-Mix Charts (Step 1) -->
-    <div th:if="${analytics != null and (!analytics.timeline.empty or !analytics.composition.empty) and activeTab != 'scatter' and activeTab != 'advisor'}"
-         style="display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr); gap: 20px; align-items: stretch;">
-
-        <!-- Left Column: Traffic & Attack Timeline -->
-        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; display: flex; flex-direction: column;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <div style="font-weight: 600; font-size: 13px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
-                    <span>&#x1F4CA;</span> Traffic &amp; Attack Timeline
-                </div>
-                <div style="font-size: 11px; color: var(--text-muted);">
-                    <span th:text="${analytics.totalRequests} + ' requests'">0 requests</span>
-                    (<span style="color: var(--color-danger);" th:text="${analytics.totalBlocked} + ' blocked'">0 blocked</span><th:block th:if="${analytics.totalMarked > 0}">, <span style="color: var(--color-purple);" th:text="${analytics.totalMarked} + ' marked'">0 marked</span></th:block>)
-                </div>
-            </div>
-            <div class="chart-container-box" style="height: 300px; max-height: 300px; position: relative; overflow: hidden;">
-                <canvas id="timelineChart"></canvas>
-            </div>
+                <span>&#x26A1;</span> Trigger Rollup Catch-Up
+            </button>
         </div>
 
-        <!-- Right Column: Traffic Composition & Bot-Mix -->
-        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; display: flex; flex-direction: column;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <div style="font-weight: 600; font-size: 13px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
-                    <span>&#x1F916;</span> Traffic Composition &amp; Bot-Mix
-                </div>
-                <div style="font-size: 11px; color: var(--text-muted);" th:text="${analytics.composition.size()} + ' categories'">
-                    Categories
-                </div>
-            </div>
-            <div class="chart-container-box" style="height: 300px; max-height: 300px; position: relative; overflow: hidden;">
-                <canvas id="compositionChart"></canvas>
-            </div>
-        </div>
-    </div>
+        <!-- View A: Timeline & Bot-Mix Charts (Step 1) -->
+        <div th:if="${analytics != null and (!analytics.timeline.empty or !analytics.composition.empty) and activeTab != 'scatter' and activeTab != 'advisor' and activeTab != 'useragents'}"
+            style="display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr); gap: 20px; align-items: stretch;">
 
-    <!-- View B: Residential Proxy & Subnet Scatterplot (Step 2) -->
-    <div th:if="${analytics != null and !analytics.scatterPoints.empty and activeTab == 'scatter'}"
-         style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px;">
-            <div>
-                <div style="font-weight: 600; font-size: 13px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
-                    <span>&#x1F3AF;</span>
-                    <span th:text="${scatterGroupBy == 'ASN' ? 'Autonomous System (ASN) Cluster &amp; Botnet Analysis' : 'Residential Proxy &amp; Distributed Botnet Cluster Analysis'}">Residential Proxy &amp; Distributed Botnet Cluster Analysis</span>
+            <!-- Left Column: Traffic & Attack Timeline -->
+            <div
+                style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; display: flex; flex-direction: column;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <div
+                        style="font-weight: 600; font-size: 13px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                        <span>&#x1F4CA;</span> Traffic &amp; Attack Timeline
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-muted);">
+                        <span th:text="${analytics.totalRequests} + ' requests'">0 requests</span>
+                        (<span style="color: var(--color-danger);" th:text="${analytics.totalBlocked} + ' blocked'">0
+                            blocked</span>
+                        <th:block th:if="${analytics.totalMarked > 0}">, <span style="color: var(--color-purple);"
+                                th:text="${analytics.totalMarked} + ' marked'">0 marked</span></th:block>)
+                    </div>
                 </div>
-                <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-                    <span th:if="${scatterGroupBy == 'ASN'}">Aggregates distributed rotating residential proxy swarms across entire Autonomous Systems (ASNs) to isolate synchronized network-wide campaigns.</span>
-                    <span th:unless="${scatterGroupBy == 'ASN'}">Identifies distributed attacks where hundreds of residential IPs send low-frequency requests to bypass traditional single-IP rate limits.</span>
-                </div>
-            </div>
-            <div class="badge" style="background: rgba(56, 189, 248, 0.12); color: var(--color-primary); font-size: 11px;">
-                <span th:text="${analytics.scatterPoints.size()} + (${scatterGroupBy == 'ASN'} ? ' ASN Clusters Analyzed' : ' Subnet Clusters Analyzed')">0 Clusters</span>
-            </div>
-        </div>
-
-        <!-- Forensic Controls Bar: Grouping, Traffic Filter, and Authentication State -->
-        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 12px;">
-            <!-- Group 1: Aggregation Dimension (Subnet vs ASN) -->
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <span style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Dimension:</span>
-                <div class="filter-btn-group">
-                    <button type="button" class="filter-btn"
-                            th:classappend="${scatterGroupBy != 'ASN' ? 'active' : ''}"
-                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy='SUBNET',scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter},servers=${selectedServers},valves=${selectedValves})}"
-                            hx-target="#analytics-container"
-                            hx-swap="outerHTML"
-                            title="Group cluster telemetry by CIDR subnets (/24 for IPv4, /64 for IPv6)">
-                        <span>🌐</span> Subnets (/24)
-                    </button>
-                    <button type="button" class="filter-btn"
-                            th:classappend="${scatterGroupBy == 'ASN' ? 'active' : ''}"
-                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy='ASN',scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter},servers=${selectedServers},valves=${selectedValves})}"
-                            hx-target="#analytics-container"
-                            hx-swap="outerHTML"
-                            title="Aggregate rotating proxy botnets across entire Autonomous Systems (ASNs)">
-                        <span>🏛️</span> ASN Rollup
-                    </button>
+                <div class="chart-container-box"
+                    style="height: 300px; max-height: 300px; position: relative; overflow: hidden;">
+                    <canvas id="timelineChart"></canvas>
                 </div>
             </div>
 
-            <!-- Group 2: Traffic Filter (e.g. Exclude Search & AI Bots) -->
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <span style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Traffic:</span>
-                <div class="filter-btn-group">
-                    <button type="button" class="filter-btn"
-                            th:classappend="${scatterTrafficFilter == null or scatterTrafficFilter == 'ALL' ? 'active' : ''}"
-                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy=${scatterGroupBy},scatterTrafficFilter='ALL',scatterAuthFilter=${scatterAuthFilter},servers=${selectedServers},valves=${selectedValves})}"
-                            hx-target="#analytics-container"
-                            hx-swap="outerHTML">
-                        All
-                    </button>
-                    <button type="button" class="filter-btn"
-                            th:classappend="${scatterTrafficFilter == 'EXCLUDE_BOTS' ? 'active' : ''}"
-                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy=${scatterGroupBy},scatterTrafficFilter='EXCLUDE_BOTS',scatterAuthFilter=${scatterAuthFilter},servers=${selectedServers},valves=${selectedValves})}"
-                            hx-target="#analytics-container"
-                            hx-swap="outerHTML"
-                            title="Filter out verified search engines and AI crawlers so stealth residential proxy swarms stand out">
-                        <span>🛡️</span> Exclude Bots
-                    </button>
-                    <button type="button" class="filter-btn"
-                            th:classappend="${scatterTrafficFilter == 'RESIDENTIAL_ONLY' ? 'active' : ''}"
-                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy=${scatterGroupBy},scatterTrafficFilter='RESIDENTIAL_ONLY',scatterAuthFilter=${scatterAuthFilter},servers=${selectedServers},valves=${selectedValves})}"
-                            hx-target="#analytics-container"
-                            hx-swap="outerHTML"
-                            title="Isolate consumer residential broadband pools">
-                        <span>🏠</span> Residential
-                    </button>
-                    <button type="button" class="filter-btn"
-                            th:classappend="${scatterTrafficFilter == 'DATACENTER_ONLY' ? 'active' : ''}"
-                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy=${scatterGroupBy},scatterTrafficFilter='DATACENTER_ONLY',scatterAuthFilter=${scatterAuthFilter},servers=${selectedServers},valves=${selectedValves})}"
-                            hx-target="#analytics-container"
-                            hx-swap="outerHTML"
-                            title="Isolate datacenter and cloud hosting ranges">
-                        <span>🏢</span> Datacenter
-                    </button>
+            <!-- Right Column: Traffic Composition & Bot-Mix -->
+            <div
+                style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; display: flex; flex-direction: column;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <div
+                        style="font-weight: 600; font-size: 13px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                        <span>&#x1F916;</span> Traffic Composition &amp; Bot-Mix
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-muted);"
+                        th:text="${analytics.composition.size()} + ' categories'">
+                        Categories
+                    </div>
                 </div>
-            </div>
-
-            <!-- Group 3: Login / Authenticated Session Filter -->
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <span style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Authentication:</span>
-                <div class="filter-btn-group">
-                    <button type="button" class="filter-btn"
-                            th:classappend="${scatterAuthFilter == null or scatterAuthFilter == 'ALL' ? 'active' : ''}"
-                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter='ALL',servers=${selectedServers},valves=${selectedValves})}"
-                            hx-target="#analytics-container"
-                            hx-swap="outerHTML">
-                        All
-                    </button>
-                    <button type="button" class="filter-btn"
-                            th:classappend="${scatterAuthFilter == 'NO_LOGINS' ? 'active' : ''}"
-                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter='NO_LOGINS',servers=${selectedServers},valves=${selectedValves})}"
-                            hx-target="#analytics-container"
-                            hx-swap="outerHTML"
-                            title="Show only clusters with 0 authenticated logins (pure anonymous scrapers and botnet swarms)">
-                        <span>🚨</span> 0 Logins
-                    </button>
-                    <button type="button" class="filter-btn"
-                            th:classappend="${scatterAuthFilter == 'WITH_LOGINS' ? 'active' : ''}"
-                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter='WITH_LOGINS',servers=${selectedServers},valves=${selectedValves})}"
-                            hx-target="#analytics-container"
-                            hx-swap="outerHTML"
-                            title="Show clusters carrying authenticated user sessions (avoids collateral damage on real users)">
-                        <span>🔐</span> With Logins
-                    </button>
+                <div class="chart-container-box"
+                    style="height: 300px; max-height: 300px; position: relative; overflow: hidden;">
+                    <canvas id="compositionChart"></canvas>
                 </div>
             </div>
         </div>
 
-        <!-- Explanatory Guide Box -->
-        <div style="display: flex; gap: 16px; flex-wrap: wrap; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 14px; margin-bottom: 12px; font-size: 11px;">
-            <div style="display: flex; align-items: center; gap: 6px;">
-                <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #f43f5e;"></span>
-                <span><strong>Residential Proxy Evasion:</strong> Many IPs (high X), low requests/IP (low Y) &mdash; evades per-IP rate limits (bypasses Valve)</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 6px;">
-                <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #f59e0b;"></span>
-                <span><strong>Datacenter Scrapers:</strong> Moderate IPs, high burst rate</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 6px;">
-                <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #f59e0b; background: rgba(245, 158, 11, 0.25);"></span>
-                <span><strong>Forensic Notes:</strong> Highlighted borders indicate annotated Subnets or ASNs (hover for details)</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 6px;">
-                <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #f43f5e; box-sizing: border-box;"></span>
-                <span><strong>Block Rate Arc:</strong> Outer red ring shows % blocked (no ring = 0% / bypass)</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 6px; color: var(--text-muted); margin-left: auto;">
-                <span>💡 Click on any bubble to inspect or jump to table below</span>
-            </div>
-        </div>
-
-        <div class="chart-container-box" style="height: 380px; max-height: 380px; position: relative; overflow: hidden;">
-            <canvas id="scatterChart"></canvas>
-        </div>
-
-        <!-- Subnet Cluster Forensics Table & Quick Filters -->
-        <div style="margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 18px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
+        <!-- View B: Residential Proxy & Subnet Scatterplot (Step 2) -->
+        <div th:if="${analytics != null and !analytics.scatterPoints.empty and activeTab == 'scatter'}"
+            style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px;">
+            <div
+                style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px;">
                 <div>
-                    <div style="font-weight: 600; font-size: 13px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
-                        <span>&#x1F4CB;</span>
-                        <span th:text="${scatterGroupBy == 'ASN' ? 'Autonomous System Forensics Breakdown' : 'Subnet Cluster Forensics Breakdown'}">Subnet Cluster Forensics Breakdown</span>
-                        <span id="scatter-table-count" class="badge" style="background: rgba(56, 189, 248, 0.12); color: var(--color-primary); font-size: 10px;">
-                            <span th:text="${analytics.scatterPoints.size()}">0</span>
-                            <span th:text="${scatterGroupBy == 'ASN' ? ' ASNs' : ' Subnets'}"> Subnets</span>
-                        </span>
+                    <div
+                        style="font-weight: 600; font-size: 13px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                        <span>&#x1F3AF;</span>
+                        <span
+                            th:text="${scatterGroupBy == 'ASN' ? 'Autonomous System (ASN) Cluster &amp; Botnet Analysis' : 'Residential Proxy &amp; Distributed Botnet Cluster Analysis'}">Residential
+                            Proxy &amp; Distributed Botnet Cluster Analysis</span>
                     </div>
                     <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-                        Click column headers to sort &bull; Hover over rows to highlight corresponding bubble in scatterplot
+                        <span th:if="${scatterGroupBy == 'ASN'}">Aggregates distributed rotating residential proxy
+                            swarms across entire Autonomous Systems (ASNs) to isolate synchronized network-wide
+                            campaigns.</span>
+                        <span th:unless="${scatterGroupBy == 'ASN'}">Identifies distributed attacks where hundreds of
+                            residential IPs send low-frequency requests to bypass traditional single-IP rate
+                            limits.</span>
                     </div>
                 </div>
-
-                <!-- Quick Filter Chips -->
-                <div class="filter-btn-group">
-                    <button type="button" class="filter-btn scatter-filter-btn active" data-filter="all" onclick="filterScatterTable('all')">
-                        All (<span th:text="${analytics.scatterPoints.size()}">0</span>)
-                    </button>
-                    <button type="button" class="filter-btn scatter-filter-btn" data-filter="nologins" onclick="filterScatterTable('nologins')"
-                            title="Filter clusters with 0 authenticated user logins (potential botnet/scraper swarms)">
-                        <span>🚨</span> 0 Logins
-                    </button>
-                    <button type="button" class="filter-btn scatter-filter-btn" data-filter="bypass" onclick="filterScatterTable('bypass')"
-                            title="Filter clusters with 0% blocked requests (potential evasion botnets)">
-                        <span>⚠️</span> 0% Blocked (Bypass)
-                    </button>
-                    <button type="button" class="filter-btn scatter-filter-btn" data-filter="annotated" onclick="filterScatterTable('annotated')"
-                            title="Filter clusters with existing operator notes or verdicts">
-                        <span>📝</span> With Notes
-                    </button>
+                <div class="badge"
+                    style="background: rgba(56, 189, 248, 0.12); color: var(--color-primary); font-size: 11px;">
+                    <span
+                        th:text="${analytics.scatterPoints.size()} + (${scatterGroupBy == 'ASN'} ? ' ASN Clusters Analyzed' : ' Subnet Clusters Analyzed')">0
+                        Clusters</span>
                 </div>
             </div>
 
-            <!-- Table Container -->
-            <div class="table-responsive" style="max-height: 480px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
-                <table class="data-table" id="scatter-clusters-table" style="margin-bottom: 0;">
-                    <thead>
-                        <tr>
-                            <th onclick="sortScatterTable(0, 'string')" style="cursor: pointer;"
-                                th:text="${scatterGroupBy == 'ASN' ? 'ASN & Notes ⇅' : 'Subnet & Notes ⇅'}">Subnet &amp; Notes &#x21C5;</th>
-                            <th onclick="sortScatterTable(1, 'string')" style="cursor: pointer;"
-                                th:text="${scatterGroupBy == 'ASN' ? 'Provider & Country ⇅' : 'ASN / ISP ⇅'}">ASN / ISP &#x21C5;</th>
-                            <th onclick="sortScatterTable(2, 'number')" style="cursor: pointer; text-align: right;" title="Sort by Unique Client IPs (X)">Distinct IPs (X) &#x21C5;</th>
-                            <th onclick="sortScatterTable(3, 'number')" style="cursor: pointer; text-align: right;" title="Sort by Average Requests per IP (Y)">Ø Reqs / IP (Y) &#x21C5;</th>
-                            <th onclick="sortScatterTable(4, 'number')" style="cursor: pointer; text-align: right;" title="Sort by Total Request Volume">Total Reqs &#x21C5;</th>
-                            <th onclick="sortScatterTable(5, 'number')" style="cursor: pointer; text-align: right;" title="Sort by Blocked 429 Count">Blocked &#x21C5;</th>
-                            <th onclick="sortScatterTable(6, 'number')" style="cursor: pointer; text-align: right;" title="Sort by Block Rate %">Block Rate &#x21C5;</th>
-                            <th onclick="sortScatterTable(7, 'number')" style="cursor: pointer; text-align: center;" title="Sort by Authenticated Requests">Logins (Auth) &#x21C5;</th>
-                            <th style="text-align: center;">Classification</th>
-                            <th style="text-align: right;">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr th:each="pt : ${analytics.scatterPoints}"
-                            class="scatter-table-row"
-                            th:attr="data-subnet=${pt.subnetGroup},
+            <!-- Forensic Controls Bar: Grouping, Traffic Filter, and Authentication State -->
+            <div
+                style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 12px;">
+                <!-- Group 1: Aggregation Dimension (Subnet vs ASN) -->
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span
+                        style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Dimension:</span>
+                    <div class="filter-btn-group">
+                        <button type="button" class="filter-btn"
+                            th:classappend="${scatterGroupBy != 'ASN' ? 'active' : ''}"
+                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy='SUBNET',scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter},servers=${selectedServers},valves=${selectedValves})}"
+                            hx-target="#analytics-container" hx-swap="outerHTML"
+                            title="Group cluster telemetry by CIDR subnets (/24 for IPv4, /64 for IPv6)">
+                            <span>🌐</span> Subnets (/24)
+                        </button>
+                        <button type="button" class="filter-btn"
+                            th:classappend="${scatterGroupBy == 'ASN' ? 'active' : ''}"
+                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy='ASN',scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter},servers=${selectedServers},valves=${selectedValves})}"
+                            hx-target="#analytics-container" hx-swap="outerHTML"
+                            title="Aggregate rotating proxy botnets across entire Autonomous Systems (ASNs)">
+                            <span>🏛️</span> ASN Rollup
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Group 2: Traffic Filter (e.g. Exclude Search & AI Bots) -->
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span
+                        style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Traffic:</span>
+                    <div class="filter-btn-group">
+                        <button type="button" class="filter-btn"
+                            th:classappend="${scatterTrafficFilter == null or scatterTrafficFilter == 'ALL' ? 'active' : ''}"
+                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy=${scatterGroupBy},scatterTrafficFilter='ALL',scatterAuthFilter=${scatterAuthFilter},servers=${selectedServers},valves=${selectedValves})}"
+                            hx-target="#analytics-container" hx-swap="outerHTML">
+                            All
+                        </button>
+                        <button type="button" class="filter-btn"
+                            th:classappend="${scatterTrafficFilter == 'EXCLUDE_BOTS' ? 'active' : ''}"
+                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy=${scatterGroupBy},scatterTrafficFilter='EXCLUDE_BOTS',scatterAuthFilter=${scatterAuthFilter},servers=${selectedServers},valves=${selectedValves})}"
+                            hx-target="#analytics-container" hx-swap="outerHTML"
+                            title="Filter out verified search engines and AI crawlers so stealth residential proxy swarms stand out">
+                            <span>🛡️</span> Exclude Bots
+                        </button>
+                        <button type="button" class="filter-btn"
+                            th:classappend="${scatterTrafficFilter == 'RESIDENTIAL_ONLY' ? 'active' : ''}"
+                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy=${scatterGroupBy},scatterTrafficFilter='RESIDENTIAL_ONLY',scatterAuthFilter=${scatterAuthFilter},servers=${selectedServers},valves=${selectedValves})}"
+                            hx-target="#analytics-container" hx-swap="outerHTML"
+                            title="Isolate consumer residential broadband pools">
+                            <span>🏠</span> Residential
+                        </button>
+                        <button type="button" class="filter-btn"
+                            th:classappend="${scatterTrafficFilter == 'DATACENTER_ONLY' ? 'active' : ''}"
+                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy=${scatterGroupBy},scatterTrafficFilter='DATACENTER_ONLY',scatterAuthFilter=${scatterAuthFilter},servers=${selectedServers},valves=${selectedValves})}"
+                            hx-target="#analytics-container" hx-swap="outerHTML"
+                            title="Isolate datacenter and cloud hosting ranges">
+                            <span>🏢</span> Datacenter
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Group 3: Login / Authenticated Session Filter -->
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span
+                        style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Authentication:</span>
+                    <div class="filter-btn-group">
+                        <button type="button" class="filter-btn"
+                            th:classappend="${scatterAuthFilter == null or scatterAuthFilter == 'ALL' ? 'active' : ''}"
+                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter='ALL',servers=${selectedServers},valves=${selectedValves})}"
+                            hx-target="#analytics-container" hx-swap="outerHTML">
+                            All
+                        </button>
+                        <button type="button" class="filter-btn"
+                            th:classappend="${scatterAuthFilter == 'NO_LOGINS' ? 'active' : ''}"
+                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter='NO_LOGINS',servers=${selectedServers},valves=${selectedValves})}"
+                            hx-target="#analytics-container" hx-swap="outerHTML"
+                            title="Show only clusters with 0 authenticated logins (pure anonymous scrapers and botnet swarms)">
+                            <span>🚨</span> 0 Logins
+                        </button>
+                        <button type="button" class="filter-btn"
+                            th:classappend="${scatterAuthFilter == 'WITH_LOGINS' ? 'active' : ''}"
+                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter='WITH_LOGINS',servers=${selectedServers},valves=${selectedValves})}"
+                            hx-target="#analytics-container" hx-swap="outerHTML"
+                            title="Show clusters carrying authenticated user sessions (avoids collateral damage on real users)">
+                            <span>🔐</span> With Logins
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Explanatory Guide Box -->
+            <div
+                style="display: flex; gap: 16px; flex-wrap: wrap; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 14px; margin-bottom: 12px; font-size: 11px;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span
+                        style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #f43f5e;"></span>
+                    <span><strong>Residential Proxy Evasion:</strong> Many IPs (high X), low requests/IP (low Y) &mdash;
+                        evades per-IP rate limits (bypasses Valve)</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span
+                        style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #f59e0b;"></span>
+                    <span><strong>Datacenter Scrapers:</strong> Moderate IPs, high burst rate</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span
+                        style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #f59e0b; background: rgba(245, 158, 11, 0.25);"></span>
+                    <span><strong>Forensic Notes:</strong> Highlighted borders indicate annotated Subnets or ASNs (hover
+                        for details)</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span
+                        style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #f43f5e; box-sizing: border-box;"></span>
+                    <span><strong>Block Rate Arc:</strong> Outer red ring shows % blocked (no ring = 0% / bypass)</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; color: var(--text-muted); margin-left: auto;">
+                    <span>💡 Click on any bubble to inspect or jump to table below</span>
+                </div>
+            </div>
+
+            <div class="chart-container-box"
+                style="height: 380px; max-height: 380px; position: relative; overflow: hidden;">
+                <canvas id="scatterChart"></canvas>
+            </div>
+
+            <!-- Subnet Cluster Forensics Table & Quick Filters -->
+            <div style="margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 18px;">
+                <div
+                    style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
+                    <div>
+                        <div
+                            style="font-weight: 600; font-size: 13px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                            <span>&#x1F4CB;</span>
+                            <span
+                                th:text="${scatterGroupBy == 'ASN' ? 'Autonomous System Forensics Breakdown' : 'Subnet Cluster Forensics Breakdown'}">Subnet
+                                Cluster Forensics Breakdown</span>
+                            <span id="scatter-table-count" class="badge"
+                                style="background: rgba(56, 189, 248, 0.12); color: var(--color-primary); font-size: 10px;">
+                                <span th:text="${analytics.scatterPoints.size()}">0</span>
+                                <span th:text="${scatterGroupBy == 'ASN' ? ' ASNs' : ' Subnets'}"> Subnets</span>
+                            </span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                            Click column headers to sort &bull; Hover over rows to highlight corresponding bubble in
+                            scatterplot
+                        </div>
+                    </div>
+
+                    <!-- Quick Filter Chips -->
+                    <div class="filter-btn-group">
+                        <button type="button" class="filter-btn scatter-filter-btn active" data-filter="all"
+                            onclick="filterScatterTable('all')">
+                            All (<span th:text="${analytics.scatterPoints.size()}">0</span>)
+                        </button>
+                        <button type="button" class="filter-btn scatter-filter-btn" data-filter="nologins"
+                            onclick="filterScatterTable('nologins')"
+                            title="Filter clusters with 0 authenticated user logins (potential botnet/scraper swarms)">
+                            <span>🚨</span> 0 Logins
+                        </button>
+                        <button type="button" class="filter-btn scatter-filter-btn" data-filter="bypass"
+                            onclick="filterScatterTable('bypass')"
+                            title="Filter clusters with 0% blocked requests (potential evasion botnets)">
+                            <span>⚠️</span> 0% Blocked (Bypass)
+                        </button>
+                        <button type="button" class="filter-btn scatter-filter-btn" data-filter="annotated"
+                            onclick="filterScatterTable('annotated')"
+                            title="Filter clusters with existing operator notes or verdicts">
+                            <span>📝</span> With Notes
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Table Container -->
+                <div class="table-responsive"
+                    style="max-height: 480px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
+                    <table class="data-table" id="scatter-clusters-table" style="margin-bottom: 0;">
+                        <thead>
+                            <tr>
+                                <th onclick="sortScatterTable(0, 'string')" style="cursor: pointer;"
+                                    th:text="${scatterGroupBy == 'ASN' ? 'ASN & Notes ⇅' : 'Subnet & Notes ⇅'}">Subnet
+                                    &amp; Notes &#x21C5;</th>
+                                <th onclick="sortScatterTable(1, 'string')" style="cursor: pointer;"
+                                    th:text="${scatterGroupBy == 'ASN' ? 'Provider & Country ⇅' : 'ASN / ISP ⇅'}">ASN /
+                                    ISP &#x21C5;</th>
+                                <th onclick="sortScatterTable(2, 'number')" style="cursor: pointer; text-align: right;"
+                                    title="Sort by Unique Client IPs (X)">Distinct IPs (X) &#x21C5;</th>
+                                <th onclick="sortScatterTable(3, 'number')" style="cursor: pointer; text-align: right;"
+                                    title="Sort by Average Requests per IP (Y)">Ø Reqs / IP (Y) &#x21C5;</th>
+                                <th onclick="sortScatterTable(4, 'number')" style="cursor: pointer; text-align: right;"
+                                    title="Sort by Total Request Volume">Total Reqs &#x21C5;</th>
+                                <th onclick="sortScatterTable(5, 'number')" style="cursor: pointer; text-align: right;"
+                                    title="Sort by Blocked 429 Count">Blocked &#x21C5;</th>
+                                <th onclick="sortScatterTable(6, 'number')" style="cursor: pointer; text-align: right;"
+                                    title="Sort by Block Rate %">Block Rate &#x21C5;</th>
+                                <th onclick="sortScatterTable(7, 'number')" style="cursor: pointer; text-align: center;"
+                                    title="Sort by Authenticated Requests">Logins (Auth) &#x21C5;</th>
+                                <th style="text-align: center;">Classification</th>
+                                <th style="text-align: right;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="pt : ${analytics.scatterPoints}" class="scatter-table-row"
+                                th:attr="data-subnet=${pt.subnetGroup},
                                      data-blocked=${pt.blockedRequests},
                                      data-total=${pt.totalRequests},
                                      data-hasnote=${pt.hasNote},
@@ -369,533 +412,870 @@
                                      data-clienttype=${pt.clientType},
                                      onmouseenter=|if(window.AntiDoSCharts) AntiDoSCharts.highlightScatterPoint('scatterChart', '${pt.subnetGroup}')|,
                                      onmouseleave=|if(window.AntiDoSCharts) AntiDoSCharts.clearScatterHighlight('scatterChart')|">
-                            <!-- Subnet / ASN & Notes -->
-                            <td>
-                                <div style="display: flex; align-items: center; gap: 6px;">
-                                    <!-- ASN link if ASN mode -->
-                                    <a th:if="${scatterGroupBy == 'ASN' and pt.asn != null}"
-                                       th:href="@{/offenders(asn=${pt.asn},groupBy='ASN')}"
-                                       class="ip-mono"
-                                       style="font-size: 12px; text-decoration: underline; color: inherit; font-weight: 600;"
-                                       title="Filter offenders view for this Autonomous System"
-                                       th:text="${pt.subnetGroup}">AS24940</a>
-                                    <button th:if="${scatterGroupBy == 'ASN' and pt.asn != null}" type="button" class="btn"
-                                       style="padding: 1px 5px; font-size: 10px; cursor: pointer;"
-                                       th:hx-get="@{/analytics/asn-drilldown(asn=${pt.asn})}"
-                                       hx-target="#asn-drilldown-modal-container"
-                                       title="Open Hourly ASN Deep-Dive &amp; Timeline">&#x1F4CA;</button>
-                                    <!-- Subnet link if Subnet mode -->
-                                    <a th:unless="${scatterGroupBy == 'ASN' and pt.asn != null}"
-                                       th:href="@{/offenders(clientQuery=${pt.subnetGroup},groupBy='SUBNET')}"
-                                       class="ip-mono"
-                                       style="font-size: 12px; text-decoration: underline; color: inherit; font-weight: 600;"
-                                       title="Filter offenders view for this subnet"
-                                       th:text="${pt.subnetGroup}">185.246.221.0/24</a>
+                                <!-- Subnet / ASN & Notes -->
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <!-- ASN link if ASN mode -->
+                                        <a th:if="${scatterGroupBy == 'ASN' and pt.asn != null}"
+                                            th:href="@{/offenders(asn=${pt.asn},groupBy='ASN')}" class="ip-mono"
+                                            style="font-size: 12px; text-decoration: underline; color: inherit; font-weight: 600;"
+                                            title="Filter offenders view for this Autonomous System"
+                                            th:text="${pt.subnetGroup}">AS24940</a>
+                                        <button th:if="${scatterGroupBy == 'ASN' and pt.asn != null}" type="button"
+                                            class="btn" style="padding: 1px 5px; font-size: 10px; cursor: pointer;"
+                                            th:hx-get="@{/analytics/asn-drilldown(asn=${pt.asn})}"
+                                            hx-target="#asn-drilldown-modal-container"
+                                            title="Open Hourly ASN Deep-Dive &amp; Timeline">&#x1F4CA;</button>
+                                        <!-- Subnet link if Subnet mode -->
+                                        <a th:unless="${scatterGroupBy == 'ASN' and pt.asn != null}"
+                                            th:href="@{/offenders(clientQuery=${pt.subnetGroup},groupBy='SUBNET')}"
+                                            class="ip-mono"
+                                            style="font-size: 12px; text-decoration: underline; color: inherit; font-weight: 600;"
+                                            title="Filter offenders view for this subnet"
+                                            th:text="${pt.subnetGroup}">185.246.221.0/24</a>
 
-                                    <!-- Subnet Note Badge or Add Button (Subnet Mode) -->
-                                    <th:block th:if="${scatterGroupBy != 'ASN' and pt.subnetNoteVerdict != null}">
-                                        <span class="badge-note"
-                                              th:classappend="${#strings.toLowerCase(pt.subnetNoteVerdict) == 'suspicious' ? 'badge-warning' : (#strings.toLowerCase(pt.subnetNoteVerdict) == 'malicious' ? 'badge-danger' : (#strings.toLowerCase(pt.subnetNoteVerdict) == 'legitimate' ? 'badge-success' : 'badge-info'))}"
-                                              th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${pt.subnetGroup}, context='table')}"
-                                              hx-target="#note-modal-container"
-                                              th:title="'Subnet Note: ' + ${pt.subnetNoteVerdict} + (${pt.subnetNoteSnippet != null} ? ' - &quot;' + ${pt.subnetNoteSnippet} + '&quot;' : '')"
-                                              th:text="${pt.subnetNoteIcon != null ? pt.subnetNoteIcon : '📝'}">🟢</span>
-                                    </th:block>
-                                    <th:block th:if="${scatterGroupBy != 'ASN' and pt.subnetNoteVerdict == null and pt.subnetGroup != null}">
-                                        <span class="btn-add-note"
-                                              th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${pt.subnetGroup}, context='table')}"
-                                              hx-target="#note-modal-container"
-                                              title="Add note for this subnet">+📝</span>
-                                    </th:block>
-
-                                    <!-- ASN Note Badge or Add Button (ASN Mode) -->
-                                    <th:block th:if="${scatterGroupBy == 'ASN' and pt.asn != null and pt.asnNoteVerdict != null}">
-                                        <span class="badge-note"
-                                              th:classappend="${#strings.toLowerCase(pt.asnNoteVerdict) == 'suspicious' ? 'badge-warning' : (#strings.toLowerCase(pt.asnNoteVerdict) == 'malicious' ? 'badge-danger' : (#strings.toLowerCase(pt.asnNoteVerdict) == 'legitimate' ? 'badge-success' : 'badge-info'))}"
-                                              th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${pt.asn}, context='table')}"
-                                              hx-target="#note-modal-container"
-                                              th:title="'ASN Note: ' + ${pt.asnNoteVerdict} + (${pt.asnNoteSnippet != null} ? ' - &quot;' + ${pt.asnNoteSnippet} + '&quot;' : '')"
-                                              th:text="${pt.asnNoteIcon != null ? pt.asnNoteIcon : '📝'}">🟢</span>
-                                    </th:block>
-                                    <th:block th:if="${scatterGroupBy == 'ASN' and pt.asn != null and pt.asnNoteVerdict == null}">
-                                        <span class="btn-add-note"
-                                              th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${pt.asn}, context='table')}"
-                                              hx-target="#note-modal-container"
-                                              title="Add note for this ASN">+📝</span>
-                                    </th:block>
-                                </div>
-                            </td>
-
-                            <!-- ASN & ISP / Provider Details -->
-                            <td>
-                                <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
-                                    <span th:if="${pt.countryCode != null and pt.countryCode != '--'}" class="badge badge-secondary" style="padding: 1px 4px; font-size: 9px;" th:text="${pt.countryCode}">DE</span>
-                                    <span th:if="${pt.asn != null and scatterGroupBy != 'ASN'}" style="display: inline-flex; align-items: center; gap: 3px;">
-                                        <a th:href="@{/events(asn=${pt.asn})}" class="badge badge-info" style="padding: 1px 5px; font-size: 9px; text-decoration: none;" th:title="${pt.asOrg + ' - Click to filter incidents'}" th:text="'AS' + ${pt.asn}">AS24940</a>
-                                        <button type="button" class="btn" style="padding: 0px 4px; font-size: 8px; cursor: pointer; line-height: 1.2;" th:hx-get="@{/analytics/asn-drilldown(asn=${pt.asn})}" hx-target="#asn-drilldown-modal-container" title="Open Hourly ASN Deep-Dive &amp; Timeline">&#x1F4CA;</button>
-                                        <th:block th:if="${pt.asnNoteVerdict != null}">
+                                        <!-- Subnet Note Badge or Add Button (Subnet Mode) -->
+                                        <th:block th:if="${scatterGroupBy != 'ASN' and pt.subnetNoteVerdict != null}">
                                             <span class="badge-note"
-                                                  th:classappend="${#strings.toLowerCase(pt.asnNoteVerdict) == 'suspicious' ? 'badge-warning' : (#strings.toLowerCase(pt.asnNoteVerdict) == 'malicious' ? 'badge-danger' : (#strings.toLowerCase(pt.asnNoteVerdict) == 'legitimate' ? 'badge-success' : 'badge-info'))}"
-                                                  th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${pt.asn}, context='table')}"
-                                                  hx-target="#note-modal-container"
-                                                  th:title="'ASN Note: ' + ${pt.asnNoteVerdict} + (${pt.asnNoteSnippet != null} ? ' - &quot;' + ${pt.asnNoteSnippet} + '&quot;' : '')"
-                                                  th:text="${pt.asnNoteIcon != null ? pt.asnNoteIcon : '📝'}">🟢</span>
+                                                th:classappend="${#strings.toLowerCase(pt.subnetNoteVerdict) == 'suspicious' ? 'badge-warning' : (#strings.toLowerCase(pt.subnetNoteVerdict) == 'malicious' ? 'badge-danger' : (#strings.toLowerCase(pt.subnetNoteVerdict) == 'legitimate' ? 'badge-success' : 'badge-info'))}"
+                                                th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${pt.subnetGroup}, context='table')}"
+                                                hx-target="#note-modal-container"
+                                                th:title="'Subnet Note: ' + ${pt.subnetNoteVerdict} + (${pt.subnetNoteSnippet != null} ? ' - &quot;' + ${pt.subnetNoteSnippet} + '&quot;' : '')"
+                                                th:text="${pt.subnetNoteIcon != null ? pt.subnetNoteIcon : '📝'}">🟢</span>
                                         </th:block>
-                                        <th:block th:if="${pt.asnNoteVerdict == null}">
+                                        <th:block
+                                            th:if="${scatterGroupBy != 'ASN' and pt.subnetNoteVerdict == null and pt.subnetGroup != null}">
                                             <span class="btn-add-note"
-                                                  th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${pt.asn}, context='table')}"
-                                                  hx-target="#note-modal-container"
-                                                  title="Add note for this ASN">+📝</span>
+                                                th:hx-get="@{/notes/modal/view-target(targetType='SUBNET', targetKey=${pt.subnetGroup}, context='table')}"
+                                                hx-target="#note-modal-container"
+                                                title="Add note for this subnet">+📝</span>
+                                        </th:block>
+
+                                        <!-- ASN Note Badge or Add Button (ASN Mode) -->
+                                        <th:block
+                                            th:if="${scatterGroupBy == 'ASN' and pt.asn != null and pt.asnNoteVerdict != null}">
+                                            <span class="badge-note"
+                                                th:classappend="${#strings.toLowerCase(pt.asnNoteVerdict) == 'suspicious' ? 'badge-warning' : (#strings.toLowerCase(pt.asnNoteVerdict) == 'malicious' ? 'badge-danger' : (#strings.toLowerCase(pt.asnNoteVerdict) == 'legitimate' ? 'badge-success' : 'badge-info'))}"
+                                                th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${pt.asn}, context='table')}"
+                                                hx-target="#note-modal-container"
+                                                th:title="'ASN Note: ' + ${pt.asnNoteVerdict} + (${pt.asnNoteSnippet != null} ? ' - &quot;' + ${pt.asnNoteSnippet} + '&quot;' : '')"
+                                                th:text="${pt.asnNoteIcon != null ? pt.asnNoteIcon : '📝'}">🟢</span>
+                                        </th:block>
+                                        <th:block
+                                            th:if="${scatterGroupBy == 'ASN' and pt.asn != null and pt.asnNoteVerdict == null}">
+                                            <span class="btn-add-note"
+                                                th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${pt.asn}, context='table')}"
+                                                hx-target="#note-modal-container"
+                                                title="Add note for this ASN">+📝</span>
+                                        </th:block>
+                                    </div>
+                                </td>
+
+                                <!-- ASN & ISP / Provider Details -->
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+                                        <span th:if="${pt.countryCode != null and pt.countryCode != '--'}"
+                                            class="badge badge-secondary" style="padding: 1px 4px; font-size: 9px;"
+                                            th:text="${pt.countryCode}">DE</span>
+                                        <span th:if="${pt.asn != null and scatterGroupBy != 'ASN'}"
+                                            style="display: inline-flex; align-items: center; gap: 3px;">
+                                            <a th:href="@{/events(asn=${pt.asn})}" class="badge badge-info"
+                                                style="padding: 1px 5px; font-size: 9px; text-decoration: none;"
+                                                th:title="${pt.asOrg + ' - Click to filter incidents'}"
+                                                th:text="'AS' + ${pt.asn}">AS24940</a>
+                                            <button type="button" class="btn"
+                                                style="padding: 0px 4px; font-size: 8px; cursor: pointer; line-height: 1.2;"
+                                                th:hx-get="@{/analytics/asn-drilldown(asn=${pt.asn})}"
+                                                hx-target="#asn-drilldown-modal-container"
+                                                title="Open Hourly ASN Deep-Dive &amp; Timeline">&#x1F4CA;</button>
+                                            <th:block th:if="${pt.asnNoteVerdict != null}">
+                                                <span class="badge-note"
+                                                    th:classappend="${#strings.toLowerCase(pt.asnNoteVerdict) == 'suspicious' ? 'badge-warning' : (#strings.toLowerCase(pt.asnNoteVerdict) == 'malicious' ? 'badge-danger' : (#strings.toLowerCase(pt.asnNoteVerdict) == 'legitimate' ? 'badge-success' : 'badge-info'))}"
+                                                    th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${pt.asn}, context='table')}"
+                                                    hx-target="#note-modal-container"
+                                                    th:title="'ASN Note: ' + ${pt.asnNoteVerdict} + (${pt.asnNoteSnippet != null} ? ' - &quot;' + ${pt.asnNoteSnippet} + '&quot;' : '')"
+                                                    th:text="${pt.asnNoteIcon != null ? pt.asnNoteIcon : '📝'}">🟢</span>
+                                            </th:block>
+                                            <th:block th:if="${pt.asnNoteVerdict == null}">
+                                                <span class="btn-add-note"
+                                                    th:hx-get="@{/notes/modal/view-target(targetType='ASN', targetKey='AS' + ${pt.asn}, context='table')}"
+                                                    hx-target="#note-modal-container"
+                                                    title="Add note for this ASN">+📝</span>
+                                            </th:block>
+                                        </span>
+                                        <span style="font-size: 11px; color: var(--text-secondary);"
+                                            th:text="${pt.asOrg}">Provider Org</span>
+                                    </div>
+                                </td>
+
+                                <!-- Distinct IPs (X) & UA Diversity -->
+                                <td style="text-align: right;">
+                                    <div>
+                                        <span class="ip-mono" style="font-weight: 700; color: var(--text-primary);"
+                                            th:text="${pt.distinctClients}">50</span>
+                                        <div th:if="${pt.distinctUserAgents > 0}"
+                                            style="font-size: 11px; margin-top: 1px;">
+                                            <span class="badge"
+                                                th:classappend="${pt.distinctClients >= 5 and pt.distinctUserAgents == 1 ? 'badge-danger' : 'badge-secondary'}"
+                                                style="font-size: 9px; padding: 0 4px;"
+                                                th:title="'User-Agent Diversity: ' + ${pt.distinctUserAgents} + ' distinct UA signature' + (${pt.distinctUserAgents == 1} ? '' : 's')">
+                                                <span
+                                                    th:text="${pt.distinctUserAgents} + ' UA' + (${pt.distinctUserAgents == 1} ? '' : 's')"></span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <!-- Ø Reqs / IP (Y) -->
+                                <td style="text-align: right;">
+                                    <span class="ip-mono" style="font-weight: 600;"
+                                        th:text="${pt.averageRequestsPerClient}">10.0</span>
+                                </td>
+
+                                <!-- Total Reqs -->
+                                <td style="text-align: right;">
+                                    <span class="ip-mono"
+                                        th:text="${#numbers.formatInteger(pt.totalRequests, 0, 'COMMA')}">500</span>
+                                </td>
+
+                                <!-- Blocked -->
+                                <td style="text-align: right;">
+                                    <span class="ip-mono"
+                                        th:style="${pt.blockedRequests > 0 ? 'color: var(--color-danger); font-weight: 600;' : 'color: var(--text-muted);'}"
+                                        th:text="${#numbers.formatInteger(pt.blockedRequests, 0, 'COMMA')}">0</span>
+                                </td>
+
+                                <!-- Block Rate % -->
+                                <td style="text-align: right;">
+                                    <div
+                                        style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+                                        <div
+                                            style="width: 50px; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden;">
+                                            <div
+                                                th:style="'height: 100%; width: ' + ${pt.blockedRatioPercent} + '%; background: ' + (${pt.blockedRatioPercent == 0} ? 'transparent' : 'var(--color-danger)') + ';'">
+                                            </div>
+                                        </div>
+                                        <span class="ip-mono" style="font-size: 11px;"
+                                            th:styleappend="${pt.blockedRatioPercent == 0 ? 'color: var(--text-muted);' : 'color: var(--color-danger); font-weight: 600;'}"
+                                            th:text="${pt.blockedRatioPercent} + '%'">0.0%</span>
+                                        <span th:if="${pt.blockedRatioPercent == 0}" class="badge"
+                                            style="background: rgba(244,63,94,0.15); color: #f43f5e; font-size: 9px; padding: 0 4px;"
+                                            title="0% blocked - potential evasion">Bypass</span>
+                                    </div>
+                                </td>
+
+                                <!-- Logins (Auth) -->
+                                <td style="text-align: center;">
+                                    <span th:if="${pt.authenticatedRequests == 0}" class="badge"
+                                        style="background: rgba(244, 63, 94, 0.12); color: #f43f5e; font-size: 10px; border: 1px solid rgba(244, 63, 94, 0.3);"
+                                        title="0 authenticated requests observed - pure anonymous / scraper traffic">🚨
+                                        0 Logins</span>
+                                    <span th:if="${pt.authenticatedRequests > 0}" class="badge badge-success"
+                                        style="font-size: 10px;"
+                                        th:title="${pt.authenticatedRequests} + ' authenticated of ' + ${pt.authenticatedTrackedRequests} + ' tracked requests'">
+                                        🔐 <span th:text="${pt.authenticatedRequests}">12</span>
+                                        <th:block th:if="${pt.authenticatedRatioPercent != null}">
+                                            (<span th:text="${pt.authenticatedRatioPercent} + '%'">15.4%</span>)
                                         </th:block>
                                     </span>
-                                    <span style="font-size: 11px; color: var(--text-secondary);" th:text="${pt.asOrg}">Provider Org</span>
-                                </div>
-                            </td>
+                                </td>
 
-                            <!-- Distinct IPs (X) & UA Diversity -->
-                            <td style="text-align: right;">
-                                <div>
-                                    <span class="ip-mono" style="font-weight: 700; color: var(--text-primary);" th:text="${pt.distinctClients}">50</span>
-                                    <div th:if="${pt.distinctUserAgents > 0}" style="font-size: 11px; margin-top: 1px;">
-                                        <span class="badge" th:classappend="${pt.distinctClients >= 5 and pt.distinctUserAgents == 1 ? 'badge-danger' : 'badge-secondary'}"
-                                              style="font-size: 9px; padding: 0 4px;"
-                                              th:title="'User-Agent Diversity: ' + ${pt.distinctUserAgents} + ' distinct UA signature' + (${pt.distinctUserAgents == 1} ? '' : 's')">
-                                            <span th:text="${pt.distinctUserAgents} + ' UA' + (${pt.distinctUserAgents == 1} ? '' : 's')"></span>
-                                        </span>
-                                    </div>
-                                </div>
-                            </td>
+                                <!-- Classification -->
+                                <td style="text-align: center;">
+                                    <span th:if="${pt.classification == 'HIGH_RISK_RESIDENTIAL'}" class="badge"
+                                        style="background: rgba(244,63,94,0.15); color: #f43f5e; border: 1px solid #f43f5e; font-size: 10px;">🚨
+                                        Residential Evasion</span>
+                                    <span th:if="${pt.classification == 'DATACENTER_CLUSTER'}"
+                                        class="badge badge-warning" style="font-size: 10px;">🏢 Datacenter
+                                        Scraper</span>
+                                    <span th:if="${pt.classification == 'TOR_ANONYMIZER'}" class="badge badge-purple"
+                                        style="font-size: 10px;">🧅 Tor Exit Node</span>
+                                    <span th:if="${pt.classification == 'VERIFIED_BOT'}" class="badge badge-success"
+                                        style="font-size: 10px;">🤖 Verified Crawler</span>
+                                    <span th:if="${pt.classification == 'DISTRIBUTED_ACTIVE'}" class="badge badge-info"
+                                        style="font-size: 10px;">🌐 Distributed Swarm</span>
+                                    <span th:if="${pt.classification == 'REGULAR_SUBNET' or pt.classification == null}"
+                                        class="badge badge-secondary" style="font-size: 10px;">Standard Subnet</span>
+                                </td>
 
-                            <!-- Ø Reqs / IP (Y) -->
-                            <td style="text-align: right;">
-                                <span class="ip-mono" style="font-weight: 600;" th:text="${pt.averageRequestsPerClient}">10.0</span>
-                            </td>
-
-                            <!-- Total Reqs -->
-                            <td style="text-align: right;">
-                                <span class="ip-mono" th:text="${#numbers.formatInteger(pt.totalRequests, 0, 'COMMA')}">500</span>
-                            </td>
-
-                            <!-- Blocked -->
-                            <td style="text-align: right;">
-                                <span class="ip-mono"
-                                      th:style="${pt.blockedRequests > 0 ? 'color: var(--color-danger); font-weight: 600;' : 'color: var(--text-muted);'}"
-                                      th:text="${#numbers.formatInteger(pt.blockedRequests, 0, 'COMMA')}">0</span>
-                            </td>
-
-                            <!-- Block Rate % -->
-                            <td style="text-align: right;">
-                                <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
-                                    <div style="width: 50px; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden;">
-                                        <div th:style="'height: 100%; width: ' + ${pt.blockedRatioPercent} + '%; background: ' + (${pt.blockedRatioPercent == 0} ? 'transparent' : 'var(--color-danger)') + ';'"></div>
-                                    </div>
-                                    <span class="ip-mono" style="font-size: 11px;"
-                                          th:styleappend="${pt.blockedRatioPercent == 0 ? 'color: var(--text-muted);' : 'color: var(--color-danger); font-weight: 600;'}"
-                                          th:text="${pt.blockedRatioPercent} + '%'">0.0%</span>
-                                    <span th:if="${pt.blockedRatioPercent == 0}" class="badge" style="background: rgba(244,63,94,0.15); color: #f43f5e; font-size: 9px; padding: 0 4px;" title="0% blocked - potential evasion">Bypass</span>
-                                </div>
-                            </td>
-
-                            <!-- Logins (Auth) -->
-                            <td style="text-align: center;">
-                                <span th:if="${pt.authenticatedRequests == 0}"
-                                      class="badge"
-                                      style="background: rgba(244, 63, 94, 0.12); color: #f43f5e; font-size: 10px; border: 1px solid rgba(244, 63, 94, 0.3);"
-                                      title="0 authenticated requests observed - pure anonymous / scraper traffic">🚨 0 Logins</span>
-                                <span th:if="${pt.authenticatedRequests > 0}"
-                                      class="badge badge-success"
-                                      style="font-size: 10px;"
-                                      th:title="${pt.authenticatedRequests} + ' authenticated of ' + ${pt.authenticatedTrackedRequests} + ' tracked requests'">
-                                    🔐 <span th:text="${pt.authenticatedRequests}">12</span>
-                                    <th:block th:if="${pt.authenticatedRatioPercent != null}">
-                                        (<span th:text="${pt.authenticatedRatioPercent} + '%'">15.4%</span>)
-                                    </th:block>
-                                </span>
-                            </td>
-
-                            <!-- Classification -->
-                            <td style="text-align: center;">
-                                <span th:if="${pt.classification == 'HIGH_RISK_RESIDENTIAL'}" class="badge" style="background: rgba(244,63,94,0.15); color: #f43f5e; border: 1px solid #f43f5e; font-size: 10px;">🚨 Residential Evasion</span>
-                                <span th:if="${pt.classification == 'DATACENTER_CLUSTER'}" class="badge badge-warning" style="font-size: 10px;">🏢 Datacenter Scraper</span>
-                                <span th:if="${pt.classification == 'TOR_ANONYMIZER'}" class="badge badge-purple" style="font-size: 10px;">🧅 Tor Exit Node</span>
-                                <span th:if="${pt.classification == 'VERIFIED_BOT'}" class="badge badge-success" style="font-size: 10px;">🤖 Verified Crawler</span>
-                                <span th:if="${pt.classification == 'DISTRIBUTED_ACTIVE'}" class="badge badge-info" style="font-size: 10px;">🌐 Distributed Swarm</span>
-                                <span th:if="${pt.classification == 'REGULAR_SUBNET' or pt.classification == null}" class="badge badge-secondary" style="font-size: 10px;">Standard Subnet</span>
-                            </td>
-
-                            <!-- Action -->
-                            <td style="text-align: right;">
-                                <a th:if="${scatterGroupBy == 'ASN' and pt.asn != null}"
-                                   th:href="@{/offenders(asn=${pt.asn},groupBy='ASN')}"
-                                   class="btn"
-                                   style="padding: 2px 8px; font-size: 11px;"
-                                   title="Inspect Autonomous System in Top Offenders Forensics">Inspect &rarr;</a>
-                                <a th:unless="${scatterGroupBy == 'ASN' and pt.asn != null}"
-                                   th:href="@{/offenders(clientQuery=${pt.subnetGroup},groupBy='SUBNET')}"
-                                   class="btn"
-                                   style="padding: 2px 8px; font-size: 11px;"
-                                   title="Inspect Subnet in Top Offenders Forensics">Inspect &rarr;</a>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- View C: Configuration & False-Positive Advisor (Step 3) -->
-    <div th:if="${analytics != null and activeTab == 'advisor'}" style="display: flex; flex-direction: column; gap: 20px;">
-
-        <!-- Summary KPI Row -->
-        <div class="stats-grid" style="margin-bottom: 0;">
-            <div class="stat-card">
-                <div class="stat-label">Critical Alerts</div>
-                <div class="stat-value danger" th:text="${analytics.advisorReport != null ? analytics.advisorReport.criticalCount : 0}">
-                    0
-                </div>
-                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
-                    Search engines or core infrastructure blocked
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Warnings &amp; NAT Risks</div>
-                <div class="stat-value warning" th:text="${analytics.advisorReport != null ? analytics.advisorReport.warningCount : 0}">
-                    0
-                </div>
-                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
-                    Shared IP / returning user throttling
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Edge Offload Candidates</div>
-                <div class="stat-value info" th:text="${analytics.advisorReport != null ? analytics.advisorReport.infoCount : 0}">
-                    0
-                </div>
-                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
-                    High-volume cloud bot scraping waves
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Recommended Whitelist Subnets</div>
-                <div class="stat-value success" th:text="${analytics.advisorReport != null ? analytics.advisorReport.recommendedAlwaysAllowedSubnets.size() : 0}">
-                    0
-                </div>
-                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
-                    Subnets suggested for alwaysAllowedIPs
+                                <!-- Action -->
+                                <td style="text-align: right;">
+                                    <a th:if="${scatterGroupBy == 'ASN' and pt.asn != null}"
+                                        th:href="@{/offenders(asn=${pt.asn},groupBy='ASN')}" class="btn"
+                                        style="padding: 2px 8px; font-size: 11px;"
+                                        title="Inspect Autonomous System in Top Offenders Forensics">Inspect &rarr;</a>
+                                    <a th:unless="${scatterGroupBy == 'ASN' and pt.asn != null}"
+                                        th:href="@{/offenders(clientQuery=${pt.subnetGroup},groupBy='SUBNET')}"
+                                        class="btn" style="padding: 2px 8px; font-size: 11px;"
+                                        title="Inspect Subnet in Top Offenders Forensics">Inspect &rarr;</a>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
 
-        <!-- Consolidated Quick-Fix Box if recommended subnets exist -->
-        <div th:if="${analytics.advisorReport != null and !analytics.advisorReport.recommendedAlwaysAllowedSubnets.isEmpty()}"
-             style="background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: var(--radius-md); padding: 18px;">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 12px; flex-wrap: wrap;">
-                <div>
-                    <div style="font-size: 14px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
-                        <span>&#x1F6E1;&#xFE0F;</span> Consolidated Whitelist Directives (Tomcat server.xml)
+        <!-- View C: Configuration & False-Positive Advisor (Step 3) -->
+        <div th:if="${analytics != null and activeTab == 'advisor'}"
+            style="display: flex; flex-direction: column; gap: 20px;">
+
+            <!-- Summary KPI Row -->
+            <div class="stats-grid" style="margin-bottom: 0;">
+                <div class="stat-card">
+                    <div class="stat-label">Critical Alerts</div>
+                    <div class="stat-value danger"
+                        th:text="${analytics.advisorReport != null ? analytics.advisorReport.criticalCount : 0}">
+                        0
                     </div>
-                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
-                        The advisor detected internal networks or verified crawlers hitting strict limits. Add these to <code>alwaysAllowedIPs</code> on the relevant valve(s):
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
+                        Search engines or core infrastructure blocked
                     </div>
                 </div>
-                <button type="button" class="btn btn-primary"
+                <div class="stat-card">
+                    <div class="stat-label">Warnings &amp; NAT Risks</div>
+                    <div class="stat-value warning"
+                        th:text="${analytics.advisorReport != null ? analytics.advisorReport.warningCount : 0}">
+                        0
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
+                        Shared IP / returning user throttling
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Edge Offload Candidates</div>
+                    <div class="stat-value info"
+                        th:text="${analytics.advisorReport != null ? analytics.advisorReport.infoCount : 0}">
+                        0
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
+                        High-volume cloud bot scraping waves
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Recommended Whitelist Subnets</div>
+                    <div class="stat-value success"
+                        th:text="${analytics.advisorReport != null ? analytics.advisorReport.recommendedAlwaysAllowedSubnets.size() : 0}">
+                        0
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
+                        Subnets suggested for alwaysAllowedIPs
+                    </div>
+                </div>
+            </div>
+
+            <!-- Consolidated Quick-Fix Box if recommended subnets exist -->
+            <div th:if="${analytics.advisorReport != null and !analytics.advisorReport.recommendedAlwaysAllowedSubnets.isEmpty()}"
+                style="background: var(--bg-card); border: 1px solid var(--border-accent); border-radius: var(--radius-md); padding: 18px;">
+                <div
+                    style="display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 12px; flex-wrap: wrap;">
+                    <div>
+                        <div
+                            style="font-size: 14px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                            <span>&#x1F6E1;&#xFE0F;</span> Consolidated Whitelist Directives (Tomcat server.xml)
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                            The advisor detected internal networks or verified crawlers hitting strict limits. Add these
+                            to <code>alwaysAllowedIPs</code> on the relevant valve(s):
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-primary"
                         onclick="copyAdvisorCode('consolidated-server-xml', this)"
                         style="padding: 6px 14px; font-size: 12px;">
-                    <span>&#x1F4CB;</span> Copy XML Snippet
-                </button>
-            </div>
-
-            <!-- Display suggested subnets pills -->
-            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
-                <span th:each="sub : ${analytics.advisorReport.recommendedAlwaysAllowedSubnets}"
-                      class="badge badge-info" style="font-size: 11.5px; padding: 4px 8px; font-family: ui-monospace, monospace;"
-                      th:text="${sub}">10.77.25.0/24</span>
-            </div>
-
-            <pre id="consolidated-server-xml" style="background: rgba(0,0,0,0.35); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; font-size: 11.5px; overflow-x: auto; color: var(--text-primary); margin: 0; line-height: 1.45;"><code th:text="${analytics.advisorReport.consolidatedServerXmlSnippet}"></code></pre>
-        </div>
-
-        <!-- Empty State if no findings -->
-        <div th:if="${analytics.advisorReport == null or analytics.advisorReport.findings.isEmpty()}"
-             style="text-align: center; padding: 50px 20px; color: var(--text-muted); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
-            <div style="font-size: 36px; margin-bottom: 10px;">&#x2705;</div>
-            <div style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px;">
-                Optimal Configuration &mdash; No False Positives Detected
-            </div>
-            <div style="font-size: 12.5px; max-width: 520px; margin: 0 auto; line-height: 1.4;">
-                No verified search engine crawlers or internal private network addresses were blocked in this time window.
-                Rate limits are well-tuned for your observed traffic profile.
-            </div>
-        </div>
-
-        <!-- Findings List -->
-        <div th:if="${analytics.advisorReport != null and !analytics.advisorReport.findings.isEmpty()}"
-             style="display: flex; flex-direction: column; gap: 16px;">
-            <div th:each="f : ${analytics.advisorReport.findings}"
-                 class="sys-card" style="padding: 18px; margin: 0; border-left: 4px solid var(--border-color);"
-                 th:styleappend="${f.severity.name() == 'CRITICAL' ? 'border-left-color: var(--color-danger);' : (f.severity.name() == 'WARNING' ? 'border-left-color: var(--color-warning);' : 'border-left-color: var(--color-info);')}">
-
-                <!-- Finding Header -->
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; flex-wrap: wrap;">
-                    <div>
-                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
-                            <span th:if="${f.severity.name() == 'CRITICAL'}" class="badge badge-danger">CRITICAL</span>
-                            <span th:if="${f.severity.name() == 'WARNING'}" class="badge badge-warning">WARNING</span>
-                            <span th:if="${f.severity.name() == 'INFO'}" class="badge badge-info">INFO</span>
-                            <span class="badge badge-secondary" th:text="${f.category.label}">Internal Infrastructure</span>
-                            <span style="font-size: 12px; color: var(--text-muted);" th:text="'Node: ' + ${f.serverId} + ' &bull; Valve: ' + ${f.valveName}">Node: Pub03</span>
-                        </div>
-                        <div style="font-size: 14.5px; font-weight: 700; color: var(--text-primary);" th:text="${f.title}">
-                            Internal RFC 1918 Network (10.77.25.0/24) Blocked by 'FUER ALLE' on Pub04
-                        </div>
-                    </div>
-
-                    <!-- Metrics Badges -->
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <div style="text-align: right;">
-                            <div style="font-size: 13px; font-weight: 700; color: var(--color-danger);"
-                                 th:text="${#numbers.formatInteger(f.blockedRequests, 1, 'COMMA')} + ' Blocked'">4,547 Blocked</div>
-                            <div style="font-size: 11px; color: var(--text-muted);"
-                                 th:text="${f.blockPercentage} + '% block rate (' + ${#numbers.formatInteger(f.totalRequests, 1, 'COMMA')} + ' reqs)'">100% block rate</div>
-                        </div>
-                    </div>
+                        <span>&#x1F4CB;</span> Copy XML Snippet
+                    </button>
                 </div>
 
-                <!-- Explanation Paragraph -->
-                <div style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.45; margin-bottom: 12px;"
-                     th:text="${f.explanation}">
-                    Explanation text...
+                <!-- Display suggested subnets pills -->
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+                    <span th:each="sub : ${analytics.advisorReport.recommendedAlwaysAllowedSubnets}"
+                        class="badge badge-info"
+                        style="font-size: 11.5px; padding: 4px 8px; font-family: ui-monospace, monospace;"
+                        th:text="${sub}">10.77.25.0/24</span>
                 </div>
 
-                <!-- Recommendation & Action Box -->
-                <div style="background: rgba(0,0,0,0.22); border-radius: var(--radius-sm); border: 1px solid var(--border-color); padding: 12px 14px; margin-bottom: 12px;">
-                    <div style="font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
-                        <span>&#x1F4A1;</span> Recommended Action:
-                    </div>
-                    <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.45; white-space: pre-line;"
-                         th:text="${f.recommendation}">
-                        Recommendation text...
-                    </div>
+                <pre id="consolidated-server-xml"
+                    style="background: rgba(0,0,0,0.35); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; font-size: 11.5px; overflow-x: auto; color: var(--text-primary); margin: 0; line-height: 1.45;"><code th:text="${analytics.advisorReport.consolidatedServerXmlSnippet}"></code></pre>
+            </div>
 
-                    <!-- 1-Click Active Mitigation Actions for Attack Categories -->
-                    <div th:if="${f.category.name() == 'STEALTH_CARPET_ATTACK' or f.category.name() == 'CHAMELEON_BOT' or f.category.name() == 'DATACENTER_OFFLOAD'}"
-                         style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
-                        <a th:if="${f.extractAsn() != null}"
-                           th:href="@{/mitigation(asn=${f.extractAsn()},reason=${f.title},source='ADVISOR')}"
-                           class="btn btn-danger"
-                           style="font-size: 11.5px; padding: 5px 12px; font-weight: 700;">
-                            <span>&#x1F6E1;&#xFE0F;</span> Mitigate ASN <span th:text="${f.extractAsn()}">64496</span> Active Subnets &rarr;
-                        </a>
-                        <a th:if="${f.isDirectCidrTarget()}"
-                           th:href="@{/mitigation(cidr=${f.targetSubnet},reason=${f.title},source='ADVISOR')}"
-                           class="btn btn-danger"
-                           style="font-size: 11.5px; padding: 5px 12px; font-weight: 700;">
-                            <span>&#x1F6E1;&#xFE0F;</span> Block Subnet <span th:text="${f.targetSubnet}">198.51.100.0/24</span> Dynamically &rarr;
-                        </a>
-                    </div>
+            <!-- Empty State if no findings -->
+            <div th:if="${analytics.advisorReport == null or analytics.advisorReport.findings.isEmpty()}"
+                style="text-align: center; padding: 50px 20px; color: var(--text-muted); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                <div style="font-size: 36px; margin-bottom: 10px;">&#x2705;</div>
+                <div style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px;">
+                    Optimal Configuration &mdash; No False Positives Detected
                 </div>
+                <div style="font-size: 12.5px; max-width: 520px; margin: 0 auto; line-height: 1.4;">
+                    No verified search engine crawlers or internal private network addresses were blocked in this time
+                    window.
+                    Rate limits are well-tuned for your observed traffic profile.
+                </div>
+            </div>
 
-                <!-- Suggested Configuration XML Snippet if available -->
-                <div th:if="${f.suggestedConfigXml != null}">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <span style="font-size: 11.5px; font-weight: 600; color: var(--text-muted);">Suggested Tomcat server.xml Configuration:</span>
-                        <button type="button" class="btn btn-primary" style="padding: 4px 12px; font-size: 11.5px;"
+            <!-- Findings List -->
+            <div th:if="${analytics.advisorReport != null and !analytics.advisorReport.findings.isEmpty()}"
+                style="display: flex; flex-direction: column; gap: 16px;">
+                <div th:each="f : ${analytics.advisorReport.findings}" class="sys-card"
+                    style="padding: 18px; margin: 0; border-left: 4px solid var(--border-color);"
+                    th:styleappend="${f.severity.name() == 'CRITICAL' ? 'border-left-color: var(--color-danger);' : (f.severity.name() == 'WARNING' ? 'border-left-color: var(--color-warning);' : 'border-left-color: var(--color-info);')}">
+
+                    <!-- Finding Header -->
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; flex-wrap: wrap;">
+                        <div>
+                            <div
+                                style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
+                                <span th:if="${f.severity.name() == 'CRITICAL'}"
+                                    class="badge badge-danger">CRITICAL</span>
+                                <span th:if="${f.severity.name() == 'WARNING'}"
+                                    class="badge badge-warning">WARNING</span>
+                                <span th:if="${f.severity.name() == 'INFO'}" class="badge badge-info">INFO</span>
+                                <span class="badge badge-secondary" th:text="${f.category.label}">Internal
+                                    Infrastructure</span>
+                                <span style="font-size: 12px; color: var(--text-muted);"
+                                    th:text="'Node: ' + ${f.serverId} + ' &bull; Valve: ' + ${f.valveName}">Node:
+                                    Pub03</span>
+                            </div>
+                            <div style="font-size: 14.5px; font-weight: 700; color: var(--text-primary);"
+                                th:text="${f.title}">
+                                Internal RFC 1918 Network (10.77.25.0/24) Blocked by 'FUER ALLE' on Pub04
+                            </div>
+                        </div>
+
+                        <!-- Metrics Badges -->
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <div style="text-align: right;">
+                                <div style="font-size: 13px; font-weight: 700; color: var(--color-danger);"
+                                    th:text="${#numbers.formatInteger(f.blockedRequests, 1, 'COMMA')} + ' Blocked'">
+                                    4,547 Blocked</div>
+                                <div style="font-size: 11px; color: var(--text-muted);"
+                                    th:text="${f.blockPercentage} + '% block rate (' + ${#numbers.formatInteger(f.totalRequests, 1, 'COMMA')} + ' reqs)'">
+                                    100% block rate</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Explanation Paragraph -->
+                    <div style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.45; margin-bottom: 12px;"
+                        th:text="${f.explanation}">
+                        Explanation text...
+                    </div>
+
+                    <!-- Recommendation & Action Box -->
+                    <div
+                        style="background: rgba(0,0,0,0.22); border-radius: var(--radius-sm); border: 1px solid var(--border-color); padding: 12px 14px; margin-bottom: 12px;">
+                        <div
+                            style="font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                            <span>&#x1F4A1;</span> Recommended Action:
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.45; white-space: pre-line;"
+                            th:text="${f.recommendation}">
+                            Recommendation text...
+                        </div>
+
+                        <!-- 1-Click Active Mitigation Actions for Attack Categories -->
+                        <div th:if="${f.category.name() == 'STEALTH_CARPET_ATTACK' or f.category.name() == 'CHAMELEON_BOT' or f.category.name() == 'DATACENTER_OFFLOAD'}"
+                            style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
+                            <a th:if="${f.extractAsn() != null}"
+                                th:href="@{/mitigation(asn=${f.extractAsn()},reason=${f.title},source='ADVISOR')}"
+                                class="btn btn-danger" style="font-size: 11.5px; padding: 5px 12px; font-weight: 700;">
+                                <span>&#x1F6E1;&#xFE0F;</span> Mitigate ASN <span
+                                    th:text="${f.extractAsn()}">64496</span> Active Subnets &rarr;
+                            </a>
+                            <a th:if="${f.isDirectCidrTarget()}"
+                                th:href="@{/mitigation(cidr=${f.targetSubnet},reason=${f.title},source='ADVISOR')}"
+                                class="btn btn-danger" style="font-size: 11.5px; padding: 5px 12px; font-weight: 700;">
+                                <span>&#x1F6E1;&#xFE0F;</span> Block Subnet <span
+                                    th:text="${f.targetSubnet}">198.51.100.0/24</span> Dynamically &rarr;
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Suggested Configuration XML Snippet if available -->
+                    <div th:if="${f.suggestedConfigXml != null}">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span style="font-size: 11.5px; font-weight: 600; color: var(--text-muted);">Suggested
+                                Tomcat server.xml Configuration:</span>
+                            <button type="button" class="btn btn-primary" style="padding: 4px 12px; font-size: 11.5px;"
                                 th:attr="onclick='copyAdvisorCode(\'code-' + ${f.id} + '\', this)'">
-                            <span>&#x1F4CB;</span> Copy XML Snippet
-                        </button>
+                                <span>&#x1F4CB;</span> Copy XML Snippet
+                            </button>
+                        </div>
+                        <pre th:id="'code-' + ${f.id}"
+                            style="background: rgba(0,0,0,0.35); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 11px; overflow-x: auto; color: var(--text-primary); margin: 0; line-height: 1.4;"><code th:text="${f.suggestedConfigXml}"></code></pre>
                     </div>
-                    <pre th:id="'code-' + ${f.id}" style="background: rgba(0,0,0,0.35); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 11px; overflow-x: auto; color: var(--text-primary); margin: 0; line-height: 1.4;"><code th:text="${f.suggestedConfigXml}"></code></pre>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Hidden Raw JSON container for safe chart initialization (must use th:utext to avoid HTML entity encoding &quot; in script tags) -->
-    <script type="application/json" class="analytics-data-payload" id="analytics-data-payload" th:utext="${analyticsJson != null ? analyticsJson : '{}'}"></script>
+        <!-- View D: User-Agent Forensics & Scraper Diagnostics (Step 4) -->
+        <div th:if="${analytics != null and activeTab == 'useragents'}"
+            style="display: flex; flex-direction: column; gap: 20px;">
 
-    <script>
-        (function() {
-            let initTimer = null;
+            <!-- Sampling Confidence Warning Banner (when sampling is low or unconfigured) -->
+            <div th:if="${analytics.userAgents != null and analytics.userAgents.hasLowSamplingConfidence}"
+                class="alert alert-warning"
+                style="display: flex; align-items: flex-start; gap: 12px; padding: 14px 18px; border-radius: var(--radius-md); animation: fadeIn 0.3s ease-in-out;">
+                <span style="font-size: 20px; line-height: 1;">&#x26A0;&#xFE0F;</span>
+                <div style="font-size: 13px; line-height: 1.5;">
+                    <strong>Sampling &amp; Telemetry Notice:</strong>
+                    <span th:text="${analytics.userAgents.confidenceMessage}">Limited Visibility Notice</span>
+                </div>
+            </div>
 
-            function doInitCharts() {
-                if (typeof window.AntiDoSCharts === 'undefined' || typeof Chart === 'undefined') {
-                    setTimeout(doInitCharts, 50);
-                    return;
+            <!-- Summary KPI Row -->
+            <div class="stats-grid" style="margin-bottom: 0;">
+                <div class="stat-card">
+                    <div class="stat-label">Sampled Requests</div>
+                    <div class="stat-value"
+                        th:text="${analytics.userAgents != null ? #numbers.formatInteger(analytics.userAgents.totalSampledRequests, 1, 'COMMA') : 0}">
+                        0
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
+                        From <span
+                            th:text="${analytics.userAgents != null ? analytics.userAgents.totalSampledEvents : 0}">0</span>
+                        client telemetry events
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Distinct User-Agents</div>
+                    <div class="stat-value"
+                        th:text="${analytics.userAgents != null ? analytics.userAgents.distinctUserAgents : 0}">
+                        0
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
+                        Across <span
+                            th:text="${analytics.userAgents != null ? analytics.userAgents.distinctFamilies : 0}">0</span>
+                        semantic families
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Rate-Limit Incidents</div>
+                    <div class="stat-value"
+                        th:classappend="${analytics.userAgents != null and (analytics.userAgents.totalBlockedEvents + analytics.userAgents.totalMarkedEvents) > 0 ? 'danger' : ''}">
+                        <span
+                            th:text="${analytics.userAgents != null ? (analytics.userAgents.totalBlockedEvents + analytics.userAgents.totalMarkedEvents) : 0}">0</span>
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
+                        <span
+                            th:text="${analytics.userAgents != null ? analytics.userAgents.totalBlockedEvents : 0}">0</span>
+                        blocked &bull;
+                        <span
+                            th:text="${analytics.userAgents != null ? analytics.userAgents.totalMarkedEvents : 0}">0</span>
+                        marked
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Authenticated Samples</div>
+                    <div class="stat-value success"
+                        th:text="${analytics.userAgents != null ? analytics.userAgents.totalAuthenticatedSamples : 0}">
+                        0
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
+                        Samples from verified user sessions
+                    </div>
+                </div>
+            </div>
+
+            <!-- Semantic User-Agent Families Distribution -->
+            <div class="table-card" style="padding: 18px;"
+                th:if="${analytics.userAgents != null and !analytics.userAgents.families.empty}">
+                <div
+                    style="font-weight: 700; font-size: 14px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+                    <span style="display: flex; align-items: center; gap: 8px;">
+                        <span>&#x1F4CA;</span> User-Agent Families Distribution
+                    </span>
+                    <span style="font-size: 12px; color: var(--text-muted); font-weight: 400;">
+                        Categorized by browser engine, mobile platform, or automation tool
+                    </span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table" style="margin-bottom: 0;">
+                        <thead>
+                            <tr>
+                                <th>Family</th>
+                                <th>Traffic Share</th>
+                                <th style="text-align: right;">Total Requests</th>
+                                <th style="text-align: right;">Sample Events</th>
+                                <th style="text-align: right;">Blocked / Marked</th>
+                                <th style="text-align: right;">Incident Rate</th>
+                                <th style="text-align: right;">Authenticated</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="fam : ${analytics.userAgents.families}">
+                                <td>
+                                    <span th:utext="${fam.icon()}">&#x1F310;</span>
+                                    <strong th:text="${fam.displayName()}" style="margin-left: 6px;">Chrome
+                                        Desktop</strong>
+                                    <span th:if="${fam.isAutomated()}" class="badge badge-warning"
+                                        style="margin-left: 6px; font-size: 10px;">Automated</span>
+                                </td>
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <div class="metric-bar" style="flex: 1; min-width: 60px;">
+                                            <div class="metric-fill" th:style="'width:' + ${fam.sharePercent()} + '%;'">
+                                            </div>
+                                        </div>
+                                        <span style="font-size: 11.5px; font-weight: 600;"
+                                            th:text="${fam.sharePercent()} + '%'">45.2%</span>
+                                    </div>
+                                </td>
+                                <td style="text-align: right; font-weight: 600;"
+                                    th:text="${#numbers.formatInteger(fam.totalRequests(), 1, 'COMMA')}">1,200</td>
+                                <td style="text-align: right;" th:text="${fam.eventCount()}">24</td>
+                                <td style="text-align: right;">
+                                    <span th:if="${fam.blockedCount() > 0 or fam.markedCount() > 0}"
+                                        style="color: var(--color-danger); font-weight: 600;"
+                                        th:text="${fam.blockedCount() + fam.markedCount()}">5</span>
+                                    <span th:unless="${fam.blockedCount() > 0 or fam.markedCount() > 0}"
+                                        style="color: var(--text-muted);">-</span>
+                                </td>
+                                <td style="text-align: right;">
+                                    <span th:if="${fam.blockMarkRatioPercent() > 0}"
+                                        th:classappend="${fam.blockMarkRatioPercent() >= 50.0 ? 'text-danger' : 'text-warning'}"
+                                        style="font-weight: 600;"
+                                        th:text="${fam.blockMarkRatioPercent()} + '%'">12.5%</span>
+                                    <span th:unless="${fam.blockMarkRatioPercent() > 0}"
+                                        style="color: var(--text-muted);">0.0%</span>
+                                </td>
+                                <td style="text-align: right;">
+                                    <span th:if="${fam.authenticatedCount() > 0}" class="badge badge-success"
+                                        style="font-size: 11px;">
+                                        <span th:text="${fam.authenticatedCount()}">3</span> [Auth]
+                                    </span>
+                                    <span th:unless="${fam.authenticatedCount() > 0}"
+                                        style="color: var(--text-muted);">-</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Concrete User-Agents & Forensic Origins Table -->
+            <div class="table-card" style="padding: 18px;">
+                <div
+                    style="font-weight: 700; font-size: 14px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                    <span style="display: flex; align-items: center; gap: 8px;">
+                        <span>&#x1F50D;</span> Top Observed User-Agents &amp; Origin Networks
+                    </span>
+                    <span style="font-size: 12px; color: var(--text-muted); font-weight: 400;">
+                        Correlated with ASN and Subnet provenance to identify scraper pools vs. legitimate browsers
+                    </span>
+                </div>
+
+                <div th:if="${analytics.userAgents == null or analytics.userAgents.userAgents.empty}"
+                    style="text-align: center; padding: 32px 16px; color: var(--text-muted);">
+                    <div style="font-size: 28px; margin-bottom: 8px;">&#x1F50E;</div>
+                    <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">No
+                        User-Agent Samples Captured Yet</div>
+                    <div style="font-size: 12px; max-width: 520px; margin: 0 auto;">
+                        User-Agents are captured on rate-limit blocks and active sampling. Enable
+                        <code>activeSampleThreshold="50"</code> in <code>server.xml</code> to capture baseline request
+                        snapshots from legitimate and stealth clients.
+                    </div>
+                </div>
+
+                <div class="table-responsive"
+                    th:if="${analytics.userAgents != null and !analytics.userAgents.userAgents.empty}">
+                    <table class="table" id="user-agent-forensics-table" style="margin-bottom: 0;">
+                        <thead>
+                            <tr>
+                                <th style="min-width: 280px;">User-Agent Header</th>
+                                <th>Family</th>
+                                <th style="text-align: right;">Total Requests</th>
+                                <th style="text-align: right;">Incidents</th>
+                                <th>Auth Status</th>
+                                <th>Provenance (Top ASNs &amp; Subnets)</th>
+                                <th>Heuristic Assessment</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="item : ${analytics.userAgents.userAgents}">
+                                <td>
+                                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                                        <code style="font-size: 12px; word-break: break-all; white-space: normal;"
+                                            th:text="${item.userAgent()}"
+                                            th:title="${item.userAgent()}">Mozilla/5.0...</code>
+                                        <div style="font-size: 11px; color: var(--text-muted);">
+                                            <span th:text="${item.eventCount()}">5</span> samples &bull;
+                                            <span th:text="${item.distinctSubnets()}">2</span> subnets &bull;
+                                            <span th:text="${item.distinctAsns()}">1</span> ASN(s)
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span th:utext="${item.icon()}">&#x1F310;</span>
+                                    <span th:text="${item.displayName()}"
+                                        style="font-size: 12px; font-weight: 600; margin-left: 4px;">Chrome
+                                        Desktop</span>
+                                </td>
+                                <td style="text-align: right; font-weight: 600;"
+                                    th:text="${#numbers.formatInteger(item.totalRequests(), 1, 'COMMA')}">
+                                    4,500
+                                </td>
+                                <td style="text-align: right;">
+                                    <div th:if="${item.incidentCount() > 0}" style="font-size: 12px;">
+                                        <strong style="color: var(--color-danger);"
+                                            th:text="${item.incidentCount()}">12</strong>
+                                        <span style="font-size: 10.5px; color: var(--text-muted);"
+                                            th:text="'(' + ${item.blockMarkRatioPercent()} + '%)'">(85%)</span>
+                                    </div>
+                                    <span th:unless="${item.incidentCount() > 0}"
+                                        style="color: var(--text-muted);">-</span>
+                                </td>
+                                <td>
+                                    <span th:if="${item.hasAuthenticatedTraffic()}" class="badge badge-success"
+                                        style="font-size: 11px;"
+                                        title="Confirmed legitimate user sessions observed with this User-Agent">
+                                        <span>&#x2714;</span> Verified Auth (<span
+                                            th:text="${item.authenticatedCount()}">1</span>)
+                                    </span>
+                                    <span th:unless="${item.hasAuthenticatedTraffic()}" class="badge badge-neutral"
+                                        style="font-size: 11px;"
+                                        title="No authenticated sessions recorded for this User-Agent">
+                                        Unauthenticated
+                                    </span>
+                                </td>
+                                <td>
+                                    <div style="display: flex; flex-direction: column; gap: 3px;">
+                                        <div th:each="origin : ${item.topOrigins()}"
+                                            style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                            <button th:if="${origin.asn() != null and origin.asn() > 0}" type="button"
+                                                class="badge badge-neutral"
+                                                style="cursor: pointer; border: 1px solid var(--border-color); font-size: 10.5px; padding: 2px 6px;"
+                                                th:attr="hx-get=@{/analytics/asn-drilldown(asn=${origin.asn()},hours=${selectedHours})}"
+                                                hx-target="#asn-drilldown-modal-container" hx-swap="innerHTML"
+                                                onclick="document.getElementById('asn-drilldown-modal-container').style.display='block'"
+                                                th:title="'Drilldown into AS' + ${origin.asn()}">
+                                                <span th:text="${origin.formattedAsn()}">AS24940 Hetzner</span>
+                                            </button>
+                                            <a th:if="${origin.subnetGroup() != null}"
+                                                th:href="@{/events(subnetQuery=${origin.subnetGroup()})}" class="badge"
+                                                style="text-decoration: none; font-size: 10.5px; padding: 2px 6px; background: rgba(255, 255, 255, 0.06);"
+                                                th:title="'Inspect incident events for subnet ' + ${origin.subnetGroup()}">
+                                                <span th:text="${origin.subnetGroup()}">198.51.100.0/24</span>
+                                            </a>
+                                            <span style="font-size: 10px; color: var(--text-muted);"
+                                                th:text="${origin.requests()} + ' reqs'">100 reqs</span>
+                                        </div>
+                                        <span th:if="${item.topOrigins().empty}"
+                                            style="color: var(--text-muted); font-size: 11px;">-</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div th:if="${item.isSuspicious()}"
+                                        style="display: flex; flex-direction: column; gap: 2px;">
+                                        <span class="badge badge-danger"
+                                            style="align-self: flex-start; font-size: 10.5px;">Suspicious</span>
+                                        <span style="font-size: 10.5px; color: var(--color-danger); line-height: 1.3;"
+                                            th:text="${item.suspicionReason()}">High incident rate</span>
+                                    </div>
+                                    <div th:unless="${item.isSuspicious()}">
+                                        <span th:if="${item.hasAuthenticatedTraffic()}" class="badge badge-success"
+                                            style="font-size: 10.5px;">Legitimate Traffic</span>
+                                        <span th:unless="${item.hasAuthenticatedTraffic()}" class="badge badge-neutral"
+                                            style="font-size: 10.5px;">Standard</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Hidden Raw JSON container for safe chart initialization (must use th:utext to avoid HTML entity encoding &quot; in script tags) -->
+        <script type="application/json" class="analytics-data-payload" id="analytics-data-payload"
+            th:utext="${analyticsJson != null ? analyticsJson : '{}'}"></script>
+
+        <script>
+            (function () {
+                let initTimer = null;
+
+                function doInitCharts() {
+                    if (typeof window.AntiDoSCharts === 'undefined' || typeof Chart === 'undefined') {
+                        setTimeout(doInitCharts, 50);
+                        return;
+                    }
+
+                    const container = document.getElementById('analytics-container');
+                    const payloadEl = container
+                        ? (container.querySelector('.analytics-data-payload') || container.querySelector('#analytics-data-payload'))
+                        : document.getElementById('analytics-data-payload');
+                    if (!payloadEl || !payloadEl.textContent || !payloadEl.textContent.trim()) return;
+
+                    try {
+                        const data = JSON.parse(payloadEl.textContent);
+                        if (!data) return;
+
+                        if (document.getElementById('timelineChart') && data.timeline) {
+                            window.AntiDoSCharts.renderTimeline('timelineChart', data.timeline);
+                        }
+                        if (document.getElementById('compositionChart') && data.composition) {
+                            window.AntiDoSCharts.renderComposition('compositionChart', data.composition);
+                        }
+                        if (document.getElementById('scatterChart') && data.scatterPoints) {
+                            window.AntiDoSCharts.renderScatter('scatterChart', data.scatterPoints);
+                        }
+                    } catch (e) {
+                        console.error('Failed to parse analytics payload:', e);
+                    }
                 }
 
-                const container = document.getElementById('analytics-container');
-                const payloadEl = container
-                    ? (container.querySelector('.analytics-data-payload') || container.querySelector('#analytics-data-payload'))
-                    : document.getElementById('analytics-data-payload');
-                if (!payloadEl || !payloadEl.textContent || !payloadEl.textContent.trim()) return;
-
-                try {
-                    const data = JSON.parse(payloadEl.textContent);
-                    if (!data) return;
-
-                    if (document.getElementById('timelineChart') && data.timeline) {
-                        window.AntiDoSCharts.renderTimeline('timelineChart', data.timeline);
+                function syncFilterInputs() {
+                    const container = document.getElementById('analytics-container');
+                    if (!container) return;
+                    const hours = container.getAttribute('data-selected-hours');
+                    const tab = container.getAttribute('data-active-tab');
+                    const filterHours = document.getElementById('filter-hours');
+                    if (filterHours && hours) {
+                        filterHours.value = hours;
                     }
-                    if (document.getElementById('compositionChart') && data.composition) {
-                        window.AntiDoSCharts.renderComposition('compositionChart', data.composition);
+                    const filterTab = document.getElementById('filter-tab');
+                    if (filterTab && tab) {
+                        filterTab.value = tab;
                     }
-                    if (document.getElementById('scatterChart') && data.scatterPoints) {
-                        window.AntiDoSCharts.renderScatter('scatterChart', data.scatterPoints);
-                    }
-                } catch (e) {
-                    console.error('Failed to parse analytics payload:', e);
                 }
-            }
 
-            function syncFilterInputs() {
-                const container = document.getElementById('analytics-container');
-                if (!container) return;
-                const hours = container.getAttribute('data-selected-hours');
-                const tab = container.getAttribute('data-active-tab');
-                const filterHours = document.getElementById('filter-hours');
-                if (filterHours && hours) {
-                    filterHours.value = hours;
+                function scheduleInit() {
+                    syncFilterInputs();
+                    if (initTimer) clearTimeout(initTimer);
+                    initTimer = setTimeout(doInitCharts, 25);
                 }
-                const filterTab = document.getElementById('filter-tab');
-                if (filterTab && tab) {
-                    filterTab.value = tab;
-                }
-            }
 
-            function scheduleInit() {
-                syncFilterInputs();
-                if (initTimer) clearTimeout(initTimer);
-                initTimer = setTimeout(doInitCharts, 25);
-            }
-
-            window.highlightScatterTableRow = function(subnetGroup) {
-                const table = document.getElementById('scatter-clusters-table');
-                if (!table) return false;
-                const rows = table.querySelectorAll('tbody tr');
-                let matched = null;
-                rows.forEach(r => {
-                    if (r.getAttribute('data-subnet') === subnetGroup) {
-                        matched = r;
-                        r.style.backgroundColor = 'rgba(56, 189, 248, 0.2)';
-                        r.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                    } else {
-                        r.style.backgroundColor = '';
+                window.highlightScatterTableRow = function (subnetGroup) {
+                    const table = document.getElementById('scatter-clusters-table');
+                    if (!table) return false;
+                    const rows = table.querySelectorAll('tbody tr');
+                    let matched = null;
+                    rows.forEach(r => {
+                        if (r.getAttribute('data-subnet') === subnetGroup) {
+                            matched = r;
+                            r.style.backgroundColor = 'rgba(56, 189, 248, 0.2)';
+                            r.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        } else {
+                            r.style.backgroundColor = '';
+                        }
+                    });
+                    if (matched) {
+                        setTimeout(() => {
+                            if (matched) matched.style.backgroundColor = '';
+                        }, 2500);
+                        return true;
                     }
-                });
-                if (matched) {
-                    setTimeout(() => {
-                        if (matched) matched.style.backgroundColor = '';
-                    }, 2500);
-                    return true;
-                }
-                return false;
-            };
+                    return false;
+                };
 
-            window.filterScatterTable = function(filter) {
-                const table = document.getElementById('scatter-clusters-table');
-                if (!table) return;
-                const rows = table.querySelectorAll('tbody tr');
-                const buttons = document.querySelectorAll('.scatter-filter-btn');
-                buttons.forEach(b => {
-                    if (b.getAttribute('data-filter') === filter) {
-                        b.classList.add('active');
-                    } else {
-                        b.classList.remove('active');
+                window.filterScatterTable = function (filter) {
+                    const table = document.getElementById('scatter-clusters-table');
+                    if (!table) return;
+                    const rows = table.querySelectorAll('tbody tr');
+                    const buttons = document.querySelectorAll('.scatter-filter-btn');
+                    buttons.forEach(b => {
+                        if (b.getAttribute('data-filter') === filter) {
+                            b.classList.add('active');
+                        } else {
+                            b.classList.remove('active');
+                        }
+                    });
+
+                    let visible = 0;
+                    rows.forEach(r => {
+                        const blocked = parseInt(r.getAttribute('data-blocked') || '0', 10);
+                        const hasNote = r.getAttribute('data-hasnote') === 'true';
+                        const auth = parseInt(r.getAttribute('data-auth') || '0', 10);
+                        const clientType = r.getAttribute('data-clienttype') || '';
+
+                        let show = true;
+                        if (filter === 'bypass') {
+                            show = (blocked === 0);
+                        } else if (filter === 'annotated') {
+                            show = hasNote;
+                        } else if (filter === 'nologins') {
+                            show = (auth === 0);
+                        } else if (filter === 'logins') {
+                            show = (auth > 0);
+                        } else if (filter === 'nobots') {
+                            show = (clientType !== 'SEARCH_ENGINE' && clientType !== 'AI_CRAWLER');
+                        }
+
+                        if (show) {
+                            r.style.display = '';
+                            visible++;
+                        } else {
+                            r.style.display = 'none';
+                        }
+                    });
+
+                    const countEl = document.getElementById('scatter-table-count');
+                    if (countEl) {
+                        countEl.textContent = visible + ' Clusters';
                     }
-                });
+                };
 
-                let visible = 0;
-                rows.forEach(r => {
-                    const blocked = parseInt(r.getAttribute('data-blocked') || '0', 10);
-                    const hasNote = r.getAttribute('data-hasnote') === 'true';
-                    const auth = parseInt(r.getAttribute('data-auth') || '0', 10);
-                    const clientType = r.getAttribute('data-clienttype') || '';
+                let scatterSortState = {};
+                window.sortScatterTable = function (colIndex, type) {
+                    const table = document.getElementById('scatter-clusters-table');
+                    if (!table) return;
+                    const tbody = table.querySelector('tbody');
+                    const rows = Array.from(tbody.querySelectorAll('tr'));
+                    const asc = !scatterSortState[colIndex];
+                    scatterSortState = {};
+                    scatterSortState[colIndex] = asc;
 
-                    let show = true;
-                    if (filter === 'bypass') {
-                        show = (blocked === 0);
-                    } else if (filter === 'annotated') {
-                        show = hasNote;
-                    } else if (filter === 'nologins') {
-                        show = (auth === 0);
-                    } else if (filter === 'logins') {
-                        show = (auth > 0);
-                    } else if (filter === 'nobots') {
-                        show = (clientType !== 'SEARCH_ENGINE' && clientType !== 'AI_CRAWLER');
+                    rows.sort((rowA, rowB) => {
+                        const textA = (rowA.children[colIndex].innerText || '').trim();
+                        const textB = (rowB.children[colIndex].innerText || '').trim();
+                        if (type === 'number') {
+                            const valA = parseFloat(textA.replace(/[^0-9.-]/g, '')) || 0;
+                            const valB = parseFloat(textB.replace(/[^0-9.-]/g, '')) || 0;
+                            return asc ? valA - valB : valB - valA;
+                        } else {
+                            return asc ? textA.localeCompare(textB) : textB.localeCompare(textA);
+                        }
+                    });
+
+                    rows.forEach(r => tbody.appendChild(r));
+                };
+
+                window.copyAdvisorCode = function (elementId, btn) {
+                    let text = '';
+                    const el = document.getElementById(elementId);
+                    if (el) {
+                        text = el.innerText || el.textContent;
                     }
-
-                    if (show) {
-                        r.style.display = '';
-                        visible++;
-                    } else {
-                        r.style.display = 'none';
+                    if (!text && btn && btn.nextElementSibling) {
+                        text = btn.nextElementSibling.innerText || btn.nextElementSibling.textContent;
                     }
-                });
-
-                const countEl = document.getElementById('scatter-table-count');
-                if (countEl) {
-                    countEl.textContent = visible + ' Clusters';
-                }
-            };
-
-            let scatterSortState = {};
-            window.sortScatterTable = function(colIndex, type) {
-                const table = document.getElementById('scatter-clusters-table');
-                if (!table) return;
-                const tbody = table.querySelector('tbody');
-                const rows = Array.from(tbody.querySelectorAll('tr'));
-                const asc = !scatterSortState[colIndex];
-                scatterSortState = {};
-                scatterSortState[colIndex] = asc;
-
-                rows.sort((rowA, rowB) => {
-                    const textA = (rowA.children[colIndex].innerText || '').trim();
-                    const textB = (rowB.children[colIndex].innerText || '').trim();
-                    if (type === 'number') {
-                        const valA = parseFloat(textA.replace(/[^0-9.-]/g, '')) || 0;
-                        const valB = parseFloat(textB.replace(/[^0-9.-]/g, '')) || 0;
-                        return asc ? valA - valB : valB - valA;
-                    } else {
-                        return asc ? textA.localeCompare(textB) : textB.localeCompare(textA);
+                    if (text) {
+                        navigator.clipboard.writeText(text.trim()).then(() => {
+                            const orig = btn.innerHTML;
+                            btn.innerHTML = '<span>&#x2705;</span> Copied!';
+                            setTimeout(() => { btn.innerHTML = orig; }, 2000);
+                        }).catch(err => {
+                            console.error('Copy failed:', err);
+                        });
                     }
-                });
+                };
 
-                rows.forEach(r => tbody.appendChild(r));
-            };
+                scheduleInit();
 
-            window.copyAdvisorCode = function(elementId, btn) {
-                let text = '';
-                const el = document.getElementById(elementId);
-                if (el) {
-                    text = el.innerText || el.textContent;
-                }
-                if (!text && btn && btn.nextElementSibling) {
-                    text = btn.nextElementSibling.innerText || btn.nextElementSibling.textContent;
-                }
-                if (text) {
-                    navigator.clipboard.writeText(text.trim()).then(() => {
-                        const orig = btn.innerHTML;
-                        btn.innerHTML = '<span>&#x2705;</span> Copied!';
-                        setTimeout(() => { btn.innerHTML = orig; }, 2000);
-                    }).catch(err => {
-                        console.error('Copy failed:', err);
+                if (!window.__antiDoSChartsHtmxBound) {
+                    window.__antiDoSChartsHtmxBound = true;
+                    document.addEventListener('htmx:afterSwap', function (evt) {
+                        if (evt.target && (evt.target.id === 'analytics-container' || (evt.target.querySelector && evt.target.querySelector('#analytics-container')))) {
+                            scheduleInit();
+                        }
                     });
                 }
-            };
-
-            scheduleInit();
-
-            if (!window.__antiDoSChartsHtmxBound) {
-                window.__antiDoSChartsHtmxBound = true;
-                document.addEventListener('htmx:afterSwap', function(evt) {
-                    if (evt.target && (evt.target.id === 'analytics-container' || (evt.target.querySelector && evt.target.querySelector('#analytics-container')))) {
-                        scheduleInit();
-                    }
-                });
-            }
-        })();
-    </script>
-</div>
+            })();
+        </script>
+    </div>
 
 </body>
+
 </html>

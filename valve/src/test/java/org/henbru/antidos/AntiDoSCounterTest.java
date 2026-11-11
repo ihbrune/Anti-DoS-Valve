@@ -2,8 +2,8 @@ package org.henbru.antidos;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import org.junit.jupiter.api.Test;
 
 /**
@@ -100,12 +100,22 @@ class AntiDoSCounterTest {
 		assertEquals("POST", sample.method());
 		assertEquals("/wp-login.php", sample.uri()); // query string stripped!
 		assertEquals("curl/7.88.1", sample.userAgent());
+		assertFalse(sample.authenticated());
 
 		// Second call must NOT overwrite the first sample
-		boolean second = counter.recordSampleIfAbsent("GET", "/other", "other-ua");
+		boolean second = counter.recordSampleIfAbsent("GET", "/other", "other-ua", true);
 		assertFalse(second);
 		assertEquals("POST", counter.getSample().method());
 		assertEquals("/wp-login.php", counter.getSample().uri());
+		assertFalse(counter.getSample().authenticated());
+	}
+
+	@Test
+	void testRecordSampleAuthenticated() {
+		AntiDoSCounter counter = new AntiDoSCounter();
+		assertTrue(counter.recordSampleIfAbsent("GET", "/dashboard", "Mozilla/5.0", true));
+		assertNotNull(counter.getSample());
+		assertTrue(counter.getSample().authenticated());
 	}
 
 	@Test

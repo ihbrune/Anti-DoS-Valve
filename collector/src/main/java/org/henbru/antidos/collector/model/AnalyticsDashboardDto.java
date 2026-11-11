@@ -2,6 +2,7 @@ package org.henbru.antidos.collector.model;
 
 import java.time.Instant;
 import java.util.List;
+
 import org.henbru.antidos.collector.advisor.AdvisorReport;
 
 /**
@@ -25,8 +26,32 @@ public record AnalyticsDashboardDto(
 		AdvisorReport advisorReport,
 		String scatterGroupBy,
 		String scatterTrafficFilter,
-		String scatterAuthFilter
+		String scatterAuthFilter,
+		UserAgentAnalyticsDto userAgents
 ) {
+	public AnalyticsDashboardDto(
+			Instant windowFrom,
+			Instant windowTo,
+			int hours,
+			List<TimelinePoint> timeline,
+			List<TrafficCompositionPoint> composition,
+			List<SubnetScatterPoint> scatterPoints,
+			long totalRequests,
+			long totalActive,
+			long totalBlocked,
+			long totalMarked,
+			double blockedRatioPercent,
+			double markedRatioPercent,
+			AdvisorReport advisorReport,
+			String scatterGroupBy,
+			String scatterTrafficFilter,
+			String scatterAuthFilter
+	) {
+		this(windowFrom, windowTo, hours, timeline, composition, scatterPoints,
+				totalRequests, totalActive, totalBlocked, totalMarked, blockedRatioPercent, markedRatioPercent, advisorReport,
+				scatterGroupBy, scatterTrafficFilter, scatterAuthFilter, null);
+	}
+
 	public AnalyticsDashboardDto(
 			Instant windowFrom,
 			Instant windowTo,
@@ -44,7 +69,7 @@ public record AnalyticsDashboardDto(
 	) {
 		this(windowFrom, windowTo, hours, timeline, composition, scatterPoints,
 				totalRequests, totalActive, totalBlocked, totalMarked, blockedRatioPercent, markedRatioPercent, advisorReport,
-				"SUBNET", "ALL", "ALL");
+				"SUBNET", "ALL", "ALL", null);
 	}
 
 	public AnalyticsDashboardDto(

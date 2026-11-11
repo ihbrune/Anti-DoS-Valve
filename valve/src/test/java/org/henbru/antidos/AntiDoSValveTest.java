@@ -3044,6 +3044,7 @@ class AntiDoSValveTest {
 		assertTrue(json.contains("\"sampleMethod\": \"POST\""));
 		assertTrue(json.contains("\"sampleUri\": \"/api/data\""));
 		assertTrue(json.contains("\"sampleUserAgent\": \"TestBot/2.0\""));
+		assertTrue(json.contains("\"sampleAuthenticated\": false"));
 	}
 
 	@Test

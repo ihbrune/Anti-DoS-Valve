@@ -1,6 +1,7 @@
 package org.henbru.antidos.collector.model;
 
 import java.time.Instant;
+
 import org.henbru.antidos.collector.util.IpNetworkUtil;
 
 /**
@@ -38,12 +39,59 @@ public record ClientEvent(
 		Integer authenticatedCount,
 		String sampleMethod,
 		String sampleUri,
-		String sampleUserAgent
+		String sampleUserAgent,
+		Boolean sampleAuthenticated
 ) {
 
 	public static final String STATUS_BLOCKED = "BLOCKED";
 	public static final String STATUS_MARKED = "MARKED";
 	public static final String STATUS_ACTIVE = "ACTIVE";
+
+	/**
+	 * Backward-compatible constructor defaulting sampleAuthenticated to null.
+	 */
+	public ClientEvent(
+			Long id,
+			String serverId,
+			String valveName,
+			long slotKey,
+			Instant slotTime,
+			String clientKey,
+			int ipVersion,
+			int cidrPrefix,
+			Long ipV4Start,
+			Long ipV4End,
+			String ipV6Start,
+			String ipV6End,
+			String subnetGroup,
+			int requestCount,
+			int retainedCount,
+			boolean locked,
+			String status,
+			boolean completed,
+			Instant lastUpdatedAt,
+			Long asn,
+			String asOrg,
+			String countryCode,
+			ClientType clientType,
+			EnrichmentStatus enrichmentStatus,
+			Long entityId,
+			int distinctClients,
+			Integer distinctUserAgents,
+			Integer returningCount,
+			Integer authenticatedCount,
+			String sampleMethod,
+			String sampleUri,
+			String sampleUserAgent
+	) {
+		this(
+				id, serverId, valveName, slotKey, slotTime, clientKey, ipVersion, cidrPrefix,
+				ipV4Start, ipV4End, ipV6Start, ipV6End, subnetGroup, requestCount, retainedCount,
+				locked, status, completed, lastUpdatedAt, asn, asOrg, countryCode, clientType,
+				enrichmentStatus, entityId, distinctClients, distinctUserAgents, returningCount,
+				authenticatedCount, sampleMethod, sampleUri, sampleUserAgent, null
+		);
+	}
 
 	/**
 	 * Backward-compatible constructor defaulting distinctUserAgents to null.
@@ -501,7 +549,8 @@ public record ClientEvent(
 			Integer authenticatedCount,
 			String sampleMethod,
 			String sampleUri,
-			String sampleUserAgent
+			String sampleUserAgent,
+			Boolean sampleAuthenticated
 	) {
 		this(
 				id,
@@ -529,7 +578,53 @@ public record ClientEvent(
 				authenticatedCount,
 				sampleMethod,
 				sampleUri,
-				sampleUserAgent
+				sampleUserAgent,
+				sampleAuthenticated
+		);
+	}
+
+	public ClientEvent(
+			Long id,
+			String serverId,
+			String valveName,
+			long slotKey,
+			Instant slotTime,
+			String clientKey,
+			int requestCount,
+			int retainedCount,
+			boolean locked,
+			String status,
+			boolean completed,
+			Instant lastUpdatedAt,
+			int distinctClients,
+			Integer distinctUserAgents,
+			Integer returningCount,
+			Integer authenticatedCount,
+			String sampleMethod,
+			String sampleUri,
+			String sampleUserAgent
+	) {
+		this(
+				id,
+				serverId,
+				valveName,
+				slotKey,
+				slotTime,
+				clientKey,
+				requestCount,
+				retainedCount,
+				locked,
+				status,
+				completed,
+				lastUpdatedAt,
+				distinctClients,
+				distinctUserAgents,
+				returningCount,
+				authenticatedCount,
+				sampleMethod,
+				sampleUri,
+				sampleUserAgent,
+				null
 		);
 	}
 
@@ -812,7 +907,8 @@ public record ClientEvent(
 			Integer authenticatedCount,
 			String sampleMethod,
 			String sampleUri,
-			String sampleUserAgent
+			String sampleUserAgent,
+			Boolean sampleAuthenticated
 	) {
 		this(
 				id,
@@ -846,7 +942,67 @@ public record ClientEvent(
 				authenticatedCount,
 				sampleMethod,
 				sampleUri,
-				sampleUserAgent
+				sampleUserAgent,
+				sampleAuthenticated
+		);
+	}
+
+	public ClientEvent(
+			Long id,
+			String serverId,
+			String valveName,
+			long slotKey,
+			Instant slotTime,
+			String clientKey,
+			IpNetworkInfo net,
+			int requestCount,
+			int retainedCount,
+			boolean locked,
+			String status,
+			boolean completed,
+			Instant lastUpdatedAt,
+			Long asn,
+			String asOrg,
+			String countryCode,
+			ClientType clientType,
+			EnrichmentStatus enrichmentStatus,
+			Long entityId,
+			int distinctClients,
+			Integer distinctUserAgents,
+			Integer returningCount,
+			Integer authenticatedCount,
+			String sampleMethod,
+			String sampleUri,
+			String sampleUserAgent
+	) {
+		this(
+				id,
+				serverId,
+				valveName,
+				slotKey,
+				slotTime,
+				clientKey,
+				net,
+				requestCount,
+				retainedCount,
+				locked,
+				status,
+				completed,
+				lastUpdatedAt,
+				asn,
+				asOrg,
+				countryCode,
+				clientType,
+				enrichmentStatus,
+				entityId,
+				distinctClients,
+				distinctUserAgents,
+				returningCount,
+				authenticatedCount,
+				sampleMethod,
+				sampleUri,
+				sampleUserAgent,
+				null
 		);
 	}
 
@@ -1044,7 +1200,8 @@ public record ClientEvent(
 				authenticatedCount,
 				sampleMethod,
 				sampleUri,
-				sampleUserAgent
+				sampleUserAgent,
+				sampleAuthenticated
 		);
 	}
 
@@ -1081,12 +1238,17 @@ public record ClientEvent(
 				authenticatedCount,
 				sampleMethod,
 				sampleUri,
-				sampleUserAgent
+				sampleUserAgent,
+				sampleAuthenticated
 		);
 	}
 
 	public boolean hasSample() {
 		return sampleUri != null && !sampleUri.isBlank();
+	}
+
+	public boolean isSampleAuthenticated() {
+		return Boolean.TRUE.equals(sampleAuthenticated);
 	}
 
 	public String formattedSample() {

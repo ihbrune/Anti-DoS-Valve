@@ -292,6 +292,14 @@ public class ApiController {
 		return dto != null ? dto.advisorReport() : null;
 	}
 
+	@GetMapping("/analytics/user-agents")
+	public org.henbru.antidos.collector.model.UserAgentAnalyticsDto analyticsUserAgents(
+			@RequestParam(name = "hours", defaultValue = "24") int hours,
+			@RequestParam(name = "servers", required = false) List<String> servers,
+			@RequestParam(name = "valves", required = false) List<String> valves) {
+		return analyticsService.getUserAgentAnalytics(hours, null, null, servers, valves);
+	}
+
 	@GetMapping("/valves")
 	public List<org.henbru.antidos.collector.model.MonitoredValve> listValves(
 			@RequestParam(name = "serverId", required = false) String serverId,

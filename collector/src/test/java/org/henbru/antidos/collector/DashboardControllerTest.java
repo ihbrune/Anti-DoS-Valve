@@ -640,6 +640,13 @@ class DashboardControllerTest {
 				.andExpect(jsonPath("$.scatterGroupBy").value("ASN"))
 				.andExpect(jsonPath("$.scatterTrafficFilter").value("EXCLUDE_BOTS"))
 				.andExpect(jsonPath("$.scatterAuthFilter").value("NO_LOGINS"));
+
+		mockMvc.perform(get("/fragments/analytics-overview")
+						.param("hours", "24")
+						.param("tab", "useragents"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("User-Agents")))
+				.andExpect(content().string(containsString("Distinct User-Agents")));
 	}
 
 	@Test

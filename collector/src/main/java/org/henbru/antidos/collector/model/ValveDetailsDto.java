@@ -1,7 +1,8 @@
 package org.henbru.antidos.collector.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.List;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
  * DTO representing the details JSON payload from an AntiDoSValve status endpoint.
@@ -123,8 +124,27 @@ public record ValveDetailsDto(
 			Integer authenticatedCount,
 			String sampleMethod,
 			String sampleUri,
-			String sampleUserAgent
+			String sampleUserAgent,
+			Boolean sampleAuthenticated
 	) {
+		public BlockedClientDto(
+				String key,
+				int count,
+				int retained,
+				int effective,
+				boolean locked,
+				String lastUpdate,
+				Integer distinctClients,
+				Integer distinctUserAgents,
+				Integer returningCount,
+				Integer authenticatedCount,
+				String sampleMethod,
+				String sampleUri,
+				String sampleUserAgent
+		) {
+			this(key, count, retained, effective, locked, lastUpdate, distinctClients, distinctUserAgents, returningCount, authenticatedCount, sampleMethod, sampleUri, sampleUserAgent, null);
+		}
+
 		public BlockedClientDto(
 				String key,
 				int count,
@@ -139,7 +159,7 @@ public record ValveDetailsDto(
 				String sampleUri,
 				String sampleUserAgent
 		) {
-			this(key, count, retained, effective, locked, lastUpdate, distinctClients, null, returningCount, authenticatedCount, sampleMethod, sampleUri, sampleUserAgent);
+			this(key, count, retained, effective, locked, lastUpdate, distinctClients, null, returningCount, authenticatedCount, sampleMethod, sampleUri, sampleUserAgent, null);
 		}
 
 		public BlockedClientDto(
@@ -183,8 +203,27 @@ public record ValveDetailsDto(
 			Integer authenticatedCount,
 			String sampleMethod,
 			String sampleUri,
-			String sampleUserAgent
+			String sampleUserAgent,
+			Boolean sampleAuthenticated
 	) {
+		public ActiveClientDto(
+				String key,
+				int count,
+				int retained,
+				int effective,
+				int limit,
+				int quotaPercent,
+				Integer distinctClients,
+				Integer distinctUserAgents,
+				Integer returningCount,
+				Integer authenticatedCount,
+				String sampleMethod,
+				String sampleUri,
+				String sampleUserAgent
+		) {
+			this(key, count, retained, effective, limit, quotaPercent, distinctClients, distinctUserAgents, returningCount, authenticatedCount, sampleMethod, sampleUri, sampleUserAgent, null);
+		}
+
 		public ActiveClientDto(
 				String key,
 				int count,
@@ -197,19 +236,19 @@ public record ValveDetailsDto(
 				Integer returningCount,
 				Integer authenticatedCount
 		) {
-			this(key, count, retained, effective, limit, quotaPercent, distinctClients, distinctUserAgents, returningCount, authenticatedCount, null, null, null);
+			this(key, count, retained, effective, limit, quotaPercent, distinctClients, distinctUserAgents, returningCount, authenticatedCount, null, null, null, null);
 		}
 
 		public ActiveClientDto(String key, int count, int retained, int effective, int limit, int quotaPercent, Integer distinctClients, Integer returningCount, Integer authenticatedCount) {
-			this(key, count, retained, effective, limit, quotaPercent, distinctClients, null, returningCount, authenticatedCount, null, null, null);
+			this(key, count, retained, effective, limit, quotaPercent, distinctClients, null, returningCount, authenticatedCount, null, null, null, null);
 		}
 
 		public ActiveClientDto(String key, int count, int retained, int effective, int limit, int quotaPercent, Integer distinctClients) {
-			this(key, count, retained, effective, limit, quotaPercent, distinctClients, null, null, null, null, null, null);
+			this(key, count, retained, effective, limit, quotaPercent, distinctClients, null, null, null, null, null, null, null);
 		}
 
 		public ActiveClientDto(String key, int count, int retained, int effective, int limit, int quotaPercent) {
-			this(key, count, retained, effective, limit, quotaPercent, 1, null, null, null, null, null, null);
+			this(key, count, retained, effective, limit, quotaPercent, 1, null, null, null, null, null, null, null);
 		}
 	}
 }

@@ -953,6 +953,13 @@ public final class AntiDoSOpenApiSpec {
             ],
             "description": "User-Agent header of the most recent sampled request."
           },
+          "sampleAuthenticated": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "True if the sampled request had a valid authenticated session."
+          },
           "status": {
             "type": "string",
             "enum": [

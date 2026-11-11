@@ -115,6 +115,7 @@ To provide an uncluttered forensic workflow, controls are logically partitioned 
     * `Timeline & Bot-Mix`: Dual view featuring the stacked Traffic & Attack Timeline alongside the Bot-Mix Donut.
     * `Subnet Scatterplot`: 2D cluster forensic map identifying distributed residential proxy networks.
     * `Config Advisor`: Automated operational diagnostic engine detecting search engine crawler drops, blocked internal/RFC 1918 subnets, shared NAT risks, and edge offload opportunities.
+    * `User-Agents`: Telemetry analysis of User-Agent distributions, semantic client families, authentication ratios, incident correlations, and origin ASNs / Subnets.
   * **Time Horizon Selector (`1h`, `6h`, `24h`, `7d`):**
     * `1h`: High-resolution real-time monitoring of active incidents and sudden traffic surges.
     * `6h`: Shift-level analysis covering recent peak or off-peak business cycles.
@@ -283,7 +284,35 @@ The **Config Advisor** is an automated diagnostic engine evaluating historical t
 
 ---
 
-### 6. Practical Investigation Workflows
+### 6. User-Agent Analysis & Bot Profiling (`tab=user-agents`)
+
+The **User-Agents** focus tab cross-correlates request header samples captured by Anti-DoS Valves (`sampleUserAgent` and `sampleAuthenticated`) with Autonomous Systems and rate-limiting incidents across the fleet.
+
+#### Sampling Telemetry & Confidence Detection:
+* **Active Sampling (`activeSampleThreshold`):** Valves configured with `activeSampleThreshold="20"` capture a request snapshot (HTTP method, URI, User-Agent, and authentication flag) once a non-blocked client exceeds 20 requests in the active slot window.
+* **Incident Sampling:** Blocked and marked clients always capture a request sample upon exceeding rate limits.
+* **Confidence Notice Banner:** If active sampling is disabled (`activeSampleThreshold="0"`) across connected valves or total sampled events are under 20 within the selected window, the dashboard prominently warns that telemetry is heavily biased toward blocked offenders and may underrepresent legitimate browser traffic.
+
+#### Key Telemetry Metrics & Heuristics:
+1. **Semantic Family Categorization:** User-Agent strings are classified into structured families without external dependencies:
+   * **Browsers:** `CHROME`, `FIREFOX`, `SAFARI`, `EDGE`, `OPERA`, `MOBILE_BROWSER`.
+   * **Automated Tools & Libraries:** `PYTHON_REQUESTS`, `CURL`, `GO_HTTP`, `JAVA_HTTP`, `NODE_FETCH`, `PHP_HTTP`, `SCRAPY`, `POSTMAN`, `AUTOMATED_TOOL`.
+   * **Crawlers & Spiders:** `SEARCH_CRAWLER`, `AI_CRAWLER`.
+   * **Anomalous / Missing:** `EMPTY_OR_BLANK`, `CUSTOM_OR_UNKNOWN`.
+2. **Authenticated Client Share:** Tracks whether the User-Agent was observed in requests carrying valid authentication cookies or session credentials (`sampleAuthenticated=true`). Legitimate desktop and mobile browsers exhibit healthy authentication ratios, whereas scrapers and automated bots rarely possess authenticated sessions.
+3. **Incident Rate Correlation:** Quantifies the proportion of samples associated with HTTP 429 rate blocks or simulation marks:
+   $$\text{Incident Rate} = \frac{\text{Blocked Samples} + \text{Marked Samples}}{\text{Total Samples}} \times 100\%$$
+4. **Origin ASNs & Subnet Footprints:** For suspicious or automated User-Agents, the dashboard lists the top Autonomous Systems (e.g. Hetzner, OVH, DigitalOcean) and CIDR subnets from which the User-Agent originated, allowing operators to cross-check with ASN notes or prepare targeted mitigation rules.
+5. **Heuristic Suspicion Badges:**
+   * 🔴 `SUSPICIOUS`: Automatically assigned to known scraping libraries, headless automation tools, or User-Agents exhibiting high incident rates combined with pure cloud hosting / datacenter infrastructure.
+   * 🟢 `LEGITIMATE`: Browsers exhibiting confirmed authenticated logins and low incident rates across consumer/residential ASNs.
+   * ⚪ `NEUTRAL`: Unclassified or moderate incident rates with mixed traffic.
+
+* Programmatic access is available via REST at `/api/v1/analytics/user-agents`.
+
+---
+
+### 7. Practical Investigation Workflows
 
 #### Workflow A: Unmasking a Stealth Residential Scraping Wave
 1. Navigate to `/analytics` and select the **24 Hours** or **7 Days** time horizon.

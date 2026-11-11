@@ -7,6 +7,7 @@ import java.sql.Timestamp;
 import java.sql.Types;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -17,6 +18,7 @@ import org.henbru.antidos.collector.model.ClientType;
 import org.henbru.antidos.collector.model.EnrichmentStatus;
 import org.henbru.antidos.collector.model.IpNetworkInfo;
 import org.henbru.antidos.collector.model.TopOffenderSummary;
+import org.henbru.antidos.collector.model.UserAgentOriginSummary;
 import org.henbru.antidos.collector.util.IpNetworkUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -107,10 +109,15 @@ public class ClientEventRepository {
 		String sampleMethod = null;
 		String sampleUri = null;
 		String sampleUserAgent = null;
+		Boolean sampleAuthenticated = null;
 		try {
 			sampleMethod = rs.getString("sample_method");
 			sampleUri = rs.getString("sample_uri");
 			sampleUserAgent = rs.getString("sample_user_agent");
+			boolean sa = rs.getBoolean("sample_authenticated");
+			if (!rs.wasNull()) {
+				sampleAuthenticated = sa;
+			}
 		} catch (SQLException ignored) {
 		}
 
@@ -146,7 +153,8 @@ public class ClientEventRepository {
 				authenticatedCount,
 				sampleMethod,
 				sampleUri,
-				sampleUserAgent
+				sampleUserAgent,
+				sampleAuthenticated
 		);
 	};
 
@@ -240,9 +248,9 @@ public class ClientEventRepository {
 				    request_count, retained_count, is_locked, status, is_completed, last_updated_at,
 				    asn, as_org, country_code, client_type, enrichment_status, entity_id, distinct_clients,
 				    distinct_user_agents, returning_count, authenticated_count,
-				    sample_method, sample_uri, sample_user_agent
+				    sample_method, sample_uri, sample_user_agent, sample_authenticated
 				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (server_id, valve_name, slot_key, client_key) DO UPDATE SET
 				    slot_time = EXCLUDED.slot_time,
 				    ip_version = EXCLUDED.ip_version,
@@ -265,6 +273,7 @@ public class ClientEventRepository {
 				    sample_method = COALESCE(EXCLUDED.sample_method, client_events.sample_method),
 				    sample_uri = COALESCE(EXCLUDED.sample_uri, client_events.sample_uri),
 				    sample_user_agent = COALESCE(EXCLUDED.sample_user_agent, client_events.sample_user_agent),
+				    sample_authenticated = COALESCE(EXCLUDED.sample_authenticated, client_events.sample_authenticated),
 				    entity_id = COALESCE(EXCLUDED.entity_id, client_events.entity_id)
 				""";
 
@@ -336,6 +345,11 @@ public class ClientEventRepository {
 						ps.setString(29, e.sampleMethod());
 						ps.setString(30, e.sampleUri());
 						ps.setString(31, e.sampleUserAgent());
+						if (e.sampleAuthenticated() != null) {
+							ps.setBoolean(32, e.sampleAuthenticated());
+						} else {
+							ps.setNull(32, Types.BOOLEAN);
+						}
 					}
 
 					@Override
@@ -890,6 +904,145 @@ public class ClientEventRepository {
 			int subnets = rs.getInt("distinct_subnets");
 			return AsnUserAgentSummary.of(rawUa, reqs, totalAsnRequests, events, subnets);
 		}, asn, Timestamp.from(from), Timestamp.from(to), Math.max(1, limit));
+	}
+
+	public record RawUserAgentAggregation(
+			String userAgent,
+			long totalRequests,
+			int eventCount,
+			int blockedCount,
+			int markedCount,
+			int activeCount,
+			int authenticatedCount,
+			int distinctSubnets,
+			int distinctAsns,
+			int datacenterCount,
+			int residentialCount
+	) {}
+
+	public List<RawUserAgentAggregation> findUserAgentAggregations(Instant from, Instant to, List<String> servers, List<String> valves, int limit) {
+		StringBuilder sql = new StringBuilder("""
+				SELECT 
+				    COALESCE(NULLIF(TRIM(sample_user_agent), ''), '(Empty User-Agent)') AS ua,
+				    SUM(request_count) AS total_requests,
+				    COUNT(*) AS event_count,
+				    SUM(CASE WHEN status = 'BLOCKED' THEN 1 ELSE 0 END) AS blocked_count,
+				    SUM(CASE WHEN status = 'MARKED' THEN 1 ELSE 0 END) AS marked_count,
+				    SUM(CASE WHEN status = 'ACTIVE' THEN 1 ELSE 0 END) AS active_count,
+				    SUM(CASE WHEN sample_authenticated = TRUE OR (authenticated_count IS NOT NULL AND authenticated_count > 0) THEN 1 ELSE 0 END) AS auth_count,
+				    COUNT(DISTINCT subnet_group) AS distinct_subnets,
+				    COUNT(DISTINCT asn) AS distinct_asns,
+				    SUM(CASE WHEN client_type IN ('DATACENTER', 'TOR_EXIT_NODE') THEN 1 ELSE 0 END) AS datacenter_count,
+				    SUM(CASE WHEN client_type IN ('RESIDENTIAL', 'PRIVACY_RELAY') THEN 1 ELSE 0 END) AS residential_count
+				FROM client_events
+				WHERE slot_time >= ? AND slot_time <= ?
+				  AND sample_user_agent IS NOT NULL
+				  AND TRIM(sample_user_agent) != ''
+				""");
+		List<Object> params = new ArrayList<>();
+		params.add(Timestamp.from(from));
+		params.add(Timestamp.from(to));
+
+		if (servers != null && !servers.isEmpty()) {
+			sql.append(" AND server_id IN (").append(String.join(",", Collections.nCopies(servers.size(), "?"))).append(")");
+			params.addAll(servers);
+		}
+		if (valves != null && !valves.isEmpty()) {
+			sql.append(" AND valve_name IN (").append(String.join(",", Collections.nCopies(valves.size(), "?"))).append(")");
+			params.addAll(valves);
+		}
+
+		sql.append("""
+				 GROUP BY ua
+				 ORDER BY total_requests DESC
+				 LIMIT ?
+				""");
+		params.add(Math.max(1, limit));
+
+		return jdbcTemplate.query(sql.toString(), (rs, rowNum) -> new RawUserAgentAggregation(
+				rs.getString("ua"),
+				rs.getLong("total_requests"),
+				rs.getInt("event_count"),
+				rs.getInt("blocked_count"),
+				rs.getInt("marked_count"),
+				rs.getInt("active_count"),
+				rs.getInt("auth_count"),
+				rs.getInt("distinct_subnets"),
+				rs.getInt("distinct_asns"),
+				rs.getInt("datacenter_count"),
+				rs.getInt("residential_count")
+		), params.toArray());
+	}
+
+	public List<UserAgentOriginSummary> findUserAgentTopOrigins(String ua, Instant from, Instant to, List<String> servers, List<String> valves, int limit) {
+		StringBuilder sql = new StringBuilder("""
+				SELECT 
+				    subnet_group,
+				    asn,
+				    as_org,
+				    SUM(request_count) AS total_requests,
+				    COUNT(*) AS event_count
+				FROM client_events
+				WHERE slot_time >= ? AND slot_time <= ?
+				  AND TRIM(sample_user_agent) = ?
+				""");
+		List<Object> params = new ArrayList<>();
+		params.add(Timestamp.from(from));
+		params.add(Timestamp.from(to));
+		params.add(ua != null ? ua.trim() : "");
+
+		if (servers != null && !servers.isEmpty()) {
+			sql.append(" AND server_id IN (").append(String.join(",", Collections.nCopies(servers.size(), "?"))).append(")");
+			params.addAll(servers);
+		}
+		if (valves != null && !valves.isEmpty()) {
+			sql.append(" AND valve_name IN (").append(String.join(",", Collections.nCopies(valves.size(), "?"))).append(")");
+			params.addAll(valves);
+		}
+
+		sql.append("""
+				 GROUP BY subnet_group, asn, as_org
+				 ORDER BY total_requests DESC
+				 LIMIT ?
+				""");
+		params.add(Math.max(1, limit));
+
+		return jdbcTemplate.query(sql.toString(), (rs, rowNum) -> {
+			Long asnVal = rs.getLong("asn");
+			if (rs.wasNull()) asnVal = null;
+			return new UserAgentOriginSummary(
+					rs.getString("subnet_group"),
+					asnVal,
+					rs.getString("as_org"),
+					rs.getLong("total_requests"),
+					rs.getInt("event_count")
+			);
+		}, params.toArray());
+	}
+
+	public int countSampledEvents(Instant from, Instant to, List<String> servers, List<String> valves) {
+		StringBuilder sql = new StringBuilder("""
+				SELECT COUNT(*)
+				FROM client_events
+				WHERE slot_time >= ? AND slot_time <= ?
+				  AND sample_user_agent IS NOT NULL
+				  AND TRIM(sample_user_agent) != ''
+				""");
+		List<Object> params = new ArrayList<>();
+		params.add(Timestamp.from(from));
+		params.add(Timestamp.from(to));
+
+		if (servers != null && !servers.isEmpty()) {
+			sql.append(" AND server_id IN (").append(String.join(",", Collections.nCopies(servers.size(), "?"))).append(")");
+			params.addAll(servers);
+		}
+		if (valves != null && !valves.isEmpty()) {
+			sql.append(" AND valve_name IN (").append(String.join(",", Collections.nCopies(valves.size(), "?"))).append(")");
+			params.addAll(valves);
+		}
+
+		Integer count = jdbcTemplate.queryForObject(sql.toString(), Integer.class, params.toArray());
+		return count != null ? count : 0;
 	}
 }
 

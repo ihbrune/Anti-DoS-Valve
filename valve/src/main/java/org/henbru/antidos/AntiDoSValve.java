@@ -2180,9 +2180,9 @@ public class AntiDoSValve extends ValveBase {
 		String userAgent = request.getHeader("User-Agent");
 		boolean allowed = isRequestAllowed(ip, path, isReturningVisitor, isAuthenticated, userAgent);
 		if (!allowed) {
-			recordBlockedSampleIfAbsent(ip, request, path);
+			recordBlockedSampleIfAbsent(ip, request, path, isAuthenticated);
 		} else if (activeSampleThreshold > 0 && isExtendedMetricsActive()) {
-			recordActiveSampleIfEligible(ip, request, path);
+			recordActiveSampleIfEligible(ip, request, path, isAuthenticated);
 		}
 		if (allowed || simulationMode) {
 			if (visitorCookieEnabled && visitorTokenService != null && issueNewCookie && clientSubnetBytes != null) {
@@ -2235,6 +2235,10 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	void recordBlockedSampleIfAbsent(String ip, Request request, String path) {
+		recordBlockedSampleIfAbsent(ip, request, path, false);
+	}
+
+	void recordBlockedSampleIfAbsent(String ip, Request request, String path, boolean authenticated) {
 		AntiDoSMonitor monitor = provideMonitor();
 		if (monitor == null || request == null) {
 			return;
@@ -2253,11 +2257,15 @@ public class AntiDoSValve extends ValveBase {
 		if (counter != null && counter.getSample() == null) {
 			String method = request.getMethod();
 			String ua = request.getHeader("User-Agent");
-			counter.recordSampleIfAbsent(method, path, ua);
+			counter.recordSampleIfAbsent(method, path, ua, authenticated);
 		}
 	}
 
 	void recordActiveSampleIfEligible(String ip, Request request, String path) {
+		recordActiveSampleIfEligible(ip, request, path, false);
+	}
+
+	void recordActiveSampleIfEligible(String ip, Request request, String path, boolean authenticated) {
 		AntiDoSMonitor monitor = provideMonitor();
 		if (monitor == null || request == null) {
 			return;
@@ -2270,7 +2278,7 @@ public class AntiDoSValve extends ValveBase {
 		if (counter != null && counter.getSample() == null && counter.getCountCombined() >= activeSampleThreshold) {
 			String method = request.getMethod();
 			String ua = request.getHeader("User-Agent");
-			counter.recordSampleIfAbsent(method, path, ua);
+			counter.recordSampleIfAbsent(method, path, ua, authenticated);
 		}
 	}
 

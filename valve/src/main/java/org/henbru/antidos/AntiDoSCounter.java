@@ -41,10 +41,14 @@ public class AntiDoSCounter {
 	private static final VarHandle SAMPLE_REQUEST;
 
 	/**
-	 * Compact, immutable snapshot of an offending client request captured upon rate-limit blocking.
+	 * Compact, immutable snapshot of an offending client request captured upon rate-limit blocking or sampling.
 	 * All string fields are strictly bounded and sanitized.
 	 */
-	public record SampleRequest(String method, String uri, String userAgent) {}
+	public record SampleRequest(String method, String uri, String userAgent, boolean authenticated) {
+		public SampleRequest(String method, String uri, String userAgent) {
+			this(method, uri, userAgent, false);
+		}
+	}
 
 	static {
 		try {
@@ -394,6 +398,22 @@ public class AntiDoSCounter {
 	 * @return true if the sample was successfully captured, false if a sample already exists
 	 */
 	public boolean recordSampleIfAbsent(String method, String uri, String userAgent) {
+		return recordSampleIfAbsent(method, uri, userAgent, false);
+	}
+
+	/**
+	 * Atomically captures an offending request sample if no sample has been recorded yet,
+	 * including whether the request was associated with a valid authenticated session.
+	 * All fields are strictly sanitized and length-bounded to prevent memory bloat or injection.
+	 * Query parameters are explicitly stripped for privacy/GDPR compliance.
+	 *
+	 * @param method        HTTP method (e.g. "POST")
+	 * @param uri           Request URI path (query string stripped, max 256 chars)
+	 * @param userAgent     User-Agent header (max 128 chars)
+	 * @param authenticated true if the sampled request had a valid authenticated session
+	 * @return true if the sample was successfully captured, false if a sample already exists
+	 */
+	public boolean recordSampleIfAbsent(String method, String uri, String userAgent, boolean authenticated) {
 		if (this.sampleRequest != null) {
 			return false;
 		}
@@ -403,7 +423,7 @@ public class AntiDoSCounter {
 		if (cleanMethod == null && cleanUri == null) {
 			return false;
 		}
-		SampleRequest sample = new SampleRequest(cleanMethod, cleanUri, cleanUserAgent);
+		SampleRequest sample = new SampleRequest(cleanMethod, cleanUri, cleanUserAgent, authenticated);
 		return SAMPLE_REQUEST.compareAndSet(this, null, sample);
 	}
 
