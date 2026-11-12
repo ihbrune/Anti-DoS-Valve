@@ -820,6 +820,75 @@ Outside business hours or during high-rate overnight waves, the Autonomous Defen
 * **Auto-Extension for Persistent Attackers:** When enabled (`autoExtendPersistent = true`), rules whose attackers remain in `PERSISTENT` deterrence state near expiration are autonomously extended by +60 minutes up to a configurable maximum lifetime cap (`maxExtensionHours`, default `24h`).
 * **Runtime Database Overrides (`system_settings`):** Thresholds and mode switches can be adjusted live in the `/mitigation` dashboard. Runtime overrides are stored in the `system_settings` database table, taking immediate precedence over `application.yaml` defaults, with a **Reset to Defaults** button to revert at any time.
 
+### 6.1 ASN & Subnet Lifecycle: Deduplication, Deterrence & Granular Auto-Extension
+
+Understanding how the Autonomous Defense Engine tracks ASNs across multiple scan cycles and manages individual subnet lifecycles is critical for operational confidence:
+
+#### 1. Are already blocked subnets included when evaluating if an ASN is still anomalous?
+**Yes.** The roll-up aggregation service persists both unblocked (`ACTIVE`) and blocked (`BLOCKED`) request telemetry into `client_subnet_rollups`. When `AutoMitigationService` runs its detection cycle (every 2 minutes), queries spanning the lookback window (`carpetWindowHours`, default 1 hour) calculate the full ASN volume and distinct subnets across all states. This ensures the engine retains full awareness of the horizontal carpet footprint even after individual subnets have been clamped down by HTTP 429 drops.
+
+#### 2. How are existing vs. newly emerging subnets handled during subsequent cycles?
+When an ASN triggers the carpet detection threshold:
+* **Pre-Filter Existing Rules:** The engine compares the ASN's candidate subnets against currently active mitigation rules across the fleet (`activeRules`).
+* **Zero Duplication / Zero Reset:** Subnets that already have an active rule are **strictly skipped**. Their timers, hit statistics, and original creation timestamps are never reset or overwritten by the new ASN evaluation cycle.
+* **Incremental Blocking:** Only *new* subnets (e.g. if the botnet begins rotating or sprinkling into previously unseen `/24` or `/64` ranges within the same ASN) are issued as an incremental batch (`AUTO-ASN-<asn>-...`) with the configured default TTL.
+* **No-Op when Fully Blocked:** If all qualifying subnets of the ASN are already actively blocked, the enforcement phase gracefully no-ops for that ASN.
+
+#### 3. Are active blocks renewed as a blanket ASN-wide extension, or only for subnets that were not deterred?
+**Extensions are strictly granular per-subnet; there is NEVER a blanket ASN-wide renewal.**
+The engine relies on individual subnet **Deterrence States** refreshed continuously based on live traffic during the last 10 minutes (`DETERRENCE_WINDOW_SECONDS = 600s`):
+* **`PERSISTENT` (Active Threat):** The subnet continued firing requests blocked by the Valve within the last 10 minutes (`last_hit > now - 10m`).
+* **`DETERRED` (Attack Ceased / Deterred):** The rule has been active for over 10 minutes and recorded zero hits during the last 10 minutes (`last_hit <= now - 10m`). The attacker stopped attacking or gave up.
+* **`OBSERVING` (Initial Window):** Fresh rules during their initial 10-minute observation period.
+
+When `autoExtendPersistent` is active:
+* **Granular Qualification:** Only subnets currently marked **`PERSISTENT`** AND possessing **$\le 15$ minutes of remaining TTL** qualify for extension.
+* **Extension Increment:** Qualified rules are extended by +60 minutes (up to `maxExtensionHours`, default 24h).
+* **Automatic Expiration for Deterred Subnets:** Subnets in **`DETERRED`** state are **never extended**. Their TTL is allowed to run out naturally. Once expired, the Valve evicts the rule from memory and traffic flow is restored immediately.
+
+---
+
+#### Real-World Operational Scenarios
+
+```mermaid
+flowchart TD
+    A["Scheduled Scan (Every 2 min)"] --> B["Carpet Attack Detection (Lookback Window)"]
+    B --> C{"ASN Exceeds Carpet Threshold?"}
+    C -- No --> D["No Action"]
+    C -- Yes --> E["Inspect Candidate Subnets"]
+    E --> F{"Subnet Already Blocked?"}
+    F -- "No (New Subnet)" --> G["Create New Auto-Block (TTL: 60m)"]
+    F -- "Yes (Already Active)" --> H["Check Deterrence & TTL"]
+    H --> I{"Status == PERSISTENT and TTL <= 15m?"}
+    I -- Yes --> K["Auto-Extend (+60m, capped at maxExtensionHours)"]
+    I -- No --> L["Do Nothing (If DETERRED, let TTL elapse naturally)"]
+```
+
+##### Scenario A: Persistent Attacker Hammering the Same Subnets
+* **T = 0m:** ASN 12345 launches carpet attack across Subnets A, B, and C. Engine auto-blocks A, B, and C for 60m (expiry at T=60m). State: `OBSERVING`.
+* **T = 15m:** Attacker continuously floods. Since requests are blocked within the last 10 minutes, states update to `PERSISTENT`.
+* **T = 46m:** Remaining TTL reaches 14m ($\le 15$m). Because Subnets A, B, and C are `PERSISTENT`, the engine auto-extends each by +60m (new expiry: T=106m).
+* **T = 70m:** Attacker disconnects and halts flood traffic.
+* **T = 81m:** With no hits for 11 minutes, states transition to `DETERRED`.
+* **T = 92m:** Remaining TTL is 14m ($\le 15$m). Because state is `DETERRED`, the engine **skips extension**.
+* **T = 106m:** Rules expire naturally; all 3 subnets are unlocked cleanly.
+
+##### Scenario B: Selective Deterrence (Partial Attacker Back-off)
+* **T = 0m:** ASN 12345 attacks across Subnets A, B, and C (all blocked for 60m).
+* **T = 25m:** Attacker abandons Subnet A, but doubles down on Subnets B and C.
+* **T = 40m:** Subnet A becomes `DETERRED`. Subnets B and C remain `PERSISTENT`.
+* **T = 46m:** Extension evaluation:
+  * Subnet A: `DETERRED` $\rightarrow$ **Not extended**. Runs out at T=60m.
+  * Subnets B & C: `PERSISTENT` $\rightarrow$ **Extended** to T=106m.
+* **Result:** Benign or vacated IP space is released promptly, minimizing collateral surface, while active threat vectors remain neutralized.
+
+##### Scenario C: Subnet Sprinkling / Hopping (Attacker Expands Range)
+* **T = 0m:** ASN 12345 floods Subnets A and B $\rightarrow$ both blocked for 60m.
+* **T = 20m:** Attacker notices drops and shifts traffic into new Subnets D and E of the same ASN.
+* **T = 22m:** Scheduled evaluation analyzes ASN 12345:
+  * Subnets A & B are recognized as already active $\rightarrow$ skipped.
+  * Subnets D & E are recognized as new candidates $\rightarrow$ blocked under a new batch (`AUTO-ASN-12345-...`) with fresh 60m TTL.
+
 ### 7. Webhook & Slack Alerting
 Operators can connect the active mitigation control plane to collaboration channels (Slack, Microsoft Teams, Discord, Mattermost) or generic SIEM pipelines:
 * **Configuration:** Expand the configuration drawer in `/mitigation` to set the **Webhook Target URL**, enable/disable alerting, and choose whether to receive notifications for Simulation (Dry-Run) discoveries and Emergency Flushes.
