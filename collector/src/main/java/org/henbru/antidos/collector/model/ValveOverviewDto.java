@@ -79,6 +79,7 @@ public record ValveOverviewDto(
 			Integer mitigationMinPrefixV6,
 			Integer mitigationMaxTtlSeconds,
 			Integer mitigationMaxActiveBlocks,
+			Boolean alwaysAllowPrivateIPs,
 			long alwaysForbiddenBlockedRequests,
 			int currentActiveCounters,
 			int currentBlockedCounters,
@@ -94,6 +95,91 @@ public record ValveOverviewDto(
 			boolean isStatusHost,
 			boolean isCurrentHost
 	) {
+		/**
+		 * Overloaded constructor without alwaysAllowPrivateIPs for backwards compatibility.
+		 */
+		public ValveSummaryDto(
+				String monitorName,
+				String description,
+				int pipelineOrder,
+				String monitorMode,
+				boolean simulationMode,
+				boolean serverWideBlocking,
+				int httpStatusCode,
+				int allowedRequestsPerSlot,
+				int slotLength,
+				int numberOfSlots,
+				float shareOfRetainedFormerRequests,
+				int ipv4SubnetMask,
+				int ipv6SubnetMask,
+				int maxIPCacheSize,
+				int maxBlockedIPCacheSize,
+				String relevantPaths,
+				String nonRelevantPaths,
+				String alwaysAllowedIPs,
+				String alwaysForbiddenIPs,
+				String statusUri,
+				String statusAllowedIPs,
+				String collectorIntegration,
+				boolean visitorCookieEnabled,
+				String visitorCookieName,
+				boolean authTrackingEnabled,
+				String authTrackingMode,
+				String authCookieName,
+				String authLoginPaths,
+				int authSessionTtlSeconds,
+				int maxAuthCacheSize,
+				int activeAuthSessions,
+				String relevantAuthScope,
+				Integer activeSampleThreshold,
+				Boolean dynamicMitigationEnabled,
+				String mitigationUri,
+				String mitigationAllowedIPs,
+				Integer dynamicBlocksActiveCount,
+				Long dynamicBlocksBlockedRequests,
+				Long dynamicRulesRevision,
+				Integer dynamicRulesHashVersion,
+				Integer mitigationMinPrefixV4,
+				Integer mitigationMinPrefixV6,
+				Integer mitigationMaxTtlSeconds,
+				Integer mitigationMaxActiveBlocks,
+				long alwaysForbiddenBlockedRequests,
+				int currentActiveCounters,
+				int currentBlockedCounters,
+				long currentSlotKey,
+				long lastCompletedSlotKey,
+				long totalRequests,
+				long totalAuthenticatedRequests,
+				long previousTotalRequests,
+				long previousAuthenticatedRequests,
+				int previousActiveCounters,
+				int previousBlockedCounters,
+				int activeSlots,
+				boolean isStatusHost,
+				boolean isCurrentHost
+		) {
+			this(
+					monitorName, description, pipelineOrder, monitorMode, simulationMode, serverWideBlocking,
+					httpStatusCode, allowedRequestsPerSlot, slotLength, numberOfSlots,
+					shareOfRetainedFormerRequests, ipv4SubnetMask, ipv6SubnetMask, maxIPCacheSize,
+					maxBlockedIPCacheSize, relevantPaths, nonRelevantPaths, alwaysAllowedIPs,
+					alwaysForbiddenIPs, statusUri, statusAllowedIPs, collectorIntegration,
+					visitorCookieEnabled, visitorCookieName,
+					authTrackingEnabled, authTrackingMode, authCookieName, authLoginPaths,
+					authSessionTtlSeconds, maxAuthCacheSize, activeAuthSessions,
+					relevantAuthScope, activeSampleThreshold,
+					dynamicMitigationEnabled, mitigationUri, mitigationAllowedIPs,
+					dynamicBlocksActiveCount, dynamicBlocksBlockedRequests, dynamicRulesRevision,
+					dynamicRulesHashVersion,
+					mitigationMinPrefixV4, mitigationMinPrefixV6, mitigationMaxTtlSeconds, mitigationMaxActiveBlocks,
+					false,
+					alwaysForbiddenBlockedRequests, currentActiveCounters, currentBlockedCounters,
+					currentSlotKey, lastCompletedSlotKey, totalRequests, totalAuthenticatedRequests,
+					previousTotalRequests, previousAuthenticatedRequests,
+					previousActiveCounters, previousBlockedCounters, activeSlots, isStatusHost, isCurrentHost
+			);
+		}
+
 		/**
 		 * Overloaded constructor without dynamicRulesHashVersion for backwards compatibility.
 		 */
@@ -728,6 +814,10 @@ public record ValveOverviewDto(
 			return mitigationMaxActiveBlocks != null && mitigationMaxActiveBlocks > 0 ? mitigationMaxActiveBlocks : 5000;
 		}
 
+		public boolean alwaysAllowPrivateIPsOrDefault() {
+			return Boolean.TRUE.equals(alwaysAllowPrivateIPs);
+		}
+
 		/**
 		 * Computes an in-memory hash of configuration parameters (excluding transient traffic counters)
 		 * to detect configuration drift and prevent redundant database writes.
@@ -738,7 +828,7 @@ public record ValveOverviewDto(
 					httpStatusCode, allowedRequestsPerSlot, slotLength, numberOfSlots,
 					Float.floatToIntBits(shareOfRetainedFormerRequests), ipv4SubnetMask, ipv6SubnetMask,
 					maxIPCacheSize, maxBlockedIPCacheSize, relevantPaths, nonRelevantPaths,
-					alwaysAllowedIPs, alwaysForbiddenIPs, statusUri, statusAllowedIPs, collectorIntegration,
+					alwaysAllowedIPs, alwaysAllowPrivateIPsOrDefault(), alwaysForbiddenIPs, statusUri, statusAllowedIPs, collectorIntegration,
 					visitorCookieEnabled, visitorCookieNameOrDefault(),
 					relevantAuthScopeOrDefault(),
 					activeSampleThresholdOrDefault(),

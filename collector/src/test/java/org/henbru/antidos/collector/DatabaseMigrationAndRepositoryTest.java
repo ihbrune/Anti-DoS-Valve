@@ -794,6 +794,63 @@ class DatabaseMigrationAndRepositoryTest {
 		assertEquals(12345, found.configHash());
 		assertTrue(found.hasPathFilters());
 		assertTrue(found.hasIpLists());
+		assertFalse(found.alwaysAllowPrivateIPs());
+
+		org.henbru.antidos.collector.model.MonitoredValve valvePrivate = new org.henbru.antidos.collector.model.MonitoredValve(
+				"VALVE-NODE-PRIVATE",
+				"Private-IP-Limiter",
+				"Private IP limiter test",
+				1,
+				"BLOCKING",
+				false,
+				false,
+				429,
+				100,
+				60,
+				5,
+				0.8f,
+				32,
+				64,
+				15000,
+				10000,
+				null,
+				null,
+				null,
+				true,
+				null,
+				"/antidos-status",
+				"127.0.0.1",
+				"auto",
+				false,
+				"_adv",
+				false,
+				"OFF",
+				null,
+				null,
+				900,
+				50000,
+				"ALL",
+				0,
+				false,
+				null,
+				0,
+				0L,
+				0L,
+				1,
+				16,
+				32,
+				86400,
+				5000,
+				now,
+				54321,
+				true
+		);
+		monitoredValveRepository.upsert(valvePrivate);
+		Optional<org.henbru.antidos.collector.model.MonitoredValve> foundPrivate =
+				monitoredValveRepository.findByServerIdAndValveName("VALVE-NODE-PRIVATE", "Private-IP-Limiter");
+		assertTrue(foundPrivate.isPresent());
+		assertTrue(foundPrivate.get().alwaysAllowPrivateIPs());
+		assertTrue(foundPrivate.get().hasIpLists());
 
 		// Test update on conflict
 		org.henbru.antidos.collector.model.MonitoredValve updated = new org.henbru.antidos.collector.model.MonitoredValve(

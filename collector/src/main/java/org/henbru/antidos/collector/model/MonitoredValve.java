@@ -26,6 +26,7 @@ public record MonitoredValve(
 		String relevantPaths,
 		String nonRelevantPaths,
 		String alwaysAllowedIPs,
+		boolean alwaysAllowPrivateIPs,
 		String alwaysForbiddenIPs,
 		String statusUri,
 		String statusAllowedIPs,
@@ -54,6 +55,71 @@ public record MonitoredValve(
 		int configHash,
 		boolean isActive
 ) {
+	/**
+	 * Backwards-compatible constructor without alwaysAllowPrivateIPs.
+	 */
+	public MonitoredValve(
+			String serverId,
+			String valveName,
+			String description,
+			int pipelineOrder,
+			String monitorMode,
+			boolean simulationMode,
+			boolean serverWideBlocking,
+			int httpStatusCode,
+			int allowedRequestsPerSlot,
+			int slotLength,
+			int numberOfSlots,
+			float shareOfRetainedFormerRequests,
+			int ipv4SubnetMask,
+			int ipv6SubnetMask,
+			int maxIPCacheSize,
+			int maxBlockedIPCacheSize,
+			String relevantPaths,
+			String nonRelevantPaths,
+			String alwaysAllowedIPs,
+			String alwaysForbiddenIPs,
+			String statusUri,
+			String statusAllowedIPs,
+			String collectorIntegration,
+			boolean visitorCookieEnabled,
+			String visitorCookieName,
+			boolean authTrackingEnabled,
+			String authTrackingMode,
+			String authCookieName,
+			String authLoginPaths,
+			int authSessionTtlSeconds,
+			int maxAuthCacheSize,
+			String relevantAuthScope,
+			int activeSampleThreshold,
+			boolean dynamicMitigationEnabled,
+			String mitigationUri,
+			int dynamicBlocksActiveCount,
+			long dynamicBlocksBlockedRequests,
+			long dynamicRulesRevision,
+			int dynamicRulesHashVersion,
+			int mitigationMinPrefixV4,
+			int mitigationMinPrefixV6,
+			int mitigationMaxTtlSeconds,
+			int mitigationMaxActiveBlocks,
+			Instant lastUpdatedAt,
+			int configHash,
+			boolean isActive
+	) {
+		this(serverId, valveName, description, pipelineOrder, monitorMode, simulationMode,
+				serverWideBlocking, httpStatusCode, allowedRequestsPerSlot, slotLength, numberOfSlots,
+				shareOfRetainedFormerRequests, ipv4SubnetMask, ipv6SubnetMask, maxIPCacheSize,
+				maxBlockedIPCacheSize, relevantPaths, nonRelevantPaths, alwaysAllowedIPs,
+				false, alwaysForbiddenIPs, statusUri, statusAllowedIPs, collectorIntegration,
+				visitorCookieEnabled, visitorCookieName, authTrackingEnabled, authTrackingMode,
+				authCookieName, authLoginPaths, authSessionTtlSeconds, maxAuthCacheSize,
+				relevantAuthScope, activeSampleThreshold,
+				dynamicMitigationEnabled, mitigationUri, dynamicBlocksActiveCount,
+				dynamicBlocksBlockedRequests, dynamicRulesRevision, dynamicRulesHashVersion,
+				mitigationMinPrefixV4, mitigationMinPrefixV6, mitigationMaxTtlSeconds, mitigationMaxActiveBlocks,
+				lastUpdatedAt, configHash, isActive);
+	}
+
 	/**
 	 * Backwards-compatible constructor without dynamicRulesHashVersion.
 	 */
@@ -602,6 +668,7 @@ public record MonitoredValve(
 
 	public boolean hasIpLists() {
 		return (alwaysAllowedIPs != null && !alwaysAllowedIPs.isBlank())
+				|| alwaysAllowPrivateIPs
 				|| (alwaysForbiddenIPs != null && !alwaysForbiddenIPs.isBlank());
 	}
 

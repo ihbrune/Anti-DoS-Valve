@@ -330,6 +330,8 @@
                                 th:classappend="${rv.relevantAuthScopeBadgeClass()}"
                                 th:title="'Relevant auth scope: ' + ${rv.relevantAuthScope()}"
                                 th:text="'SCOPE: ' + ${rv.relevantAuthScope()}">SCOPE: AUTHENTICATED_ONLY</span>
+                            <span th:if="${rv.alwaysAllowPrivateIPs}" class="badge badge-success"
+                                title="Private IP addresses (RFC 1918 / ULA) are always permitted and never rate-limited">PRIVATE IPs: BYPASS</span>
                         </div>
                         <div style="font-size: 11px; color: var(--text-muted);">
                             Last Synced: <span style="font-weight: 600; color: var(--text-secondary);"
@@ -508,6 +510,11 @@
                                     Allowed IPs:</span>
                                 <code style="word-break: break-all; color: var(--color-success);"
                                     th:text="${rv.alwaysAllowedIPs}">127.0.0.1, 10.0.0.0/8</code>
+                            </div>
+                            <div style="display: flex; gap: 8px; align-items: baseline;">
+                                <span style="min-width: 150px; font-weight: 600; color: var(--text-muted);">Private IPs Bypass:</span>
+                                <span th:if="${rv.alwaysAllowPrivateIPs}" class="badge badge-success">&#x2714; ALWAYS ALLOWED (RFC 1918 / ULA)</span>
+                                <span th:unless="${rv.alwaysAllowPrivateIPs}" style="color: var(--text-muted);">Standard rate limiting</span>
                             </div>
                             <div th:if="${rv.alwaysForbiddenIPs != null and !rv.alwaysForbiddenIPs.isBlank()}"
                                 style="display: flex; gap: 8px; align-items: baseline;">

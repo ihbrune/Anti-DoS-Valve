@@ -56,6 +56,7 @@ public class MonitoredValveRepository {
 			rs.getString("relevant_paths"),
 			rs.getString("non_relevant_paths"),
 			rs.getString("always_allowed_ips"),
+			getBooleanSafe(rs, "always_allow_private_ips", false),
 			rs.getString("always_forbidden_ips"),
 			rs.getString("status_uri"),
 			rs.getString("status_allowed_ips"),
@@ -98,6 +99,14 @@ public class MonitoredValveRepository {
 		}
 	}
 
+	private static boolean getBooleanSafe(ResultSet rs, String colName, boolean defaultVal) {
+		try {
+			return rs.getBoolean(colName);
+		} catch (SQLException ignored) {
+			return defaultVal;
+		}
+	}
+
 	public void upsert(MonitoredValve v) {
 		String sql = """
 				INSERT INTO monitored_valves (
@@ -105,7 +114,7 @@ public class MonitoredValveRepository {
 				    simulation_mode, server_wide_blocking, http_status_code, allowed_requests_per_slot,
 				    slot_length, number_of_slots, share_of_retained_former_requests,
 				    ipv4_subnet_mask, ipv6_subnet_mask, max_ip_cache_size, max_blocked_ip_cache_size,
-				    relevant_paths, non_relevant_paths, always_allowed_ips, always_forbidden_ips,
+				    relevant_paths, non_relevant_paths, always_allowed_ips, always_allow_private_ips, always_forbidden_ips,
 				    status_uri, status_allowed_ips, collector_integration,
 				    visitor_cookie_enabled, visitor_cookie_name,
 				    auth_tracking_enabled, auth_tracking_mode, auth_cookie_name, auth_login_paths,
@@ -117,7 +126,7 @@ public class MonitoredValveRepository {
 				    mitigation_max_ttl_seconds, mitigation_max_active_blocks,
 				    last_updated_at, config_hash, is_active
 				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (server_id, valve_name) DO UPDATE SET
 				    description = EXCLUDED.description,
 				    pipeline_order = EXCLUDED.pipeline_order,
@@ -136,6 +145,7 @@ public class MonitoredValveRepository {
 				    relevant_paths = EXCLUDED.relevant_paths,
 				    non_relevant_paths = EXCLUDED.non_relevant_paths,
 				    always_allowed_ips = EXCLUDED.always_allowed_ips,
+				    always_allow_private_ips = EXCLUDED.always_allow_private_ips,
 				    always_forbidden_ips = EXCLUDED.always_forbidden_ips,
 				    status_uri = EXCLUDED.status_uri,
 				    status_allowed_ips = EXCLUDED.status_allowed_ips,
@@ -185,6 +195,7 @@ public class MonitoredValveRepository {
 				v.relevantPaths(),
 				v.nonRelevantPaths(),
 				v.alwaysAllowedIPs(),
+				v.alwaysAllowPrivateIPs(),
 				v.alwaysForbiddenIPs(),
 				v.statusUri(),
 				v.statusAllowedIPs(),
