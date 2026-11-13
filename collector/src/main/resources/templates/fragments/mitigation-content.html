@@ -1262,8 +1262,9 @@
                 <div>
                     <select name="auditActor" class="input-control" style="height: 34px; font-size: 12px; width: auto;">
                         <option value="ALL" th:selected="${auditActor == 'ALL'}">All Actors</option>
-                        <option value="AUTO_MITIGATION" th:selected="${auditActor == 'AUTO_MITIGATION'}">AUTO_MITIGATION</option>
+                        <option value="AUTO_ENGINE" th:selected="${auditActor == 'AUTO_ENGINE'}">AUTO_ENGINE</option>
                         <option value="ADMIN" th:selected="${auditActor == 'ADMIN'}">ADMIN</option>
+                        <option value="AUTO_POLLER" th:selected="${auditActor == 'AUTO_POLLER'}">AUTO_POLLER</option>
                     </select>
                 </div>
                 <div>

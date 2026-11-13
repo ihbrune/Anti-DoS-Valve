@@ -18,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.LinkedHashSet;
@@ -81,11 +82,8 @@ public class DailyReportService {
 			int auditExtendsCount,
 			int auditRevokesCount,
 			int auditFlushesCount,
-			int dryRunSimulatedBlocksCount,
-			int dryRunSimulatedExtendsCount,
 			List<MitigationRule> dayRules,
 			List<MitigationAuditEntry> dayAuditEntries,
-			List<DryRunSimulationEntry> dryRunSimulations,
 			boolean engineEnabled,
 			boolean engineDryRun
 	) {
@@ -103,20 +101,6 @@ public class DailyReportService {
 			}
 		}
 	}
-
-	public record DryRunSimulationEntry(
-			Instant timestamp,
-			String targetCidrOrAsn,
-			Long asn,
-			String action,
-			String details,
-			int subnetsCount,
-			List<String> candidateSubnets,
-			long estimatedRequests,
-			long authenticatedRequests,
-			double returningRatioPct,
-			String asOrg
-	) {}
 
 	public record ValveAggregate(
 			String serverId,
@@ -1251,10 +1235,7 @@ public class DailyReportService {
 			}
 			if (mitigationSummary.engineEnabled()) {
 				if (mitigationSummary.engineDryRun()) {
-					int simCount = mitigationSummary.dryRunSimulatedBlocksCount();
-					sb.append("| **Autonomous Defense Mode** | **DRY-RUN SIMULATION (")
-							.append(simCount).append(simCount == 1 ? " Attack Simulated" : " Attacks Simulated")
-							.append(")** | Carpet-attack detection in simulation mode without active fleet-wide rule deployment |\n");
+					sb.append("| **Autonomous Defense Mode** | **DRY-RUN (SIMULATION ONLY)** | Carpet-attack detection in simulation mode without active fleet-wide rule deployment |\n");
 				} else {
 					sb.append("| **Autonomous Defense Mode** | **ACTIVE (LIVE DEFENSE — ")
 							.append(mitigationSummary.autoRulesCount()).append(" Auto-Blocks)** | Autonomous detection and live fleet-wide CIDR block enforcement |\n");
@@ -1711,11 +1692,6 @@ public class DailyReportService {
 		return sb.toString();
 	}
 
-	private static final Pattern SUBNET_LIST_PATTERN = Pattern.compile("Would block (\\d+) subnets? \\(([^)]+)\\)", Pattern.CASE_INSENSITIVE);
-	private static final Pattern ASN_ORG_PATTERN = Pattern.compile("from ASN (\\d+)(?: \\(([^)]+)\\))?", Pattern.CASE_INSENSITIVE);
-	private static final Pattern REQ_PATTERN = Pattern.compile("(\\d+)\\s+reqs", Pattern.CASE_INSENSITIVE);
-	private static final Pattern RET_PATTERN = Pattern.compile("returning ratio ([\\d.,]+)%", Pattern.CASE_INSENSITIVE);
-
 	private DailyMitigationSummary queryDailyMitigations(Instant startInstant, Instant endInstant) {
 		int activeValvesCount = 0;
 		long fleetBlockedHits = 0L;
@@ -1810,9 +1786,6 @@ public class DailyReportService {
 		int auditExtends = 0;
 		int auditRevokes = 0;
 		int auditFlushes = 0;
-		int dryRunBlocks = 0;
-		int dryRunExtends = 0;
-		List<DryRunSimulationEntry> dryRunSimulations = new ArrayList<>();
 
 		try {
 			if (ruleRepository != null) {
@@ -1834,24 +1807,16 @@ public class DailyReportService {
 					case "EXTEND", "AUTO_EXTEND" -> auditExtends++;
 					case "REVOKE" -> auditRevokes++;
 					case "FLUSH", "EMERGENCY_FLUSH" -> auditFlushes++;
-					case "AUTO_WOULD_BLOCK" -> {
-						dryRunBlocks++;
-						dryRunSimulations.add(extractDryRunSimulation(a, startInstant, endInstant));
-					}
-					case "AUTO_WOULD_EXTEND" -> dryRunExtends++;
 				}
 			}
 		} catch (Exception e) {
 			log.debug("Error querying mitigation_audit_log for daily report: {}", e.getMessage());
 		}
 
-		// If autonomous blocks or simulations occurred during the reporting period, reflect active/dry-run status
+		// If autonomous blocks occurred during the reporting period, reflect active live defense status
 		if (autoCount > 0 || auditAutoBlocks > 0) {
 			engineEnabled = true;
 			engineDryRun = false;
-		} else if ((dryRunBlocks > 0 || dryRunExtends > 0) && !engineEnabled) {
-			engineEnabled = true;
-			engineDryRun = true;
 		}
 
 		return new DailyMitigationSummary(
@@ -1870,109 +1835,10 @@ public class DailyReportService {
 				auditExtends,
 				auditRevokes,
 				auditFlushes,
-				dryRunBlocks,
-				dryRunExtends,
 				dayRules,
 				dayAuditEntries,
-				dryRunSimulations,
 				engineEnabled,
 				engineDryRun
-		);
-	}
-
-	private DryRunSimulationEntry extractDryRunSimulation(MitigationAuditEntry a, Instant startInstant, Instant endInstant) {
-		String details = a.details() != null ? a.details() : "";
-		String target = a.cidr() != null ? a.cidr() : "Unknown";
-
-		int subnetsCount = 0;
-		List<String> subnets = new ArrayList<>();
-		Matcher sm = SUBNET_LIST_PATTERN.matcher(details);
-		if (sm.find()) {
-			try {
-				subnetsCount = Integer.parseInt(sm.group(1));
-			} catch (NumberFormatException ignored) {}
-			String[] parts = sm.group(2).split(",\\s*");
-			for (String p : parts) {
-				if (!p.isBlank()) {
-					subnets.add(p.trim());
-				}
-			}
-		}
-
-		Long asn = null;
-		String asOrg = null;
-		Matcher am = ASN_ORG_PATTERN.matcher(details);
-		if (am.find()) {
-			try {
-				asn = Long.parseLong(am.group(1));
-			} catch (NumberFormatException ignored) {}
-			if (am.group(2) != null) {
-				asOrg = am.group(2).trim();
-			}
-		}
-		if (asn == null && target != null && target.toUpperCase().startsWith("ASN-")) {
-			try {
-				asn = Long.parseLong(target.substring(4).trim());
-			} catch (NumberFormatException ignored) {}
-		}
-
-		long estimatedReqs = 0L;
-		Matcher rm = REQ_PATTERN.matcher(details);
-		if (rm.find()) {
-			try {
-				estimatedReqs = Long.parseLong(rm.group(1));
-			} catch (NumberFormatException ignored) {}
-		}
-
-		double retPct = 0.0;
-		Matcher rtm = RET_PATTERN.matcher(details);
-		if (rtm.find()) {
-			try {
-				retPct = Double.parseDouble(rtm.group(1).replace(',', '.'));
-			} catch (NumberFormatException ignored) {}
-		}
-
-		long authReqs = 0L;
-
-		if (!subnets.isEmpty()) {
-			try {
-				String inSql = String.join(",", Collections.nCopies(subnets.size(), "?"));
-				List<Object> params = new ArrayList<>();
-				params.add(Timestamp.from(startInstant));
-				params.add(Timestamp.from(endInstant));
-				params.addAll(subnets);
-				Map<String, Object> row = jdbcTemplate.queryForMap(
-						"SELECT COALESCE(SUM(total_requests), 0) AS tot_req, " +
-						"       COALESCE(SUM(authenticated_requests), 0) AS auth_req, " +
-						"       COALESCE(SUM(returning_requests), 0) AS ret_req " +
-						"FROM client_subnet_rollups " +
-						"WHERE bucket_start >= ? AND bucket_start < ? AND subnet_group IN (" + inSql + ")",
-						params.toArray());
-				long dbReqs = ((Number) row.get("tot_req")).longValue();
-				long dbAuth = ((Number) row.get("auth_req")).longValue();
-				long dbRet = ((Number) row.get("ret_req")).longValue();
-				if (dbReqs > 0) {
-					estimatedReqs = dbReqs;
-					authReqs = dbAuth;
-					retPct = (dbRet * 100.0) / dbReqs;
-				}
-			} catch (Exception e) {
-				log.debug("Rollup query for dry-run simulation skipped: {}", e.getMessage());
-			}
-		}
-
-		return new DryRunSimulationEntry(
-				a.createdAt(),
-				target,
-				asn,
-				a.action(),
-				details,
-				subnetsCount > 0 ? subnetsCount : subnets.size(),
-				subnets,
-				estimatedReqs,
-				authReqs,
-				retPct,
-				asOrg
 		);
 	}
 
@@ -1983,7 +1849,7 @@ public class DailyReportService {
 		StringBuilder sb = new StringBuilder();
 		sb.append("## 🛡️ 6. Dynamic Mitigation & Autonomous Defense Audit\n\n");
 		sb.append("> ℹ️ **Dynamic Mitigation Telemetry:** Tracks server-wide CIDR block rules enforced across Tomcat fleet Valves, ");
-		sb.append("autonomous carpet-attack defense responses, deterrence effectiveness, and Dry-Run simulations.\n\n");
+		sb.append("autonomous carpet-attack defense responses, and deterrence effectiveness.\n\n");
 
 		sb.append("| Metric | Daily Value | Operational Context |\n");
 		sb.append("| :--- | :--- | :--- |\n");
@@ -2001,32 +1867,29 @@ public class DailyReportService {
 		} else {
 			sb.append("| **Deterrence Success Rate** | **None (0 rules evaluated)** | No rules with completed observation windows |\n");
 		}
-		sb.append("| **Audit Log Operations** | **").append(mit.dayAuditEntries().size()).append(" actions** (")
+		int totalLifecycleOps = mit.auditBlocksCount() + mit.auditAutoBlocksCount()
+				+ mit.auditExtendsCount() + mit.auditRevokesCount() + mit.auditFlushesCount();
+		sb.append("| **Audit Log Operations** | **").append(totalLifecycleOps).append(" actions** (")
 				.append(mit.auditBlocksCount() + mit.auditAutoBlocksCount()).append(" Blocks, ")
 				.append(mit.auditExtendsCount()).append(" Extends, ")
 				.append(mit.auditRevokesCount()).append(" Revokes, ")
 				.append(mit.auditFlushesCount()).append(" Flushes) | Administrative and autonomous rule lifecycle operations |\n");
 
 		String engineMode = mit.engineEnabled()
-				? (mit.engineDryRun() ? "🟡 DRY-RUN SIMULATION" : "🟢 ACTIVE (LIVE DEFENSE)")
+				? (mit.engineDryRun() ? "🟡 DRY-RUN (SIMULATION ONLY)" : "🟢 ACTIVE (LIVE DEFENSE)")
 				: "⚪ DISABLED";
 		sb.append("| **Autonomous Defense Mode** | **").append(engineMode).append("** | Autonomous carpet-attack defense engine operating state |\n\n");
 
-		// 1. Aggregated ASN Threat Mitigation & Simulation Rollup
+		// 1. Aggregated ASN Threat Mitigation Rollup
 		sb.append(buildAsnRollupMarkdown(mit, numFmt));
 
-		// 2. Dry-Run Simulation Impact Analysis (if Dry-Run mode was active or simulations occurred)
-		if (mit.engineDryRun() || !mit.dryRunSimulations().isEmpty()) {
-			sb.append(buildDryRunSimulationsMarkdown(mit, numFmt));
-		}
-
-		// 3. Top Deflected Subnet Targets (Hotspots) - capped at top 5
+		// 2. Top Deflected Subnet Targets (Hotspots) - capped at top 5
 		sb.append(buildTopSubnetHotspotsMarkdown(mit, numFmt));
 
-		// 4. Incident Campaign Milestones & Timeline - capped at 8 key milestones
+		// 3. Incident Campaign Milestones & Timeline - filtered and summarized
 		sb.append(buildCampaignTimelineMarkdown(mit));
 
-		// 5. Collateral Safety & False-Positive Verification
+		// 4. Collateral Safety & False-Positive Verification
 		sb.append(buildSafetyGuardrailMarkdown(mit));
 
 		return sb.toString();
@@ -2039,9 +1902,7 @@ public class DailyReportService {
 		int autoCount = 0;
 		int asnBatchCount = 0;
 		int manualCount = 0;
-		int simulationCount = 0;
 		long totalHits = 0L;
-		long simulatedRequests = 0L;
 		int peakIps = 0;
 		int deterredCount = 0;
 		int persistentCount = 0;
@@ -2054,15 +1915,11 @@ public class DailyReportService {
 			if (firstSeen == null || t.isBefore(firstSeen)) firstSeen = t;
 			if (lastSeen == null || t.isAfter(lastSeen)) lastSeen = t;
 		}
-
-		long totalDeflectedOrSimulated() {
-			return totalHits + simulatedRequests;
-		}
 	}
 
 	private String buildAsnRollupMarkdown(DailyMitigationSummary mit, NumberFormat numFmt) {
 		StringBuilder sb = new StringBuilder();
-		sb.append("### 🌐 ASN Threat Mitigation & Simulation Rollup\n\n");
+		sb.append("### 🌐 ASN Threat Mitigation Rollup\n\n");
 
 		Map<String, AsnCampaignAggregate> map = new LinkedHashMap<>();
 
@@ -2102,35 +1959,16 @@ public class DailyReportService {
 			agg.updateWindow(r.updatedAt());
 		}
 
-		// Process dry-run simulations
-		for (DryRunSimulationEntry sim : mit.dryRunSimulations()) {
-			long asn = sim.asn() != null ? sim.asn() : 0L;
-			String key = asn > 0 ? "AS" + asn : (sim.asOrg() != null && !sim.asOrg().isBlank() ? sim.asOrg().trim() : sim.targetCidrOrAsn());
-			AsnCampaignAggregate agg = map.computeIfAbsent(key, k -> {
-				AsnCampaignAggregate a = new AsnCampaignAggregate();
-				a.asn = asn;
-				a.asOrg = sim.asOrg();
-				return a;
-			});
-			if (agg.asOrg == null && sim.asOrg() != null) {
-				agg.asOrg = sim.asOrg();
-			}
-			agg.simulationCount++;
-			agg.simulatedRequests += sim.estimatedRequests();
-			agg.distinctSubnets.addAll(sim.candidateSubnets());
-			agg.updateWindow(sim.timestamp());
-		}
-
 		if (map.isEmpty()) {
-			sb.append("✅ *No external ASNs were targeted by active mitigations or simulations during this period.*\n\n");
+			sb.append("✅ *No external ASNs were targeted by active mitigations during this period.*\n\n");
 			return sb.toString();
 		}
 
-		sb.append("| ASN & Organization | Mode & Enforcement | Unique Subnets | Incident Window (Duration) | Deflected / Simulated Traffic | Deterrence Outcome | Threat Status |\n");
+		sb.append("| ASN & Organization | Mode & Enforcement | Unique Subnets | Incident Window (Duration) | Deflected Traffic | Deterrence Outcome | Threat Status |\n");
 		sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
 
 		List<AsnCampaignAggregate> list = new ArrayList<>(map.values());
-		list.sort((a, b) -> Long.compare(b.totalDeflectedOrSimulated(), a.totalDeflectedOrSimulated()));
+		list.sort((a, b) -> Long.compare(b.totalHits, a.totalHits));
 
 		for (AsnCampaignAggregate agg : list) {
 			String asnStr = agg.asn > 0 ? "**AS" + agg.asn + "**" : "**Unclassified**";
@@ -2138,11 +1976,8 @@ public class DailyReportService {
 				asnStr += "<br>*(" + agg.asOrg + ")*";
 			}
 
-			int totalLive = agg.autoCount + agg.asnBatchCount + agg.manualCount;
 			String modeStr;
-			if (totalLive > 0 && agg.simulationCount > 0) {
-				modeStr = "🟢 Live (" + totalLive + ") + 🟡 Sim (" + agg.simulationCount + ")";
-			} else if (agg.autoCount > 0 && agg.asnBatchCount > 0) {
+			if (agg.autoCount > 0 && agg.asnBatchCount > 0) {
 				modeStr = "🟢 Live Defense (" + agg.autoCount + " Auto, " + agg.asnBatchCount + " ASN-Batch)";
 			} else if (agg.autoCount > 0) {
 				modeStr = "🟢 Live Defense (" + agg.autoCount + " Auto)";
@@ -2151,7 +1986,7 @@ public class DailyReportService {
 			} else if (agg.manualCount > 0) {
 				modeStr = "🟢 Manual (" + agg.manualCount + " Single)";
 			} else {
-				modeStr = "🟡 Dry-Run Simulation (" + agg.simulationCount + ")";
+				modeStr = "–";
 			}
 
 			String subnetsStr = "**" + agg.distinctSubnets.size() + "** subnets";
@@ -2171,16 +2006,7 @@ public class DailyReportService {
 				windowStr = "`" + agg.firstSeen.atZone(ZoneId.systemDefault()).format(TIME_FORMATTER) + "`";
 			}
 
-			String trafficStr;
-			if (agg.totalHits > 0 && agg.simulatedRequests > 0) {
-				trafficStr = "**" + numFmt.format(agg.totalHits) + " hits**<br>*(+" + numFmt.format(agg.simulatedRequests) + " proj.)*";
-			} else if (agg.totalHits > 0) {
-				trafficStr = "**" + numFmt.format(agg.totalHits) + " hits**";
-			} else if (agg.simulatedRequests > 0) {
-				trafficStr = "*" + numFmt.format(agg.simulatedRequests) + " proj.*";
-			} else {
-				trafficStr = "0 hits";
-			}
+			String trafficStr = agg.totalHits > 0 ? "**" + numFmt.format(agg.totalHits) + " hits**" : "0 hits";
 
 			String deterrenceStr;
 			int evaluated = agg.deterredCount + agg.persistentCount;
@@ -2190,7 +2016,7 @@ public class DailyReportService {
 			} else if (agg.observingCount > 0) {
 				deterrenceStr = "Observing (" + agg.observingCount + " rules)";
 			} else {
-				deterrenceStr = "– (Simulation)";
+				deterrenceStr = "–";
 			}
 
 			String statusStr;
@@ -2198,8 +2024,6 @@ public class DailyReportService {
 				statusStr = "🔴 Active Threat";
 			} else if (agg.deterredCount > 0) {
 				statusStr = "🟢 Neutralized";
-			} else if (agg.simulationCount > 0) {
-				statusStr = "🟡 Simulated";
 			} else if (agg.observingCount > 0) {
 				statusStr = "⚪ Observing";
 			} else {
@@ -2215,67 +2039,6 @@ public class DailyReportService {
 					.append(statusStr).append(" |\n");
 		}
 		sb.append("\n");
-		return sb.toString();
-	}
-
-	private String buildDryRunSimulationsMarkdown(DailyMitigationSummary mit, NumberFormat numFmt) {
-		StringBuilder sb = new StringBuilder();
-		sb.append("### 🧪 Autonomous Defense Dry-Run Simulation Impact Analysis\n\n");
-		if (mit.dryRunSimulations().isEmpty()) {
-			sb.append("✅ *The Autonomous Defense Engine operated in Dry-Run simulation mode. No horizontal carpet attacks exceeded activation thresholds during this 24-hour period (fleet traffic operated within normal bounds).*\n\n");
-			return sb.toString();
-		}
-
-		sb.append("> ℹ️ **Dry-Run Mode Active:** The Autonomous Defense Engine detected horizontal multi-subnet carpet attacks meeting all strict safety criteria, ");
-		sb.append("but operated in simulation mode without altering Tomcat Valve blocklists. ");
-		sb.append("The table below models the exact hypothetical impact if these blocks had been enforced live:\n\n");
-
-		sb.append("| Timestamp | Targeted Source | Action Simulated | Candidate Subnets | Potential Deflected Traffic | Collateral Risk Analysis | Projected Defense Impact |\n");
-		sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
-
-		List<DryRunSimulationEntry> sorted = new ArrayList<>(mit.dryRunSimulations());
-		sorted.sort((a, b) -> Long.compare(b.estimatedRequests(), a.estimatedRequests()));
-		List<DryRunSimulationEntry> displaySims = sorted.stream().limit(5).toList();
-
-		for (DryRunSimulationEntry sim : displaySims) {
-			String timeStr = sim.timestamp() != null ? sim.timestamp().atZone(ZoneId.systemDefault()).format(TIME_FORMATTER) : "N/A";
-			String targetStr = sim.targetCidrOrAsn() != null ? sim.targetCidrOrAsn() : "Unknown";
-			if (sim.asOrg() != null && !sim.asOrg().isBlank()) {
-				targetStr += " (" + sim.asOrg() + ")";
-			}
-			String subnetsStr = sim.candidateSubnets().isEmpty()
-					? sim.subnetsCount() + " subnets"
-					: "**" + sim.subnetsCount() + " subnets** (`" + String.join("`, `", sim.candidateSubnets()) + "`)";
-			String reqsStr = "**" + numFmt.format(sim.estimatedRequests()) + " reqs**";
-			String collateralStr = sim.authenticatedRequests() == 0
-					? "✅ **0 authenticated users** (" + String.format(Locale.US, "%.1f%%", sim.returningRatioPct()) + " returning cookies)"
-					: "⚠️ " + sim.authenticatedRequests() + " authenticated users";
-			String benefitStr = sim.authenticatedRequests() == 0
-					? "🛡️ **High Defense Value**: Would have deflected " + numFmt.format(sim.estimatedRequests()) + " abusive requests at pipeline entry with 0 collateral damage to valid users"
-					: "⚠️ Risk: Potential collateral damage to active user sessions";
-
-			sb.append("| `").append(timeStr).append("` | ")
-					.append(targetStr).append(" | `")
-					.append(sim.action()).append("` | ")
-					.append(subnetsStr).append(" | ")
-					.append(reqsStr).append(" | ")
-					.append(collateralStr).append(" | ")
-					.append(benefitStr).append(" |\n");
-		}
-		sb.append("\n");
-
-		if (sorted.size() > 5) {
-			long remainingProjReqs = sorted.stream().skip(5).mapToLong(DryRunSimulationEntry::estimatedRequests).sum();
-			int remainingCount = sorted.size() - 5;
-			sb.append("> ℹ️ *Showing top 5 of ").append(numFmt.format(sorted.size())).append(" simulation discoveries. An additional ")
-					.append(numFmt.format(remainingCount)).append(" simulated waves accounted for ~").append(numFmt.format(remainingProjReqs))
-					.append(" projected requests. Complete traces are recorded in the Mitigation Audit Log.* \n\n");
-		}
-
-		if (mit.dryRunSimulatedExtendsCount() > 0) {
-			sb.append("- **Simulated Rule Auto-Extensions:** ").append(mit.dryRunSimulatedExtendsCount())
-					.append(" persistent attacker subnets were identified for auto-extension (+60m), as traffic continued despite simulated lockout.\n\n");
-		}
 		return sb.toString();
 	}
 
@@ -2330,10 +2093,73 @@ public class DailyReportService {
 		return sb.toString();
 	}
 
+	private static class TimelineEvent {
+		Instant timestamp;
+		String action;
+		String cidr;
+		String actor;
+		Integer ttlSeconds;
+		String details;
+		int count = 1;
+
+		TimelineEvent(Instant timestamp, String action, String cidr, String actor, Integer ttlSeconds, String details) {
+			this.timestamp = timestamp;
+			this.action = action;
+			this.cidr = cidr;
+			this.actor = actor;
+			this.ttlSeconds = ttlSeconds;
+			this.details = details;
+		}
+	}
+
 	private String buildCampaignTimelineMarkdown(DailyMitigationSummary mit) {
 		StringBuilder sb = new StringBuilder();
 		sb.append("### ⏱️ Incident Campaign Timeline\n\n");
-		if (mit.dayAuditEntries().isEmpty()) {
+
+		List<TimelineEvent> timelineEvents = new ArrayList<>();
+		int totalRawEvents = 0;
+
+		for (MitigationAuditEntry a : mit.dayAuditEntries()) {
+			String act = a.action() != null ? a.action().toUpperCase().trim() : "";
+			boolean isRelevant = switch (act) {
+				case "AUTO_BLOCK", "BATCH_CREATE", "CREATE", "REVOKE", "BATCH_REVOKE",
+						"EMERGENCY_FLUSH", "AUTO_CIRCUIT_BREAKER", "EXTEND", "AUTO_EXTEND" -> true;
+				default -> false;
+			};
+			if (!isRelevant) {
+				continue;
+			}
+			totalRawEvents++;
+
+			boolean isExtend = "EXTEND".equals(act) || "AUTO_EXTEND".equals(act);
+			if (isExtend && !timelineEvents.isEmpty()) {
+				TimelineEvent prev = timelineEvents.getLast();
+				boolean prevIsExtend = "EXTEND".equals(prev.action) || "EXTEND (Batch)".equals(prev.action);
+				boolean withinClusterWindow = prev.timestamp != null && a.createdAt() != null
+						&& Math.abs(Duration.between(prev.timestamp, a.createdAt()).toMinutes()) <= 15;
+				boolean sameActor = Objects.equals(prev.actor, a.actor());
+
+				if (prevIsExtend && withinClusterWindow && sameActor) {
+					prev.count++;
+					prev.action = "EXTEND (Batch)";
+					prev.cidr = prev.count + " subnets";
+					prev.details = prev.count + " active rules auto-extended (+60m) due to persistent attacker traffic";
+					continue;
+				}
+			}
+
+			TimelineEvent event = new TimelineEvent(
+					a.createdAt(),
+					a.action(),
+					a.cidr() != null ? a.cidr() : "–",
+					a.actor() != null ? a.actor() : "–",
+					a.ttlSeconds(),
+					a.details() != null ? a.details().replaceAll("[\\r\\n]+", " ") : "–"
+			);
+			timelineEvents.add(event);
+		}
+
+		if (timelineEvents.isEmpty()) {
 			sb.append("✅ *No administrative or autonomous mitigation events logged during this period.*\n\n");
 			return sb.toString();
 		}
@@ -2341,49 +2167,47 @@ public class DailyReportService {
 		sb.append("| Timestamp | Action | Target / CIDR | Actor | Duration | Reason & Details |\n");
 		sb.append("| :--- | :--- | :--- | :--- | :--- | :--- |\n");
 
-		List<MitigationAuditEntry> entries = mit.dayAuditEntries();
-		List<MitigationAuditEntry> display;
-		if (entries.size() <= 8) {
-			display = entries;
+		List<TimelineEvent> display;
+		if (timelineEvents.size() <= 8) {
+			display = timelineEvents;
 		} else {
 			display = new ArrayList<>();
 			// First 3 entries
 			for (int i = 0; i < 3; i++) {
-				display.add(entries.get(i));
+				display.add(timelineEvents.get(i));
 			}
-			// Middle significant entries (e.g. FLUSH, REVOKE, BATCH_CREATE, AUTO_BLOCK)
-			for (int i = 3; i < entries.size() - 3 && display.size() < 5; i++) {
-				String act = entries.get(i).action();
-				if (act != null && ("EMERGENCY_FLUSH".equals(act) || "BATCH_CREATE".equals(act) || "REVOKE".equals(act) || "BATCH_REVOKE".equals(act))) {
-					display.add(entries.get(i));
+			// Middle significant entries (e.g. FLUSH, REVOKE, BATCH_CREATE, AUTO_CIRCUIT_BREAKER)
+			for (int i = 3; i < timelineEvents.size() - 3 && display.size() < 5; i++) {
+				String action = timelineEvents.get(i).action;
+				if (action != null && (action.contains("FLUSH") || action.contains("REVOKE") || action.contains("CIRCUIT") || action.contains("BATCH"))) {
+					display.add(timelineEvents.get(i));
 				}
 			}
 			// Last 3 entries
-			int startTail = Math.max(display.size(), entries.size() - 3);
-			for (int i = startTail; i < entries.size(); i++) {
-				if (!display.contains(entries.get(i))) {
-					display.add(entries.get(i));
+			int startTail = Math.max(display.size(), timelineEvents.size() - 3);
+			for (int i = startTail; i < timelineEvents.size(); i++) {
+				if (!display.contains(timelineEvents.get(i))) {
+					display.add(timelineEvents.get(i));
 				}
 			}
 		}
 
-		for (MitigationAuditEntry a : display) {
-			String timeStr = a.createdAt() != null ? a.createdAt().atZone(ZoneId.systemDefault()).format(TIME_FORMATTER) : "N/A";
-			String durStr = a.ttlSeconds() != null && a.ttlSeconds() > 0 ? (a.ttlSeconds() / 60) + "m" : "–";
-			String details = a.details() != null ? a.details().replaceAll("[\\r\\n]+", " ") : "–";
+		for (TimelineEvent e : display) {
+			String timeStr = e.timestamp != null ? e.timestamp.atZone(ZoneId.systemDefault()).format(TIME_FORMATTER) : "N/A";
+			String durStr = e.ttlSeconds != null && e.ttlSeconds > 0 ? (e.ttlSeconds / 60) + "m" : "–";
 
 			sb.append("| `").append(timeStr).append("` | `")
-					.append(a.action()).append("` | `")
-					.append(a.cidr()).append("` | `")
-					.append(a.actor()).append("` | ")
+					.append(e.action).append("` | `")
+					.append(e.cidr).append("` | `")
+					.append(e.actor).append("` | ")
 					.append(durStr).append(" | ")
-					.append(details).append(" |\n");
+					.append(e.details).append(" |\n");
 		}
 		sb.append("\n");
 
-		if (entries.size() > display.size()) {
+		if (totalRawEvents > display.size()) {
 			sb.append("> ℹ️ *Showing ").append(display.size()).append(" key campaign milestones of ")
-					.append(entries.size()).append(" total operational lifecycle events. Full millisecond-precision trace is available in the /mitigation Audit Log tab.* \n\n");
+					.append(totalRawEvents).append(" total operational lifecycle events. Full millisecond-precision trace is available in the /mitigation Audit Log tab.* \n\n");
 		}
 		return sb.toString();
 	}

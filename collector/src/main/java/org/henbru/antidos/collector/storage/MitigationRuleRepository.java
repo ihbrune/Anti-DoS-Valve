@@ -314,8 +314,12 @@ public class MitigationRuleRepository {
 		}
 
 		if (actor != null && !actor.isBlank() && !"ALL".equalsIgnoreCase(actor)) {
-			sql.append(" AND actor = ?");
-			params.add(actor.trim().toUpperCase());
+			if ("AUTO_ENGINE".equalsIgnoreCase(actor.trim()) || "AUTO_MITIGATION".equalsIgnoreCase(actor.trim())) {
+				sql.append(" AND actor IN ('AUTO_ENGINE', 'AUTO_MITIGATION')");
+			} else {
+				sql.append(" AND actor = ?");
+				params.add(actor.trim().toUpperCase());
+			}
 		}
 
 		if (search != null && !search.isBlank()) {
@@ -348,8 +352,12 @@ public class MitigationRuleRepository {
 		}
 
 		if (actor != null && !actor.isBlank() && !"ALL".equalsIgnoreCase(actor)) {
-			sql.append(" AND actor = ?");
-			params.add(actor.trim().toUpperCase());
+			if ("AUTO_ENGINE".equalsIgnoreCase(actor.trim()) || "AUTO_MITIGATION".equalsIgnoreCase(actor.trim())) {
+				sql.append(" AND actor IN ('AUTO_ENGINE', 'AUTO_MITIGATION')");
+			} else {
+				sql.append(" AND actor = ?");
+				params.add(actor.trim().toUpperCase());
+			}
 		}
 
 		if (search != null && !search.isBlank()) {

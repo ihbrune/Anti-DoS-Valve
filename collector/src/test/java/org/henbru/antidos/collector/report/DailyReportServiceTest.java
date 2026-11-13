@@ -691,13 +691,15 @@ class DailyReportServiceTest {
 	void testDailyReportWithDynamicMitigationsAndDryRun() {
 		LocalDate mitDate = LocalDate.of(2026, 11, 2);
 		dailyReportRepository.deleteByReportDate(mitDate.toString());
-		jdbcTemplate.update("DELETE FROM mitigation_rules WHERE cidr IN ('198.51.100.0/24', '203.0.113.0/24')");
-		jdbcTemplate.update("DELETE FROM mitigation_audit_log WHERE cidr IN ('198.51.100.0/24', '203.0.113.0/24', 'ALL')");
+		ZonedDateTime startDay = mitDate.atStartOfDay(ZoneId.systemDefault());
+		Instant startInstant = startDay.toInstant();
+		Instant endInstant = startDay.plusDays(1).toInstant();
+		jdbcTemplate.update("DELETE FROM mitigation_rules WHERE created_at >= ? AND created_at < ?", java.sql.Timestamp.from(startInstant), java.sql.Timestamp.from(endInstant));
+		jdbcTemplate.update("DELETE FROM mitigation_audit_log WHERE created_at >= ? AND created_at < ?", java.sql.Timestamp.from(startInstant), java.sql.Timestamp.from(endInstant));
 		jdbcTemplate.update("DELETE FROM client_subnet_rollups WHERE server_id = 'SRV-MIT-TEST'");
 		jdbcTemplate.update("DELETE FROM slot_snapshots WHERE server_id = 'SRV-MIT-TEST'");
 		jdbcTemplate.update("DELETE FROM monitored_valves WHERE server_id = 'SRV-MIT-TEST'");
 
-		ZonedDateTime startDay = mitDate.atStartOfDay(ZoneId.systemDefault());
 		Instant h10 = startDay.plusHours(10).toInstant();
 		Instant h11 = startDay.plusHours(11).toInstant();
 
@@ -727,10 +729,10 @@ class DailyReportServiceTest {
 		// 2. Audit Entry 1: AUTO_BLOCK
 		mitigationRuleRepository.insertAuditEntry(new MitigationAuditEntry(
 				null, null, "198.51.100.0/24", "batch-101", "AUTO_BLOCK",
-				"AUTO_MITIGATION", 7200, "Autonomous rule created for carpet attack", h10
+				"AUTO_ENGINE", 7200, "Autonomous rule created for carpet attack", h10
 		));
 
-		// 3. Audit Entry 2: Dry-Run Simulation (AUTO_WOULD_BLOCK)
+		// 3. Audit Entry 2: Dry-Run Simulation (AUTO_WOULD_BLOCK) - should be ignored in report
 		mitigationRuleRepository.insertAuditEntry(new MitigationAuditEntry(
 				null, null, "ALL", "sim-batch-202", "AUTO_WOULD_BLOCK",
 				"AUTO_MITIGATION", 1800,
@@ -738,17 +740,32 @@ class DailyReportServiceTest {
 				h11
 		));
 
-		// Rollup data for 203.0.113.0/24 to verify 0 auth collateral damage
-		jdbcTemplate.update("""
-				INSERT INTO client_subnet_rollups (
-					bucket_start, bucket_end, bucket_minutes, server_id, valve_name, subnet_group,
-					total_requests, active_requests, blocked_requests, distinct_clients, distinct_user_agents,
-					asn, as_org, country_code, client_type, created_at,
-					authenticated_requests, returning_requests
-				) VALUES (?, ?, 60, 'SRV-MIT-TEST', 'PRIMARY', '203.0.113.0/24',
-					1200, 1100, 100, 15, 2, 64497, 'HostProvider Corp', 'US', 'DATACENTER', ?,
-					0, 50)
-				""", java.sql.Timestamp.from(h11), java.sql.Timestamp.from(h11.plus(1, ChronoUnit.HOURS)), java.sql.Timestamp.from(h11));
+		// 4. Audit Entry 3: Routine FLEET_SYNC - should be filtered out from timeline
+		mitigationRuleRepository.insertAuditEntry(new MitigationAuditEntry(
+				null, null, "FLEET", null, "FLEET_SYNC",
+				"AUTO_POLLER", 0, "Fleet rule sync", h11.plus(5, ChronoUnit.MINUTES)
+		));
+
+		// 5. Audit Entry 4: AUTO_SKIPPED_PROTECTED_ASN - should be filtered out from timeline
+		mitigationRuleRepository.insertAuditEntry(new MitigationAuditEntry(
+				null, null, "ASN-8075", null, "AUTO_SKIPPED_PROTECTED_ASN",
+				"AUTO_ENGINE", 0, "Skipped Microsoft Azure", h11.plus(10, ChronoUnit.MINUTES)
+		));
+
+		// 6. Audit Entries 5-7: Clustered EXTEND entries by AUTO_ENGINE within 2 minutes
+		Instant h12 = h11.plus(30, ChronoUnit.MINUTES);
+		mitigationRuleRepository.insertAuditEntry(new MitigationAuditEntry(
+				null, 1L, "198.51.100.0/24", "batch-101", "EXTEND",
+				"AUTO_ENGINE", 3600, "Rule extended by +60m", h12
+		));
+		mitigationRuleRepository.insertAuditEntry(new MitigationAuditEntry(
+				null, 2L, "198.51.101.0/24", "batch-101", "EXTEND",
+				"AUTO_ENGINE", 3600, "Rule extended by +60m", h12.plus(10, ChronoUnit.SECONDS)
+		));
+		mitigationRuleRepository.insertAuditEntry(new MitigationAuditEntry(
+				null, 3L, "198.51.102.0/24", "batch-101", "EXTEND",
+				"AUTO_ENGINE", 3600, "Rule extended by +60m", h12.plus(20, ChronoUnit.SECONDS)
+		));
 
 		DailyReport report = dailyReportService.generateDailyReport(mitDate);
 		assertNotNull(report);
@@ -767,13 +784,18 @@ class DailyReportServiceTest {
 		assertTrue(md.contains("BadBot Cloud LLC"));
 		assertTrue(md.contains("DETERRED"));
 
-		// Dry-Run Simulation Impact Analysis
-		assertTrue(md.contains("Dry-Run Simulation Impact Analysis"));
-		assertTrue(md.contains("AUTO_WOULD_BLOCK"));
-		assertTrue(md.contains("203.0.113.0/24"));
-		assertTrue(md.contains("HostProvider Corp"));
-		assertTrue(md.contains("0 authenticated users"));
-		assertTrue(md.contains("1,200"));
+		// Dry-Run Simulation should be completely ignored in Daily Report
+		assertFalse(md.contains("Dry-Run Simulation Impact Analysis"));
+		assertFalse(md.contains("AUTO_WOULD_BLOCK"));
+
+		// Routine sync and skipped ASN should be excluded from Timeline
+		assertTrue(md.contains("AUTO_BLOCK"));
+		assertFalse(md.contains("FLEET_SYNC"));
+		assertFalse(md.contains("AUTO_SKIPPED_PROTECTED_ASN"));
+
+		// Clustered EXTEND should be summarized as batch in Timeline
+		assertTrue(md.contains("EXTEND (Batch)"));
+		assertTrue(md.contains("3 subnets"));
 	}
 
 	@Test
