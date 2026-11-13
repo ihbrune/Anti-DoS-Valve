@@ -584,4 +584,17 @@ class MitigationServiceTest {
 		long count = mitigationService.countAuditEntriesFiltered(null, "ALL", "AUTO_ENGINE");
 		assertTrue(count >= 1);
 	}
+
+	@Test
+	void testFilterAuditEntriesByDryRunSimulation() {
+		mitigationService.recordAudit(null, "198.51.220.0/24", "AUTO_WOULD_BLOCK", "Simulation block", 3600, "AUTO_ENGINE");
+		mitigationService.recordAudit(null, "198.51.221.0/24", "AUTO_BLOCK", "Live block", 3600, "AUTO_ENGINE");
+
+		List<MitigationAuditEntry> simEntries = mitigationService.getAuditEntriesFiltered(null, "DRY_RUN_SIMULATION", "ALL", 0, 10);
+		assertTrue(simEntries.stream().anyMatch(e -> "AUTO_WOULD_BLOCK".equals(e.action())));
+		assertFalse(simEntries.stream().anyMatch(e -> "AUTO_BLOCK".equals(e.action())));
+
+		long count = mitigationService.countAuditEntriesFiltered(null, "DRY_RUN_SIMULATION", "ALL");
+		assertTrue(count >= 1);
+	}
 }

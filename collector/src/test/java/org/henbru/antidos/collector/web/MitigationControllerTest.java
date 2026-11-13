@@ -81,6 +81,10 @@ class MitigationControllerTest {
 		mockMvc.perform(get("/fragments/mitigation-content?tab=audit&auditAction=AUTO_BLOCK"))
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("Mitigation Audit Trail &amp; Lifecycle Events")));
+
+		mockMvc.perform(get("/fragments/mitigation-content?tab=audit&auditAction=DRY_RUN_SIMULATION"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("DRY_RUN_SIMULATION")));
 	}
 }
 

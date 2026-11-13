@@ -1248,7 +1248,7 @@
                     <select name="auditAction" class="input-control" style="height: 34px; font-size: 12px; width: auto;">
                         <option value="ALL" th:selected="${auditAction == 'ALL'}">All Actions</option>
                         <option value="AUTO_BLOCK" th:selected="${auditAction == 'AUTO_BLOCK'}">AUTO_BLOCK</option>
-                        <option value="SIMULATION" th:selected="${auditAction == 'SIMULATION'}">Dry-Run Simulation</option>
+                        <option value="DRY_RUN_SIMULATION" th:selected="${auditAction == 'DRY_RUN_SIMULATION' or auditAction == 'SIMULATION'}">DRY_RUN_SIMULATION</option>
                         <option value="CREATE" th:selected="${auditAction == 'CREATE'}">CREATE</option>
                         <option value="EXTEND" th:selected="${auditAction == 'EXTEND'}">EXTEND</option>
                         <option value="AUTO_EXTEND" th:selected="${auditAction == 'AUTO_EXTEND'}">AUTO_EXTEND</option>

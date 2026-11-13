@@ -305,7 +305,7 @@ public class MitigationRuleRepository {
 		List<Object> params = new java.util.ArrayList<>();
 
 		if (action != null && !action.isBlank() && !"ALL".equalsIgnoreCase(action)) {
-			if ("SIMULATION".equalsIgnoreCase(action)) {
+			if ("SIMULATION".equalsIgnoreCase(action) || "DRY_RUN_SIMULATION".equalsIgnoreCase(action)) {
 				sql.append(" AND action IN ('AUTO_WOULD_BLOCK', 'AUTO_WOULD_EXTEND')");
 			} else {
 				sql.append(" AND action = ?");
@@ -343,7 +343,7 @@ public class MitigationRuleRepository {
 		List<Object> params = new java.util.ArrayList<>();
 
 		if (action != null && !action.isBlank() && !"ALL".equalsIgnoreCase(action)) {
-			if ("SIMULATION".equalsIgnoreCase(action)) {
+			if ("SIMULATION".equalsIgnoreCase(action) || "DRY_RUN_SIMULATION".equalsIgnoreCase(action)) {
 				sql.append(" AND action IN ('AUTO_WOULD_BLOCK', 'AUTO_WOULD_EXTEND')");
 			} else {
 				sql.append(" AND action = ?");
