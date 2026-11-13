@@ -775,4 +775,63 @@ class DailyReportServiceTest {
 		assertTrue(md.contains("0 authenticated users"));
 		assertTrue(md.contains("1,200"));
 	}
+
+	@Test
+	void testDynamicMitigationDailyReportReflectsActiveEngineAndManualBreakdown() {
+		LocalDate testDate = LocalDate.parse("2026-11-05");
+		dailyReportRepository.deleteByReportDate(testDate.toString());
+		Instant start = testDate.atStartOfDay(ZoneId.systemDefault()).toInstant();
+		Instant end = start.plus(24, ChronoUnit.HOURS);
+		Instant h10 = start.plus(10, ChronoUnit.HOURS);
+
+		jdbcTemplate.update("DELETE FROM mitigation_rules WHERE created_at >= ? AND created_at < ?", java.sql.Timestamp.from(start), java.sql.Timestamp.from(end));
+
+		// Slot snapshot so telemetry exists
+		slotSnapshotRepository.upsert(new SlotSnapshot(
+				null, "SRV-AUTO-TEST", "PRIMARY", 99001L, h10, h10.plus(60, ChronoUnit.SECONDS),
+				5000L, 50, 20, 0, true, h10.plus(60, ChronoUnit.SECONDS)
+		));
+
+		// Set auto mitigation setting using official key
+		jdbcTemplate.update("INSERT OR REPLACE INTO system_settings (setting_key, setting_value, description, updated_by) VALUES ('mitigation.auto.enabled', 'true', 'test', 'TEST')");
+
+		// Insert 1 Single Manual, 2 ASN-Batch, and 5 Auto rules using unique ranges
+		Instant exp = h10.plus(1, ChronoUnit.HOURS);
+		mitigationRuleRepository.upsertRule(new MitigationRule(
+				null, "198.51.200.1/32", 4, 32, "ALL", "ACTIVE", "MANUAL", null, "Single manual test block",
+				64496L, "TestOrg", h10, h10, exp, null, null, 10L, 1, h10, "OBSERVING"
+		));
+
+		mitigationRuleRepository.upsertRule(new MitigationRule(
+				null, "198.51.200.0/24", 4, 24, "ALL", "ACTIVE", "ASN_BATCH", "ASN-64496-1", "ASN batch test block 1",
+				64496L, "TestOrg", h10, h10, exp, null, null, 20L, 2, h10, "OBSERVING"
+		));
+
+		mitigationRuleRepository.upsertRule(new MitigationRule(
+				null, "198.51.201.0/24", 4, 24, "ALL", "ACTIVE", "ASN_BATCH", "ASN-64496-1", "ASN batch test block 2",
+				64496L, "TestOrg", h10, h10, exp, null, null, 30L, 3, h10, "OBSERVING"
+		));
+
+		for (int i = 1; i <= 5; i++) {
+			mitigationRuleRepository.upsertRule(new MitigationRule(
+					null, "203.0.114." + i + "/32", 4, 32, "ALL", "ACTIVE", "AUTO_CARPET", "AUTO-64496", "Auto test block",
+					64496L, "TestOrg", h10, h10, exp, null, null, 50L, 5, h10, "PERSISTENT"
+			));
+		}
+
+		DailyReport report = dailyReportService.generateDailyReport(testDate);
+		assertNotNull(report);
+		String md = report.reportMarkdown();
+		assertNotNull(md);
+
+		// Verify manual breakdown: 3 Manual [1 Single, 2 ASN-Batch], 5 Auto -> Total 8 created today
+		assertTrue(md.contains("8 created today (3 Manual [1 Single, 2 ASN-Batch], 5 Auto)"),
+				"Executive summary should show complete breakdown and exact sum: " + md);
+		assertTrue(md.contains("ACTIVE (LIVE DEFENSE — 5 Auto-Blocks)"),
+				"Executive summary should show ACTIVE defense mode: " + md);
+		assertTrue(md.contains("🟢 ACTIVE (LIVE DEFENSE)"),
+				"Section 6 should show green ACTIVE status: " + md);
+		assertTrue(md.contains("8 rules** (3 Manual [1 Single, 2 ASN-Batch], 5 Auto)"),
+				"Section 6 should show matching manual breakdown: " + md);
+	}
 }

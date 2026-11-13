@@ -86,7 +86,21 @@ public class DailyReportService {
 			List<DryRunSimulationEntry> dryRunSimulations,
 			boolean engineEnabled,
 			boolean engineDryRun
-	) {}
+	) {
+		public int totalManualRulesCount() {
+			return manualRulesCount + asnBatchRulesCount;
+		}
+
+		public String formatManualBreakdown() {
+			if (asnBatchRulesCount > 0 && manualRulesCount > 0) {
+				return totalManualRulesCount() + " Manual [" + manualRulesCount + " Single, " + asnBatchRulesCount + " ASN-Batch]";
+			} else if (asnBatchRulesCount > 0) {
+				return totalManualRulesCount() + " Manual [ASN-Batch]";
+			} else {
+				return manualRulesCount + " Manual";
+			}
+		}
+	}
 
 	public record DryRunSimulationEntry(
 			Instant timestamp,
@@ -1227,7 +1241,7 @@ public class DailyReportService {
 		if (mitigationSummary != null) {
 			if (mitigationSummary.totalDynamicHits() > 0 || mitigationSummary.rulesCreatedCount() > 0) {
 				sb.append("| **Dynamic Rules Enforced** | **").append(numFmt.format(mitigationSummary.rulesCreatedCount()))
-						.append(" created today (").append(mitigationSummary.manualRulesCount()).append(" Manual, ")
+						.append(" created today (").append(mitigationSummary.formatManualBreakdown()).append(", ")
 						.append(mitigationSummary.autoRulesCount()).append(" Auto)** | Self-expiring server-wide CIDR blocks deployed across fleet Valves |\n");
 				sb.append("| **Dynamically Blocked Requests** | **").append(numFmt.format(mitigationSummary.totalDynamicHits()))
 						.append(" hits** | Requests deflected server-wide by active CIDR block rules (prior to URL routing) |\n");
@@ -1718,12 +1732,21 @@ public class DailyReportService {
 		boolean engineDryRun = properties.getAutoMitigation().isDryRun();
 		try {
 			List<String> enabledVals = jdbcTemplate.queryForList(
-					"SELECT setting_value FROM system_settings WHERE setting_key = 'auto_mitigation.enabled'", String.class);
+					"SELECT setting_value FROM system_settings WHERE setting_key = 'mitigation.auto.enabled'", String.class);
+			if (enabledVals.isEmpty()) {
+				enabledVals = jdbcTemplate.queryForList(
+						"SELECT setting_value FROM system_settings WHERE setting_key = 'auto_mitigation.enabled'", String.class);
+			}
 			if (!enabledVals.isEmpty()) {
 				engineEnabled = Boolean.parseBoolean(enabledVals.getFirst());
 			}
+
 			List<String> dryVals = jdbcTemplate.queryForList(
-					"SELECT setting_value FROM system_settings WHERE setting_key = 'auto_mitigation.dry_run'", String.class);
+					"SELECT setting_value FROM system_settings WHERE setting_key = 'mitigation.auto.dry_run'", String.class);
+			if (dryVals.isEmpty()) {
+				dryVals = jdbcTemplate.queryForList(
+						"SELECT setting_value FROM system_settings WHERE setting_key = 'auto_mitigation.dry_run'", String.class);
+			}
 			if (!dryVals.isEmpty()) {
 				engineDryRun = Boolean.parseBoolean(dryVals.getFirst());
 			}
@@ -1817,6 +1840,15 @@ public class DailyReportService {
 			}
 		} catch (Exception e) {
 			log.debug("Error querying mitigation_audit_log for daily report: {}", e.getMessage());
+		}
+
+		// If autonomous blocks or simulations occurred during the reporting period, reflect active/dry-run status
+		if (autoCount > 0 || auditAutoBlocks > 0) {
+			engineEnabled = true;
+			engineDryRun = false;
+		} else if ((dryRunBlocks > 0 || dryRunExtends > 0) && !engineEnabled) {
+			engineEnabled = true;
+			engineDryRun = true;
 		}
 
 		return new DailyMitigationSummary(
@@ -1943,9 +1975,8 @@ public class DailyReportService {
 		sb.append("| **Mitigation-Capable Valves** | **").append(mit.activeValvesCount()).append(" Valves** | Fleet Valves with dynamic mitigation enabled in Tomcat server.xml |\n");
 		sb.append("| **Dynamically Blocked Requests** | **").append(numFmt.format(mit.totalDynamicHits())).append(" hits** | Requests deflected server-wide by active CIDR block rules (prior to URL routing) |\n");
 		sb.append("| **New Rules Created Today** | **").append(mit.rulesCreatedCount()).append(" rules** (")
-				.append(mit.manualRulesCount()).append(" Manual, ")
-				.append(mit.autoRulesCount()).append(" Auto, ")
-				.append(mit.asnBatchRulesCount()).append(" ASN-Batch) | Self-expiring CIDR blocks deployed to protect Tomcat nodes |\n");
+				.append(mit.formatManualBreakdown()).append(", ")
+				.append(mit.autoRulesCount()).append(" Auto) | Self-expiring CIDR blocks deployed to protect Tomcat nodes |\n");
 
 		int totalEvaluatedDeterrence = mit.deterredCount() + mit.persistentCount();
 		if (totalEvaluatedDeterrence > 0) {
