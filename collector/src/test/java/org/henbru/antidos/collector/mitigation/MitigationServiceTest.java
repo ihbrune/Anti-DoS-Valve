@@ -571,4 +571,17 @@ class MitigationServiceTest {
 		assertTrue(audits.stream().anyMatch(a -> "SYNC_VERSION_MISMATCH".equals(a.getAction())),
 				"Must record SYNC_VERSION_MISMATCH audit event when hash version is incompatible");
 	}
+
+	@Test
+	void testFilterAuditEntriesByAutoEngine() {
+		mitigationService.recordAudit(null, "198.51.210.0/24", "AUTO_BLOCK", "Test auto block", 3600, "AUTO_ENGINE");
+		mitigationService.recordAudit(null, "198.51.211.0/24", "CREATE", "Test manual block", 3600, "ADMIN");
+
+		List<MitigationAuditEntry> autoEntries = mitigationService.getAuditEntriesFiltered(null, "ALL", "AUTO_ENGINE", 0, 10);
+		assertTrue(autoEntries.stream().anyMatch(e -> "AUTO_ENGINE".equals(e.actor())));
+		assertFalse(autoEntries.stream().anyMatch(e -> "ADMIN".equals(e.actor())));
+
+		long count = mitigationService.countAuditEntriesFiltered(null, "ALL", "AUTO_ENGINE");
+		assertTrue(count >= 1);
+	}
 }
