@@ -226,6 +226,30 @@ public class AntiDoSMonitor {
 	public boolean registerAndCheckRequest(String counterName, String clientIp, byte[] ipv4Bytes,
 			boolean trackCardinality, int v4Mask, int v6Mask, boolean returningVisitor, boolean authenticated,
 			String userAgent) throws IllegalArgumentException {
+		return registerAndCheckRequest(counterName, clientIp, ipv4Bytes, trackCardinality, v4Mask, v6Mask,
+				returningVisitor, authenticated, false, userAgent);
+	}
+
+	/**
+	 * Registers an increment to a specific counter, optionally tracks distinct client IPs and User-Agents
+	 * within an aggregated subnet, and increments returning visitor, authenticated, and User-Agent mismatch counts if verified.
+	 * 
+	 * @param counterName      The name of the counter (e.g. IP or subnet)
+	 * @param clientIp         The original client IP address
+	 * @param ipv4Bytes        The parsed 4-byte IPv4 literal array (or null)
+	 * @param trackCardinality true if extended metrics / cardinality tracking is active
+	 * @param v4Mask           IPv4 subnet prefix length
+	 * @param v6Mask           IPv6 subnet prefix length
+	 * @param returningVisitor true if request presented a valid authenticated visitor cookie
+	 * @param authenticated    true if request presented a valid authenticated login session cookie
+	 * @param uaMismatch       true if a User-Agent mismatch was detected on the visitor cookie
+	 * @param userAgent        The raw User-Agent header string (or null)
+	 * @return true if allowed, false if blocked
+	 * @throws IllegalArgumentException If counterName is null or empty
+	 */
+	public boolean registerAndCheckRequest(String counterName, String clientIp, byte[] ipv4Bytes,
+			boolean trackCardinality, int v4Mask, int v6Mask, boolean returningVisitor, boolean authenticated,
+			boolean uaMismatch, String userAgent) throws IllegalArgumentException {
 
 		if (counterName == null || counterName.length() == 0)
 			throw new IllegalArgumentException();
@@ -250,6 +274,9 @@ public class AntiDoSMonitor {
 		}
 		if (authenticated) {
 			counter.incrementAuthenticatedCount();
+		}
+		if (uaMismatch) {
+			counter.incrementUaMismatchCount();
 		}
 		if (trackCardinality) {
 			if (clientIp != null) {
@@ -326,6 +353,11 @@ public class AntiDoSMonitor {
 
 	public void registerAlwaysForbiddenRequest(String ip, boolean returningVisitor, boolean authenticated,
 			String userAgent) throws IllegalArgumentException {
+		registerAlwaysForbiddenRequest(ip, returningVisitor, authenticated, false, userAgent);
+	}
+
+	public void registerAlwaysForbiddenRequest(String ip, boolean returningVisitor, boolean authenticated,
+			boolean uaMismatch, String userAgent) throws IllegalArgumentException {
 
 		if (ip == null || ip.isEmpty()) {
 			throw new IllegalArgumentException("IP address must not be null or empty");
@@ -351,6 +383,9 @@ public class AntiDoSMonitor {
 		}
 		if (authenticated) {
 			counter.incrementAuthenticatedCount();
+		}
+		if (uaMismatch) {
+			counter.incrementUaMismatchCount();
 		}
 		if (userAgent != null && !userAgent.isEmpty()) {
 			counter.registerUserAgent(userAgent);
@@ -402,6 +437,19 @@ public class AntiDoSMonitor {
 			boolean returningVisitor,
 			boolean authenticated,
 			String userAgent) {
+		registerDynamicBlockRequest(cidrKey, clientIp, ipv4Bytes, prefixBits, trackCardinality, returningVisitor, authenticated, false, userAgent);
+	}
+
+	public void registerDynamicBlockRequest(
+			String cidrKey,
+			String clientIp,
+			byte[] ipv4Bytes,
+			int prefixBits,
+			boolean trackCardinality,
+			boolean returningVisitor,
+			boolean authenticated,
+			boolean uaMismatch,
+			String userAgent) {
 
 		if (cidrKey == null || cidrKey.isEmpty()) {
 			throw new IllegalArgumentException("CIDR key must not be null or empty");
@@ -425,6 +473,9 @@ public class AntiDoSMonitor {
 		}
 		if (authenticated) {
 			counter.incrementAuthenticatedCount();
+		}
+		if (uaMismatch) {
+			counter.incrementUaMismatchCount();
 		}
 		if (trackCardinality) {
 			if (clientIp != null && !cidrKey.equals(clientIp)) {

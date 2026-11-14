@@ -37,6 +37,7 @@ public class AntiDoSCounter {
 	private static final VarHandle CARDINALITY_TRACKER;
 	private static final VarHandle RETURNING_COUNT;
 	private static final VarHandle AUTHENTICATED_COUNT;
+	private static final VarHandle UA_MISMATCH_COUNT;
 	private static final VarHandle UA_CARDINALITY_BITS;
 	private static final VarHandle SAMPLE_REQUEST;
 
@@ -59,6 +60,7 @@ public class AntiDoSCounter {
 			CARDINALITY_TRACKER = l.findVarHandle(AntiDoSCounter.class, "cardinalityTracker", AntiDoSCardinalityBitSet.class);
 			RETURNING_COUNT = l.findVarHandle(AntiDoSCounter.class, "returningCount", int.class);
 			AUTHENTICATED_COUNT = l.findVarHandle(AntiDoSCounter.class, "authenticatedCount", int.class);
+			UA_MISMATCH_COUNT = l.findVarHandle(AntiDoSCounter.class, "uaMismatchCount", int.class);
 			UA_CARDINALITY_BITS = l.findVarHandle(AntiDoSCounter.class, "uaCardinalityBits", long.class);
 			SAMPLE_REQUEST = l.findVarHandle(AntiDoSCounter.class, "sampleRequest", SampleRequest.class);
 		} catch (ReflectiveOperationException e) {
@@ -73,6 +75,7 @@ public class AntiDoSCounter {
 	private volatile AntiDoSCardinalityBitSet cardinalityTracker = null;
 	private volatile int returningCount = 0;
 	private volatile int authenticatedCount = 0;
+	private volatile int uaMismatchCount = 0;
 	private volatile long uaCardinalityBits = 0L;
 	private volatile SampleRequest sampleRequest = null;
 
@@ -202,6 +205,41 @@ public class AntiDoSCounter {
 	 */
 	public void setAuthenticatedCount(int value) {
 		AUTHENTICATED_COUNT.setVolatile(this, value);
+	}
+
+	/**
+	 * Atomically increments the User-Agent mismatch count by 1.
+	 * 
+	 * @return The updated User-Agent mismatch count
+	 */
+	public int incrementUaMismatchCount() {
+		return (int) UA_MISMATCH_COUNT.getAndAdd(this, 1) + 1;
+	}
+
+	/**
+	 * Atomically adds the given delta to the User-Agent mismatch count.
+	 * 
+	 * @param delta The value to add
+	 * @return The updated User-Agent mismatch count
+	 */
+	public int addAndGetUaMismatchCount(int delta) {
+		return (int) UA_MISMATCH_COUNT.getAndAdd(this, delta) + delta;
+	}
+
+	/**
+	 * @return The current User-Agent mismatch count
+	 */
+	public int getUaMismatchCount() {
+		return uaMismatchCount;
+	}
+
+	/**
+	 * Sets the User-Agent mismatch count directly to the specified value.
+	 * 
+	 * @param value The new User-Agent mismatch count
+	 */
+	public void setUaMismatchCount(int value) {
+		UA_MISMATCH_COUNT.setVolatile(this, value);
 	}
 
 	/**
@@ -482,6 +520,7 @@ public class AntiDoSCounter {
 				+ (cardinalityTracker != null ? " DistinctClients:" + getDistinctClients() : "")
 				+ (returningCount > 0 ? " Returning:" + returningCount : "")
 				+ (authenticatedCount > 0 ? " Authenticated:" + authenticatedCount : "")
+				+ (uaMismatchCount > 0 ? " UaMismatch:" + uaMismatchCount : "")
 				+ (sampleRequest != null ? " Sample:" + sampleRequest.method() + " " + sampleRequest.uri() : "");
 	}
 }

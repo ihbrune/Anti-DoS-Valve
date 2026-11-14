@@ -9,12 +9,18 @@ package org.henbru.antidos;
  * @param subnetMaskV4      the IPv4 subnet mask bits configured/used during token evaluation
  * @param subnetMaskV6      the IPv6 subnet mask bits configured/used during token evaluation
  * @param subnetBytes       the raw subnet bytes extracted from the client IP address
+ * @param uaMismatch        whether a User-Agent mismatch was detected between the token and current request
  */
 public record AntiDoSVisitorContext(
 		boolean valid,
 		int counter,
 		int subnetMaskV4,
 		int subnetMaskV6,
-		byte[] subnetBytes) {
+		byte[] subnetBytes,
+		boolean uaMismatch) {
+
+	public AntiDoSVisitorContext(boolean valid, int counter, int subnetMaskV4, int subnetMaskV6, byte[] subnetBytes) {
+		this(valid, counter, subnetMaskV4, subnetMaskV6, subnetBytes, false);
+	}
 }
 

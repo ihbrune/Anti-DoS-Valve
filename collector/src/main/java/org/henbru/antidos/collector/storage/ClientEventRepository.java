@@ -97,6 +97,12 @@ public class ClientEventRepository {
 		} catch (SQLException ignored) {
 		}
 
+		Integer uaMismatchCount = null;
+		try {
+			uaMismatchCount = rs.getObject("ua_mismatch_count") != null ? rs.getInt("ua_mismatch_count") : null;
+		} catch (SQLException ignored) {
+		}
+
 		Integer distinctUserAgents = null;
 		try {
 			int val = rs.getInt("distinct_user_agents");
@@ -151,6 +157,7 @@ public class ClientEventRepository {
 				distinctUserAgents,
 				returningCount,
 				authenticatedCount,
+				uaMismatchCount,
 				sampleMethod,
 				sampleUri,
 				sampleUserAgent,
@@ -247,10 +254,10 @@ public class ClientEventRepository {
 				    ip_version, cidr_prefix, ip_v4_start, ip_v4_end, ip_v6_start, ip_v6_end, subnet_group,
 				    request_count, retained_count, is_locked, status, is_completed, last_updated_at,
 				    asn, as_org, country_code, client_type, enrichment_status, entity_id, distinct_clients,
-				    distinct_user_agents, returning_count, authenticated_count,
+				    distinct_user_agents, returning_count, authenticated_count, ua_mismatch_count,
 				    sample_method, sample_uri, sample_user_agent, sample_authenticated
 				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (server_id, valve_name, slot_key, client_key) DO UPDATE SET
 				    slot_time = EXCLUDED.slot_time,
 				    ip_version = EXCLUDED.ip_version,
@@ -270,6 +277,7 @@ public class ClientEventRepository {
 				    distinct_user_agents = EXCLUDED.distinct_user_agents,
 				    returning_count = EXCLUDED.returning_count,
 				    authenticated_count = EXCLUDED.authenticated_count,
+				    ua_mismatch_count = EXCLUDED.ua_mismatch_count,
 				    sample_method = COALESCE(EXCLUDED.sample_method, client_events.sample_method),
 				    sample_uri = COALESCE(EXCLUDED.sample_uri, client_events.sample_uri),
 				    sample_user_agent = COALESCE(EXCLUDED.sample_user_agent, client_events.sample_user_agent),
@@ -342,13 +350,18 @@ public class ClientEventRepository {
 						} else {
 							ps.setNull(28, Types.INTEGER);
 						}
-						ps.setString(29, e.sampleMethod());
-						ps.setString(30, e.sampleUri());
-						ps.setString(31, e.sampleUserAgent());
-						if (e.sampleAuthenticated() != null) {
-							ps.setBoolean(32, e.sampleAuthenticated());
+						if (e.uaMismatchCount() != null) {
+							ps.setInt(29, e.uaMismatchCount());
 						} else {
-							ps.setNull(32, Types.BOOLEAN);
+							ps.setNull(29, Types.INTEGER);
+						}
+						ps.setString(30, e.sampleMethod());
+						ps.setString(31, e.sampleUri());
+						ps.setString(32, e.sampleUserAgent());
+						if (e.sampleAuthenticated() != null) {
+							ps.setBoolean(33, e.sampleAuthenticated());
+						} else {
+							ps.setNull(33, Types.BOOLEAN);
 						}
 					}
 

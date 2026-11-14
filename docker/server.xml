@@ -116,6 +116,7 @@
                          simulationMode="true"
                          visitorCookieEnabled="true"
                          visitorCookieName="_adv"
+                         visitorCookieEnforceUserAgent="false"
                          authTrackingMode="COOKIE"
                          authCookieName="AUTH_COOKIE"
                          authLoginPaths="/advdemo/trust.*|/trust"

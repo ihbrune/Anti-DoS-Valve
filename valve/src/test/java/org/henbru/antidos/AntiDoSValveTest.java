@@ -2238,6 +2238,90 @@ class AntiDoSValveTest {
 	}
 
 	@Test
+	void testVisitorCookieUserAgentTrackingAndEnforcement() throws Exception {
+		AntiDoSValve valve = new AntiDoSValve();
+		valve.setContainer(new org.apache.catalina.core.StandardEngine());
+		setValidAntiDoSMonitorconfiguration(valve, "UA_TRACKING_VALVE");
+		valve.setVisitorCookieEnabled(true);
+		valve.setVisitorCookieSecret("ua-tracking-test-secret");
+		valve.setRelevantPaths("/.*");
+		valve.setVisitorCookieEnforceUserAgent(false); // passive tracking mode
+		valve.start();
+
+		try {
+			String clientIp = "198.51.100.55";
+			String uaChrome = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0";
+			String uaScraper = "Python-requests/2.31.0";
+
+			// 1. Initial request from Chrome -> receives cookie
+			TestRequest req1 = new TestRequest("/test/endpoint", clientIp);
+			req1.setHeader("User-Agent", uaChrome);
+			TestResponse resp1 = new TestResponse();
+			valve.invoke(req1, resp1);
+
+			assertFalse(resp1.getSetCookies().isEmpty(), "Set-Cookie must be issued");
+			String setCookie = resp1.getSetCookies().get(0);
+			String cookieVal = setCookie.substring(5, setCookie.indexOf(";"));
+
+			AntiDoSMonitor monitor = valve.provideMonitor();
+			AntiDoSCounter counter = monitor.getSlotByKey(monitor.getCurrentSlotKey()).getCounter(clientIp);
+			assertNotNull(counter);
+			assertEquals(1, counter.getCount());
+			assertEquals(0, counter.getReturningCount());
+			assertEquals(0, counter.getUaMismatchCount());
+
+			// 2. Returning request with same cookie but DIFFERENT User-Agent (scraper rotation)
+			// Mode: visitorCookieEnforceUserAgent = false -> client is still recognized as returning visitor, but mismatch is counted
+			TestRequest req2 = new TestRequest("/test/endpoint", clientIp);
+			req2.setHeader("User-Agent", uaScraper);
+			req2.setCookies(new Cookie[]{new Cookie("_adv", cookieVal)});
+			TestResponse resp2 = new TestResponse();
+			valve.invoke(req2, resp2);
+
+			AntiDoSVisitorContext ctx2 = (AntiDoSVisitorContext) req2.getAttribute(AntiDoSValve.VISITOR_CONTEXT_ATTRIBUTE_NAME);
+			assertNotNull(ctx2);
+			assertTrue(ctx2.valid(), "In permissive mode, returning visitor status is retained");
+			assertTrue(ctx2.uaMismatch(), "uaMismatch must be detected and flagged in context");
+
+			assertEquals(2, counter.getCount());
+			assertEquals(1, counter.getReturningCount());
+			assertEquals(1, counter.getUaMismatchCount(), "uaMismatchCount must be incremented");
+
+			// Verify JSON output exposes uaMismatchCount
+			String jsonDetails = valve.getStatusRenderer().buildStatusJsonDetails("UA_TRACKING_VALVE", null, null, null, null, null, null);
+			assertTrue(jsonDetails.contains("\"uaMismatchCount\": 1"), "JSON status must contain uaMismatchCount");
+			assertTrue(jsonDetails.contains("\"visitorCookieEnforceUserAgent\": false"));
+
+			// Verify HTML output displays UA mismatch indicator badge
+			String htmlDetails = valve.getStatusRenderer().buildStatusHtmlDetails("UA_TRACKING_VALVE");
+			assertTrue(htmlDetails.contains("UA: <code>track-only</code>"));
+			assertTrue(htmlDetails.contains("⚠️ UA (1)"), "HTML details must display UA mismatch badge");
+
+			// 3. Switch valve to enforceUserAgent = true
+			valve.setVisitorCookieEnforceUserAgent(true);
+			assertTrue(valve.isVisitorCookieEnforceUserAgent());
+
+			// Client sends request with the old Chrome cookie but rotated scraper UA
+			TestRequest req3 = new TestRequest("/test/endpoint", clientIp);
+			req3.setHeader("User-Agent", uaScraper);
+			req3.setCookies(new Cookie[]{new Cookie("_adv", cookieVal)});
+			TestResponse resp3 = new TestResponse();
+			valve.invoke(req3, resp3);
+
+			AntiDoSVisitorContext ctx3 = (AntiDoSVisitorContext) req3.getAttribute(AntiDoSValve.VISITOR_CONTEXT_ATTRIBUTE_NAME);
+			assertNotNull(ctx3);
+			assertFalse(ctx3.valid(), "In enforce mode, returning visitor status must be rejected on UA mismatch");
+			assertTrue(ctx3.uaMismatch(), "uaMismatch must be flagged");
+
+			assertEquals(3, counter.getCount());
+			assertEquals(1, counter.getReturningCount(), "Returning count must NOT increase when enforced");
+			assertEquals(2, counter.getUaMismatchCount(), "uaMismatchCount must be incremented even in enforce mode");
+		} finally {
+			valve.stop();
+		}
+	}
+
+	@Test
 	void testBlockedRequestSampleCapture() throws Exception {
 		AntiDoSValve testValve = new AntiDoSValve();
 		testValve.setContainer(new org.apache.catalina.core.StandardEngine());

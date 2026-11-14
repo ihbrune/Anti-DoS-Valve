@@ -46,28 +46,33 @@ public class AntiDoSStatusRenderer {
 	}
 
 	static record CounterEntry(String key, int count, int retained, int effective, boolean locked, int distinctClients,
-			int distinctUserAgents, int returningCount, int authenticatedCount, AntiDoSCounter.SampleRequest sample)
+			int distinctUserAgents, int returningCount, int authenticatedCount, int uaMismatchCount, AntiDoSCounter.SampleRequest sample)
 			implements Comparable<CounterEntry> {
 		public CounterEntry(String key, int count, int retained, int effective, boolean locked, int distinctClients,
+				int distinctUserAgents, int returningCount, int authenticatedCount, AntiDoSCounter.SampleRequest sample) {
+			this(key, count, retained, effective, locked, distinctClients, distinctUserAgents, returningCount, authenticatedCount, 0, sample);
+		}
+
+		public CounterEntry(String key, int count, int retained, int effective, boolean locked, int distinctClients,
 				int returningCount, int authenticatedCount, AntiDoSCounter.SampleRequest sample) {
-			this(key, count, retained, effective, locked, distinctClients, -1, returningCount, authenticatedCount, sample);
+			this(key, count, retained, effective, locked, distinctClients, -1, returningCount, authenticatedCount, 0, sample);
 		}
 
 		public CounterEntry(String key, int count, int retained, int effective, boolean locked, int distinctClients,
 				int returningCount, AntiDoSCounter.SampleRequest sample) {
-			this(key, count, retained, effective, locked, distinctClients, -1, returningCount, 0, sample);
+			this(key, count, retained, effective, locked, distinctClients, -1, returningCount, 0, 0, sample);
 		}
 
 		public CounterEntry(String key, int count, int retained, int effective, boolean locked, int distinctClients, int returningCount) {
-			this(key, count, retained, effective, locked, distinctClients, -1, returningCount, 0, null);
+			this(key, count, retained, effective, locked, distinctClients, -1, returningCount, 0, 0, null);
 		}
 
 		public CounterEntry(String key, int count, int retained, int effective, boolean locked, int distinctClients) {
-			this(key, count, retained, effective, locked, distinctClients, -1, 0, 0, null);
+			this(key, count, retained, effective, locked, distinctClients, -1, 0, 0, 0, null);
 		}
 
 		public CounterEntry(String key, int count, int retained, int effective, boolean locked) {
-			this(key, count, retained, effective, locked, 1, -1, 0, 0, null);
+			this(key, count, retained, effective, locked, 1, -1, 0, 0, 0, null);
 		}
 
 		@Override
@@ -220,7 +225,7 @@ public class AntiDoSStatusRenderer {
 				int distinct = c.hasCardinalityTracker() ? c.getDistinctClients() : -1;
 				int distinctUas = c.hasUserAgentTracker() ? c.getDistinctUserAgents() : -1;
 				list.add(new CounterEntry(entry.getKey(), count, retained, count + retained, locked, distinct, distinctUas,
-						c.getReturningCount(), c.getAuthenticatedCount(), c.getSample()));
+						c.getReturningCount(), c.getAuthenticatedCount(), c.getUaMismatchCount(), c.getSample()));
 			}
 			Collections.sort(list);
 			return new FilteredEntries(list, maxOrder);
@@ -247,14 +252,14 @@ public class AntiDoSStatusRenderer {
 					continue;
 				}
 				CounterEntry candidate = new CounterEntry(entry.getKey(), count, retained, effective, locked, distinct,
-						distinctUas, c.getReturningCount(), c.getAuthenticatedCount(), c.getSample());
+						distinctUas, c.getReturningCount(), c.getAuthenticatedCount(), c.getUaMismatchCount(), c.getSample());
 				if (candidate.compareTo(worst) < 0) {
 					minHeap.poll();
 					minHeap.offer(candidate);
 				}
 			} else {
 				minHeap.offer(new CounterEntry(entry.getKey(), count, retained, effective, locked, distinct,
-						distinctUas, c.getReturningCount(), c.getAuthenticatedCount(), c.getSample()));
+						distinctUas, c.getReturningCount(), c.getAuthenticatedCount(), c.getUaMismatchCount(), c.getSample()));
 			}
 		}
 
@@ -292,7 +297,7 @@ public class AntiDoSStatusRenderer {
 					int distinct = c.hasCardinalityTracker() ? c.getDistinctClients() : -1;
 					int distinctUas = c.hasUserAgentTracker() ? c.getDistinctUserAgents() : -1;
 					list.add(new CounterEntry(entry.getKey(), count, retained, effective, locked, distinct,
-							distinctUas, c.getReturningCount(), c.getAuthenticatedCount(), c.getSample()));
+							distinctUas, c.getReturningCount(), c.getAuthenticatedCount(), c.getUaMismatchCount(), c.getSample()));
 				}
 			}
 		}
@@ -1162,13 +1167,15 @@ public class AntiDoSStatusRenderer {
 			visitorCookieStatus = "Enabled (name: <code>" + escapeHtml(target.getVisitorCookieName()) + "</code>, TTL: <strong>"
 					+ target.getVisitorCookieTtlSeconds() + "s</strong>, masks: /" + target.getVisitorCookieSubnetMaskV4()
 					+ " v4, /" + target.getVisitorCookieSubnetMaskV6() + " v6"
-					+ (target.getVisitorCookieDomain() != null ? ", domain: <code>" + escapeHtml(target.getVisitorCookieDomain()) + "</code>" : "") + ")";
+					+ (target.getVisitorCookieDomain() != null ? ", domain: <code>" + escapeHtml(target.getVisitorCookieDomain()) + "</code>" : "")
+					+ ", UA: <code>" + (target.isVisitorCookieEnforceUserAgent() ? "enforce" : "track-only") + "</code>)";
 		} else if (target.isVisitorTrackingActive()) {
 			AntiDoSValve upstream = target.getInheritedVisitorCookieValve();
 			String upstreamName = upstream != null ? escapeHtml(upstream.getMonitorName()) : "upstream";
 			visitorCookieStatus = "Inherited from <strong>" + upstreamName + "</strong> (name: <code>"
 					+ escapeHtml(target.getEffectiveVisitorCookieName()) + "</code>"
-					+ (target.getEffectiveVisitorCookieDomain() != null ? ", domain: <code>" + escapeHtml(target.getEffectiveVisitorCookieDomain()) + "</code>" : "") + ")";
+					+ (target.getEffectiveVisitorCookieDomain() != null ? ", domain: <code>" + escapeHtml(target.getEffectiveVisitorCookieDomain()) + "</code>" : "")
+					+ ", UA: <code>" + (target.isEffectiveVisitorCookieEnforceUserAgent() ? "enforce" : "track-only") + "</code>)";
 		} else {
 			visitorCookieStatus = "Disabled";
 		}
@@ -1350,7 +1357,12 @@ public class AntiDoSStatusRenderer {
 						.append("<td>").append(e.retained()).append("</td>")
 						.append("<td><strong>").append(e.effective()).append("</strong></td>");
 				if (showReturning) {
-					sb.append("<td>").append(e.returningCount()).append("</td>");
+					String retHtml = String.valueOf(e.returningCount());
+					if (e.uaMismatchCount() > 0) {
+						retHtml += " <span class=\"badge badge-warn\" style=\"font-size:0.7rem;padding:1px 4px;\" title=\"User-Agent rotation/mismatch detected on "
+								+ e.uaMismatchCount() + " requests carrying visitor cookies\">⚠️ UA (" + e.uaMismatchCount() + ")</span>";
+					}
+					sb.append("<td>").append(retHtml).append("</td>");
 				}
 				if (showAuthenticated) {
 					sb.append("<td>").append(e.authenticatedCount()).append("</td>");
@@ -1432,7 +1444,12 @@ public class AntiDoSStatusRenderer {
 						.append("<td>").append(e.retained()).append("</td>")
 						.append("<td><strong>").append(e.effective()).append("</strong></td>");
 				if (showReturning) {
-					sb.append("<td>").append(e.returningCount()).append("</td>");
+					String retHtml = String.valueOf(e.returningCount());
+					if (e.uaMismatchCount() > 0) {
+						retHtml += " <span class=\"badge badge-warn\" style=\"font-size:0.7rem;padding:1px 4px;\" title=\"User-Agent rotation/mismatch detected on "
+								+ e.uaMismatchCount() + " requests carrying visitor cookies\">⚠️ UA (" + e.uaMismatchCount() + ")</span>";
+					}
+					sb.append("<td>").append(retHtml).append("</td>");
 				}
 				if (showAuthenticated) {
 					sb.append("<td>").append(e.authenticatedCount()).append("</td>");
@@ -1742,6 +1759,7 @@ public class AntiDoSStatusRenderer {
 					.append("      \"visitorCookieInherited\": ").append(!v.isVisitorCookieEnabled() && v.isVisitorTrackingActive()).append(",\n")
 					.append("      \"visitorCookieName\": \"").append(escapeJson(v.getEffectiveVisitorCookieName())).append("\",\n")
 					.append("      \"visitorCookieDomain\": ").append(v.getEffectiveVisitorCookieDomain() != null ? "\"" + escapeJson(v.getEffectiveVisitorCookieDomain()) + "\"" : "null").append(",\n")
+					.append("      \"visitorCookieEnforceUserAgent\": ").append(v.isEffectiveVisitorCookieEnforceUserAgent()).append(",\n")
 					.append("      \"authTrackingEnabled\": ").append(v.isAuthTrackingActive()).append(",\n")
 					.append("      \"authTrackingInherited\": ").append(!v.isAuthTrackingEnabled() && v.isAuthTrackingActive()).append(",\n")
 					.append("      \"authTrackingMode\": \"").append(escapeJson(v.getEffectiveAuthTrackingMode())).append("\",\n")
@@ -1878,6 +1896,7 @@ public class AntiDoSStatusRenderer {
 				.append("    \"visitorCookieInherited\": ").append(!target.isVisitorCookieEnabled() && target.isVisitorTrackingActive()).append(",\n")
 				.append("    \"visitorCookieName\": \"").append(escapeJson(target.getEffectiveVisitorCookieName())).append("\",\n")
 				.append("    \"visitorCookieDomain\": ").append(target.getEffectiveVisitorCookieDomain() != null ? "\"" + escapeJson(target.getEffectiveVisitorCookieDomain()) + "\"" : "null").append(",\n")
+				.append("    \"visitorCookieEnforceUserAgent\": ").append(target.isEffectiveVisitorCookieEnforceUserAgent()).append(",\n")
 				.append("    \"authTrackingEnabled\": ").append(target.isAuthTrackingActive()).append(",\n")
 				.append("    \"authTrackingInherited\": ").append(!target.isAuthTrackingEnabled() && target.isAuthTrackingActive()).append(",\n")
 				.append("    \"authTrackingMode\": \"").append(escapeJson(target.getEffectiveAuthTrackingMode())).append("\",\n")
@@ -2039,7 +2058,8 @@ public class AntiDoSStatusRenderer {
 					.append("      \"distinctClients\": ").append(e.distinctClients() > 0 ? e.distinctClients() : 1).append(",\n")
 					.append("      \"distinctUserAgents\": ").append(e.distinctUserAgents() > 0 ? e.distinctUserAgents() : "null").append(",\n")
 					.append("      \"returningCount\": ").append(target.isVisitorTrackingActive() ? e.returningCount() : "null").append(",\n")
-					.append("      \"authenticatedCount\": ").append(target.isAuthTrackingActive() ? e.authenticatedCount() : "null").append(",\n");
+					.append("      \"authenticatedCount\": ").append(target.isAuthTrackingActive() ? e.authenticatedCount() : "null").append(",\n")
+					.append("      \"uaMismatchCount\": ").append(target.isVisitorTrackingActive() ? e.uaMismatchCount() : "null").append(",\n");
 			if (e.sample() != null) {
 				sb.append("      \"sampleMethod\": ").append(e.sample().method() != null ? "\"" + escapeJson(e.sample().method()) + "\"" : "null").append(",\n")
 						.append("      \"sampleUri\": ").append(e.sample().uri() != null ? "\"" + escapeJson(e.sample().uri()) + "\"" : "null").append(",\n")
@@ -2097,7 +2117,8 @@ public class AntiDoSStatusRenderer {
 					.append("      \"distinctClients\": ").append(e.distinctClients() > 0 ? e.distinctClients() : 1).append(",\n")
 					.append("      \"distinctUserAgents\": ").append(e.distinctUserAgents() > 0 ? e.distinctUserAgents() : "null").append(",\n")
 					.append("      \"returningCount\": ").append(target.isVisitorTrackingActive() ? e.returningCount() : "null").append(",\n")
-					.append("      \"authenticatedCount\": ").append(target.isAuthTrackingActive() ? e.authenticatedCount() : "null");
+					.append("      \"authenticatedCount\": ").append(target.isAuthTrackingActive() ? e.authenticatedCount() : "null").append(",\n")
+					.append("      \"uaMismatchCount\": ").append(target.isVisitorTrackingActive() ? e.uaMismatchCount() : "null");
 			if (e.sample() != null) {
 				sb.append(",\n")
 						.append("      \"sampleMethod\": ").append(e.sample().method() != null ? "\"" + escapeJson(e.sample().method()) + "\"" : "null").append(",\n")

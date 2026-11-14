@@ -347,6 +347,7 @@ public final class AntiDoSOpenApiSpec {
           "visitorCookieEnabled",
           "visitorCookieInherited",
           "visitorCookieName",
+          "visitorCookieEnforceUserAgent",
           "authTrackingEnabled",
           "authTrackingInherited",
           "authTrackingMode",
@@ -506,6 +507,10 @@ public final class AntiDoSOpenApiSpec {
               "null"
             ],
             "description": "Optional cookie domain for visitor tracking."
+          },
+          "visitorCookieEnforceUserAgent": {
+            "type": "boolean",
+            "description": "Whether visitor cookie tracking enforces matching User-Agent signatures (rejecting mismatches as first-contact)."
           },
           "authTrackingEnabled": {
             "type": "boolean",
@@ -931,6 +936,13 @@ public final class AntiDoSOpenApiSpec {
               "null"
             ],
             "description": "Requests identified as authenticated sessions."
+          },
+          "uaMismatchCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Requests where the client presented a visitor cookie with a mismatched User-Agent signature."
           },
           "sampleMethod": {
             "type": [

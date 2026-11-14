@@ -376,12 +376,13 @@ Available since version 1.8.0 (default: `0` = disabled): Sets the per-slot reque
 
 Available since version 1.7.5, enables cryptographic first-party visitor tracking (*Proof-of-Prior-Visit*) using standard **AES-256-GCM (AEAD)** with zero runtime dependencies. Default: `false`.
 
-When enabled, the Valve automatically issues an unforgeable, compact (~58 characters Base64URL) HTTP cookie to clients. The token contains the client's masked network subnet, an expiration timestamp, and a saturating visit counter. Any bit manipulation or forged cookie causes an immediate AEAD tag mismatch and is rejected before parsing.
+When enabled, the Valve automatically issues an unforgeable, compact (~64 characters Base64URL) HTTP cookie to clients. The token contains the client's masked network subnet, an integrated 32-bit User-Agent signature hash, an expiration timestamp, and a saturating visit counter. Any bit manipulation or forged cookie causes an immediate AEAD tag mismatch and is rejected before parsing.
 
 ### Visitor Cookie Parameters
 
 * `visitorCookieEnabled`: `true` or `false` (default: `false`).
 * `visitorCookieName`: Name of the HTTP cookie (default: `"_adv"`). Can be set to any valid cookie name (e.g. `visitorCookieName="my_app_visitor"`). Custom names are dynamically discovered by the status telemetry and the Anti-DoS Collector, which displays `COOKIE: ACTIVE (<name>)` and binds metrics automatically without requiring the default name.
+* `visitorCookieEnforceUserAgent`: `true` or `false` (default: `false`). When `false` (detection and fingerprinting mode), clients that rotate their `User-Agent` while reusing visitor cookies retain returning-visitor status, but the mismatch is actively flagged and counted (`uaMismatchCount`) in monitor counters, JSON telemetry, and the Collector interface (`⚠️ UA (count)`). When `true` (enforcement mode), cookies with mismatched `User-Agent` headers are rejected as returning visits (`Status.UA_MISMATCH`), treating the request as first-contact and issuing a fresh token bound to the new User-Agent while still incrementing `uaMismatchCount`.
 * `visitorCookieSecret`: 256-bit or 128-bit secret key (64 or 32 hex characters, or Base64 string). If omitted, an ephemeral 256-bit AES key is automatically generated on startup (for single-server deployments). In multi-server clusters, configure the same secret key across all nodes to allow instant stateless cross-server validation without database or session replication.
 * `visitorCookieTtlSeconds`: Token lifetime in seconds (default: `900` = 15 minutes).
 * `visitorCookieRefreshRatio`: Fraction of TTL that must elapse before a refreshed cookie with incremented visit counter is emitted (default: `0.5` = 50% elapsed). This throttling mechanism completely prevents HTTP/2 parallel asset request race conditions and header bloat.

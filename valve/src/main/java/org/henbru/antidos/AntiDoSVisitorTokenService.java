@@ -46,7 +46,9 @@ import javax.crypto.spec.SecretKeySpec;
  */
 public final class AntiDoSVisitorTokenService {
 
-	public static final byte TOKEN_VERSION = 1;
+	public static final byte TOKEN_VERSION_V1 = 1;
+	public static final byte TOKEN_VERSION_V2 = 2;
+	public static final byte TOKEN_VERSION = TOKEN_VERSION_V2;
 	public static final int GCM_IV_LENGTH_BYTES = 12;
 	public static final int GCM_TAG_LENGTH_BITS = 128; // 16 bytes authentication tag
 	public static final int MAX_COUNTER_VALUE = 65535;
@@ -57,27 +59,56 @@ public final class AntiDoSVisitorTokenService {
 	private final SecretKey secretKey;
 
 	/**
-	 * Represents the outcome of a visitor cookie validation.
+	 * Computes a 32-bit folded hash from a User-Agent string using {@link AntiDoSCounter#computeUserAgentHash(String)}.
+	 * Returns 0 if userAgent is null or blank.
+	 *
+	 * @param userAgent User-Agent header string (or null)
+	 * @return 32-bit integer hash
 	 */
-	public record TokenData(Status status, int counter, long expiresAtMillis) {
+	public static int computeUserAgentHash32(String userAgent) {
+		if (userAgent == null || userAgent.isBlank()) {
+			return 0;
+		}
+		long hash64 = AntiDoSCounter.computeUserAgentHash(userAgent.trim());
+		return (int) (hash64 ^ (hash64 >>> 32));
+	}
+
+	/**
+	 * Represents the outcome of a visitor cookie validation.
+	 *
+	 * @param status          validation status
+	 * @param counter         visitor request counter
+	 * @param expiresAtMillis timestamp when cookie expires
+	 * @param uaMismatch      true if the token was a V2 token and the provided User-Agent hash did not match the token's hash
+	 */
+	public record TokenData(Status status, int counter, long expiresAtMillis, boolean uaMismatch) {
 
 		public enum Status {
 			VALID,
 			INVALID,
 			EXPIRED,
-			IP_MISMATCH
+			IP_MISMATCH,
+			UA_MISMATCH
 		}
 
 		public boolean isValid() {
 			return status == Status.VALID;
 		}
 
-		public static final TokenData INVALID = new TokenData(Status.INVALID, 0, 0L);
-		public static final TokenData EXPIRED = new TokenData(Status.EXPIRED, 0, 0L);
-		public static final TokenData IP_MISMATCH = new TokenData(Status.IP_MISMATCH, 0, 0L);
+		public static final TokenData INVALID = new TokenData(Status.INVALID, 0, 0L, false);
+		public static final TokenData EXPIRED = new TokenData(Status.EXPIRED, 0, 0L, false);
+		public static final TokenData IP_MISMATCH = new TokenData(Status.IP_MISMATCH, 0, 0L, false);
 
 		public static TokenData valid(int counter, long expiresAtMillis) {
-			return new TokenData(Status.VALID, counter, expiresAtMillis);
+			return new TokenData(Status.VALID, counter, expiresAtMillis, false);
+		}
+
+		public static TokenData valid(int counter, long expiresAtMillis, boolean uaMismatch) {
+			return new TokenData(Status.VALID, counter, expiresAtMillis, uaMismatch);
+		}
+
+		public static TokenData uaMismatch(int counter, long expiresAtMillis) {
+			return new TokenData(Status.UA_MISMATCH, counter, expiresAtMillis, true);
 		}
 	}
 
@@ -89,7 +120,7 @@ public final class AntiDoSVisitorTokenService {
 	}
 
 	/**
-	 * Creates an AES-GCM encrypted and authenticated visitor cookie token.
+	 * Creates an AES-GCM encrypted and authenticated visitor cookie token (Version 2 with User-Agent hash).
 	 * 
 	 * @param subnetBytes    The masked client subnet bytes (e.g. 4 bytes for IPv4, 8/16 for IPv6)
 	 * @param currentCounter The last observed counter value (0 for first contact)
@@ -98,6 +129,20 @@ public final class AntiDoSVisitorTokenService {
 	 * @return Base64URL encoded authenticated token string
 	 */
 	public String createToken(byte[] subnetBytes, int currentCounter, long ttlMillis, long nowMillis) {
+		return createToken(subnetBytes, 0, currentCounter, ttlMillis, nowMillis);
+	}
+
+	/**
+	 * Creates an AES-GCM encrypted and authenticated visitor cookie token (Version 2 with User-Agent hash).
+	 * 
+	 * @param subnetBytes    The masked client subnet bytes (e.g. 4 bytes for IPv4, 8/16 for IPv6)
+	 * @param uaHash32       The 32-bit User-Agent hash (or 0 if none)
+	 * @param currentCounter The last observed counter value (0 for first contact)
+	 * @param ttlMillis      Time-to-live in milliseconds
+	 * @param nowMillis      Current system timestamp in milliseconds
+	 * @return Base64URL encoded authenticated token string
+	 */
+	public String createToken(byte[] subnetBytes, int uaHash32, int currentCounter, long ttlMillis, long nowMillis) {
 		if (subnetBytes == null || subnetBytes.length == 0 || subnetBytes.length > 16) {
 			throw new IllegalArgumentException("Invalid subnet bytes");
 		}
@@ -109,11 +154,12 @@ public final class AntiDoSVisitorTokenService {
 		int nextCounter = currentCounter >= MAX_COUNTER_VALUE ? MAX_COUNTER_VALUE : currentCounter + 1;
 		long expiresAt = nowMillis + ttlMillis;
 
-		// Plaintext layout: [version: 1B] [ipLen: 1B] [subnetBytes: NB] [expiresAt: 8B] [counter: 2B]
-		ByteBuffer plain = ByteBuffer.allocate(1 + 1 + subnetBytes.length + 8 + 2);
-		plain.put(TOKEN_VERSION);
+		// Plaintext layout V2: [version: 1B (0x02)] [ipLen: 1B] [subnetBytes: NB] [uaHash: 4B] [expiresAt: 8B] [counter: 2B]
+		ByteBuffer plain = ByteBuffer.allocate(1 + 1 + subnetBytes.length + 4 + 8 + 2);
+		plain.put(TOKEN_VERSION_V2);
 		plain.put((byte) subnetBytes.length);
 		plain.put(subnetBytes);
+		plain.putInt(uaHash32);
 		plain.putLong(expiresAt);
 		plain.putShort((short) nextCounter);
 
@@ -134,7 +180,7 @@ public final class AntiDoSVisitorTokenService {
 	}
 
 	/**
-	 * Decrypts and validates an incoming visitor cookie token.
+	 * Decrypts and validates an incoming visitor cookie token without User-Agent checking.
 	 * 
 	 * @param cookieValue       The raw cookie value from the HTTP request
 	 * @param clientSubnetBytes The current client's masked subnet bytes
@@ -142,13 +188,28 @@ public final class AntiDoSVisitorTokenService {
 	 * @return TokenData with validation status, visit counter, and expiration
 	 */
 	public TokenData validateToken(String cookieValue, byte[] clientSubnetBytes, long nowMillis) {
+		return validateToken(cookieValue, clientSubnetBytes, 0, false, nowMillis);
+	}
+
+	/**
+	 * Decrypts and validates an incoming visitor cookie token (supporting both V1 legacy and V2 tokens).
+	 * 
+	 * @param cookieValue       The raw cookie value from the HTTP request
+	 * @param clientSubnetBytes The current client's masked subnet bytes
+	 * @param currentUaHash32   The current request's 32-bit User-Agent hash
+	 * @param enforceUserAgent  If true, a User-Agent hash mismatch results in {@link TokenData.Status#UA_MISMATCH}
+	 * @param nowMillis         Current system timestamp in milliseconds
+	 * @return TokenData with validation status, visit counter, expiration, and uaMismatch flag
+	 */
+	public TokenData validateToken(String cookieValue, byte[] clientSubnetBytes, int currentUaHash32,
+			boolean enforceUserAgent, long nowMillis) {
 		if (cookieValue == null || cookieValue.length() < 30 || clientSubnetBytes == null) {
 			return TokenData.INVALID;
 		}
 
 		try {
 			byte[] combined = Base64.getUrlDecoder().decode(cookieValue);
-			// Minimum size: 12B IV + 1B ver + 1B len + 1B min subnet + 8B exp + 2B cnt + 16B tag = 41B
+			// Minimum size: 12B IV + 1B ver + 1B len + 1B min subnet + 8B exp + 2B cnt + 16B tag = 41B (V1)
 			if (combined.length < GCM_IV_LENGTH_BYTES + 1 + 1 + 1 + 8 + 2 + 16) {
 				return TokenData.INVALID;
 			}
@@ -165,17 +226,28 @@ public final class AntiDoSVisitorTokenService {
 
 			ByteBuffer plain = ByteBuffer.wrap(decrypted);
 			byte version = plain.get();
-			if (version != TOKEN_VERSION) {
+			if (version != TOKEN_VERSION_V1 && version != TOKEN_VERSION_V2) {
 				return TokenData.INVALID;
 			}
 
 			int ipLen = plain.get() & 0xFF;
-			if (ipLen <= 0 || ipLen > 16 || plain.remaining() < ipLen + 8 + 2) {
+			if (ipLen <= 0 || ipLen > 16) {
+				return TokenData.INVALID;
+			}
+
+			int expectedRemaining = ipLen + (version == TOKEN_VERSION_V2 ? 4 : 0) + 8 + 2;
+			if (plain.remaining() < expectedRemaining) {
 				return TokenData.INVALID;
 			}
 
 			byte[] tokenSubnet = new byte[ipLen];
 			plain.get(tokenSubnet);
+
+			int tokenUaHash = 0;
+			if (version == TOKEN_VERSION_V2) {
+				tokenUaHash = plain.getInt();
+			}
+
 			long expiresAt = plain.getLong();
 			int counter = plain.getShort() & 0xFFFF;
 
@@ -189,7 +261,18 @@ public final class AntiDoSVisitorTokenService {
 				return TokenData.IP_MISMATCH;
 			}
 
-			return TokenData.valid(counter, expiresAt);
+			// 3. User-Agent binding check (V2 tokens only):
+			boolean uaMismatch = false;
+			if (version == TOKEN_VERSION_V2 && tokenUaHash != 0 && currentUaHash32 != 0) {
+				if (tokenUaHash != currentUaHash32) {
+					uaMismatch = true;
+					if (enforceUserAgent) {
+						return TokenData.uaMismatch(counter, expiresAt);
+					}
+				}
+			}
+
+			return TokenData.valid(counter, expiresAt, uaMismatch);
 		} catch (GeneralSecurityException | IllegalArgumentException | BufferUnderflowException e) {
 			return TokenData.INVALID;
 		}

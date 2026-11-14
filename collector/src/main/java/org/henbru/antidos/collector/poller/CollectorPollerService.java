@@ -548,6 +548,7 @@ public class CollectorPollerService {
 					Integer distinctUas = c.distinctUserAgents();
 					Integer returning = (isVisitorTrackingActive && c.returningCount() != null) ? c.returningCount() : null;
 					Integer authenticated = (!isAuthTrackingExplicitlyDisabled && c.authenticatedCount() != null) ? c.authenticatedCount() : null;
+					Integer uaMismatch = (isVisitorTrackingActive && c.uaMismatchCount() != null) ? c.uaMismatchCount() : null;
 					events.add(new ClientEvent(
 							null,
 							endpoint.getName(),
@@ -565,6 +566,7 @@ public class CollectorPollerService {
 							distinctUas,
 							returning,
 							authenticated,
+							uaMismatch,
 							c.sampleMethod(),
 							c.sampleUri(),
 							c.sampleUserAgent(),
@@ -592,6 +594,7 @@ public class CollectorPollerService {
 					Integer distinctUas = c.distinctUserAgents();
 					Integer returning = (isVisitorTrackingActive && c.returningCount() != null) ? c.returningCount() : null;
 					Integer authenticated = (!isAuthTrackingExplicitlyDisabled && c.authenticatedCount() != null) ? c.authenticatedCount() : null;
+					Integer uaMismatch = (isVisitorTrackingActive && c.uaMismatchCount() != null) ? c.uaMismatchCount() : null;
 					events.add(new ClientEvent(
 							null,
 							endpoint.getName(),
@@ -609,6 +612,7 @@ public class CollectorPollerService {
 							distinctUas,
 							returning,
 							authenticated,
+							uaMismatch,
 							c.sampleMethod(),
 							c.sampleUri(),
 							c.sampleUserAgent(),

@@ -1901,12 +1901,20 @@
                 </div>
 
                 <!-- 30. visitorCookieSecure -->
-                <div class="field-group checkbox-group visitor-cookie-field-group"
-                  style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
+                <div class="field-group checkbox-group visitor-cookie-field-group">
                   <label class="checkbox-label">
                     <input type="checkbox" id="visitorCookieSecure" name="visitorCookieSecure" checked>
                     <span>Emit Secure flag in Set-Cookie (<code>visitorCookieSecure="true"</code>, recommended for
                       HTTPS)</span>
+                  </label>
+                </div>
+
+                <!-- 31. visitorCookieEnforceUserAgent -->
+                <div class="field-group checkbox-group visitor-cookie-field-group"
+                  style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="visitorCookieEnforceUserAgent" name="visitorCookieEnforceUserAgent">
+                    <span>Enforce User-Agent match (<code>visitorCookieEnforceUserAgent="true"</code>; if false, UA mismatches are passively tracked)</span>
                   </label>
                 </div>
               </div>
@@ -2768,6 +2776,7 @@
       { key: 'visitorCookieDomain', isRequired: false, defaultVal: '' },
       { key: 'visitorCookieSameSite', isRequired: false, defaultVal: 'Lax' },
       { key: 'visitorCookieSecure', isRequired: false, defaultVal: true, isBoolean: true },
+      { key: 'visitorCookieEnforceUserAgent', isRequired: false, defaultVal: false, isBoolean: true },
       { key: 'authTrackingMode', isRequired: false, defaultVal: 'OFF' },
       { key: 'authCookieName', isRequired: false, defaultVal: '' },
       { key: 'authLoginPaths', isRequired: false, defaultVal: '' },
@@ -2900,6 +2909,8 @@
             if (param.key === 'visitorCookieSecure') {
               // Default is true; omit if true or if visitor cookie feature is disabled
               if (val === true || !document.getElementById('visitorCookieEnabled').checked) return;
+            } else if (param.key === 'visitorCookieEnforceUserAgent') {
+              if (!val || !document.getElementById('visitorCookieEnabled').checked) return;
             } else {
               if (!val) return; // Default false omitted
             }

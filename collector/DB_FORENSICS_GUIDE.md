@@ -8,7 +8,7 @@ This runbook serves as an investigative guide, analytical cookbook, and capacity
 
 The Collector aggregates telemetry from distributed Apache Tomcat Valve instances across multiple data centers. It supports both **SQLite** (default zero-ops embedded database with WAL mode) and **PostgreSQL 14+** (multi-server enterprise fleets).
 
-Database schemas (managed via versioned Flyway migrations from `V1` to `V24`) divide data into three distinct volume and lifecycle tiers:
+Database schemas (managed via versioned Flyway migrations from `V1` to `V32`) divide data into three distinct volume and lifecycle tiers:
 
 ```
 +-----------------------------------------------------------------------------------+
@@ -502,7 +502,7 @@ sqlite3 -header -column antidos-collector.db \
 
 | Table Name | Time Column | Count / Volume Columns | Dimension & Status Columns |
 |---|---|---|---|
-| **`client_events`** | `slot_time` | `request_count`, `retained_count`, `returning_count`, `authenticated_count` | `status` (`ACTIVE`/`BLOCKED`/`MARKED`), `client_key`, `subnet_group`, `sample_method`, `sample_uri`, `sample_user_agent`, `distinct_user_agents`, `distinct_clients` |
+| **`client_events`** | `slot_time` | `request_count`, `retained_count`, `returning_count`, `authenticated_count`, `ua_mismatch_count` | `status` (`ACTIVE`/`BLOCKED`/`MARKED`), `client_key`, `subnet_group`, `sample_method`, `sample_uri`, `sample_user_agent`, `distinct_user_agents`, `distinct_clients` |
 | **`client_subnet_rollups`** | `bucket_start`, `bucket_end` | `total_requests`, `active_requests`, `blocked_requests`, `marked_requests`, `returning_requests`, `authenticated_requests` | `subnet_group`, `asn`, `as_org`, `country_code`, `client_type`, `distinct_clients`, `distinct_user_agents` |
 | **`slot_snapshots`** | `start_time`, `end_time` | `total_requests`, `active_counters`, `blocked_counters`, `marked_counters` | `server_id`, `valve_name`, `slot_key`, `is_completed` |
 | **`daily_reports`** | `report_date`, `created_at` | `total_requests`, `total_blocked`, `total_marked`, `peak_requests_per_sec`, `peak_blocked_per_sec`, `peak_marked_per_sec` | `status`, `peak_server_id`, `peak_valve_name`, `server_count`, `incident_count`, `report_markdown` |

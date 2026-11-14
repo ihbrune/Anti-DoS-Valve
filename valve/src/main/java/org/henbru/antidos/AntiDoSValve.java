@@ -293,6 +293,7 @@ public class AntiDoSValve extends ValveBase {
 	private volatile String visitorCookieSameSite = "Lax";
 	private volatile String visitorCookieSecure = "auto";
 	private volatile String visitorCookieDomain = null;
+	private volatile boolean visitorCookieEnforceUserAgent = false;
 	private volatile AntiDoSVisitorTokenService visitorTokenService = null;
 
 	private static final AntiDoSAuthSessionCache sharedAuthSessionCache = new AntiDoSAuthSessionCache();
@@ -1148,6 +1149,28 @@ public class AntiDoSValve extends ValveBase {
 			this.visitorCookieDomain = null;
 		} else {
 			this.visitorCookieDomain = visitorCookieDomain.trim();
+		}
+	}
+
+	public boolean isVisitorCookieEnforceUserAgent() {
+		return visitorCookieEnforceUserAgent;
+	}
+
+	public boolean isEffectiveVisitorCookieEnforceUserAgent() {
+		if (this.visitorCookieEnabled) {
+			return this.visitorCookieEnforceUserAgent;
+		}
+		AntiDoSValve upstream = getInheritedVisitorCookieValve();
+		return upstream != null ? upstream.isVisitorCookieEnforceUserAgent() : this.visitorCookieEnforceUserAgent;
+	}
+
+	public void setVisitorCookieEnforceUserAgent(boolean visitorCookieEnforceUserAgent) {
+		this.visitorCookieEnforceUserAgent = visitorCookieEnforceUserAgent;
+	}
+
+	public void setVisitorCookieEnforceUserAgent(String visitorCookieEnforceUserAgent) {
+		if (visitorCookieEnforceUserAgent != null) {
+			this.visitorCookieEnforceUserAgent = Boolean.parseBoolean(visitorCookieEnforceUserAgent.trim());
 		}
 	}
 
@@ -2122,28 +2145,37 @@ public class AntiDoSValve extends ValveBase {
 		boolean isReturningVisitor = false;
 		int visitorCounter = 0;
 		boolean issueNewCookie = false;
+		boolean uaMismatch = false;
 		byte[] clientSubnetBytes = null;
 		long now = getTimeInMillis();
+		String userAgent = request.getHeader("User-Agent");
+		int currentUaHash = AntiDoSVisitorTokenService.computeUserAgentHash32(userAgent);
 
 		Object upstreamCtxObj = request.getAttribute(VISITOR_CONTEXT_ATTRIBUTE_NAME);
 		if (upstreamCtxObj instanceof AntiDoSVisitorContext upstreamCtx) {
 			isReturningVisitor = upstreamCtx.valid();
 			visitorCounter = upstreamCtx.counter();
 			clientSubnetBytes = upstreamCtx.subnetBytes();
+			uaMismatch = upstreamCtx.uaMismatch();
 		} else if (visitorCookieEnabled && visitorTokenService != null) {
 			clientSubnetBytes = extractVisitorSubnetBytes(ip);
 			String cookieVal = extractCookieValue(request, visitorCookieName);
 			if (cookieVal != null && clientSubnetBytes != null) {
-				TokenData tokenData = visitorTokenService.validateToken(cookieVal, clientSubnetBytes, now);
+				TokenData tokenData = visitorTokenService.validateToken(cookieVal, clientSubnetBytes, currentUaHash,
+						visitorCookieEnforceUserAgent, now);
 				if (tokenData.isValid()) {
 					isReturningVisitor = true;
 					visitorCounter = tokenData.counter();
+					uaMismatch = tokenData.uaMismatch();
 					long remainingTtl = tokenData.expiresAtMillis() - now;
 					long fullTtl = (long) visitorCookieTtlSeconds * 1000L;
 					if (remainingTtl < (long) (fullTtl * visitorCookieRefreshRatio)) {
 						issueNewCookie = true;
 					}
 				} else {
+					if (tokenData.status() == TokenData.Status.UA_MISMATCH) {
+						uaMismatch = true;
+					}
 					issueNewCookie = true;
 				}
 			} else {
@@ -2155,7 +2187,8 @@ public class AntiDoSValve extends ValveBase {
 					visitorCounter,
 					visitorCookieSubnetMaskV4,
 					visitorCookieSubnetMaskV6,
-					clientSubnetBytes));
+					clientSubnetBytes,
+					uaMismatch));
 			request.setAttribute(RETURNING_VISITOR_ATTRIBUTE_NAME, isReturningVisitor);
 			request.setAttribute(FIRST_CONTACT_ATTRIBUTE_NAME, !isReturningVisitor);
 			request.setAttribute(VISITOR_COUNTER_ATTRIBUTE_NAME, visitorCounter);
@@ -2177,8 +2210,7 @@ public class AntiDoSValve extends ValveBase {
 			request.setAttribute(AUTHENTICATED_ATTRIBUTE_NAME, Boolean.valueOf(isAuthenticated));
 		}
 
-		String userAgent = request.getHeader("User-Agent");
-		boolean allowed = isRequestAllowed(ip, path, isReturningVisitor, isAuthenticated, userAgent);
+		boolean allowed = isRequestAllowed(ip, path, isReturningVisitor, isAuthenticated, uaMismatch, userAgent);
 		if (!allowed) {
 			recordBlockedSampleIfAbsent(ip, request, path, isAuthenticated);
 		} else if (activeSampleThreshold > 0 && isExtendedMetricsActive()) {
@@ -2186,7 +2218,7 @@ public class AntiDoSValve extends ValveBase {
 		}
 		if (allowed || simulationMode) {
 			if (visitorCookieEnabled && visitorTokenService != null && issueNewCookie && clientSubnetBytes != null) {
-				String newCookieVal = visitorTokenService.createToken(clientSubnetBytes, visitorCounter,
+				String newCookieVal = visitorTokenService.createToken(clientSubnetBytes, currentUaHash, visitorCounter,
 						(long) visitorCookieTtlSeconds * 1000L, now);
 				String headerVal = buildSetCookieHeader(request, newCookieVal, visitorCookieTtlSeconds);
 				response.addHeader("Set-Cookie", headerVal);
@@ -2284,10 +2316,15 @@ public class AntiDoSValve extends ValveBase {
 
 	private void registerAlwaysForbiddenInMonitor(String ip, boolean returningVisitor, boolean authenticated,
 			String userAgent) {
+		registerAlwaysForbiddenInMonitor(ip, returningVisitor, authenticated, false, userAgent);
+	}
+
+	private void registerAlwaysForbiddenInMonitor(String ip, boolean returningVisitor, boolean authenticated,
+			boolean uaMismatch, String userAgent) {
 		AntiDoSMonitor monitor = provideMonitor();
 		if (monitor != null) {
 			try {
-				monitor.registerAlwaysForbiddenRequest(ip, returningVisitor, authenticated, userAgent);
+				monitor.registerAlwaysForbiddenRequest(ip, returningVisitor, authenticated, uaMismatch, userAgent);
 			} catch (Exception e) {
 				log.warn(name4logging + " Failed to register always-forbidden IP in monitor: " + ip, e);
 			}
@@ -2300,6 +2337,17 @@ public class AntiDoSValve extends ValveBase {
 			byte[] preParsedIpv4Bytes,
 			boolean returningVisitor,
 			boolean authenticated,
+			String userAgent) {
+		registerDynamicBlockInMonitor(dynEntry, ip, preParsedIpv4Bytes, returningVisitor, authenticated, false, userAgent);
+	}
+
+	private void registerDynamicBlockInMonitor(
+			AntiDoSDynamicBlockRegistry.DynamicBlockEntry dynEntry,
+			String ip,
+			byte[] preParsedIpv4Bytes,
+			boolean returningVisitor,
+			boolean authenticated,
+			boolean uaMismatch,
 			String userAgent) {
 		AntiDoSMonitor monitor = provideMonitor();
 		if (monitor != null && dynEntry != null) {
@@ -2317,6 +2365,7 @@ public class AntiDoSValve extends ValveBase {
 						trackCard,
 						returningVisitor,
 						authenticated,
+						uaMismatch,
 						userAgent);
 			} catch (Exception e) {
 				log.warn(name4logging + " Failed to register dynamic block hit in monitor: " + ip, e);
@@ -3332,13 +3381,18 @@ public class AntiDoSValve extends ValveBase {
 
 	public boolean isRequestAllowed(String ip, String requestURI, boolean returningVisitor, boolean authenticated,
 			String userAgent) {
+		return isRequestAllowed(ip, requestURI, returningVisitor, authenticated, false, userAgent);
+	}
+
+	public boolean isRequestAllowed(String ip, String requestURI, boolean returningVisitor, boolean authenticated,
+			boolean uaMismatch, String userAgent) {
 		if (isIPAddressInAlwaysForbidden(ip)) {
 			alwaysForbiddenBlockedRequests.increment();
 			if (log.isDebugEnabled())
 				log.debug(name4logging + " In alwaysForbidden: " + ip);
 
 			if (trackAlwaysForbiddenInMonitor) {
-				registerAlwaysForbiddenInMonitor(ip, returningVisitor, authenticated, userAgent);
+				registerAlwaysForbiddenInMonitor(ip, returningVisitor, authenticated, uaMismatch, userAgent);
 			}
 
 			return false;
@@ -3361,7 +3415,7 @@ public class AntiDoSValve extends ValveBase {
 			AntiDoSDynamicBlockRegistry.DynamicBlockEntry matchedRule = dynamicBlockRegistry.match(ip, null, nowMillis);
 			if (matchedRule != null) {
 				dynamicBlockRegistry.recordBlockedHit(matchedRule, nowMillis);
-				registerDynamicBlockInMonitor(matchedRule, ip, null, returningVisitor, authenticated, userAgent);
+				registerDynamicBlockInMonitor(matchedRule, ip, null, returningVisitor, authenticated, uaMismatch, userAgent);
 				if (log.isDebugEnabled()) {
 					log.debug(name4logging + " Dynamically blocked by CIDR rule " + matchedRule.getCidr() + ": " + ip);
 				}
@@ -3391,7 +3445,7 @@ public class AntiDoSValve extends ValveBase {
 		}
 
 		if (isRequestURIInRelevantPaths(requestURI)) {
-			return !isIPAddressBlocked(ip, returningVisitor, authenticated, userAgent);
+			return !isIPAddressBlocked(ip, returningVisitor, authenticated, uaMismatch, userAgent);
 		}
 
 		if (serverWideBlocking && isIPAddressCurrentlyBlocked(ip)) {
@@ -3464,6 +3518,11 @@ public class AntiDoSValve extends ValveBase {
 	 */
 	public boolean isIPAddressBlocked(String ip, boolean returningVisitor, boolean authenticated, String userAgent)
 			throws IllegalArgumentException {
+		return isIPAddressBlocked(ip, returningVisitor, authenticated, false, userAgent);
+	}
+
+	public boolean isIPAddressBlocked(String ip, boolean returningVisitor, boolean authenticated, boolean uaMismatch,
+			String userAgent) throws IllegalArgumentException {
 		if (ip == null || ip.isEmpty()) {
 			throw new IllegalArgumentException("IP address must not be null or empty");
 		}
@@ -3491,7 +3550,7 @@ public class AntiDoSValve extends ValveBase {
 		boolean trackCardinality = isExtendedMetricsActive() && !counterName.equals(ip);
 		AntiDoSMonitor monitor = provideMonitor();
 		if (monitor == null || monitor.registerAndCheckRequest(counterName, ip, rawIpv4Bytes, trackCardinality, v4Mask,
-				v6Mask, returningVisitor, authenticated, userAgent)) {
+				v6Mask, returningVisitor, authenticated, uaMismatch, userAgent)) {
 			if (log.isDebugEnabled())
 				if (monitor == null)
 					log.debug(name4logging + " not available");

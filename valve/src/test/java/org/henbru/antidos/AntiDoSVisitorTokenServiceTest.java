@@ -194,4 +194,102 @@ class AntiDoSVisitorTokenServiceTest {
 		byte[] otherSubnet = new byte[]{0x20, 0x01, 0x0d, (byte) 0xb8, (byte) 0xab, (byte) 0xcd, 0x56, 0x78};
 		assertEquals(TokenData.Status.IP_MISMATCH, service.validateToken(token, otherSubnet, now).status());
 	}
+
+	@Test
+	void testUserAgentHashMatchingAndMismatchModes() {
+		SecretKey key = AntiDoSVisitorTokenService.parseOrGenerateKey("test-secret-key-ua");
+		AntiDoSVisitorTokenService service = new AntiDoSVisitorTokenService(key);
+		byte[] subnet = new byte[]{(byte) 192, (byte) 168, 1, 0};
+		long now = 1700000000000L;
+		long ttl = 900_000L;
+
+		String uaChrome = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
+		String uaFirefox = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/119.0";
+		int uaHashChrome = AntiDoSVisitorTokenService.computeUserAgentHash32(uaChrome);
+		int uaHashFirefox = AntiDoSVisitorTokenService.computeUserAgentHash32(uaFirefox);
+		assertNotEquals(0, uaHashChrome);
+		assertNotEquals(0, uaHashFirefox);
+		assertNotEquals(uaHashChrome, uaHashFirefox);
+
+		// Issue V2 token bound to Chrome UA
+		String token = service.createToken(subnet, uaHashChrome, 0, ttl, now);
+
+		// 1. Same UA -> Valid, no mismatch
+		TokenData match = service.validateToken(token, subnet, uaHashChrome, true, now + 1000L);
+		assertTrue(match.isValid());
+		assertEquals(TokenData.Status.VALID, match.status());
+		assertFalse(match.uaMismatch());
+		assertEquals(1, match.counter());
+
+		// 2. Different UA with enforceUserAgent = false -> Valid, but uaMismatch flagged
+		TokenData mismatchPermissive = service.validateToken(token, subnet, uaHashFirefox, false, now + 1000L);
+		assertTrue(mismatchPermissive.isValid());
+		assertEquals(TokenData.Status.VALID, mismatchPermissive.status());
+		assertTrue(mismatchPermissive.uaMismatch());
+		assertEquals(1, mismatchPermissive.counter());
+
+		// 3. Different UA with enforceUserAgent = true -> Invalid (Status.UA_MISMATCH), rejected as returning visitor
+		TokenData mismatchEnforced = service.validateToken(token, subnet, uaHashFirefox, true, now + 1000L);
+		assertFalse(mismatchEnforced.isValid());
+		assertEquals(TokenData.Status.UA_MISMATCH, mismatchEnforced.status());
+		assertTrue(mismatchEnforced.uaMismatch());
+	}
+
+	@Test
+	void testLegacyV1TokenBackwardCompatibility() throws Exception {
+		SecretKey key = AntiDoSVisitorTokenService.parseOrGenerateKey("test-secret-key-v1-compat");
+		AntiDoSVisitorTokenService service = new AntiDoSVisitorTokenService(key);
+		byte[] subnet = new byte[]{(byte) 10, 0, 0, 0};
+		long now = 1700000000000L;
+		long ttl = 600_000L;
+		long expiresAt = now + ttl;
+		int counter = 5;
+
+		// Craft a raw V1 token: [ver:1][ipLen:4][subnet:4B][exp:8B][counter:2B]
+		byte[] plaintextV1 = new byte[1 + 1 + subnet.length + 8 + 2];
+		plaintextV1[0] = 1; // TOKEN_VERSION_V1
+		plaintextV1[1] = (byte) subnet.length;
+		System.arraycopy(subnet, 0, plaintextV1, 2, subnet.length);
+		int off = 2 + subnet.length;
+		for (int i = 7; i >= 0; i--) {
+			plaintextV1[off++] = (byte) (expiresAt >>> (i * 8));
+		}
+		plaintextV1[off++] = (byte) ((counter + 1) >>> 8);
+		plaintextV1[off] = (byte) (counter + 1);
+
+		// Encrypt with AES-GCM
+		byte[] iv = new byte[12];
+		for (int i = 0; i < iv.length; i++) iv[i] = (byte) (i + 1);
+		javax.crypto.Cipher cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding");
+		cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, key, new javax.crypto.spec.GCMParameterSpec(128, iv));
+		byte[] ciphertext = cipher.doFinal(plaintextV1);
+
+		byte[] rawV1Token = new byte[iv.length + ciphertext.length];
+		System.arraycopy(iv, 0, rawV1Token, 0, iv.length);
+		System.arraycopy(ciphertext, 0, rawV1Token, iv.length, ciphertext.length);
+		String v1TokenString = Base64.getUrlEncoder().withoutPadding().encodeToString(rawV1Token);
+
+		// Validate V1 token in V2 service with enforceUserAgent = true
+		int anyUaHash = AntiDoSVisitorTokenService.computeUserAgentHash32("Some User Agent");
+		TokenData v1Result = service.validateToken(v1TokenString, subnet, anyUaHash, true, now + 1000L);
+
+		assertTrue(v1Result.isValid(), "V1 token should be accepted as valid by V2 service");
+		assertEquals(TokenData.Status.VALID, v1Result.status());
+		assertFalse(v1Result.uaMismatch(), "V1 token has no UA hash, so uaMismatch must be false");
+		assertEquals(6, v1Result.counter());
+		assertEquals(expiresAt, v1Result.expiresAtMillis());
+	}
+
+	@Test
+	void testComputeUserAgentHash32DeterministicAndNormalized() {
+		assertEquals(0, AntiDoSVisitorTokenService.computeUserAgentHash32(null));
+		assertEquals(0, AntiDoSVisitorTokenService.computeUserAgentHash32(""));
+		assertEquals(0, AntiDoSVisitorTokenService.computeUserAgentHash32("   "));
+
+		String ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)";
+		int h1 = AntiDoSVisitorTokenService.computeUserAgentHash32(ua);
+		int h2 = AntiDoSVisitorTokenService.computeUserAgentHash32("  " + ua + "  ");
+		assertEquals(h1, h2);
+		assertNotEquals(0, h1);
+	}
 }

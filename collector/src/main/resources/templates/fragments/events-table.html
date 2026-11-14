@@ -225,6 +225,9 @@
                                     <span
                                         th:text="${#numbers.formatDecimal(event.returningRatio(), 1, 0)} + '%'"></span>
                                     (<span th:text="${event.returningCount}"></span>)</span>
+                                <span th:if="${event.uaMismatchCount != null and event.uaMismatchCount > 0}"
+                                    class="badge badge-warning" style="font-size: 10px; padding: 1px 6px;"
+                                    th:title="${event.uaMismatchCount} + ' request(s) presented a visitor cookie with a mismatched User-Agent signature (potential UA rotation)'">⚠️ UA (<span th:text="${event.uaMismatchCount}"></span>)</span>
                                 <th:block th:if="${valveScopes != null and valveScopes.isUnauthenticatedOnly(event.serverId, event.valveName)}">
                                     <span th:if="${event.authenticatedCount != null and event.authenticatedCount == 0}"
                                         class="badge badge-secondary" style="font-size: 10px; padding: 1px 6px; border: 1px dashed rgba(245, 158, 11, 0.5);"
