@@ -966,6 +966,123 @@
                     </span>
                 </div>
 
+                <!-- Mini Heuristic Indicator Summary Panel -->
+                <div th:if="${analytics.userAgents != null and analytics.userAgents.indicatorStats != null and !analytics.userAgents.userAgents.empty}"
+                    class="ua-indicator-summary-panel"
+                    style="margin-bottom: 16px; padding: 12px 14px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: 6px;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                        <div
+                            style="font-size: 12px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                            <span>&#x2699;&#xFE0F;</span> Heuristic Risk Indicators &amp; Signal Distribution
+                        </div>
+                        <div style="font-size: 11px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                            <span class="badge badge-danger" style="font-size: 10px;"
+                                th:text="${analytics.userAgents.indicatorStats.suspiciousCount()} + ' Suspicious'">1
+                                Suspicious</span>
+                            <span class="badge badge-neutral" style="font-size: 10px;"
+                                th:text="${analytics.userAgents.indicatorStats.standardCount()} + ' Standard'">3
+                                Standard</span>
+                            <span class="badge badge-success" style="font-size: 10px;"
+                                th:text="${analytics.userAgents.indicatorStats.legitimateCount()} + ' Legitimate'">5
+                                Legitimate</span>
+                        </div>
+                    </div>
+
+                    <!-- 6 Responsive Indicator Metric Tiles -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px;">
+                        <!-- Res Zero-Auth -->
+                        <div style="padding: 8px 10px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 4px;"
+                            title="Unauthenticated residential traffic (≥10 residential samples, 0.0% authenticated sessions). Stealth rotating proxy scrapers.">
+                            <div
+                                style="font-size: 10.5px; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
+                                <span>&#x1F3E1;</span> Res Zero-Auth
+                            </div>
+                            <div style="margin-top: 3px; display: flex; align-items: baseline; gap: 6px;">
+                                <strong style="font-size: 14px;"
+                                    th:classappend="${analytics.userAgents.indicatorStats.residentialZeroAuthCount() > 0 ? 'text-danger' : ''}"
+                                    th:text="${analytics.userAgents.indicatorStats.residentialZeroAuthCount()}">0</strong>
+                                <span style="font-size: 10px; color: var(--text-muted);">UAs flagged</span>
+                            </div>
+                        </div>
+
+                        <!-- Mitigation Correlated -->
+                        <div style="padding: 8px 10px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 4px;"
+                            title="Observed from subnets or ASNs currently or recently under dynamic mitigation rules (e.g. AUTO_CARPET, ASN_BATCH).">
+                            <div
+                                style="font-size: 10.5px; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
+                                <span>&#x1F6E1;&#xFE0F;</span> Mitigation Match
+                            </div>
+                            <div style="margin-top: 3px; display: flex; align-items: baseline; gap: 6px;">
+                                <strong style="font-size: 14px;"
+                                    th:classappend="${analytics.userAgents.indicatorStats.mitigationMatchCount() > 0 ? 'text-warning' : ''}"
+                                    th:text="${analytics.userAgents.indicatorStats.mitigationMatchCount()}">0</strong>
+                                <span style="font-size: 10px; color: var(--text-muted);">UAs correlated</span>
+                            </div>
+                        </div>
+
+                        <!-- High Incident Rate -->
+                        <div style="padding: 8px 10px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 4px;"
+                            title="Rate-limiting incident ratio ≥50.0% (blocked via HTTP 429 or simulation marked).">
+                            <div
+                                style="font-size: 10.5px; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
+                                <span>&#x26A1;</span> Incidents &ge;50%
+                            </div>
+                            <div style="margin-top: 3px; display: flex; align-items: baseline; gap: 6px;">
+                                <strong style="font-size: 14px;"
+                                    th:classappend="${analytics.userAgents.indicatorStats.highIncidentCount() > 0 ? 'text-danger' : ''}"
+                                    th:text="${analytics.userAgents.indicatorStats.highIncidentCount()}">0</strong>
+                                <span style="font-size: 10px; color: var(--text-muted);">UAs high rate</span>
+                            </div>
+                        </div>
+
+                        <!-- Datacenter Heavy -->
+                        <div style="padding: 8px 10px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 4px;"
+                            title="Datacenter/hosting ratio ≥75.0% across resolved geo-locations.">
+                            <div
+                                style="font-size: 10.5px; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
+                                <span>&#x1F3E2;</span> Datacenter &ge;75%
+                            </div>
+                            <div style="margin-top: 3px; display: flex; align-items: baseline; gap: 6px;">
+                                <strong style="font-size: 14px;"
+                                    th:classappend="${analytics.userAgents.indicatorStats.datacenterCount() > 0 ? 'text-warning' : ''}"
+                                    th:text="${analytics.userAgents.indicatorStats.datacenterCount()}">0</strong>
+                                <span style="font-size: 10px; color: var(--text-muted);">UAs cloud hosted</span>
+                            </div>
+                        </div>
+
+                        <!-- Automated Signatures -->
+                        <div style="padding: 8px 10px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 4px;"
+                            title="Automated scraping/CLI tool signatures (curl, python, scrapy, etc.) or empty User-Agent headers.">
+                            <div
+                                style="font-size: 10.5px; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
+                                <span>&#x1F916;</span> Tool Signatures
+                            </div>
+                            <div style="margin-top: 3px; display: flex; align-items: baseline; gap: 6px;">
+                                <strong style="font-size: 14px;"
+                                    th:classappend="${analytics.userAgents.indicatorStats.automatedCount() > 0 ? 'text-danger' : ''}"
+                                    th:text="${analytics.userAgents.indicatorStats.automatedCount()}">0</strong>
+                                <span style="font-size: 10px; color: var(--text-muted);">UAs automated</span>
+                            </div>
+                        </div>
+
+                        <!-- Verified Authenticated -->
+                        <div style="padding: 8px 10px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 4px;"
+                            title="Confirmed legitimate browsers observed carrying authenticated user sessions.">
+                            <div
+                                style="font-size: 10.5px; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
+                                <span>&#x2705;</span> Authenticated
+                            </div>
+                            <div style="margin-top: 3px; display: flex; align-items: baseline; gap: 6px;">
+                                <strong style="font-size: 14px;"
+                                    th:classappend="${analytics.userAgents.indicatorStats.authenticatedCount() > 0 ? 'text-success' : ''}"
+                                    th:text="${analytics.userAgents.indicatorStats.authenticatedCount()}">0</strong>
+                                <span style="font-size: 10px; color: var(--text-muted);">UAs verified</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div th:if="${analytics.userAgents == null or analytics.userAgents.userAgents.empty}"
                     style="text-align: center; padding: 32px 16px; color: var(--text-muted);">
                     <div style="font-size: 28px; margin-bottom: 8px;">&#x1F50E;</div>
@@ -998,7 +1115,8 @@
                                         <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                                             <span th:utext="${item.icon()}">&#x1F310;</span>
                                             <strong th:text="${item.displayName()}"
-                                                style="font-size: 12.5px; color: var(--text-primary);">Chrome Desktop</strong>
+                                                style="font-size: 12.5px; color: var(--text-primary);">Chrome
+                                                Desktop</strong>
                                             <span th:if="${item.isAutomated()}" class="badge badge-warning"
                                                 style="font-size: 9.5px; padding: 1px 5px;">Automated</span>
                                             <span th:if="${item.hasAuthenticatedTraffic()}" class="badge badge-success"
@@ -1017,8 +1135,7 @@
 
                                         <!-- UA code snippet with copy button and 2-line clamp -->
                                         <div style="display: flex; align-items: flex-start; gap: 6px;">
-                                            <code class="ua-code-clamp"
-                                                th:text="${item.userAgent()}"
+                                            <code class="ua-code-clamp" th:text="${item.userAgent()}"
                                                 th:title="${item.userAgent()}">Mozilla/5.0...</code>
                                             <button type="button" class="btn-copy-sm"
                                                 th:attr="onclick='copyText(\'' + ${#strings.escapeJavaScript(item.userAgent())} + '\', this)'"
@@ -1079,18 +1196,61 @@
                                     </div>
                                 </td>
                                 <td>
-                                    <div th:if="${item.isSuspicious()}"
-                                        style="display: flex; flex-direction: column; gap: 2px;">
-                                        <span class="badge badge-danger"
-                                            style="align-self: flex-start; font-size: 10.5px;">Suspicious</span>
-                                        <span style="font-size: 11px; color: var(--color-danger); line-height: 1.3;"
-                                            th:text="${item.suspicionReason()}">High incident rate</span>
-                                    </div>
-                                    <div th:unless="${item.isSuspicious()}">
-                                        <span th:if="${item.hasAuthenticatedTraffic()}" class="badge badge-success"
-                                            style="font-size: 10.5px;">Legitimate Traffic</span>
-                                        <span th:unless="${item.hasAuthenticatedTraffic()}" class="badge badge-neutral"
-                                            style="font-size: 10.5px;">Standard</span>
+                                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                                        <!-- Primary Status Badge -->
+                                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                            <div th:if="${item.isSuspicious()}">
+                                                <span class="badge badge-danger"
+                                                    style="font-size: 10.5px;">Suspicious</span>
+                                            </div>
+                                            <div th:unless="${item.isSuspicious()}">
+                                                <span th:if="${item.hasAuthenticatedTraffic()}"
+                                                    class="badge badge-success" style="font-size: 10.5px;">Legitimate
+                                                    Traffic</span>
+                                                <span th:unless="${item.hasAuthenticatedTraffic()}"
+                                                    class="badge badge-neutral"
+                                                    style="font-size: 10.5px;">Standard</span>
+                                            </div>
+                                        </div>
+
+                                        <!-- Micro Indicator Badges for Triggered Signals -->
+                                        <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px;">
+                                            <span th:if="${item.hasResidentialZeroAuthAnomaly()}"
+                                                class="badge badge-danger" style="font-size: 9.5px; padding: 1px 5px;"
+                                                title="Residential Zero-Auth anomaly: Unauthenticated consumer ISP traffic">
+                                                <span>&#x1F3E1;</span> Res Zero-Auth
+                                            </span>
+                                            <span th:if="${item.hasMitigationMatch()}" class="badge badge-warning"
+                                                style="font-size: 9.5px; padding: 1px 5px;"
+                                                th:title="${item.mitigationMatchDetails() != null ? item.mitigationMatchDetails() : 'Origin correlated with active mitigation'}">
+                                                <span>&#x1F6E1;&#xFE0F;</span> Mitigation Match
+                                            </span>
+                                            <span th:if="${item.hasAutomatedSignature()}" class="badge badge-danger"
+                                                style="font-size: 9.5px; padding: 1px 5px;"
+                                                title="Automated scraping/CLI tool library or crawler signature">
+                                                <span>&#x1F916;</span> Tool Sig
+                                            </span>
+                                            <span th:if="${item.hasHighIncidentRate()}" class="badge badge-danger"
+                                                style="font-size: 9.5px; padding: 1px 5px;"
+                                                title="High incident rate (≥50% blocked or marked)">
+                                                <span>&#x26A1;</span> Incidents &ge;50%
+                                            </span>
+                                            <span th:if="${item.hasDatacenterConcentration()}"
+                                                class="badge badge-warning" style="font-size: 9.5px; padding: 1px 5px;"
+                                                title="Datacenter concentration (≥75% hosting traffic)">
+                                                <span>&#x1F3E2;</span> Datacenter
+                                            </span>
+                                            <span th:if="${item.hasAuthenticatedTraffic()}" class="badge badge-success"
+                                                style="font-size: 9.5px; padding: 1px 5px;"
+                                                title="Confirmed authenticated user sessions observed">
+                                                <span>&#x2714;</span> Auth
+                                            </span>
+                                        </div>
+
+                                        <!-- Detailed suspicion rationale if present -->
+                                        <div th:if="${item.suspicionReason() != null and !item.suspicionReason().isBlank()}"
+                                            style="font-size: 11px; color: var(--color-danger); line-height: 1.3;"
+                                            th:text="${item.suspicionReason()}">High incident rate</div>
                                     </div>
                                 </td>
                             </tr>

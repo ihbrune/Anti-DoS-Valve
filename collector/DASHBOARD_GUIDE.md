@@ -304,10 +304,43 @@ The **User-Agents** focus tab cross-correlates request header samples captured b
 3. **Incident Rate Correlation:** Quantifies the proportion of samples associated with HTTP 429 rate blocks or simulation marks:
    $$\text{Incident Rate} = \frac{\text{Blocked Samples} + \text{Marked Samples}}{\text{Total Samples}} \times 100\%$$
 4. **Origin ASNs & Subnet Footprints:** For suspicious or automated User-Agents, the dashboard lists the top Autonomous Systems (e.g. Hetzner, OVH, DigitalOcean) and CIDR subnets from which the User-Agent originated, allowing operators to cross-check with ASN notes or prepare targeted mitigation rules.
-5. **Heuristic Suspicion Badges:**
-   * 🔴 `SUSPICIOUS`: Automatically assigned to known scraping libraries, headless automation tools, or User-Agents exhibiting high incident rates combined with pure cloud hosting / datacenter infrastructure.
-   * 🟢 `LEGITIMATE`: Browsers exhibiting confirmed authenticated logins and low incident rates across consumer/residential ASNs.
-   * ⚪ `NEUTRAL`: Unclassified or moderate incident rates with mixed traffic.
+5. **Heuristic Evaluation Engine & Suspicion Badges:**
+   Each observed User-Agent is assessed by the analytics engine using a deterministic multi-signal heuristic:
+   
+   * **Classification Decision Tree (`isSuspicious`):**
+     A User-Agent is flagged as 🔴 **`Suspicious`** if **any** of the following conditions are met:
+     1. **Automated Signature:** The parsed family is an automated tool, scraping library, or known bot (`family.isAutomated() == true`, e.g. `python-requests`, `curl`, `Scrapy`, `Go-http-client`, etc.).
+     2. **High Incident Ratio:** The ratio of rate-limiting incidents (blocks + marks) relative to total captured telemetry events is $\ge 50.0\%$ (with at least 2 incident events):
+        $$\text{Incident Ratio} = \frac{\text{Blocked Samples} + \text{Marked Samples}}{\text{Total Telemetry Events}} \ge 50\%$$
+     3. **Datacenter Concentration:** The proportion of datacenter/cloud infrastructure origins relative to resolved residential and datacenter origins is $\ge 75.0\%$ (with at least 2 datacenter events):
+        $$\text{Datacenter Ratio} = \frac{\text{Datacenter Samples}}{\text{Datacenter Samples} + \text{Residential Samples}} \ge 75\%$$
+     4. **Empty User-Agent:** The User-Agent header is missing or blank (`UserAgentFamily.EMPTY`).
+     5. **Residential Zero-Auth Anomaly:** The User-Agent demonstrates substantial consumer residential presence ($\ge 10$ residential samples, or $\ge 25$ samples overall with $\ge 50\%$ residential share) combined with strictly **$0.0\%$ authenticated traffic** (`authenticatedCount == 0`). This reliably detects stealth scrapers rotating through residential broadband proxies while spoofing popular desktop or mobile browser User-Agents.
+     6. **Active / Recent Mitigation Correlation:** The User-Agent originates from subnets or ASNs that are currently or were recently subjected to dynamic mitigation rules (e.g. `AUTO_CARPET` or `ASN_BATCH` blocks).
+
+   * **Heuristic Risk Indicators & Signal Distribution Mini-Display:**
+     Directly above the forensic User-Agent table, an indicator breakdown bar provides operators with an instant quantitative pulse of fleet-wide heuristic activity:
+     * **Summary Tally Badges:** Real-time counts of `Suspicious`, `Standard`, and `Legitimate` User-Agents within the analytical window.
+     * **🏡 Res Zero-Auth Tile:** Number of User-Agents flagged for unauthenticated residential proxy clusters.
+     * **🛡️ Mitigation Match Tile:** Number of User-Agents exhibiting origins correlated with active or recent fleet mitigation rules.
+     * **⚡ Incidents $\ge 50\%$ Tile:** Number of User-Agents crossing the rate-limiting block/mark threshold.
+     * **🏢 Datacenter $\ge 75\%$ Tile:** Number of User-Agents dominated by cloud and hosting provider ASNs.
+     * **🤖 Tool Signatures Tile:** Number of User-Agents identifying as scripting libraries, CLI tools, or missing headers.
+     * **✅ Authenticated Tile:** Number of verified browser User-Agents exhibiting authentic user sessions.
+
+   * **UI Assessment Badge Resolution:**
+     Based on the suspicion calculation and authentication telemetry, each table row displays a primary badge and micro indicator chips:
+     * 🔴 **`Suspicious`** (with detailed rationale): Triggered when `isSuspicious == true`. Accompanied by micro-chips highlighting every triggered indicator (e.g. `[🏡 Res Zero-Auth]`, `[🛡️ Mitigation Match]`, `[🤖 Tool Sig]`, `[⚡ Incidents ≥50%]`, `[🏢 Datacenter]`).
+     * 🟢 **`Legitimate Traffic`**: Triggered when `isSuspicious == false` **AND** at least one authenticated request sample has been recorded (`authenticatedCount > 0`). Accompanied by the `[✔ Auth]` micro-chip.
+     * ⚪ **`Standard`**: Neutral fallback applied when `isSuspicious == false` **BUT** zero authenticated sessions have been observed (`authenticatedCount == 0`). Represents unauthenticated, non-automated web traffic that has not crossed incident, residential anomaly, or mitigation thresholds.
+
+#### Forensic Analysis: The Residential Proxy Scraper Blind Spot
+When reviewing User-Agent telemetry during distributed web scraping or carpet attacks, operators should be aware of why sophisticated botnets can initially appear with the ⚪ **`Standard`** badge:
+1. **Browser User-Agent Spoofing:** Modern botnets configure standard consumer desktop or mobile User-Agent strings (e.g., `Mozilla/5.0 ... Chrome/146.0.0.0 Safari/537.36`), cleanly bypassing the `family.isAutomated()` check.
+2. **Residential IP Rotation (Bypassing Datacenter Ratio):** By routing scraper traffic through residential proxy networks (e.g., Comcast `AS33659`, RCN `AS6079`), the traffic is categorized as `RESIDENTIAL`. Consequently, the datacenter ratio stays far below the $75\%$ threshold (often $\le 15\%$).
+3. **Active Sampling Dilution (Bypassing Incident Ratio):** When `activeSampleThreshold` is enabled (e.g. at 20 requests), the Valve samples high-volume requests *before* the IP exceeds the blocking threshold. If the bot distributes requests across hundreds of subnets (keeping each IP below the hard block threshold), the vast majority of telemetry events are logged as unblocked `ACTIVE` samples. For example, 31 blocked events out of 620 total sampled events yields an incident ratio of only $5.0\%$, well below the $50\%$ threshold.
+4. **Key Forensic Indicator — Zero Authentication:**
+   Even though the User-Agent mimics a popular browser, **`0.0% Auth`** across hundreds of residential samples is a strong forensic indicator of an unauthenticated scraper cluster. Real human browser traffic on interactive web applications almost invariably exhibits a non-zero authenticated session ratio. Operators can cross-reference the top origin subnets shown in the table with active mitigation rules or known residential attack networks.
 
 * Programmatic access is available via REST at `/api/v1/analytics/user-agents`.
 

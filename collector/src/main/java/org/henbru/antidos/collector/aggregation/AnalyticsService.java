@@ -5,14 +5,18 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import org.henbru.antidos.collector.advisor.AdvisorReport;
 import org.henbru.antidos.collector.annotation.NetworkAnnotationService;
 import org.henbru.antidos.collector.model.AnalyticsDashboardDto;
 import org.henbru.antidos.collector.model.ClientType;
+import org.henbru.antidos.collector.model.MitigationRule;
 import org.henbru.antidos.collector.model.NetworkAnnotation;
 import org.henbru.antidos.collector.model.SubnetScatterPoint;
 import org.henbru.antidos.collector.model.TimelinePoint;
@@ -20,9 +24,11 @@ import org.henbru.antidos.collector.model.TrafficCompositionPoint;
 import org.henbru.antidos.collector.model.UserAgentAnalyticsDto;
 import org.henbru.antidos.collector.model.UserAgentFamily;
 import org.henbru.antidos.collector.model.UserAgentFamilySummary;
+import org.henbru.antidos.collector.model.UserAgentIndicatorStats;
 import org.henbru.antidos.collector.model.UserAgentItemSummary;
 import org.henbru.antidos.collector.model.UserAgentOriginSummary;
 import org.henbru.antidos.collector.storage.ClientEventRepository;
+import org.henbru.antidos.collector.storage.MitigationRuleRepository;
 import org.henbru.antidos.collector.storage.MonitoredValveRepository;
 import org.henbru.antidos.collector.storage.SubnetRollupRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +47,7 @@ public class AnalyticsService {
 	private final org.henbru.antidos.collector.advisor.AdvisorService advisorService;
 	private final org.henbru.antidos.collector.storage.ClientEventRepository clientEventRepository;
 	private final MonitoredValveRepository monitoredValveRepository;
+	private final MitigationRuleRepository mitigationRuleRepository;
 
 	@Autowired
 	public AnalyticsService(
@@ -49,7 +56,8 @@ public class AnalyticsService {
 			@Autowired(required = false) NetworkAnnotationService networkAnnotationService,
 			@Autowired(required = false) org.henbru.antidos.collector.advisor.AdvisorService advisorService,
 			@Autowired(required = false) org.henbru.antidos.collector.storage.ClientEventRepository clientEventRepository,
-			@Autowired(required = false) MonitoredValveRepository monitoredValveRepository
+			@Autowired(required = false) MonitoredValveRepository monitoredValveRepository,
+			@Autowired(required = false) MitigationRuleRepository mitigationRuleRepository
 	) {
 		this.subnetRollupRepository = subnetRollupRepository;
 		this.rollupAggregationService = rollupAggregationService;
@@ -57,6 +65,18 @@ public class AnalyticsService {
 		this.advisorService = advisorService;
 		this.clientEventRepository = clientEventRepository;
 		this.monitoredValveRepository = monitoredValveRepository;
+		this.mitigationRuleRepository = mitigationRuleRepository;
+	}
+
+	public AnalyticsService(
+			SubnetRollupRepository subnetRollupRepository,
+			RollupAggregationService rollupAggregationService,
+			NetworkAnnotationService networkAnnotationService,
+			org.henbru.antidos.collector.advisor.AdvisorService advisorService,
+			org.henbru.antidos.collector.storage.ClientEventRepository clientEventRepository,
+			MonitoredValveRepository monitoredValveRepository
+	) {
+		this(subnetRollupRepository, rollupAggregationService, networkAnnotationService, advisorService, clientEventRepository, monitoredValveRepository, null);
 	}
 
 	public AnalyticsService(
@@ -66,7 +86,7 @@ public class AnalyticsService {
 			org.henbru.antidos.collector.advisor.AdvisorService advisorService,
 			org.henbru.antidos.collector.storage.ClientEventRepository clientEventRepository
 	) {
-		this(subnetRollupRepository, rollupAggregationService, networkAnnotationService, advisorService, clientEventRepository, null);
+		this(subnetRollupRepository, rollupAggregationService, networkAnnotationService, advisorService, clientEventRepository, null, null);
 	}
 
 	public AnalyticsService(
@@ -318,6 +338,40 @@ public class AnalyticsService {
 		int totalActiveEvents = 0;
 		int totalAuthenticatedSamples = 0;
 
+		Set<String> activeMitigatedCidrs = new HashSet<>();
+		Map<Long, String> activeMitigatedAsns = new HashMap<>();
+
+		if (mitigationRuleRepository != null) {
+			try {
+				Instant now = Instant.now();
+				List<MitigationRule> activeRules = mitigationRuleRepository.findActiveRules(now);
+				for (MitigationRule r : activeRules) {
+					if (r.cidr() != null && !r.cidr().isBlank()) {
+						activeMitigatedCidrs.add(r.cidr().trim());
+					}
+					if (r.asn() != null && r.asn() > 0) {
+						String label = r.asnOrganization() != null && !r.asnOrganization().isBlank()
+								? r.asnOrganization().trim() : ("AS" + r.asn());
+						activeMitigatedAsns.putIfAbsent(r.asn(), label);
+					}
+				}
+
+				List<MitigationRule> windowRules = mitigationRuleRepository.findRulesCreatedBetween(from, to);
+				for (MitigationRule r : windowRules) {
+					if (r.cidr() != null && !r.cidr().isBlank()) {
+						activeMitigatedCidrs.add(r.cidr().trim());
+					}
+					if (r.asn() != null && r.asn() > 0) {
+						String label = r.asnOrganization() != null && !r.asnOrganization().isBlank()
+								? r.asnOrganization().trim() : ("AS" + r.asn());
+						activeMitigatedAsns.putIfAbsent(r.asn(), label);
+					}
+				}
+			} catch (Exception ignored) {
+				// Non-fatal if mitigation repository is unavailable
+			}
+		}
+
 		Map<UserAgentFamily, FamilyAggregator> familyMap = new EnumMap<>(UserAgentFamily.class);
 		List<UserAgentItemSummary> items = new ArrayList<>();
 
@@ -342,10 +396,41 @@ public class AnalyticsService {
 			double incidentRatio = row.eventCount() > 0 ? (totalIncidents * 100.0 / row.eventCount()) : 0.0;
 			int totalGeo = row.datacenterCount() + row.residentialCount();
 			double dcRatio = totalGeo > 0 ? (row.datacenterCount() * 100.0 / totalGeo) : 0.0;
+			double resRatio = totalGeo > 0 ? (row.residentialCount() * 100.0 / totalGeo) : 0.0;
+
+			// Top origins (subnets and ASNs)
+			List<UserAgentOriginSummary> origins = clientEventRepository.findUserAgentTopOrigins(
+					row.userAgent(), from, to, servers, valves, 6);
+
+			boolean mitigationMatch = false;
+			String mitigationDetails = null;
+			if (!activeMitigatedCidrs.isEmpty() || !activeMitigatedAsns.isEmpty()) {
+				for (UserAgentOriginSummary origin : origins) {
+					if (origin.subnetGroup() != null && activeMitigatedCidrs.contains(origin.subnetGroup().trim())) {
+						mitigationMatch = true;
+						mitigationDetails = "Subnet " + origin.subnetGroup().trim() + " under active/recent mitigation";
+						break;
+					}
+					if (origin.asn() != null && activeMitigatedAsns.containsKey(origin.asn())) {
+						mitigationMatch = true;
+						mitigationDetails = "ASN " + origin.asn() + " (" + activeMitigatedAsns.get(origin.asn()) + ") under active/recent mitigation";
+						break;
+					}
+				}
+			}
+
+			boolean residentialZeroAuth = false;
+			if (row.residentialCount() >= 10 && row.authenticatedCount() == 0 && (resRatio >= 50.0 || row.residentialCount() >= 25)) {
+				residentialZeroAuth = true;
+			}
 
 			if (family.isAutomated()) {
 				isSuspicious = true;
 				reasons.add(family == UserAgentFamily.BOT_CRAWLER ? "Crawler signature" : "Scraper / tool library signature");
+			}
+			if (family == UserAgentFamily.EMPTY) {
+				isSuspicious = true;
+				reasons.add("Empty User-Agent header");
 			}
 			if (incidentRatio >= 50.0 && totalIncidents >= 2) {
 				isSuspicious = true;
@@ -355,14 +440,14 @@ public class AnalyticsService {
 				isSuspicious = true;
 				reasons.add(String.format(Locale.ROOT, "Datacenter concentration (%.1f%%)", dcRatio));
 			}
-			if (family == UserAgentFamily.EMPTY) {
+			if (residentialZeroAuth) {
 				isSuspicious = true;
-				reasons.add("Empty User-Agent header");
+				reasons.add(String.format(Locale.ROOT, "Residential Zero-Auth anomaly (%d res samples, 0.0%% auth)", row.residentialCount()));
 			}
-
-			// Top origins (subnets and ASNs)
-			List<UserAgentOriginSummary> origins = clientEventRepository.findUserAgentTopOrigins(
-					row.userAgent(), from, to, servers, valves, 4);
+			if (mitigationMatch) {
+				isSuspicious = true;
+				reasons.add(mitigationDetails != null ? mitigationDetails : "Origin in mitigated network");
+			}
 
 			items.add(new UserAgentItemSummary(
 					row.userAgent(),
@@ -381,9 +466,53 @@ public class AnalyticsService {
 					Math.round(dcRatio * 10.0) / 10.0,
 					isSuspicious,
 					String.join(" • ", reasons),
-					origins
+					origins,
+					residentialZeroAuth,
+					mitigationMatch,
+					mitigationDetails
 			));
 		}
+
+		// Calculate indicator stats
+		int suspiciousCount = 0;
+		int standardCount = 0;
+		int legitimateCount = 0;
+		int residentialZeroAuthCount = 0;
+		int mitigationMatchCount = 0;
+		int highIncidentCount = 0;
+		int datacenterCount = 0;
+		int automatedCount = 0;
+		int authenticatedCount = 0;
+
+		for (UserAgentItemSummary item : items) {
+			if (item.isSuspicious()) {
+				suspiciousCount++;
+			} else if (item.hasAuthenticatedTraffic()) {
+				legitimateCount++;
+			} else {
+				standardCount++;
+			}
+
+			if (item.hasResidentialZeroAuthAnomaly()) residentialZeroAuthCount++;
+			if (item.hasMitigationMatch()) mitigationMatchCount++;
+			if (item.hasHighIncidentRate()) highIncidentCount++;
+			if (item.hasDatacenterConcentration()) datacenterCount++;
+			if (item.hasAutomatedSignature()) automatedCount++;
+			if (item.hasAuthenticatedTraffic()) authenticatedCount++;
+		}
+
+		UserAgentIndicatorStats indicatorStats = new UserAgentIndicatorStats(
+				items.size(),
+				suspiciousCount,
+				standardCount,
+				legitimateCount,
+				residentialZeroAuthCount,
+				mitigationMatchCount,
+				highIncidentCount,
+				datacenterCount,
+				automatedCount,
+				authenticatedCount
+		);
 
 		// Family summaries
 		List<UserAgentFamilySummary> families = new ArrayList<>();
@@ -434,7 +563,8 @@ public class AnalyticsService {
 				hasLowConfidence,
 				confidenceMessage,
 				families,
-				items
+				items,
+				indicatorStats
 		);
 	}
 

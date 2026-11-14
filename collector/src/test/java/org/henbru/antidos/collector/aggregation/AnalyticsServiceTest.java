@@ -355,5 +355,73 @@ class AnalyticsServiceTest {
 
 		// Verify families
 		assertEquals(2, dto.families().size());
+
+		// Verify indicator stats
+		assertNotNull(dto.indicatorStats());
+		assertEquals(2, dto.indicatorStats().totalEvaluated());
+		assertEquals(1, dto.indicatorStats().suspiciousCount());
+		assertEquals(1, dto.indicatorStats().legitimateCount());
+		assertEquals(0, dto.indicatorStats().standardCount());
+		assertEquals(1, dto.indicatorStats().automatedCount());
+		assertEquals(1, dto.indicatorStats().authenticatedCount());
+	}
+
+	@Test
+	void testGetUserAgentAnalytics_WithResidentialZeroAuthAndMitigationMatch() {
+		ClientEventRepository clientRepo = mock(ClientEventRepository.class);
+		MonitoredValveRepository valveRepo = mock(MonitoredValveRepository.class);
+		org.henbru.antidos.collector.storage.MitigationRuleRepository mitigationRepo =
+				mock(org.henbru.antidos.collector.storage.MitigationRuleRepository.class);
+
+		AnalyticsService service = new AnalyticsService(
+				rollupRepository, rollupAggregationService, null, null, clientRepo, valveRepo, mitigationRepo);
+
+		String spoofedChrome = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36";
+		ClientEventRepository.RawUserAgentAggregation scraperUa = new ClientEventRepository.RawUserAgentAggregation(
+				spoofedChrome, 7500L, 620, 31, 0, 589, 0, 45, 12, 31, 214
+		);
+
+		when(clientRepo.findUserAgentAggregations(any(), any(), any(), any(), anyInt()))
+				.thenReturn(List.of(scraperUa));
+
+		when(clientRepo.findUserAgentTopOrigins(eq(spoofedChrome), any(), any(), any(), any(), anyInt()))
+				.thenReturn(List.of(
+						new UserAgentOriginSummary("188.223.184.0/24", 6079L, "RCN", 62L, 5),
+						new UserAgentOriginSummary("205.188.173.0/24", 6079L, "RCN", 49L, 4)
+				));
+
+		Instant now = Instant.now();
+		org.henbru.antidos.collector.model.MitigationRule carpetRule = new org.henbru.antidos.collector.model.MitigationRule(
+				101L, "188.223.184.0/24", 4, 24, "ALL", "ACTIVE", "AUTO_CARPET", "AUTO-ASN-6079",
+				"Carpet attack from ASN 6079 (RCN)", 6079L, "RCN", now.minusSeconds(3600), now, now.plusSeconds(3600),
+				null, null, 100L, 25, now, "OBSERVING"
+		);
+		when(mitigationRepo.findActiveRules(any())).thenReturn(List.of(carpetRule));
+		when(mitigationRepo.findRulesCreatedBetween(any(), any())).thenReturn(List.of());
+
+		UserAgentAnalyticsDto dto = service.getUserAgentAnalytics(24, null, null, null, null);
+
+		assertNotNull(dto);
+		assertEquals(1, dto.userAgents().size());
+		UserAgentItemSummary item = dto.userAgents().get(0);
+
+		assertEquals(spoofedChrome, item.userAgent());
+		assertEquals(UserAgentFamily.CHROME_DESKTOP, item.family());
+		assertTrue(item.isSuspicious(), "Spoofed Chrome must be flagged as suspicious due to residential zero-auth and mitigation match");
+		assertTrue(item.hasResidentialZeroAuthAnomaly(), "Residential zero auth anomaly must be detected");
+		assertTrue(item.hasMitigationMatch(), "Mitigation match must be detected");
+		assertFalse(item.hasAuthenticatedTraffic(), "Must have zero authenticated sessions");
+		assertTrue(item.suspicionReason().contains("Residential Zero-Auth anomaly"));
+		assertTrue(item.suspicionReason().contains("mitigation"));
+
+		// Indicator stats
+		assertNotNull(dto.indicatorStats());
+		assertEquals(1, dto.indicatorStats().totalEvaluated());
+		assertEquals(1, dto.indicatorStats().suspiciousCount());
+		assertEquals(0, dto.indicatorStats().standardCount());
+		assertEquals(0, dto.indicatorStats().legitimateCount());
+		assertEquals(1, dto.indicatorStats().residentialZeroAuthCount());
+		assertEquals(1, dto.indicatorStats().mitigationMatchCount());
+		assertEquals(0, dto.indicatorStats().automatedCount());
 	}
 }
