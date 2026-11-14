@@ -30,6 +30,7 @@ public class EnrichmentConfig {
 		map.put("bingbot", new CrawlerFeedConfig("bingbot", "Bingbot", "SEARCH_ENGINE", "https://www.bing.com/toolbox/bingbot.json"));
 		map.put("applebot", new CrawlerFeedConfig("applebot", "Applebot", "SEARCH_ENGINE", "https://search.developer.apple.com/applebot.json"));
 		map.put("duckduckbot", new CrawlerFeedConfig("duckduckbot", "DuckDuckBot", "SEARCH_ENGINE", "https://duckduckgo.com/duckduckbot.json"));
+		map.put("linkupbot", new CrawlerFeedConfig("linkupbot", "LinkupBot", "SEARCH_ENGINE", "https://www.linkup.so/linkupbot-ips.txt"));
 		map.put("openai-gptbot", new CrawlerFeedConfig("openai-gptbot", "OpenAI GPTBot", "AI_CRAWLER", "https://openai.com/gptbot.json"));
 		map.put("openai-searchbot", new CrawlerFeedConfig("openai-searchbot", "OpenAI SearchBot", "AI_CRAWLER", "https://openai.com/searchbot.json"));
 		map.put("openai-chatgpt-user", new CrawlerFeedConfig("openai-chatgpt-user", "ChatGPT User", "AI_CRAWLER", "https://openai.com/chatgpt-user.json"));

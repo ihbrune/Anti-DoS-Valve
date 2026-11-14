@@ -206,6 +206,12 @@ class CrawlerSyncServiceTest {
 
 		assertTrue(defaults.containsKey("perplexitybot"));
 		assertTrue(defaults.containsKey("duckduckbot"));
+		assertTrue(defaults.containsKey("linkupbot"));
+		var linkupConfig = defaults.get("linkupbot");
+		assertEquals("LinkupBot", linkupConfig.getName());
+		assertEquals("SEARCH_ENGINE", linkupConfig.getCategory());
+		assertEquals("https://www.linkup.so/linkupbot-ips.txt", linkupConfig.getUrl());
+		assertTrue(linkupConfig.isEnabled());
 		assertTrue(defaults.containsKey("openai-searchbot"));
 	}
 

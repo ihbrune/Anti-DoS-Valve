@@ -69,6 +69,8 @@ class UserAgentClassifierTest {
 				"ClaudeBot/1.0; (+https://www.anthropic.com/claudebot)"));
 		assertEquals(UserAgentFamily.BOT_CRAWLER, UserAgentClassifier.classify(
 				"Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.0; +https://openai.com/gptbot)"));
+		assertEquals(UserAgentFamily.BOT_CRAWLER, UserAgentClassifier.classify(
+				"LinkupBot/1.0 (LinkupBot for web indexing; https://www.linkup.so/bot; bot@linkup.so)"));
 
 		assertTrue(UserAgentFamily.BOT_CRAWLER.isAutomated());
 	}

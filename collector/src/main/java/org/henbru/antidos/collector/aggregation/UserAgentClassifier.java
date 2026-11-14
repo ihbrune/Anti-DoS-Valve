@@ -38,7 +38,8 @@ public final class UserAgentClassifier {
 				|| lower.contains("chatgpt") || lower.contains("applebot") || lower.contains("baiduspider")
 				|| lower.contains("duckduckbot") || lower.contains("facebookexternalhit")
 				|| lower.contains("semrush") || lower.contains("ahrefs") || lower.contains("mj12bot")
-				|| lower.contains("dotbot") || lower.contains("seznambot") || lower.contains("crawler")) {
+				|| lower.contains("dotbot") || lower.contains("seznambot") || lower.contains("linkupbot")
+				|| lower.contains("crawler")) {
 			return UserAgentFamily.BOT_CRAWLER;
 		}
 

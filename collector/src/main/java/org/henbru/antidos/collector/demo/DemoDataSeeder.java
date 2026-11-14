@@ -685,6 +685,11 @@ public class DemoDataSeeder {
 				now.minus(2, ChronoUnit.HOURS), "SUCCESS", 64, null
 		));
 		crawlerFeedRepository.upsert(new org.henbru.antidos.collector.model.CrawlerFeed(
+				"linkupbot", "LinkupBot", "SEARCH_ENGINE",
+				"https://www.linkup.so/linkupbot-ips.txt",
+				now.minus(2, ChronoUnit.HOURS), "SUCCESS", 1, null
+		));
+		crawlerFeedRepository.upsert(new org.henbru.antidos.collector.model.CrawlerFeed(
 				"openai-gptbot", "OpenAI GPTBot", "AI_CRAWLER",
 				"https://openai.com/gptbot.json",
 				now.minus(1, ChronoUnit.HOURS), "SUCCESS", 86, null

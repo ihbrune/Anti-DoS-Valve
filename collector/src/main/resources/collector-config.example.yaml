@@ -201,8 +201,8 @@ collector:
     crawler-retry-cron: "0 15 * * * *"
 
     # Crawler, Privacy Relay & Anonymizer IP range feeds:
-    # Default feeds out-of-the-box (Googlebot, Bingbot, Applebot, DuckDuckBot, OpenAI, Anthropic ClaudeBot,
-    # PerplexityBot, Apple iCloud Private Relay, Tor Exit Nodes)
+    # Default feeds out-of-the-box (Googlebot, Bingbot, Applebot, DuckDuckBot, LinkupBot, OpenAI,
+    # Anthropic ClaudeBot, PerplexityBot, Apple iCloud Private Relay, Tor Exit Nodes)
     # are defined in application.yaml and automatically merged with your custom feeds below.
     # Supported categories: SEARCH_ENGINE, AI_CRAWLER, PRIVACY_RELAY, TOR_EXIT_NODE
     # (Feeds with unknown categories will log a warning and remain disabled as INVALID_CONFIG).

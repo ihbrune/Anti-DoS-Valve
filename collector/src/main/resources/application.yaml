@@ -94,6 +94,11 @@ collector:
         category: "SEARCH_ENGINE"
         url: "https://duckduckgo.com/duckduckbot.json"
         enabled: true
+      linkupbot:
+        name: "LinkupBot"
+        category: "SEARCH_ENGINE"
+        url: "https://www.linkup.so/linkupbot-ips.txt"
+        enabled: true
       openai-gptbot:
         name: "OpenAI GPTBot"
         category: "AI_CRAWLER"
