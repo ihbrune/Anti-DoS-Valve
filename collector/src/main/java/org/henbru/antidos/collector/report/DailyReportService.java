@@ -29,6 +29,7 @@ import java.util.stream.Collectors;
 
 import org.henbru.antidos.collector.annotation.AnnotationMarkdownService;
 import org.henbru.antidos.collector.config.CollectorProperties;
+import org.henbru.antidos.collector.model.ClientType;
 import org.henbru.antidos.collector.model.DailyReport;
 import org.henbru.antidos.collector.model.DailyReportNote;
 import org.henbru.antidos.collector.model.MitigationAuditEntry;
@@ -41,6 +42,7 @@ import org.henbru.antidos.collector.storage.DailyReportNoteRepository;
 import org.henbru.antidos.collector.storage.DailyReportRepository;
 import org.henbru.antidos.collector.storage.MitigationRuleRepository;
 import org.henbru.antidos.collector.storage.MonitoredValveRepository;
+import org.henbru.antidos.collector.util.IpNetworkUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -282,6 +284,27 @@ public class DailyReportService {
 			double surgeMultiplier,
 			boolean isNewOrReactivated
 	) {}
+
+	public static boolean isInternalOrPrivate(TopOffenderSummary top) {
+		if (top == null) {
+			return false;
+		}
+		if (top.clientType() == ClientType.INTERNAL_NETWORK || top.clientType() == ClientType.PRIVATE_NETWORK) {
+			return true;
+		}
+		String key = top.clientKey();
+		if (key != null) {
+			if ("PRIVATE".equalsIgnoreCase(key) || key.toUpperCase().contains("PRIVATE")) {
+				return true;
+			}
+			int slashIdx = key.indexOf('/');
+			String ip = slashIdx > 0 ? key.substring(0, slashIdx) : key;
+			if (IpNetworkUtil.isPrivateOrLocal(ip)) {
+				return true;
+			}
+		}
+		return false;
+	}
 
 	@Autowired
 	public DailyReportService(
@@ -914,13 +937,32 @@ public class DailyReportService {
 			log.warn("Error querying incident counts for {}: {}", dateStr, e.getMessage());
 		}
 
-		List<TopOffenderSummary> topClients = Collections.emptyList();
+		List<TopOffenderSummary> allTopClients = Collections.emptyList();
+		List<TopOffenderSummary> topExternalClients = Collections.emptyList();
+		List<TopOffenderSummary> topInternalClients = Collections.emptyList();
 		List<TopOffenderSummary> topAsns = Collections.emptyList();
 		List<TopOffenderSummary> topMarkedClients = Collections.emptyList();
 		List<TopOffenderSummary> topTrafficAsns = Collections.emptyList();
 		try {
-			topClients = clientEventRepository.findTopOffendersFiltered(
-					null, null, startInstant, endInstant, null, null, null, null, "BLOCKED", "client_key", 10);
+			allTopClients = clientEventRepository.findTopOffendersFiltered(
+					null, null, startInstant, endInstant, null, null, null, null, "BLOCKED", "client_key", 50);
+			topExternalClients = allTopClients.stream()
+					.filter(c -> !isInternalOrPrivate(c))
+					.limit(10)
+					.toList();
+			topInternalClients = allTopClients.stream()
+					.filter(DailyReportService::isInternalOrPrivate)
+					.limit(10)
+					.toList();
+			if (topInternalClients.isEmpty()) {
+				try {
+					List<TopOffenderSummary> explicitInternal = clientEventRepository.findTopOffendersFiltered(
+							null, null, startInstant, endInstant, null, List.of("INTERNAL_NETWORK", "PRIVATE_NETWORK"), null, null, "BLOCKED", "client_key", 10);
+					if (!explicitInternal.isEmpty()) {
+						topInternalClients = explicitInternal;
+					}
+				} catch (Exception ignored) {}
+			}
 			topAsns = clientEventRepository.findTopOffendersFiltered(
 					null, null, startInstant, endInstant, null, null, null, null, "BLOCKED", "ASN", 5);
 			topMarkedClients = clientEventRepository.findTopOffendersFiltered(
@@ -1133,7 +1175,7 @@ public class DailyReportService {
 				fleetPeakReqRate, fleetPeakReqRaw, fleetPeakReqDuration, peakReqServer, peakReqValve, fleetPeakReqTime,
 				fleetPeakBlockRate, fleetPeakBlockRaw, fleetPeakBlockDuration, peakBlockServer, peakBlockValve, fleetPeakBlockTime,
 				fleetPeakMarkRate, fleetPeakMarkRaw, fleetPeakMarkDuration, peakMarkServer, peakMarkValve, fleetPeakMarkTime,
-				valveAggregates, hourlyBuckets, pollSummary, serverPollStats, outageIncidents, topTrafficAsns, topClients, topAsns, topMarkedClients,
+				valveAggregates, hourlyBuckets, pollSummary, serverPollStats, outageIncidents, topTrafficAsns, topExternalClients, topInternalClients, topAsns, topMarkedClients,
 				valveCapacityAudits, fingerprintAnomalies, baselineSurges,
 				noteMarkdown, numFmt,
 				fleetAuthRequests, fleetAuthTrackedRequests,
@@ -1210,7 +1252,8 @@ public class DailyReportService {
 			List<ServerPollStat> serverPollStats,
 			List<OutageIncident> outageIncidents,
 			List<TopOffenderSummary> topTrafficAsns,
-			List<TopOffenderSummary> topClients,
+			List<TopOffenderSummary> topExternalClients,
+			List<TopOffenderSummary> topInternalClients,
 			List<TopOffenderSummary> topAsns,
 			List<TopOffenderSummary> topMarkedClients,
 			List<ValveCapacityAudit> valveCapacityAudits,
@@ -1335,6 +1378,11 @@ public class DailyReportService {
 
 		// Optional Operator Day Note (anchored with HTML comments for atomic re-embedding)
 		sb.append(buildNoteSectionMarkdown(noteMarkdown));
+
+		// Actionable Insights & Triage Recommendations
+		sb.append(buildAdminActionItemsMarkdown(
+				topExternalClients, topInternalClients, mitigationSummary,
+				valveCapacityAudits, outageIncidents, fingerprintAnomalies, numFmt));
 
 		// Server- & Valve-Breakdown
 		sb.append("## ⚡ 2. Server & Valve Telemetry (Normalized Peaks)\n\n");
@@ -1602,10 +1650,22 @@ public class DailyReportService {
 			sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
 
 			for (TopOffenderSummary asnTop : topTrafficAsns) {
-				String asnLabel = asnTop.asn() != null ? "AS" + asnTop.asn() : asnTop.clientKey();
-				String org = asnTop.asOrg() != null && !asnTop.asOrg().isBlank() ? asnTop.asOrg() : (asnTop.asn() == null ? "Private / Unresolved Network" : "–");
-				String country = asnTop.countryCode() != null && !asnTop.countryCode().isBlank() ? asnTop.countryCode() : "–";
-				String clientType = asnTop.clientType() != null ? asnTop.clientType().name() : "UNKNOWN";
+				boolean isPrivate = "PRIVATE".equalsIgnoreCase(asnTop.clientKey())
+						|| asnTop.clientType() == ClientType.PRIVATE_NETWORK
+						|| (asnTop.clientKey() != null && asnTop.clientKey().toUpperCase().contains("PRIVATE"));
+				String asnLabel = isPrivate ? "Private / Local" : (asnTop.asn() != null ? "AS" + asnTop.asn() : asnTop.clientKey());
+				String org;
+				if (isPrivate) {
+					if (asnTop.asOrg() != null && !asnTop.asOrg().isBlank() && !asnTop.asOrg().equalsIgnoreCase("Internal Infrastructure")) {
+						org = asnTop.asOrg();
+					} else {
+						org = "Internal Infrastructure (RFC 1918)";
+					}
+				} else {
+					org = asnTop.asOrg() != null && !asnTop.asOrg().isBlank() ? asnTop.asOrg() : (asnTop.asn() == null ? "Unresolved Network" : "–");
+				}
+				String country = isPrivate ? "–" : (asnTop.countryCode() != null && !asnTop.countryCode().isBlank() ? asnTop.countryCode() : "–");
+				String clientType = isPrivate ? "PRIVATE_NETWORK" : (asnTop.clientType() != null ? asnTop.clientType().name() : "UNKNOWN");
 				double share = totalRequests > 0 ? (asnTop.totalRequests() * 100.0) / totalRequests : 0.0;
 				String shareStr = (share < 0.1 && asnTop.totalRequests() > 0) ? "< 0.1%" : String.format(Locale.US, "%.1f%%", share);
 
@@ -1637,14 +1697,16 @@ public class DailyReportService {
 			sb.append("\n");
 		}
 
-		if (topClients.isEmpty()) {
-			sb.append("✅ *No blocked clients recorded for this date. The fleet operated unhindered.*\n\n");
+		// External Offending Clients
+		if (topExternalClients == null || topExternalClients.isEmpty()) {
+			sb.append("### 🌐 Top 10 External Offending Clients & Subnets (Hard Blocks / HTTP 429)\n\n");
+			sb.append("✅ *No external blocked clients recorded for this date. The fleet operated unhindered.*\n\n");
 		} else {
-			sb.append("### Top 10 Offending Client Addresses & Subnets (Hard Blocks / HTTP 429)\n\n");
+			sb.append("### 🌐 Top 10 External Offending Clients & Subnets (Hard Blocks / HTTP 429)\n\n");
 			sb.append("| IP / Subnet | Total Requests | Blocked Requests | ASN / Operator | Country | Client Type |\n");
 			sb.append("| :--- | :--- | :--- | :--- | :--- | :--- |\n");
 
-			for (TopOffenderSummary top : topClients) {
+			for (TopOffenderSummary top : topExternalClients) {
 				String asnStr = top.asn() != null ? "AS" + top.asn() + (top.asOrg() != null ? " (" + top.asOrg() + ")" : "") : "Unknown";
 				String country = top.countryCode() != null && !top.countryCode().isBlank() ? top.countryCode() : "–";
 				String clientType = top.clientType() != null ? top.clientType().name() : "UNKNOWN";
@@ -1659,14 +1721,39 @@ public class DailyReportService {
 			sb.append("\n");
 		}
 
+		// Internal & Campus Network Hotspots
+		if (topInternalClients != null && !topInternalClients.isEmpty()) {
+			sb.append("### 🏢 Top Internal & Campus Network Hotspots (Rate-Limited / High Volume)\n\n");
+			sb.append("> ℹ️ **Internal & Campus Telemetry:** Segregates local network infrastructure, university campus subnets, and RFC 1918 traffic from external internet threats to preserve visibility into campus scrapers and internal service health.\n\n");
+			sb.append("| IP / Subnet | Total Requests | Blocked Requests | ASN / Operator | Country | Client Type |\n");
+			sb.append("| :--- | :--- | :--- | :--- | :--- | :--- |\n");
+
+			for (TopOffenderSummary topInt : topInternalClients) {
+				String asnStr = topInt.asn() != null ? "AS" + topInt.asn() + (topInt.asOrg() != null ? " (" + topInt.asOrg() + ")" : "") : (topInt.asOrg() != null ? topInt.asOrg() : "Internal Infrastructure");
+				String country = topInt.countryCode() != null && !topInt.countryCode().isBlank() ? topInt.countryCode() : "–";
+				String clientType = topInt.clientType() != null ? topInt.clientType().name() : "INTERNAL_NETWORK";
+
+				sb.append("| `").append(topInt.clientKey()).append("` | ")
+						.append(numFmt.format(topInt.totalRequests())).append(" | ")
+						.append(numFmt.format(topInt.totalBlockedRequests())).append(" | ")
+						.append(asnStr).append(" | ")
+						.append(country).append(" | `")
+						.append(clientType).append("` |\n");
+			}
+			sb.append("\n");
+		}
+
 		if (!topAsns.isEmpty()) {
 			sb.append("### Top Abusive Autonomous Systems (ASNs)\n\n");
 			sb.append("| ASN | Operator / Organization | Total Requests | Blocked Requests |\n");
 			sb.append("| :--- | :--- | :--- | :--- |\n");
 
 			for (TopOffenderSummary asnTop : topAsns) {
-				String asnLabel = asnTop.clientKey();
-				String org = asnTop.asOrg() != null && !asnTop.asOrg().isBlank() ? asnTop.asOrg() : "–";
+				boolean isPrivate = "PRIVATE".equalsIgnoreCase(asnTop.clientKey())
+						|| asnTop.clientType() == ClientType.PRIVATE_NETWORK
+						|| (asnTop.clientKey() != null && asnTop.clientKey().toUpperCase().contains("PRIVATE"));
+				String asnLabel = isPrivate ? "Private / Local" : asnTop.clientKey();
+				String org = isPrivate ? "Internal Infrastructure (RFC 1918)" : (asnTop.asOrg() != null && !asnTop.asOrg().isBlank() ? asnTop.asOrg() : "–");
 				sb.append("| `").append(asnLabel).append("` | ")
 						.append(org).append(" | ")
 						.append(numFmt.format(asnTop.totalRequests())).append(" | ")
@@ -2349,6 +2436,116 @@ public class DailyReportService {
 			sb.append("---\n\n");
 		}
 		sb.append("<!-- DAILY_NOTE_END -->\n\n");
+		return sb.toString();
+	}
+
+	private String buildAdminActionItemsMarkdown(
+			List<TopOffenderSummary> topExternalClients,
+			List<TopOffenderSummary> topInternalClients,
+			DailyMitigationSummary mitigationSummary,
+			List<ValveCapacityAudit> valveCapacityAudits,
+			List<OutageIncident> outageIncidents,
+			List<FingerprintAnomaly> fingerprintAnomalies,
+			NumberFormat numFmt
+	) {
+		StringBuilder sb = new StringBuilder();
+		sb.append("## 💡 Actionable Insights & Triage Recommendations\n\n");
+		sb.append("> ℹ️ **Automated Triage Engine:** Synthesizes fleet telemetry, threat forensics, and infrastructure health into prioritized operational action items for systems and network administrators.\n\n");
+
+		List<String> items = new ArrayList<>();
+
+		// 1. Edge-Offloading Candidates (High volume, high block rate external offenders)
+		if (topExternalClients != null && !topExternalClients.isEmpty()) {
+			List<TopOffenderSummary> edgeCandidates = topExternalClients.stream()
+					.filter(c -> c.totalBlockedRequests() >= 500 && c.totalRequests() > 0 && ((c.totalBlockedRequests() * 100.0) / c.totalRequests()) >= 90.0)
+					.toList();
+			if (!edgeCandidates.isEmpty()) {
+				TopOffenderSummary worst = edgeCandidates.get(0);
+				double blkRate = (worst.totalBlockedRequests() * 100.0) / worst.totalRequests();
+				String orgStr = worst.asOrg() != null && !worst.asOrg().isBlank() ? " (" + (worst.asn() != null ? "AS" + worst.asn() + " " : "") + worst.asOrg() + ")" : "";
+				if (edgeCandidates.size() == 1) {
+					items.add(String.format(Locale.US,
+							"🌐 **Edge Firewall Offloading Candidate:** External client `%s`%s sent **%s requests** with a **%.1f%% block rate** (HTTP 429). Offloading this client or its subnet to an edge firewall, reverse proxy, or upstream ACL will prevent Tomcat worker thread exhaustion.",
+							worst.clientKey(), orgStr, numFmt.format(worst.totalRequests()), blkRate));
+				} else {
+					long totalAggBlocked = edgeCandidates.stream().mapToLong(TopOffenderSummary::totalBlockedRequests).sum();
+					items.add(String.format(Locale.US,
+							"🌐 **Edge Firewall Offloading Candidates:** **%d external clients** (led by `%s`%s) generated **%s combined blocked requests** with >90%% block rates. Offloading these persistent offenders to an edge firewall, reverse proxy, or upstream ACL will reduce Java servlet thread load.",
+							edgeCandidates.size(), worst.clientKey(), orgStr, numFmt.format(totalAggBlocked)));
+				}
+			}
+		}
+
+		// 2. Campus & Internal Network Scraper Hotspots
+		if (topInternalClients != null && !topInternalClients.isEmpty()) {
+			long totalInternalBlocked = topInternalClients.stream().mapToLong(TopOffenderSummary::totalBlockedRequests).sum();
+			if (totalInternalBlocked >= 100) {
+				TopOffenderSummary topInt = topInternalClients.get(0);
+				String intOrg = topInt.asOrg() != null && !topInt.asOrg().isBlank() ? " (" + topInt.asOrg() + ")" : "";
+				items.add(String.format(Locale.US,
+						"🏢 **Campus / Internal Network Scraper Hotspots:** Internal/campus clients%s accumulated **%s blocked requests** (peak: `%s` with %s blocks). Coordinate with internal teams or system owners to identify misconfigured crawlers or automated scripts.",
+						intOrg, numFmt.format(totalInternalBlocked), topInt.clientKey(), numFmt.format(topInt.totalBlockedRequests())));
+			}
+		}
+
+		// 3. Autonomous Defense Active
+		if (mitigationSummary != null && mitigationSummary.rulesCreatedCount() > 0) {
+			items.add(String.format(Locale.US,
+					"🛡️ **Autonomous Defense Active:** The autonomous defense system deployed **%s dynamic CIDR blocks**, deflecting **%s requests** server-wide. If carpet-bombing campaigns recur from the same subnets, consider promoting these CIDRs to permanent edge ACL rules.",
+					numFmt.format(mitigationSummary.rulesCreatedCount()), numFmt.format(mitigationSummary.totalDynamicHits())));
+		}
+
+		// 4. Valve Cache Capacity & Saturated Slots
+		boolean hasSaturation = false;
+		if (valveCapacityAudits != null) {
+			for (ValveCapacityAudit audit : valveCapacityAudits) {
+				if (audit.hasSaturation()) {
+					hasSaturation = true;
+					items.add(String.format(Locale.US,
+							"⚠️ **Valve Cache Saturation Alert:** Valve `%s` on server `%s` experienced capacity saturation (%d active, %d blocked saturated slots). Increase `maxIpCacheSize` or `maxBlockedIpCacheSize` in `server.xml` to prevent counter eviction drops.",
+							audit.valveName(), audit.serverId(), audit.saturatedActiveSlots(), audit.saturatedBlockedSlots()));
+				}
+			}
+		}
+		if (!hasSaturation) {
+			items.add("✅ **Valve Cache Capacity Nominal:** Zero counter eviction drops recorded across all monitored valves. Tracking caches are sized adequately for observed concurrency peaks.");
+		}
+
+		// 5. Node Connectivity & Scheduled Maintenance Restarts
+		if (outageIncidents != null && !outageIncidents.isEmpty()) {
+			Set<String> affectedServers = outageIncidents.stream()
+					.map(OutageIncident::serverId)
+					.collect(Collectors.toSet());
+			boolean allShortOutages = outageIncidents.stream()
+					.allMatch(o -> o.failedPollsCount() <= 3);
+			if (affectedServers.size() >= 3 && allShortOutages) {
+				items.add("🔄 **Synchronized Fleet Maintenance Windows:** Detected synchronized brief node unreachability across "
+						+ affectedServers.size() + " servers (typical for automated daily OS/Tomcat maintenance updates or rolling restarts). No unscheduled single-node outages observed.");
+			} else {
+				long totalFailedPolls = outageIncidents.stream().mapToLong(OutageIncident::failedPollsCount).sum();
+				items.add(String.format(Locale.US,
+						"📡 **Fleet Node Connectivity Audit:** %d connection failure window(s) logged across %d server(s) (%s total failed polls). Check Section 4 for details.",
+						outageIncidents.size(), affectedServers.size(), numFmt.format(totalFailedPolls)));
+			}
+		}
+
+		// 6. Scraping / Fingerprint Anomalies
+		if (fingerprintAnomalies != null && !fingerprintAnomalies.isEmpty()) {
+			FingerprintAnomaly worstFp = fingerprintAnomalies.get(0);
+			items.add(String.format(Locale.US,
+					"🕵️ **Scraping / Fingerprint Anomaly Detected:** Subnet `%s` (%s, %s) exhibited **%s** across %d distinct IPs and %d User-Agents (%s requests). Inspect Section 5 for forensic breakdown.",
+					worstFp.subnetGroup(), worstFp.asOrg(), worstFp.countryCode(), worstFp.anomalyType(), worstFp.distinctClients(), worstFp.distinctUserAgents(), numFmt.format(worstFp.totalRequests())));
+		}
+
+		if (items.isEmpty()) {
+			sb.append("✅ *All fleet metrics, error rates, and threat profiles are within nominal baseline limits. No immediate administrative triage or edge firewall offloading required.*\n\n");
+		} else {
+			for (String item : items) {
+				sb.append("* ").append(item).append("\n");
+			}
+			sb.append("\n");
+		}
+		sb.append("---\n\n");
 		return sb.toString();
 	}
 

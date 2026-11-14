@@ -9,6 +9,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 
+import org.henbru.antidos.collector.model.ClientEvent;
+import org.henbru.antidos.collector.model.ClientType;
 import org.henbru.antidos.collector.model.DailyReport;
 import org.henbru.antidos.collector.model.DailyReportNote;
 import org.henbru.antidos.collector.model.MitigationAuditEntry;
@@ -16,6 +18,7 @@ import org.henbru.antidos.collector.model.MitigationRule;
 import org.henbru.antidos.collector.model.MonitoredValve;
 import org.henbru.antidos.collector.model.PollEventLog;
 import org.henbru.antidos.collector.model.SlotSnapshot;
+import org.henbru.antidos.collector.storage.ClientEventRepository;
 import org.henbru.antidos.collector.storage.DailyReportRepository;
 import org.henbru.antidos.collector.storage.MitigationRuleRepository;
 import org.henbru.antidos.collector.storage.MonitoredValveRepository;
@@ -52,6 +55,9 @@ class DailyReportServiceTest {
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
+
+	@Autowired
+	private ClientEventRepository clientEventRepository;
 
 	@Autowired(required = false)
 	private MitigationRuleRepository mitigationRuleRepository;
@@ -1020,5 +1026,160 @@ class DailyReportServiceTest {
 		assertTrue(md.contains("Gateway Timeout"), "SRV-CLUSTER-B should show Gateway Timeout");
 		assertTrue(md.contains("*(single poll)*"), "SRV-CLUSTER-B single blip should be marked as single poll");
 		assertTrue(md.contains("< 15s"), "SRV-CLUSTER-B duration should be < 15s");
+	}
+
+	@Test
+	void testDailyReportRendersAdminActionItemsAndSegregatesExternalVsInternalThreats() {
+		LocalDate reportDate = LocalDate.parse("2026-10-26");
+		dailyReportRepository.deleteByReportDate(reportDate.toString());
+		jdbcTemplate.update("DELETE FROM slot_snapshots WHERE server_id = 'SRV-ACTION-TEST'");
+		jdbcTemplate.update("DELETE FROM client_events WHERE server_id = 'SRV-ACTION-TEST'");
+		jdbcTemplate.update("DELETE FROM monitored_valves WHERE server_id = 'SRV-ACTION-TEST'");
+
+		monitoredValveRepository.upsert(new MonitoredValve(
+				"SRV-ACTION-TEST", "VALVE-MAIN", "Main Node", 1, "BLOCKING", false, false,
+				429, 500, 10, 6, 0.5f, 24, 64, 10000, 5000, "", "", "", "", "/status", "*", "auto",
+				false, "_adv", Instant.now(), 1111, true
+		));
+
+		Instant dayStart = reportDate.atStartOfDay(ZoneId.systemDefault()).toInstant();
+		Instant t1 = dayStart.plus(10, ChronoUnit.HOURS);
+
+		slotSnapshotRepository.upsert(new SlotSnapshot(
+				null, "SRV-ACTION-TEST", "VALVE-MAIN", 201L, t1, t1.plus(60, ChronoUnit.SECONDS),
+				10000L, 1000, 0, true, t1.plus(60, ChronoUnit.SECONDS)
+		));
+
+		// 1. External persistent attacker: 600 requests, 580 blocked (> 90% block rate)
+		clientEventRepository.batchUpsert(List.of(new ClientEvent(
+				null, "SRV-ACTION-TEST", "VALVE-MAIN", 201L, t1, "47.76.103.189",
+				4, 32, null, null, null, null, "47.76.103.0/24",
+				600, 0, false, ClientEvent.STATUS_BLOCKED, true, t1,
+				45102L, "Alibaba.com LLC", "HK", ClientType.DATACENTER, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+		)));
+
+		// 2. Internal campus scrapers: 500 requests (all blocked) and 300 requests (all blocked)
+		clientEventRepository.batchUpsert(List.of(
+				new ClientEvent(
+						null, "SRV-ACTION-TEST", "VALVE-MAIN", 201L, t1, "129.70.124.238",
+						4, 32, null, null, null, null, "129.70.124.0/24",
+						500, 0, false, ClientEvent.STATUS_BLOCKED, true, t1,
+						680L, "DFN-Verein", "DE", ClientType.INTERNAL_NETWORK, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+				),
+				new ClientEvent(
+						null, "SRV-ACTION-TEST", "VALVE-MAIN", 201L, t1, "129.70.124.13",
+						4, 32, null, null, null, null, "129.70.124.0/24",
+						300, 0, false, ClientEvent.STATUS_BLOCKED, true, t1,
+						680L, "DFN-Verein", "DE", ClientType.INTERNAL_NETWORK, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+				)
+		));
+
+		DailyReport report = dailyReportService.generateDailyReport(reportDate);
+		assertNotNull(report);
+		String md = report.reportMarkdown();
+		assertNotNull(md);
+
+		// Verify Action Items Box is present
+		assertTrue(md.contains("## 💡 Actionable Insights & Triage Recommendations"),
+				"Report should contain Actionable Insights & Triage Recommendations box");
+		assertTrue(md.contains("Edge Firewall Offloading Candidate"),
+				"Action items should recommend edge offloading for persistent external attacker");
+		assertTrue(md.contains("`47.76.103.189`"),
+				"Action items should mention the external attacker IP");
+		assertTrue(md.contains("Campus / Internal Network Scraper Hotspots"),
+				"Action items should highlight campus scraper hotspots");
+		assertTrue(md.contains("`129.70.124.238`"),
+				"Action items should mention peak campus scraper IP");
+		assertTrue(md.contains("Valve Cache Capacity Nominal"),
+				"Action items should confirm nominal cache capacity without dropped counters");
+
+		// Verify Section 5 segregated tables
+		assertTrue(md.contains("### 🌐 Top 10 External Offending Clients & Subnets (Hard Blocks / HTTP 429)"),
+				"Section 5 should have dedicated External Offending Clients table");
+		assertTrue(md.contains("### 🏢 Top Internal & Campus Network Hotspots (Rate-Limited / High Volume)"),
+				"Section 5 should have dedicated Internal & Campus Network Hotspots table");
+
+		// Verify external table contains external IP
+		int extIdx = md.indexOf("### 🌐 Top 10 External Offending Clients & Subnets");
+		int intIdx = md.indexOf("### 🏢 Top Internal & Campus Network Hotspots");
+		assertTrue(extIdx < intIdx, "External table must precede Internal hotspots table");
+
+		String extSection = md.substring(extIdx, intIdx);
+		assertTrue(extSection.contains("`47.76.103.189`"), "External table must include external IP");
+		assertFalse(extSection.contains("129.70.124.238"), "External table must NOT include internal campus IP");
+
+		String intSection = md.substring(intIdx);
+		assertTrue(intSection.contains("`129.70.124.238`"), "Internal hotspots table must include campus IP 129.70.124.238");
+		assertTrue(intSection.contains("`129.70.124.13`"), "Internal hotspots table must include campus IP 129.70.124.13");
+	}
+
+	@Test
+	void testDailyReportRendersRfc1918TrafficAsPrivateLocalWithoutUnknownCountry() {
+		LocalDate reportDate = LocalDate.parse("2026-10-28");
+		dailyReportRepository.deleteByReportDate(reportDate.toString());
+		jdbcTemplate.update("DELETE FROM slot_snapshots WHERE server_id = 'SRV-RFC-TEST'");
+		jdbcTemplate.update("DELETE FROM client_events WHERE server_id = 'SRV-RFC-TEST'");
+		jdbcTemplate.update("DELETE FROM monitored_valves WHERE server_id = 'SRV-RFC-TEST'");
+
+		monitoredValveRepository.upsert(new MonitoredValve(
+				"SRV-RFC-TEST", "VALVE-RFC", "RFC Node", 1, "BLOCKING", false, false,
+				429, 500, 10, 6, 0.5f, 24, 64, 10000, 5000, "", "", "", "", "/status", "*", "auto",
+				false, "_adv", Instant.now(), 1111, true
+		));
+
+		Instant dayStart = reportDate.atStartOfDay(ZoneId.systemDefault()).toInstant();
+		Instant t1 = dayStart.plus(12, ChronoUnit.HOURS);
+
+		slotSnapshotRepository.upsert(new SlotSnapshot(
+				null, "SRV-RFC-TEST", "VALVE-RFC", 301L, t1, t1.plus(60, ChronoUnit.SECONDS),
+				2000L, 0, 0, true, t1.plus(60, ChronoUnit.SECONDS)
+		));
+
+		// 1. Private RFC 1918 traffic (1000 requests, null ASN, null country)
+		clientEventRepository.batchUpsert(List.of(new ClientEvent(
+				null, "SRV-RFC-TEST", "VALVE-RFC", 301L, t1, "10.68.1.15",
+				4, 32, null, null, null, null, "10.68.1.0/24",
+				1000, 0, false, ClientEvent.STATUS_ACTIVE, true, t1,
+				null, "Internal Infrastructure", null, ClientType.PRIVATE_NETWORK, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+		)));
+
+		// 2. Unresolved external IP (200 requests, null ASN, but country "US")
+		clientEventRepository.batchUpsert(List.of(new ClientEvent(
+				null, "SRV-RFC-TEST", "VALVE-RFC", 301L, t1, "198.51.100.42",
+				4, 32, null, null, null, null, "198.51.100.0/24",
+				200, 0, false, ClientEvent.STATUS_ACTIVE, true, t1,
+				null, null, "US", ClientType.UNKNOWN, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+		)));
+
+		// 3. Normal public IP (800 requests, AS15169 Google)
+		clientEventRepository.batchUpsert(List.of(new ClientEvent(
+				null, "SRV-RFC-TEST", "VALVE-RFC", 301L, t1, "8.8.8.8",
+				4, 32, null, null, null, null, "8.8.8.0/24",
+				800, 0, false, ClientEvent.STATUS_ACTIVE, true, t1,
+				15169L, "Google LLC", "US", ClientType.DATACENTER, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+		)));
+
+		DailyReport report = dailyReportService.generateDailyReport(reportDate);
+		assertNotNull(report);
+		String md = report.reportMarkdown();
+		assertNotNull(md);
+
+		// Verify Top Autonomous Systems table displays Private / Local cleanly
+		assertTrue(md.contains("### 🌐 Top Autonomous Systems by Traffic Volume (Fleet Traffic Share)"),
+				"Report should contain Top Autonomous Systems table");
+		assertTrue(md.contains("`Private / Local`"),
+				"Private traffic should be labeled as `Private / Local`");
+		assertTrue(md.contains("Internal Infrastructure (RFC 1918)"),
+				"Private traffic organization should be Internal Infrastructure (RFC 1918)");
+		assertTrue(md.contains("`PRIVATE_NETWORK`"),
+				"Private traffic category should be `PRIVATE_NETWORK`");
+
+		// Ensure Private / Local row has country '-' and NOT 'US'
+		int privIdx = md.indexOf("`Private / Local`");
+		assertTrue(privIdx > 0);
+		int nextNewline = md.indexOf("\n", privIdx);
+		String privRow = md.substring(privIdx, nextNewline);
+		assertTrue(privRow.contains("| – |"), "Private network row must show country '–': " + privRow);
+		assertFalse(privRow.contains("| US |"), "Private network row must NOT inherit country 'US': " + privRow);
 	}
 }

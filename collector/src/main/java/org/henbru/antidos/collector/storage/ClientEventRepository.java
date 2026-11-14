@@ -524,7 +524,7 @@ public class ClientEventRepository {
 	) {
 		String groupCol;
 		if ("ASN".equalsIgnoreCase(groupBy)) {
-			groupCol = "COALESCE('AS' || asn, 'AS-UNKNOWN')";
+			groupCol = "CASE WHEN client_type = 'PRIVATE_NETWORK' THEN 'PRIVATE' WHEN asn IS NOT NULL THEN 'AS' || asn ELSE 'AS-UNKNOWN' END";
 		} else if ("SUBNET".equalsIgnoreCase(groupBy)) {
 			groupCol = "subnet_group";
 		} else {
