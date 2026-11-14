@@ -1,10 +1,12 @@
 package org.henbru.antidos.collector.report;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Optional;
 
 import org.henbru.antidos.collector.model.DailyReport;
@@ -694,7 +696,7 @@ class DailyReportServiceTest {
 		ZonedDateTime startDay = mitDate.atStartOfDay(ZoneId.systemDefault());
 		Instant startInstant = startDay.toInstant();
 		Instant endInstant = startDay.plusDays(1).toInstant();
-		jdbcTemplate.update("DELETE FROM mitigation_rules WHERE created_at >= ? AND created_at < ?", java.sql.Timestamp.from(startInstant), java.sql.Timestamp.from(endInstant));
+		jdbcTemplate.update("DELETE FROM mitigation_rules WHERE cidr LIKE '198.51.%' OR (created_at >= ? AND created_at < ?)", java.sql.Timestamp.from(startInstant), java.sql.Timestamp.from(endInstant));
 		jdbcTemplate.update("DELETE FROM mitigation_audit_log WHERE created_at >= ? AND created_at < ?", java.sql.Timestamp.from(startInstant), java.sql.Timestamp.from(endInstant));
 		jdbcTemplate.update("DELETE FROM client_subnet_rollups WHERE server_id = 'SRV-MIT-TEST'");
 		jdbcTemplate.update("DELETE FROM slot_snapshots WHERE server_id = 'SRV-MIT-TEST'");
@@ -855,5 +857,168 @@ class DailyReportServiceTest {
 				"Section 6 should show green ACTIVE status: " + md);
 		assertTrue(md.contains("8 rules** (3 Manual [1 Single, 2 ASN-Batch], 5 Auto)"),
 				"Section 6 should show matching manual breakdown: " + md);
+	}
+
+	@Test
+	void testClusterOutagesEmptyAndNull() {
+		assertTrue(DailyReportService.clusterOutages(null).isEmpty());
+		assertTrue(DailyReportService.clusterOutages(List.of()).isEmpty());
+	}
+
+	@Test
+	void testClusterOutagesGroupsConsecutivePollsWithinThreshold() {
+		Instant base = Instant.parse("2026-10-20T03:15:00Z");
+		List<DailyReportService.OutageLog> logs = List.of(
+				new DailyReportService.OutageLog("SRV-01", base, 0, 15, "Connection refused: connect"),
+				new DailyReportService.OutageLog("SRV-01", base.plusSeconds(15), 0, 12, "Connection refused: connect"),
+				new DailyReportService.OutageLog("SRV-01", base.plusSeconds(30), 0, 10, "Connection refused: connect"),
+				new DailyReportService.OutageLog("SRV-01", base.plusSeconds(45), 0, 14, "Connection refused: connect"),
+				new DailyReportService.OutageLog("SRV-01", base.plusSeconds(60), 0, 11, "Connection refused: connect")
+		);
+
+		List<DailyReportService.OutageIncident> incidents = DailyReportService.clusterOutages(logs, 120);
+		assertEquals(1, incidents.size());
+		DailyReportService.OutageIncident incident = incidents.get(0);
+		assertEquals("SRV-01", incident.serverId());
+		assertEquals(base, incident.startTime());
+		assertEquals(base.plusSeconds(60), incident.endTime());
+		assertEquals(5, incident.failedPollsCount());
+		assertEquals("1m 00s", incident.formatDuration());
+		assertEquals(0, incident.httpStatusCode());
+		assertEquals("Connection refused: connect", incident.primaryErrorMessage());
+		assertTrue(incident.formatTimeWindow(ZoneId.of("UTC")).contains("03:15:00 – 03:16:00"));
+	}
+
+	@Test
+	void testClusterOutagesSeparateDisjointWindows() {
+		Instant base = Instant.parse("2026-10-20T03:15:00Z");
+		Instant afternoon = Instant.parse("2026-10-20T14:00:00Z");
+		List<DailyReportService.OutageLog> logs = List.of(
+				new DailyReportService.OutageLog("SRV-01", base, 0, 15, "Connection refused: connect"),
+				new DailyReportService.OutageLog("SRV-01", base.plusSeconds(30), 0, 10, "Connection refused: connect"),
+				new DailyReportService.OutageLog("SRV-01", afternoon, 504, 5000, "Gateway Timeout")
+		);
+
+		List<DailyReportService.OutageIncident> incidents = DailyReportService.clusterOutages(logs, 120);
+		assertEquals(2, incidents.size());
+
+		DailyReportService.OutageIncident inc1 = incidents.get(0);
+		assertEquals("SRV-01", inc1.serverId());
+		assertEquals(base, inc1.startTime());
+		assertEquals(base.plusSeconds(30), inc1.endTime());
+		assertEquals(2, inc1.failedPollsCount());
+		assertEquals("30s", inc1.formatDuration());
+		assertEquals("Connection refused: connect", inc1.primaryErrorMessage());
+
+		DailyReportService.OutageIncident inc2 = incidents.get(1);
+		assertEquals("SRV-01", inc2.serverId());
+		assertEquals(afternoon, inc2.startTime());
+		assertEquals(afternoon, inc2.endTime());
+		assertEquals(1, inc2.failedPollsCount());
+		assertEquals("< 15s", inc2.formatDuration());
+		assertEquals(504, inc2.httpStatusCode());
+		assertEquals("Gateway Timeout", inc2.primaryErrorMessage());
+		assertTrue(inc2.formatTimeWindow(ZoneId.of("UTC")).contains("*(single poll)*"));
+	}
+
+	@Test
+	void testClusterOutagesMultipleServersAndFrequencyResolution() {
+		Instant t1 = Instant.parse("2026-10-20T03:00:00Z");
+		List<DailyReportService.OutageLog> logs = List.of(
+				// SRV-B at 03:01
+				new DailyReportService.OutageLog("SRV-B", t1.plusSeconds(60), 503, 200, "Service Unavailable"),
+				new DailyReportService.OutageLog("SRV-B", t1.plusSeconds(80), 503, 190, "Service Unavailable"),
+				// SRV-A at 03:00
+				new DailyReportService.OutageLog("SRV-A", t1, 0, 15, "Connection refused"),
+				new DailyReportService.OutageLog("SRV-A", t1.plusSeconds(10), 0, 12, "Connection refused"),
+				new DailyReportService.OutageLog("SRV-A", t1.plusSeconds(20), 0, 14, "Socket timeout")
+		);
+
+		List<DailyReportService.OutageIncident> incidents = DailyReportService.clusterOutages(logs, 120);
+		assertEquals(2, incidents.size());
+
+		// Chronological ordering: SRV-A starts at 03:00:00, SRV-B starts at 03:01:00
+		assertEquals("SRV-A", incidents.get(0).serverId());
+		assertEquals(3, incidents.get(0).failedPollsCount());
+		assertEquals("Connection refused", incidents.get(0).primaryErrorMessage());
+
+		assertEquals("SRV-B", incidents.get(1).serverId());
+		assertEquals(2, incidents.get(1).failedPollsCount());
+		assertEquals(503, incidents.get(1).httpStatusCode());
+		assertEquals("Service Unavailable", incidents.get(1).primaryErrorMessage());
+	}
+
+	@Test
+	void testDailyReportRendersClusteredOutageWindowsAndPerNodeAudit() {
+		LocalDate reportDate = LocalDate.parse("2026-10-25");
+		dailyReportRepository.deleteByReportDate(reportDate.toString());
+		jdbcTemplate.update("DELETE FROM slot_snapshots WHERE server_id IN ('SRV-CLUSTER-A', 'SRV-CLUSTER-B')");
+		jdbcTemplate.update("DELETE FROM poll_event_log WHERE server_id IN ('SRV-CLUSTER-A', 'SRV-CLUSTER-B')");
+		jdbcTemplate.update("DELETE FROM monitored_valves WHERE server_id IN ('SRV-CLUSTER-A', 'SRV-CLUSTER-B')");
+
+		monitoredValveRepository.upsert(new MonitoredValve(
+				"SRV-CLUSTER-A", "VALVE-A", "Node A", 1, "BLOCKING", false, false,
+				429, 500, 10, 6, 0.5f, 24, 64, 10000, 5000, "", "", "", "", "/status", "*", "auto",
+				false, "_adv", Instant.now(), 1111, true
+		));
+		monitoredValveRepository.upsert(new MonitoredValve(
+				"SRV-CLUSTER-B", "VALVE-B", "Node B", 1, "BLOCKING", false, false,
+				429, 500, 10, 6, 0.5f, 24, 64, 10000, 5000, "", "", "", "", "/status", "*", "auto",
+				false, "_adv", Instant.now(), 2222, true
+		));
+
+		Instant dayStart = reportDate.atStartOfDay(ZoneId.systemDefault()).toInstant();
+		Instant tReboot = dayStart.plus(3, ChronoUnit.HOURS).plus(15, ChronoUnit.MINUTES);
+		Instant tSingle = dayStart.plus(11, ChronoUnit.HOURS).plus(30, ChronoUnit.MINUTES);
+
+		slotSnapshotRepository.upsert(new SlotSnapshot(
+				null, "SRV-CLUSTER-A", "VALVE-A", 101L, dayStart.plus(1, ChronoUnit.HOURS), dayStart.plus(1, ChronoUnit.HOURS).plus(10, ChronoUnit.SECONDS),
+				1000L, 0, 0, true, dayStart.plus(1, ChronoUnit.HOURS).plus(10, ChronoUnit.SECONDS)
+		));
+
+		for (int i = 0; i < 10; i++) {
+			pollEventLogRepository.insert(new PollEventLog(
+					null, "SRV-CLUSTER-A", "http://cluster-a/status", tReboot.plusSeconds(i * 15),
+					"ERROR", 0, 15L, 1, 0, 0, 0, 0, null, "Connection refused: connect"
+			));
+		}
+		for (int i = 0; i < 50; i++) {
+			pollEventLogRepository.insert(new PollEventLog(
+					null, "SRV-CLUSTER-A", "http://cluster-a/status", dayStart.plus(4, ChronoUnit.HOURS).plusSeconds(i * 60),
+					"SUCCESS", 200, 25L, 1, 1, 0, 0, 0, "OK", null
+			));
+		}
+
+		pollEventLogRepository.insert(new PollEventLog(
+				null, "SRV-CLUSTER-B", "http://cluster-b/status", tSingle,
+				"ERROR", 504, 5000L, 1, 0, 0, 0, 0, null, "Gateway Timeout"
+		));
+		for (int i = 0; i < 50; i++) {
+			pollEventLogRepository.insert(new PollEventLog(
+					null, "SRV-CLUSTER-B", "http://cluster-b/status", dayStart.plus(4, ChronoUnit.HOURS).plusSeconds(i * 60),
+					"SUCCESS", 200, 20L, 1, 1, 0, 0, 0, "OK", null
+			));
+		}
+
+		DailyReport report = dailyReportService.generateDailyReport(reportDate);
+		assertNotNull(report);
+		String md = report.reportMarkdown();
+		assertNotNull(md);
+
+		// Verify Section 4 contains Per-Node Connectivity & Availability Audit
+		assertTrue(md.contains("### 🖥️ Per-Node Connectivity & Availability Audit"),
+				"Report should contain Per-Node Connectivity & Availability Audit table");
+		assertTrue(md.contains("`SRV-CLUSTER-A`"), "Table should list SRV-CLUSTER-A");
+		assertTrue(md.contains("`SRV-CLUSTER-B`"), "Table should list SRV-CLUSTER-B");
+		assertTrue(md.contains("1 incident"), "Table should indicate 1 incident for nodes with outages");
+
+		// Verify Section 4 contains Clustered Outage Windows table
+		assertTrue(md.contains("### ⚠️ Connection Failures & Outage Windows"),
+				"Report should contain Connection Failures & Outage Windows table");
+		assertTrue(md.contains("2m 15s"), "SRV-CLUSTER-A reboot should be clustered into a 2m 15s duration window");
+		assertTrue(md.contains("Connection refused: connect"), "SRV-CLUSTER-A should show primary error");
+		assertTrue(md.contains("Gateway Timeout"), "SRV-CLUSTER-B should show Gateway Timeout");
+		assertTrue(md.contains("*(single poll)*"), "SRV-CLUSTER-B single blip should be marked as single poll");
+		assertTrue(md.contains("< 15s"), "SRV-CLUSTER-B duration should be < 15s");
 	}
 }

@@ -37,6 +37,10 @@ public record UserAgentItemSummary(
 		return authenticatedCount > 0;
 	}
 
+	public boolean isAutomated() {
+		return family != null && family.isAutomated();
+	}
+
 	public int incidentCount() {
 		return blockedCount + markedCount;
 	}

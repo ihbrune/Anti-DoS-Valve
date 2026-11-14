@@ -13,6 +13,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -24,6 +25,7 @@ import java.util.Set;
 import java.util.LinkedHashSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.henbru.antidos.collector.annotation.AnnotationMarkdownService;
 import org.henbru.antidos.collector.config.CollectorProperties;
@@ -163,6 +165,56 @@ public class DailyReportService {
 			long responseTimeMs,
 			String errorMessage
 	) {}
+
+	public record OutageIncident(
+			String serverId,
+			Instant startTime,
+			Instant endTime,
+			int failedPollsCount,
+			int httpStatusCode,
+			String primaryErrorMessage
+	) {
+		public Duration duration() {
+			if (startTime == null || endTime == null) {
+				return Duration.ZERO;
+			}
+			return Duration.between(startTime, endTime);
+		}
+
+		public String formatDuration() {
+			Duration d = duration();
+			if (d.isNegative() || d.isZero()) {
+				return "< 15s";
+			}
+			long totalSec = d.getSeconds();
+			if (totalSec < 15) {
+				return "< 15s";
+			}
+			long hours = totalSec / 3600;
+			long minutes = (totalSec % 3600) / 60;
+			long seconds = totalSec % 60;
+			if (hours > 0) {
+				return String.format(Locale.US, "%dh %02dm %02ds", hours, minutes, seconds);
+			} else if (minutes > 0) {
+				return String.format(Locale.US, "%dm %02ds", minutes, seconds);
+			} else {
+				return totalSec + "s";
+			}
+		}
+
+		public String formatTimeWindow(ZoneId zone) {
+			if (startTime == null) {
+				return "–";
+			}
+			ZoneId z = zone != null ? zone : ZoneId.systemDefault();
+			String startStr = startTime.atZone(z).format(TIME_FORMATTER);
+			if (endTime == null || startTime.equals(endTime)) {
+				return failedPollsCount <= 1 ? "`" + startStr + "` *(single poll)*" : "`" + startStr + "`";
+			}
+			String endStr = endTime.atZone(z).format(TIME_FORMATTER);
+			return "`" + startStr + " – " + endStr + "`";
+		}
+	}
 
 	public record HourlyTrafficBucket(
 			int hour,
@@ -816,8 +868,8 @@ public class DailyReportService {
 					SELECT server_id, poll_time, http_status_code, response_time_ms, error_message
 					FROM poll_event_log
 					WHERE poll_time >= ? AND poll_time < ? AND status = 'ERROR'
-					ORDER BY poll_time ASC
-					LIMIT 50
+					ORDER BY server_id ASC, poll_time ASC
+					LIMIT 10000
 					""";
 
 			outages = jdbcTemplate.query(outagesSql, (rs, rowNum) -> new OutageLog(
@@ -830,6 +882,8 @@ public class DailyReportService {
 		} catch (Exception e) {
 			log.warn("Error querying outages for {}: {}", dateStr, e.getMessage());
 		}
+
+		List<OutageIncident> outageIncidents = clusterOutages(outages, 120);
 
 		// 5. Threat Highlights (Top Offending IPs and ASNs from client_events)
 		int distinctBlockedClients = 0;
@@ -1079,7 +1133,7 @@ public class DailyReportService {
 				fleetPeakReqRate, fleetPeakReqRaw, fleetPeakReqDuration, peakReqServer, peakReqValve, fleetPeakReqTime,
 				fleetPeakBlockRate, fleetPeakBlockRaw, fleetPeakBlockDuration, peakBlockServer, peakBlockValve, fleetPeakBlockTime,
 				fleetPeakMarkRate, fleetPeakMarkRaw, fleetPeakMarkDuration, peakMarkServer, peakMarkValve, fleetPeakMarkTime,
-				valveAggregates, hourlyBuckets, pollSummary, serverPollStats, outages, topTrafficAsns, topClients, topAsns, topMarkedClients,
+				valveAggregates, hourlyBuckets, pollSummary, serverPollStats, outageIncidents, topTrafficAsns, topClients, topAsns, topMarkedClients,
 				valveCapacityAudits, fingerprintAnomalies, baselineSurges,
 				noteMarkdown, numFmt,
 				fleetAuthRequests, fleetAuthTrackedRequests,
@@ -1154,7 +1208,7 @@ public class DailyReportService {
 			List<HourlyTrafficBucket> hourlyBuckets,
 			PollSummary pollSummary,
 			List<ServerPollStat> serverPollStats,
-			List<OutageLog> outages,
+			List<OutageIncident> outageIncidents,
 			List<TopOffenderSummary> topTrafficAsns,
 			List<TopOffenderSummary> topClients,
 			List<TopOffenderSummary> topAsns,
@@ -1476,29 +1530,60 @@ public class DailyReportService {
 			sb.append("*No polling telemetry available for this date.*\n\n");
 		}
 
-		// Server Outages Table
-		sb.append("### ⚠️ Connection Failures & Node Outages\n\n");
-		if (outages == null || outages.isEmpty()) {
+		// Per-Node Connectivity & Availability Audit Table
+		if (serverPollStats != null && !serverPollStats.isEmpty()) {
+			sb.append("### 🖥️ Per-Node Connectivity & Availability Audit\n\n");
+			sb.append("| Server Node | Invocations | Successful | Failed | Availability | Avg Latency | Max Latency | Outage Incidents |\n");
+			sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
+
+			Map<String, Long> outageCountsByServer = (outageIncidents != null ? outageIncidents : Collections.<OutageIncident>emptyList())
+					.stream().collect(Collectors.groupingBy(OutageIncident::serverId, Collectors.counting()));
+
+			for (ServerPollStat stat : serverPollStats) {
+				long tot = stat.totalPolls();
+				long succ = stat.successPolls();
+				long err = stat.errorPolls();
+				double avail = tot > 0 ? (succ * 100.0) / tot : 100.0;
+				long incidents = outageCountsByServer.getOrDefault(stat.serverId(), 0L);
+
+				String errStr = err > 0 ? "**" + numFmt.format(err) + "**" : "0";
+				String availStr = avail < 99.5 ? "**" + String.format(Locale.US, "%.2f%%", avail) + "**" : String.format(Locale.US, "%.2f%%", avail);
+				String incidentStr = incidents == 0 ? "0" : (incidents == 1 ? "1 incident" : incidents + " incidents");
+
+				sb.append("| `").append(stat.serverId()).append("` | ")
+						.append(numFmt.format(tot)).append(" | ")
+						.append(numFmt.format(succ)).append(" | ")
+						.append(errStr).append(" | ")
+						.append(availStr).append(" | ")
+						.append(String.format(Locale.US, "%.1fms", stat.avgMs())).append(" | ")
+						.append(numFmt.format(stat.maxMs())).append("ms | ")
+						.append(incidentStr).append(" |\n");
+			}
+			sb.append("\n");
+		}
+
+		// Clustered Outage Incidents Table
+		sb.append("### ⚠️ Connection Failures & Outage Windows\n\n");
+		if (outageIncidents == null || outageIncidents.isEmpty()) {
 			sb.append("✅ *No connection dropouts or node unreachable errors recorded for this date.*\n\n");
 		} else {
-			sb.append("| Server | Timestamp | HTTP Code | Latency | Error Message |\n");
-			sb.append("| :--- | :--- | :--- | :--- | :--- |\n");
-			for (OutageLog outObj : outages) {
-				String sId = outObj.serverId();
-				Instant pTime = outObj.pollTime();
-				int httpCode = outObj.httpStatusCode();
-				long respMs = outObj.responseTimeMs();
-				String errMsg = outObj.errorMessage();
-
-				String timeFormatted = pTime != null ? pTime.atZone(ZoneId.systemDefault()).format(DATETIME_FORMATTER) : "–";
-				String cleanErr = errMsg != null ? errMsg.replace("|", "/") : "Unknown error";
-				if (cleanErr.length() > 80) cleanErr = cleanErr.substring(0, 77) + "...";
+			sb.append("| Server | Outage Window (Start – End) | Duration | Failed Polls | HTTP Status | Primary Cause / Error Sample |\n");
+			sb.append("| :--- | :--- | :--- | :--- | :--- | :--- |\n");
+			for (OutageIncident inc : outageIncidents) {
+				String sId = inc.serverId();
+				String timeWin = inc.formatTimeWindow(ZoneId.systemDefault());
+				String dur = inc.formatDuration();
+				int count = inc.failedPollsCount();
+				int httpCode = inc.httpStatusCode();
+				String httpStr = httpCode > 0 ? String.valueOf(httpCode) : "–";
+				String errMsg = inc.primaryErrorMessage();
 
 				sb.append("| `").append(sId).append("` | ")
-						.append(timeFormatted).append(" | ")
-						.append(httpCode > 0 ? httpCode : "–").append(" | ")
-						.append(respMs).append("ms | `")
-						.append(cleanErr).append("` |\n");
+						.append(timeWin).append(" | ")
+						.append(dur).append(" | ")
+						.append(numFmt.format(count)).append(" | ")
+						.append(httpStr).append(" | `")
+						.append(errMsg).append("` |\n");
 			}
 			sb.append("\n");
 		}
@@ -2391,5 +2476,98 @@ public class DailyReportService {
 				Instant.now()
 		);
 		reportRepository.upsert(updated);
+	}
+
+	public static List<OutageIncident> clusterOutages(List<OutageLog> rawOutages) {
+		return clusterOutages(rawOutages, 120);
+	}
+
+	public static List<OutageIncident> clusterOutages(List<OutageLog> rawOutages, long gapThresholdSeconds) {
+		if (rawOutages == null || rawOutages.isEmpty()) {
+			return List.of();
+		}
+		List<OutageLog> sorted = rawOutages.stream()
+				.filter(o -> o != null && o.serverId() != null && o.pollTime() != null)
+				.sorted(Comparator.comparing(OutageLog::serverId).thenComparing(OutageLog::pollTime))
+				.toList();
+
+		if (sorted.isEmpty()) {
+			return List.of();
+		}
+
+		List<OutageIncident> result = new ArrayList<>();
+
+		String currentServer = null;
+		Instant clusterStart = null;
+		Instant clusterEnd = null;
+		int pollCount = 0;
+		Map<Integer, Integer> statusCounts = new LinkedHashMap<>();
+		Map<String, Integer> errorCounts = new LinkedHashMap<>();
+
+		for (OutageLog log : sorted) {
+			boolean isSameServer = Objects.equals(currentServer, log.serverId());
+			boolean withinGap = isSameServer && clusterEnd != null &&
+					Math.abs(Duration.between(clusterEnd, log.pollTime()).getSeconds()) <= gapThresholdSeconds;
+
+			if (isSameServer && withinGap) {
+				clusterEnd = log.pollTime();
+				pollCount++;
+				statusCounts.merge(log.httpStatusCode(), 1, Integer::sum);
+				String msg = sanitizeErrorMessage(log.errorMessage());
+				errorCounts.merge(msg, 1, Integer::sum);
+			} else {
+				if (currentServer != null) {
+					result.add(createOutageIncident(currentServer, clusterStart, clusterEnd, pollCount, statusCounts, errorCounts));
+				}
+				currentServer = log.serverId();
+				clusterStart = log.pollTime();
+				clusterEnd = log.pollTime();
+				pollCount = 1;
+				statusCounts = new LinkedHashMap<>();
+				statusCounts.put(log.httpStatusCode(), 1);
+				errorCounts = new LinkedHashMap<>();
+				errorCounts.put(sanitizeErrorMessage(log.errorMessage()), 1);
+			}
+		}
+
+		if (currentServer != null) {
+			result.add(createOutageIncident(currentServer, clusterStart, clusterEnd, pollCount, statusCounts, errorCounts));
+		}
+
+		result.sort(Comparator.comparing(OutageIncident::startTime).thenComparing(OutageIncident::serverId));
+		return result;
+	}
+
+	private static OutageIncident createOutageIncident(
+			String serverId,
+			Instant start,
+			Instant end,
+			int count,
+			Map<Integer, Integer> statusCounts,
+			Map<String, Integer> errorCounts
+	) {
+		int mostFrequentStatus = statusCounts.entrySet().stream()
+				.max(Map.Entry.comparingByValue())
+				.map(Map.Entry::getKey)
+				.orElse(0);
+
+		String primaryError = errorCounts.entrySet().stream()
+				.max(Map.Entry.comparingByValue())
+				.map(Map.Entry::getKey)
+				.orElse("Unknown error");
+
+		return new OutageIncident(serverId, start, end, count, mostFrequentStatus, primaryError);
+	}
+
+	private static String sanitizeErrorMessage(String msg) {
+		if (msg == null || msg.isBlank()) {
+			return "Unknown error / timeout";
+		}
+		String clean = msg.replace('|', '/').replace('\n', ' ').replace('\r', ' ').trim();
+		clean = clean.replaceAll("\\s+", " ");
+		if (clean.length() > 80) {
+			clean = clean.substring(0, 77) + "...";
+		}
+		return clean;
 	}
 }

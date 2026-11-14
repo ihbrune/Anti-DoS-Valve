@@ -980,43 +980,69 @@
 
                 <div class="table-responsive"
                     th:if="${analytics.userAgents != null and !analytics.userAgents.userAgents.empty}">
-                    <table class="table" id="user-agent-forensics-table" style="margin-bottom: 0;">
+                    <table class="table table-sticky-col" id="user-agent-forensics-table" style="margin-bottom: 0;">
                         <thead>
                             <tr>
-                                <th style="min-width: 280px;">User-Agent Header</th>
-                                <th>Family</th>
-                                <th style="text-align: right;">Total Requests</th>
-                                <th style="text-align: right;">Incidents</th>
-                                <th>Auth Status</th>
+                                <th style="min-width: 320px; max-width: 440px;">User-Agent &amp; Identity</th>
+                                <th style="text-align: right; white-space: nowrap;">Total Requests</th>
+                                <th style="text-align: right; white-space: nowrap;">Incidents</th>
                                 <th>Provenance (Top ASNs &amp; Subnets)</th>
-                                <th>Heuristic Assessment</th>
+                                <th style="min-width: 200px;">Heuristic Assessment</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr th:each="item : ${analytics.userAgents.userAgents}">
                                 <td>
-                                    <div style="display: flex; flex-direction: column; gap: 4px;">
-                                        <code style="font-size: 12px; word-break: break-all; white-space: normal;"
-                                            th:text="${item.userAgent()}"
-                                            th:title="${item.userAgent()}">Mozilla/5.0...</code>
-                                        <div style="font-size: 11px; color: var(--text-muted);">
-                                            <span th:text="${item.eventCount()}">5</span> samples &bull;
-                                            <span th:text="${item.distinctSubnets()}">2</span> subnets &bull;
-                                            <span th:text="${item.distinctAsns()}">1</span> ASN(s)
+                                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                                        <!-- Header row with Family, Automation badge, Auth badge, and sample counts -->
+                                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                            <span th:utext="${item.icon()}">&#x1F310;</span>
+                                            <strong th:text="${item.displayName()}"
+                                                style="font-size: 12.5px; color: var(--text-primary);">Chrome Desktop</strong>
+                                            <span th:if="${item.isAutomated()}" class="badge badge-warning"
+                                                style="font-size: 9.5px; padding: 1px 5px;">Automated</span>
+                                            <span th:if="${item.hasAuthenticatedTraffic()}" class="badge badge-success"
+                                                style="font-size: 9.5px; padding: 1px 5px;"
+                                                title="Confirmed legitimate user sessions observed with this User-Agent">
+                                                <span>&#x2714;</span> Verified Auth (<span
+                                                    th:text="${item.authenticatedCount()}">1</span>)
+                                            </span>
+                                            <span th:unless="${item.hasAuthenticatedTraffic()}"
+                                                class="badge badge-neutral"
+                                                style="font-size: 9.5px; padding: 1px 5px; opacity: 0.85;"
+                                                title="No authenticated sessions recorded for this User-Agent">
+                                                Unauthenticated
+                                            </span>
+                                        </div>
+
+                                        <!-- UA code snippet with copy button and 2-line clamp -->
+                                        <div style="display: flex; align-items: flex-start; gap: 6px;">
+                                            <code class="ua-code-clamp"
+                                                th:text="${item.userAgent()}"
+                                                th:title="${item.userAgent()}">Mozilla/5.0...</code>
+                                            <button type="button" class="btn-copy-sm"
+                                                th:attr="onclick='copyText(\'' + ${#strings.escapeJavaScript(item.userAgent())} + '\', this)'"
+                                                title="Copy User-Agent string to clipboard">
+                                                <span>&#x1F4CB;</span>
+                                            </button>
+                                        </div>
+
+                                        <!-- Sub-metadata -->
+                                        <div
+                                            style="font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
+                                            <span><strong th:text="${item.eventCount()}">5</strong> samples</span>
+                                            <span>&bull;</span>
+                                            <span><strong th:text="${item.distinctSubnets()}">2</strong> subnets</span>
+                                            <span>&bull;</span>
+                                            <span><strong th:text="${item.distinctAsns()}">1</strong> ASN(s)</span>
                                         </div>
                                     </div>
                                 </td>
-                                <td>
-                                    <span th:utext="${item.icon()}">&#x1F310;</span>
-                                    <span th:text="${item.displayName()}"
-                                        style="font-size: 12px; font-weight: 600; margin-left: 4px;">Chrome
-                                        Desktop</span>
-                                </td>
-                                <td style="text-align: right; font-weight: 600;"
+                                <td style="text-align: right; font-weight: 600; white-space: nowrap;"
                                     th:text="${#numbers.formatInteger(item.totalRequests(), 1, 'COMMA')}">
                                     4,500
                                 </td>
-                                <td style="text-align: right;">
+                                <td style="text-align: right; white-space: nowrap;">
                                     <div th:if="${item.incidentCount() > 0}" style="font-size: 12px;">
                                         <strong style="color: var(--color-danger);"
                                             th:text="${item.incidentCount()}">12</strong>
@@ -1027,20 +1053,7 @@
                                         style="color: var(--text-muted);">-</span>
                                 </td>
                                 <td>
-                                    <span th:if="${item.hasAuthenticatedTraffic()}" class="badge badge-success"
-                                        style="font-size: 11px;"
-                                        title="Confirmed legitimate user sessions observed with this User-Agent">
-                                        <span>&#x2714;</span> Verified Auth (<span
-                                            th:text="${item.authenticatedCount()}">1</span>)
-                                    </span>
-                                    <span th:unless="${item.hasAuthenticatedTraffic()}" class="badge badge-neutral"
-                                        style="font-size: 11px;"
-                                        title="No authenticated sessions recorded for this User-Agent">
-                                        Unauthenticated
-                                    </span>
-                                </td>
-                                <td>
-                                    <div style="display: flex; flex-direction: column; gap: 3px;">
+                                    <div style="display: flex; flex-direction: column; gap: 4px;">
                                         <div th:each="origin : ${item.topOrigins()}"
                                             style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                                             <button th:if="${origin.asn() != null and origin.asn() > 0}" type="button"
@@ -1070,7 +1083,7 @@
                                         style="display: flex; flex-direction: column; gap: 2px;">
                                         <span class="badge badge-danger"
                                             style="align-self: flex-start; font-size: 10.5px;">Suspicious</span>
-                                        <span style="font-size: 10.5px; color: var(--color-danger); line-height: 1.3;"
+                                        <span style="font-size: 11px; color: var(--color-danger); line-height: 1.3;"
                                             th:text="${item.suspicionReason()}">High incident rate</span>
                                     </div>
                                     <div th:unless="${item.isSuspicious()}">
