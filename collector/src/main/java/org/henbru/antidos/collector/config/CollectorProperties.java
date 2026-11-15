@@ -430,6 +430,7 @@ public class CollectorProperties {
 		private int carpetWindowHours = 1;
 		private String protectedAsns = "8075,16509,14618,15169,13335";
 		private double maxReturningRatioPct = 5.0;
+		private long maxAuthenticatedRequests = 0L;
 		private int maxActiveRules = 100;
 		private int defaultTtlMinutes = 60;
 		private boolean autoExtendPersistent = true;
@@ -450,6 +451,8 @@ public class CollectorProperties {
 		public Set<Long> getProtectedAsnSet() { return parseAsnSet(this.protectedAsns); }
 		public double getMaxReturningRatioPct() { return maxReturningRatioPct; }
 		public void setMaxReturningRatioPct(double maxReturningRatioPct) { this.maxReturningRatioPct = Math.max(0.0, Math.min(100.0, maxReturningRatioPct)); }
+		public long getMaxAuthenticatedRequests() { return maxAuthenticatedRequests; }
+		public void setMaxAuthenticatedRequests(long maxAuthenticatedRequests) { this.maxAuthenticatedRequests = Math.max(0L, maxAuthenticatedRequests); }
 		public int getMaxActiveRules() { return maxActiveRules; }
 		public void setMaxActiveRules(int maxActiveRules) { this.maxActiveRules = Math.max(1, maxActiveRules); }
 		public int getDefaultTtlMinutes() { return defaultTtlMinutes; }

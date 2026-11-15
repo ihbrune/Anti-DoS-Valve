@@ -24,9 +24,9 @@ import org.springframework.stereotype.Service;
  * Autonomous, deterministic mitigation engine.
  * <p>
  * Periodically scans recent telemetry for distributed horizontal carpet attacks and abusive clusters.
- * Enforces strict safety guardrails (0 authenticated requests, returning visitor ratio <= maxReturningRatioPct,
- * crawler protection, circuit breaker cap), handles dry-run simulation vs. live block activation,
- * and manages the lifecycle of dynamic rules (auto-extension for persistent attackers).
+ * Enforces strict safety guardrails (0 authenticated requests on blocked subnets, configurable ASN-level auth tolerance,
+ * returning visitor ratio <= maxReturningRatioPct, crawler protection, circuit breaker cap), handles dry-run simulation
+ * vs. live block activation, and manages the lifecycle of dynamic rules (auto-extension for persistent attackers).
  */
 @Service
 public class AutoMitigationService {
@@ -41,6 +41,7 @@ public class AutoMitigationService {
 	public static final String KEY_CARPET_WINDOW_HOURS = "mitigation.auto.carpet_window_hours";
 	public static final String KEY_PROTECTED_ASNS = "mitigation.auto.protected_asns";
 	public static final String KEY_MAX_RETURNING_PCT = "mitigation.auto.max_returning_ratio_pct";
+	public static final String KEY_MAX_AUTHENTICATED_REQUESTS = "mitigation.auto.max_authenticated_requests";
 	public static final String KEY_MAX_ACTIVE_RULES = "mitigation.auto.max_active_rules";
 	public static final String KEY_DEFAULT_TTL_MINUTES = "mitigation.auto.default_ttl_minutes";
 	public static final String KEY_AUTO_EXTEND = "mitigation.auto.auto_extend_persistent";
@@ -89,12 +90,32 @@ public class AutoMitigationService {
 			int carpetWindowHours,
 			String protectedAsns,
 			double maxReturningRatioPct,
+			long maxAuthenticatedRequests,
 			int maxActiveRules,
 			int defaultTtlMinutes,
 			boolean autoExtendPersistent,
 			int maxExtensionHours,
 			boolean hasDatabaseOverrides
 	) {
+		public EffectiveAutoSettings(
+				boolean enabled,
+				boolean dryRun,
+				int carpetMinSubnets,
+				long carpetMinRequests,
+				int carpetWindowHours,
+				String protectedAsns,
+				double maxReturningRatioPct,
+				int maxActiveRules,
+				int defaultTtlMinutes,
+				boolean autoExtendPersistent,
+				int maxExtensionHours,
+				boolean hasDatabaseOverrides
+		) {
+			this(enabled, dryRun, carpetMinSubnets, carpetMinRequests, carpetWindowHours,
+					protectedAsns, maxReturningRatioPct, 0L, maxActiveRules, defaultTtlMinutes,
+					autoExtendPersistent, maxExtensionHours, hasDatabaseOverrides);
+		}
+
 		public boolean isEnabled() { return enabled; }
 		public boolean isDryRun() { return dryRun; }
 		public int getCarpetMinSubnets() { return carpetMinSubnets; }
@@ -103,6 +124,7 @@ public class AutoMitigationService {
 		public String getProtectedAsns() { return protectedAsns; }
 		public Set<Long> getProtectedAsnSet() { return CollectorProperties.AutoMitigationConfig.parseAsnSet(protectedAsns); }
 		public double getMaxReturningRatioPct() { return maxReturningRatioPct; }
+		public long getMaxAuthenticatedRequests() { return maxAuthenticatedRequests; }
 		public int getMaxActiveRules() { return maxActiveRules; }
 		public int getDefaultTtlMinutes() { return defaultTtlMinutes; }
 		public boolean isAutoExtendPersistent() { return autoExtendPersistent; }
@@ -120,6 +142,7 @@ public class AutoMitigationService {
 		Optional<Integer> dbWindowHours = settingsRepository.getInt(KEY_CARPET_WINDOW_HOURS);
 		Optional<String> dbProtectedAsns = settingsRepository.getString(KEY_PROTECTED_ASNS);
 		Optional<Double> dbMaxReturnPct = settingsRepository.getDouble(KEY_MAX_RETURNING_PCT);
+		Optional<Long> dbMaxAuthReqs = settingsRepository.getLong(KEY_MAX_AUTHENTICATED_REQUESTS);
 		Optional<Integer> dbMaxActive = settingsRepository.getInt(KEY_MAX_ACTIVE_RULES);
 		Optional<Integer> dbTtl = settingsRepository.getInt(KEY_DEFAULT_TTL_MINUTES);
 		Optional<Boolean> dbExtend = settingsRepository.getBoolean(KEY_AUTO_EXTEND);
@@ -127,7 +150,7 @@ public class AutoMitigationService {
 
 		boolean hasDbOverrides = dbEnabled.isPresent() || dbDryRun.isPresent() || dbMinSubnets.isPresent()
 				|| dbMinReqs.isPresent() || dbWindowHours.isPresent() || dbProtectedAsns.isPresent()
-				|| dbMaxReturnPct.isPresent() || dbMaxActive.isPresent()
+				|| dbMaxReturnPct.isPresent() || dbMaxAuthReqs.isPresent() || dbMaxActive.isPresent()
 				|| dbTtl.isPresent() || dbExtend.isPresent() || dbMaxExtHours.isPresent();
 
 		return new EffectiveAutoSettings(
@@ -138,6 +161,7 @@ public class AutoMitigationService {
 				dbWindowHours.orElse(yaml.getCarpetWindowHours()),
 				dbProtectedAsns.orElse(yaml.getProtectedAsns()),
 				dbMaxReturnPct.orElse(yaml.getMaxReturningRatioPct()),
+				dbMaxAuthReqs.orElse(yaml.getMaxAuthenticatedRequests()),
 				dbMaxActive.orElse(yaml.getMaxActiveRules()),
 				dbTtl.orElse(yaml.getDefaultTtlMinutes()),
 				dbExtend.orElse(yaml.isAutoExtendPersistent()),
@@ -160,9 +184,30 @@ public class AutoMitigationService {
 			int maxExtensionHours,
 			String updatedBy
 	) {
+		updateSettings(enabled, dryRun, carpetMinSubnets, carpetMinRequests, carpetWindowHours,
+				protectedAsns, maxReturningRatioPct, 0L, maxActiveRules, defaultTtlMinutes,
+				autoExtendPersistent, maxExtensionHours, updatedBy);
+	}
+
+	public void updateSettings(
+			boolean enabled,
+			boolean dryRun,
+			int carpetMinSubnets,
+			long carpetMinRequests,
+			int carpetWindowHours,
+			String protectedAsns,
+			double maxReturningRatioPct,
+			long maxAuthenticatedRequests,
+			int maxActiveRules,
+			int defaultTtlMinutes,
+			boolean autoExtendPersistent,
+			int maxExtensionHours,
+			String updatedBy
+	) {
 		if (properties.isViewerMode()) {
 			throw new IllegalStateException("Auto-mitigation settings cannot be modified in read-only VIEWER mode.");
 		}
+		long safeMaxAuthRequests = Math.max(0L, maxAuthenticatedRequests);
 		settingsRepository.setSetting(KEY_ENABLED, String.valueOf(enabled), "Auto-mitigation master switch", updatedBy);
 		settingsRepository.setSetting(KEY_DRY_RUN, String.valueOf(dryRun), "Auto-mitigation dry-run simulation mode", updatedBy);
 		settingsRepository.setSetting(KEY_CARPET_MIN_SUBNETS, String.valueOf(Math.max(1, carpetMinSubnets)), "Min subnets per ASN for carpet attack detection", updatedBy);
@@ -170,12 +215,13 @@ public class AutoMitigationService {
 		settingsRepository.setSetting(KEY_CARPET_WINDOW_HOURS, String.valueOf(Math.max(1, Math.min(720, carpetWindowHours))), "Lookback window in hours for carpet attack detection", updatedBy);
 		settingsRepository.setSetting(KEY_PROTECTED_ASNS, protectedAsns != null ? protectedAsns.trim() : "", "Protected ASNs exempt from auto-mitigation", updatedBy);
 		settingsRepository.setSetting(KEY_MAX_RETURNING_PCT, String.valueOf(Math.max(0.0, Math.min(100.0, maxReturningRatioPct))), "Max returning visitor ratio allowed for auto-block", updatedBy);
+		settingsRepository.setSetting(KEY_MAX_AUTHENTICATED_REQUESTS, String.valueOf(safeMaxAuthRequests), "Max authenticated requests per ASN allowed for auto-block candidate", updatedBy);
 		settingsRepository.setSetting(KEY_MAX_ACTIVE_RULES, String.valueOf(Math.max(1, maxActiveRules)), "Circuit-breaker max active auto rules", updatedBy);
 		settingsRepository.setSetting(KEY_DEFAULT_TTL_MINUTES, String.valueOf(Math.max(1, defaultTtlMinutes)), "Default TTL minutes for auto rules", updatedBy);
 		settingsRepository.setSetting(KEY_AUTO_EXTEND, String.valueOf(autoExtendPersistent), "Auto-extend persistent attackers", updatedBy);
 		settingsRepository.setSetting(KEY_MAX_EXTENSION_HOURS, String.valueOf(Math.max(1, maxExtensionHours)), "Max extension hours for auto rules", updatedBy);
-		log.info("Auto-mitigation settings updated by '{}': enabled={}, dryRun={}, carpetMinSubnets={}, windowHours={}, protectedAsns='{}'",
-				updatedBy, enabled, dryRun, carpetMinSubnets, carpetWindowHours, protectedAsns);
+		log.info("Auto-mitigation settings updated by '{}': enabled={}, dryRun={}, carpetMinSubnets={}, windowHours={}, maxAuthReqs={}, protectedAsns='{}'",
+				updatedBy, enabled, dryRun, carpetMinSubnets, carpetWindowHours, safeMaxAuthRequests, protectedAsns);
 	}
 
 	public void resetToDefaults(String updatedBy) {
@@ -189,6 +235,7 @@ public class AutoMitigationService {
 		settingsRepository.deleteSetting(KEY_CARPET_WINDOW_HOURS);
 		settingsRepository.deleteSetting(KEY_PROTECTED_ASNS);
 		settingsRepository.deleteSetting(KEY_MAX_RETURNING_PCT);
+		settingsRepository.deleteSetting(KEY_MAX_AUTHENTICATED_REQUESTS);
 		settingsRepository.deleteSetting(KEY_MAX_ACTIVE_RULES);
 		settingsRepository.deleteSetting(KEY_DEFAULT_TTL_MINUTES);
 		settingsRepository.deleteSetting(KEY_AUTO_EXTEND);
@@ -351,7 +398,7 @@ public class AutoMitigationService {
 				GROUP BY asn
 				HAVING COUNT(DISTINCT subnet_group) >= ?
 				   AND SUM(total_requests) >= ?
-				   AND SUM(authenticated_requests) = 0
+				   AND SUM(authenticated_requests) <= ?
 				ORDER BY total_requests DESC
 				""";
 
@@ -376,7 +423,7 @@ public class AutoMitigationService {
 					));
 				}
 			}
-		}, java.sql.Timestamp.from(cutoff), config.carpetMinSubnets(), config.carpetMinRequests());
+		}, java.sql.Timestamp.from(cutoff), config.carpetMinSubnets(), config.carpetMinRequests(), Math.max(0L, config.maxAuthenticatedRequests()));
 
 		return candidates;
 	}
@@ -549,19 +596,29 @@ public class AutoMitigationService {
 				statusReason = "ASN subnets are currently active dynamic mitigation rules";
 				badgeClass = "badge-success";
 				icon = "🔒";
-			} else if (authReq > 0) {
+			} else if (authReq > config.maxAuthenticatedRequests()) {
 				status = "SUPPRESSED_AUTH";
-				statusReason = "Suppressed: " + String.format("%,d", authReq) + " authenticated requests detected (human university sessions)";
+				statusReason = config.maxAuthenticatedRequests() > 0
+						? "Suppressed: " + String.format("%,d", authReq) + " authenticated requests exceed max allowed (" + String.format("%,d", config.maxAuthenticatedRequests()) + ")"
+						: "Suppressed: " + String.format("%,d", authReq) + " authenticated requests detected (human university sessions)";
 				badgeClass = "badge-warning";
 				icon = "👥";
 			} else if (activeSubnets >= config.carpetMinSubnets() && totalReq >= config.carpetMinRequests()) {
 				if (returningPct <= config.maxReturningRatioPct()) {
-					status = "QUALIFIED";
-					statusReason = config.dryRun()
-							? "QUALIFIED (Dry-Run): Meets all criteria! Would autonomously block " + activeSubnets + " subnets."
-							: "QUALIFIED (Live): Meets all criteria! Eligible for autonomous blocking.";
-					badgeClass = "badge-danger";
-					icon = "🚨";
+					List<String> eligibleSubnets = findEligibleSubnetsForAsn(asn, safeHours, config.maxReturningRatioPct());
+					if (eligibleSubnets.size() < config.carpetMinSubnets()) {
+						status = "BELOW_SUBNET_THRESHOLD";
+						statusReason = "Below threshold: " + eligibleSubnets.size() + " / " + config.carpetMinSubnets() + " eligible unauthenticated subnets";
+						badgeClass = "badge-secondary";
+						icon = "ℹ️";
+					} else {
+						status = "QUALIFIED";
+						statusReason = config.dryRun()
+								? "QUALIFIED (Dry-Run): Meets all criteria! Would autonomously block " + eligibleSubnets.size() + " unauthenticated subnets."
+								: "QUALIFIED (Live): Meets all criteria! Eligible for autonomous blocking (" + eligibleSubnets.size() + " unauthenticated subnets).";
+						badgeClass = "badge-danger";
+						icon = "🚨";
+					}
 				} else {
 					status = "SUPPRESSED_RETURNING_RATIO";
 					statusReason = "Suppressed: Returning visitor ratio (" + String.format("%.1f%%", returningPct)

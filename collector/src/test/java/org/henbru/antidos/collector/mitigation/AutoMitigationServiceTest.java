@@ -1,10 +1,5 @@
 package org.henbru.antidos.collector.mitigation;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import java.nio.file.Path;
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -15,12 +10,15 @@ import org.flywaydb.core.Flyway;
 import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.model.MitigationAuditEntry;
 import org.henbru.antidos.collector.model.MitigationRule;
-import org.henbru.antidos.collector.model.MonitoredValve;
 import org.henbru.antidos.collector.poller.ValveStatusClient;
 import org.henbru.antidos.collector.storage.MitigationRuleRepository;
 import org.henbru.antidos.collector.storage.MonitoredValveRepository;
 import org.henbru.antidos.collector.storage.SystemSettingsRepository;
 import org.henbru.antidos.collector.web.MitigationController;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -97,11 +95,12 @@ class AutoMitigationServiceTest {
 		assertEquals(1, s1.getCarpetWindowHours());
 		assertTrue(s1.getProtectedAsnSet().contains(8075L));
 		assertEquals(5.0, s1.getMaxReturningRatioPct(), 0.001);
+		assertEquals(0L, s1.getMaxAuthenticatedRequests());
 		assertEquals(50, s1.getMaxActiveRules());
 		assertFalse(s1.isHasDatabaseOverrides());
 
 		// 2. Update settings via database overrides
-		autoMitigationService.updateSettings(true, false, 5, 10000L, 3, "8075,16509", 2.5, 30, 90, true, 48, "OPERATOR-ALICE");
+		autoMitigationService.updateSettings(true, false, 5, 10000L, 3, "8075,16509", 2.5, 25L, 30, 90, true, 48, "OPERATOR-ALICE");
 		AutoMitigationService.EffectiveAutoSettings s2 = autoMitigationService.getEffectiveSettings();
 		assertTrue(s2.isEnabled());
 		assertFalse(s2.isDryRun());
@@ -112,13 +111,14 @@ class AutoMitigationServiceTest {
 		assertTrue(s2.getProtectedAsnSet().contains(8075L));
 		assertTrue(s2.getProtectedAsnSet().contains(16509L));
 		assertEquals(2.5, s2.getMaxReturningRatioPct(), 0.001);
+		assertEquals(25L, s2.getMaxAuthenticatedRequests());
 		assertEquals(30, s2.getMaxActiveRules());
 		assertEquals(90, s2.getDefaultTtlMinutes());
 		assertTrue(s2.isAutoExtendPersistent());
 		assertEquals(48, s2.getMaxExtensionHours());
 		assertTrue(s2.isHasDatabaseOverrides());
 
-		// 2b. Verify arbitrary / low values are supported without artificial step/min clamping
+		// 2b. Verify arbitrary / low values and backwards-compatible overload
 		autoMitigationService.updateSettings(false, true, 1, 50L, 1, "AS8075", 0.25, 1, 60, false, 2, "OPERATOR-BOB");
 		AutoMitigationService.EffectiveAutoSettings s2b = autoMitigationService.getEffectiveSettings();
 		assertEquals(1, s2b.getCarpetMinSubnets());
@@ -126,6 +126,7 @@ class AutoMitigationServiceTest {
 		assertEquals(1, s2b.getCarpetWindowHours());
 		assertTrue(s2b.getProtectedAsnSet().contains(8075L));
 		assertEquals(0.25, s2b.getMaxReturningRatioPct(), 0.001);
+		assertEquals(0L, s2b.getMaxAuthenticatedRequests());
 		assertEquals(1, s2b.getMaxActiveRules());
 		assertEquals(60, s2b.getDefaultTtlMinutes());
 		assertEquals(2, s2b.getMaxExtensionHours());
@@ -139,6 +140,7 @@ class AutoMitigationServiceTest {
 		assertEquals(5000L, s3.getCarpetMinRequests());
 		assertEquals(1, s3.getCarpetWindowHours());
 		assertEquals(5.0, s3.getMaxReturningRatioPct(), 0.001);
+		assertEquals(0L, s3.getMaxAuthenticatedRequests());
 		assertFalse(s3.isHasDatabaseOverrides());
 	}
 
@@ -319,7 +321,7 @@ class AutoMitigationServiceTest {
 
 		// 3. Update settings
 		ExtendedModelMap model3 = new ExtendedModelMap();
-		controller.updateAutoMitigationSettings(true, false, 4, 7500L, 2, "8075,16509", 3.5, 40, 120, true, 36, model3);
+		controller.updateAutoMitigationSettings(true, false, 4, 7500L, 2, "8075,16509", 3.5, 20L, 40, 120, true, 36, model3);
 		AutoMitigationService.EffectiveAutoSettings s3 =
 				(AutoMitigationService.EffectiveAutoSettings) model3.getAttribute("autoSettings");
 		assertEquals(4, s3.getCarpetMinSubnets());
@@ -328,6 +330,15 @@ class AutoMitigationServiceTest {
 		assertEquals("8075,16509", s3.getProtectedAsns());
 		assertTrue(s3.getProtectedAsnSet().contains(8075L));
 		assertEquals(3.5, s3.getMaxReturningRatioPct(), 0.001);
+		assertEquals(20L, s3.getMaxAuthenticatedRequests());
+
+		// Toggle preserves maxAuthenticatedRequests
+		ExtendedModelMap modelToggle = new ExtendedModelMap();
+		controller.toggleAutoMitigationSetting("dryRun", modelToggle);
+		AutoMitigationService.EffectiveAutoSettings sToggle =
+				(AutoMitigationService.EffectiveAutoSettings) modelToggle.getAttribute("autoSettings");
+		assertEquals(20L, sToggle.getMaxAuthenticatedRequests());
+		assertTrue(sToggle.isDryRun());
 
 		// 4. Reset to defaults
 		ExtendedModelMap model4 = new ExtendedModelMap();
@@ -457,6 +468,69 @@ class AutoMitigationServiceTest {
 				.orElseThrow();
 		assertEquals("PROTECTED_ASN", protectedAsn.status());
 		assertTrue(protectedAsn.isProtectedAsn());
+	}
+
+	@Test
+	void testMaxAuthenticatedRequestsThresholdBlocksOnlyUnauthenticatedSubnets() {
+		Instant now = Instant.now();
+
+		// ASN 64500: 4 subnets (3 unauthenticated + 1 with 8 authenticated requests)
+		insertSubnetRollup("198.51.101.0/24", 64500L, "Mixed Hosting AS", 2000, 20, 0, now.minus(Duration.ofMinutes(10)));
+		insertSubnetRollup("198.51.102.0/24", 64500L, "Mixed Hosting AS", 2000, 20, 0, now.minus(Duration.ofMinutes(10)));
+		insertSubnetRollup("198.51.103.0/24", 64500L, "Mixed Hosting AS", 2000, 20, 0, now.minus(Duration.ofMinutes(10)));
+		insertSubnetRollup("198.51.104.0/24", 64500L, "Mixed Hosting AS", 2000, 20, 8, now.minus(Duration.ofMinutes(10)));
+
+		// ASN 64501: 3 subnets (only 2 unauthenticated + 1 with 5 auth -> < minSubnets=3 eligible)
+		insertSubnetRollup("203.0.120.0/24", 64501L, "Small Mixed AS", 2000, 10, 0, now.minus(Duration.ofMinutes(10)));
+		insertSubnetRollup("203.0.121.0/24", 64501L, "Small Mixed AS", 2000, 10, 0, now.minus(Duration.ofMinutes(10)));
+		insertSubnetRollup("203.0.122.0/24", 64501L, "Small Mixed AS", 2000, 10, 5, now.minus(Duration.ofMinutes(10)));
+
+		// 1. Default maxAuthenticatedRequests = 0 -> ASN 64500 is suppressed
+		AutoMitigationService.EffectiveAutoSettings zeroAuthConfig = new AutoMitigationService.EffectiveAutoSettings(
+				true, false, 3, 5000L, 2, "8075", 5.0, 0L, 50, 60, false, 24, false);
+		assertTrue(autoMitigationService.findCarpetAttackCandidates(zeroAuthConfig, 2).isEmpty());
+
+		List<org.henbru.antidos.collector.model.CarpetRadarEntry> radarZero = autoMitigationService.getCarpetRadar(2);
+		org.henbru.antidos.collector.model.CarpetRadarEntry entryZero = radarZero.stream()
+				.filter(e -> e.asn() == 64500L)
+				.findFirst()
+				.orElseThrow();
+		assertEquals("SUPPRESSED_AUTH", entryZero.status());
+		assertEquals(8L, entryZero.authenticatedRequests());
+
+		// 2. Increase maxAuthenticatedRequests to 10 (persisted for getCarpetRadar as well)
+		autoMitigationService.updateSettings(true, false, 3, 5000L, 2, "8075", 5.0, 10L, 50, 60, false, 24, "OPERATOR");
+		AutoMitigationService.EffectiveAutoSettings tolerantConfig = autoMitigationService.getEffectiveSettings();
+		assertEquals(10L, tolerantConfig.getMaxAuthenticatedRequests());
+
+		// Carpet radar transitions ASN 64500 to QUALIFIED, while ASN 64501 is BELOW_SUBNET_THRESHOLD
+		List<org.henbru.antidos.collector.model.CarpetRadarEntry> radarTolerant = autoMitigationService.getCarpetRadar(2);
+		org.henbru.antidos.collector.model.CarpetRadarEntry entryTolerant = radarTolerant.stream()
+				.filter(e -> e.asn() == 64500L)
+				.findFirst()
+				.orElseThrow();
+		assertEquals("QUALIFIED", entryTolerant.status());
+
+		org.henbru.antidos.collector.model.CarpetRadarEntry smallMixed = radarTolerant.stream()
+				.filter(e -> e.asn() == 64501L)
+				.findFirst()
+				.orElseThrow();
+		assertEquals("BELOW_SUBNET_THRESHOLD", smallMixed.status());
+
+		// Candidate detection and enforcement only block the 3 unauthenticated subnets of ASN 64500
+		List<AutoMitigationService.CarpetAttackCandidate> candidates = autoMitigationService.evaluateAndEnforce(tolerantConfig);
+		assertEquals(1, candidates.size());
+		AutoMitigationService.CarpetAttackCandidate candidate = candidates.getFirst();
+		assertEquals(64500L, candidate.asn());
+		assertEquals(3, candidate.eligibleSubnets().size());
+		assertFalse(candidate.eligibleSubnets().contains("198.51.104.0/24"));
+
+		List<String> blockedCidrs = mitigationService.getActiveRules().stream().map(MitigationRule::cidr).toList();
+		assertEquals(3, blockedCidrs.size());
+		assertTrue(blockedCidrs.contains("198.51.101.0/24"));
+		assertTrue(blockedCidrs.contains("198.51.102.0/24"));
+		assertTrue(blockedCidrs.contains("198.51.103.0/24"));
+		assertFalse(blockedCidrs.contains("198.51.104.0/24"), "Authenticated subnet must NEVER be auto-blocked");
 	}
 
 	private void insertSubnetRollup(

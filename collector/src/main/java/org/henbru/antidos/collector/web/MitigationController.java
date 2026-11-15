@@ -13,7 +13,6 @@ import org.henbru.antidos.collector.mitigation.MitigationService;
 import org.henbru.antidos.collector.model.MitigationAuditEntry;
 import org.henbru.antidos.collector.model.MitigationRule;
 import org.henbru.antidos.collector.model.MonitoredValve;
-import jakarta.servlet.http.HttpServletResponse;
 import org.henbru.antidos.collector.notification.AlertNotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -26,6 +25,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
+
+import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Web &amp; HTMX controller for managing dynamic CIDR mitigations, ASN batch blocks,
@@ -343,6 +344,7 @@ public class MitigationController {
 			@RequestParam(value = "carpetWindowHours", defaultValue = "1") int carpetWindowHours,
 			@RequestParam(value = "protectedAsns", defaultValue = "8075,16509,14618,15169,13335") String protectedAsns,
 			@RequestParam(value = "maxReturningRatioPct", defaultValue = "5.0") double maxReturningRatioPct,
+			@RequestParam(value = "maxAuthenticatedRequests", defaultValue = "0") long maxAuthenticatedRequests,
 			@RequestParam(value = "maxActiveRules", defaultValue = "50") int maxActiveRules,
 			@RequestParam(value = "defaultTtlMinutes", defaultValue = "60") int defaultTtlMinutes,
 			@RequestParam(value = "autoExtendPersistent", defaultValue = "false") boolean autoExtendPersistent,
@@ -360,7 +362,7 @@ public class MitigationController {
 			autoMitigationService.updateSettings(
 					enabled, dryRun, carpetMinSubnets, carpetMinRequests,
 					carpetWindowHours, protectedAsns,
-					maxReturningRatioPct, maxActiveRules, defaultTtlMinutes,
+					maxReturningRatioPct, maxAuthenticatedRequests, maxActiveRules, defaultTtlMinutes,
 					autoExtendPersistent, maxExtensionHours, "ADMIN");
 			if (notificationService != null) {
 				notificationService.updateSettings(webhookEnabled, webhookUrl, notifyOnDryRun, notifyOnEmergencyFlush, "ADMIN");
@@ -385,6 +387,26 @@ public class MitigationController {
 			boolean autoExtendPersistent,
 			int maxExtensionHours,
 			Model model) {
+		return updateAutoMitigationSettings(
+				enabled, dryRun, carpetMinSubnets, carpetMinRequests, carpetWindowHours,
+				protectedAsns, maxReturningRatioPct, 0L, maxActiveRules, defaultTtlMinutes,
+				autoExtendPersistent, maxExtensionHours, model);
+	}
+
+	public String updateAutoMitigationSettings(
+			boolean enabled,
+			boolean dryRun,
+			int carpetMinSubnets,
+			long carpetMinRequests,
+			int carpetWindowHours,
+			String protectedAsns,
+			double maxReturningRatioPct,
+			long maxAuthenticatedRequests,
+			int maxActiveRules,
+			int defaultTtlMinutes,
+			boolean autoExtendPersistent,
+			int maxExtensionHours,
+			Model model) {
 		if (properties.isViewerMode()) {
 			populateMitigationModel(model, null, "Updating autonomous defense settings is disabled in read-only VIEWER mode.");
 			return "fragments/mitigation-content :: mitigationDashboard";
@@ -393,7 +415,7 @@ public class MitigationController {
 			autoMitigationService.updateSettings(
 					enabled, dryRun, carpetMinSubnets, carpetMinRequests,
 					carpetWindowHours, protectedAsns,
-					maxReturningRatioPct, maxActiveRules, defaultTtlMinutes,
+					maxReturningRatioPct, maxAuthenticatedRequests, maxActiveRules, defaultTtlMinutes,
 					autoExtendPersistent, maxExtensionHours, "ADMIN");
 			populateMitigationModel(model, "Autonomous defense and notification settings saved to system_settings.", null);
 		} catch (Exception e) {
@@ -422,7 +444,8 @@ public class MitigationController {
 			autoMitigationService.updateSettings(
 					newEnabled, newDryRun, current.carpetMinSubnets(), current.carpetMinRequests(),
 					current.carpetWindowHours(), current.protectedAsns(),
-					current.maxReturningRatioPct(), current.maxActiveRules(), current.defaultTtlMinutes(),
+					current.maxReturningRatioPct(), current.maxAuthenticatedRequests(),
+					current.maxActiveRules(), current.defaultTtlMinutes(),
 					current.autoExtendPersistent(), current.maxExtensionHours(), "ADMIN");
 			populateMitigationModel(model, "Toggled " + property + " to " + ("enabled".equalsIgnoreCase(property) ? newEnabled : newDryRun) + ".", null);
 		} catch (Exception e) {
