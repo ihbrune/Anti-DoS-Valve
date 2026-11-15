@@ -255,7 +255,7 @@ public class NetworkAnnotationService {
 	}
 
 	private void refreshCacheIfViewerStale() {
-		if (properties != null && properties.isViewerMode()
+		if (properties != null && !properties.getMode().isBackgroundProcessingEnabled()
 				&& System.currentTimeMillis() - lastCacheRefreshMillis >= VIEWER_CACHE_TTL_MS) {
 			refreshCache();
 		}

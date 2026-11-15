@@ -49,7 +49,7 @@ public class CrawlerController {
 
 	@GetMapping("/crawlers")
 	public String crawlersPage(Model model) {
-		if (!properties.isViewerMode()) {
+		if (properties.canPerformSystemAdmin()) {
 			ensureInitialFeedsLoaded();
 		}
 		populateModel(model);
@@ -58,9 +58,9 @@ public class CrawlerController {
 
 	@PostMapping("/crawlers/{feedKey}/sync")
 	public String syncSingleFeed(@PathVariable(name = "feedKey") String feedKey, HttpServletResponse response, Model model) {
-		if (properties.isViewerMode()) {
+		if (!properties.canPerformSystemAdmin()) {
 			response.setStatus(HttpStatus.FORBIDDEN.value());
-			model.addAttribute("viewerError", "Crawler feed synchronization is disabled in read-only VIEWER mode.");
+			model.addAttribute("viewerError", "Crawler feed synchronization is disabled in " + properties.getMode() + " mode.");
 			populateModel(model);
 			return "fragments/crawlers-table :: crawlersTable";
 		}
@@ -71,9 +71,9 @@ public class CrawlerController {
 
 	@PostMapping("/crawlers/sync-all")
 	public String syncAllFeeds(HttpServletResponse response, Model model) {
-		if (properties.isViewerMode()) {
+		if (!properties.canPerformSystemAdmin()) {
 			response.setStatus(HttpStatus.FORBIDDEN.value());
-			model.addAttribute("viewerError", "Crawler feed synchronization is disabled in read-only VIEWER mode.");
+			model.addAttribute("viewerError", "Crawler feed synchronization is disabled in " + properties.getMode() + " mode.");
 			populateModel(model);
 			return "fragments/crawlers-table :: crawlersTable";
 		}
@@ -84,9 +84,9 @@ public class CrawlerController {
 
 	@PostMapping("/crawlers/sync-browser-feeds")
 	public String syncBrowserFeeds(HttpServletResponse response, Model model) {
-		if (properties.isViewerMode()) {
+		if (!properties.canPerformSystemAdmin()) {
 			response.setStatus(HttpStatus.FORBIDDEN.value());
-			model.addAttribute("viewerError", "Browser version feed synchronization is disabled in read-only VIEWER mode.");
+			model.addAttribute("viewerError", "Browser version feed synchronization is disabled in " + properties.getMode() + " mode.");
 			populateModel(model);
 			return "fragments/browser-feeds-card :: browserFeedsCard";
 		}

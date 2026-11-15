@@ -490,7 +490,7 @@ public class SystemStatusService {
 			} catch (Exception ignored) {
 			}
 		}
-		if (properties.isViewerMode() && total == 0 && !heartbeats.isEmpty()) {
+		if (!properties.getMode().isBackgroundProcessingEnabled() && total == 0 && !heartbeats.isEmpty()) {
 			total = heartbeats.size();
 			enabled = heartbeats.size();
 		}

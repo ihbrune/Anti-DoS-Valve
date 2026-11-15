@@ -993,6 +993,12 @@ public class MitigationService {
 				.filter(MonitoredValve::dynamicMitigationEnabled)
 				.toList();
 
+		if (properties.isOperatorMode()) {
+			log.info("Operator mode: persisted {} active mitigation rule(s) (expected revision {}); active Valve push delegated to HEADLESS/FULL collector.",
+					activeRules.size(), expectedRevision);
+			return new FleetSyncResult(mitigationValves.size(), 0, activeRules.size(), expectedRevision, List.of());
+		}
+
 		Map<String, EndpointConfig> endpointsByName = new LinkedHashMap<>();
 		for (EndpointConfig ep : properties.getEndpoints()) {
 			if (ep != null && ep.isEnabled() && ep.getName() != null) {

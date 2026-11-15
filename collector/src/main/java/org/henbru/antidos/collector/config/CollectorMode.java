@@ -20,6 +20,13 @@ public enum CollectorMode {
 	HEADLESS,
 
 	/**
+	 * Analyst and operator web UI mode: allows creating/editing network notes, commenting on and
+	 * regenerating daily reports, and managing dynamic mitigation rules without background polling
+	 * or system/admin maintenance access.
+	 */
+	OPERATOR,
+
+	/**
 	 * Strictly read-only web UI and REST API viewer for inspecting a Collector database
 	 * without performing any database writes, migrations, or background processing.
 	 */
@@ -29,7 +36,7 @@ public enum CollectorMode {
 	 * @return {@code true} if the embedded web server and HTTP controllers should run.
 	 */
 	public boolean isWebEnabled() {
-		return this == FULL || this == VIEWER;
+		return this == FULL || this == OPERATOR || this == VIEWER;
 	}
 
 	/**
@@ -54,6 +61,27 @@ public enum CollectorMode {
 	}
 
 	/**
+	 * @return {@code true} if running in {@link #OPERATOR} mode.
+	 */
+	public boolean isOperator() {
+		return this == OPERATOR;
+	}
+
+	/**
+	 * @return {@code true} if operator/analyst actions (notes, daily reports, dynamic mitigation rules) are permitted.
+	 */
+	public boolean canModifyOperationalData() {
+		return this == FULL || this == OPERATOR;
+	}
+
+	/**
+	 * @return {@code true} if system/admin maintenance and configuration mutations are permitted.
+	 */
+	public boolean canPerformSystemAdmin() {
+		return this == FULL;
+	}
+
+	/**
 	 * Parses a case-insensitive mode name. Blank or null input returns {@link #FULL}.
 	 *
 	 * @param raw raw mode value
@@ -70,6 +98,6 @@ public enum CollectorMode {
 			}
 		}
 		throw new IllegalArgumentException(
-				"Invalid collector.mode '" + raw + "'. Supported values: FULL, HEADLESS, VIEWER.");
+				"Invalid collector.mode '" + raw + "'. Supported values: FULL, HEADLESS, OPERATOR, VIEWER.");
 	}
 }

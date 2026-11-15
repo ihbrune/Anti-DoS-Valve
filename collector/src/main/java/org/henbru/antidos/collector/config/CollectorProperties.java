@@ -184,6 +184,18 @@ public class CollectorProperties {
 		return getMode().isHeadless();
 	}
 
+	public boolean isOperatorMode() {
+		return getMode().isOperator();
+	}
+
+	public boolean canModifyOperationalData() {
+		return getMode().canModifyOperationalData();
+	}
+
+	public boolean canPerformSystemAdmin() {
+		return getMode().canPerformSystemAdmin();
+	}
+
 	public boolean isViewerMigrateOnStartup() {
 		return viewerMigrateOnStartup;
 	}

@@ -39,7 +39,7 @@ public class CollectorModeEnvironmentListener
 		if (mode == CollectorMode.HEADLESS) {
 			overrides.put("spring.main.web-application-type", "none");
 			overrides.put("spring.main.keep-alive", "true");
-		} else if (mode == CollectorMode.VIEWER) {
+		} else if (mode == CollectorMode.VIEWER || mode == CollectorMode.OPERATOR) {
 			boolean migrateOnStartup = Boolean.parseBoolean(
 					env.getProperty("collector.viewer-migrate-on-startup", "false"));
 			if (!migrateOnStartup) {

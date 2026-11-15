@@ -61,6 +61,11 @@ public class CollectorScheduler {
 					mode);
 			return;
 		}
+		if (properties.isOperatorMode()) {
+			log.info("Collector started in {} mode (notes, reports, and dynamic mitigation enabled; background pollers, enrichment, and retention disabled).",
+					mode);
+			return;
+		}
 		java.util.List<org.henbru.antidos.collector.config.EndpointConfig> endpoints = properties.getEndpoints();
 		if (endpoints.isEmpty()) {
 			log.info("Collector started in {} mode: 0 endpoints configured (create 'collector-config.yaml' to add Tomcat servers).",
@@ -137,8 +142,8 @@ public class CollectorScheduler {
 	 */
 	@Scheduled(cron = "0 0 3 * * *") // Daily at 03:00 AM
 	public RetentionCleanupResult runRetentionCleanup() {
-		if (properties.isViewerMode()) {
-			throw new IllegalStateException("Retention cleanup is disabled in read-only VIEWER mode.");
+		if (!properties.getMode().isBackgroundProcessingEnabled()) {
+			throw new IllegalStateException("Retention cleanup is disabled in " + properties.getMode() + " mode.");
 		}
 		long start = System.currentTimeMillis();
 		int days = properties.getRetentionDays() > 0 ? properties.getRetentionDays() : 30;

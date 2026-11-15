@@ -25,28 +25,28 @@ public class DatabaseDirectoryInitializer implements BeanFactoryPostProcessor {
 	@Override
 	public void postProcessBeanFactory(@NonNull ConfigurableListableBeanFactory beanFactory) throws BeansException {
 		Environment env = beanFactory.getBean(Environment.class);
-		boolean viewerMode = CollectorMode.fromString(env.getProperty("collector.mode", "FULL")).isViewer();
+		CollectorMode mode = CollectorMode.fromString(env.getProperty("collector.mode", "FULL"));
 		String url = env.getProperty("spring.datasource.url");
 		if (url != null && url.startsWith(SQLITE_PREFIX)) {
-			if (viewerMode) {
-				verifyExistingDatabaseFile(url);
+			if (mode.isViewer() || mode.isOperator()) {
+				verifyExistingDatabaseFile(url, mode);
 			} else {
 				ensureDirectoryExists(url);
 			}
 		}
 	}
 
-	private void verifyExistingDatabaseFile(String url) {
+	private void verifyExistingDatabaseFile(String url, CollectorMode mode) {
 		Path dbPath = resolveSqlitePath(url);
 		if (dbPath == null) {
 			return;
 		}
 		if (!Files.exists(dbPath)) {
 			throw new IllegalStateException(
-					"VIEWER mode requires an existing SQLite database file, but none was found at: "
+					mode + " mode requires an existing SQLite database file, but none was found at: "
 							+ dbPath.toAbsolutePath());
 		}
-		log.info("Verified existing SQLite database for read-only VIEWER mode: {}", dbPath.toAbsolutePath());
+		log.info("Verified existing SQLite database for {} mode: {}", mode, dbPath.toAbsolutePath());
 	}
 
 	private Path resolveSqlitePath(String url) {

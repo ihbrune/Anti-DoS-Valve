@@ -143,6 +143,10 @@ public class CollectorCliRunner {
 				      Starts the collector in HEADLESS mode (background pollers, enrichment, mitigation, and rollups only,
 				      with no embedded HTTP server or web dashboard exposed).
 
+				  java -jar anti-dos-collector-*.jar operator [path/to/antidos-collector.db]
+				      Starts the collector in OPERATOR mode (analyst & operator web UI: notes, daily report comments/regeneration,
+				      and dynamic mitigation rules are enabled without background polling or system/admin maintenance).
+
 				  java -jar anti-dos-collector-*.jar viewer [path/to/antidos-collector.db]
 				      Starts the collector in strictly read-only VIEWER mode to inspect an existing SQLite snapshot or
 				      configured database without performing any database writes or background polling.

@@ -248,10 +248,6 @@
                             (Carpet: &ge;<span th:text="${autoSettings.carpetMinSubnets}">3</span> subnets, &ge;<span
                                 th:text="${#numbers.formatInteger(autoSettings.carpetMinRequests, 1, 'COMMA')}">5,000</span>
                             reqs &bull; Max Returning: <span th:text="${autoSettings.maxReturningRatioPct}">5.0</span>%
-                            &bull; Cap: <span th:text="${autoSettings.maxActiveRules}">50</span> rules)
-                            (Carpet: &ge;<span th:text="${autoSettings.carpetMinSubnets}">3</span> subnets, &ge;<span
-                                th:text="${#numbers.formatInteger(autoSettings.carpetMinRequests, 1, 'COMMA')}">5,000</span>
-                            reqs &bull; Max Returning: <span th:text="${autoSettings.maxReturningRatioPct}">5.0</span>%
                             &bull; Max Auth: &le;<span
                                 th:text="${#numbers.formatInteger(autoSettings.maxAuthenticatedRequests, 1, 'COMMA')}">0</span>
                             &bull; Cap: <span th:text="${autoSettings.maxActiveRules}">50</span> rules)
@@ -1129,8 +1125,7 @@
                                         (&le;5.0%)</div>
                                 </td>
                                 <td style="padding: 8px 12px; text-align: right;">
-                                    <span th:if="${entry.authenticatedRequests > 0}" class="badge badge-info" <span
-                                        th:if="${entry.authenticatedRequests > 0}" class="badge"
+                                    <span th:if="${entry.authenticatedRequests > 0}" class="badge"
                                         th:classappend="${entry.authenticatedRequests <= autoSettings.maxAuthenticatedRequests ? 'badge-danger' : 'badge-info'}"
                                         th:text="${#numbers.formatInteger(entry.authenticatedRequests, 1, 'POINT')}">22,018</span>
                                     <span th:if="${entry.authenticatedRequests == 0}"

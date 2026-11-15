@@ -204,8 +204,8 @@ public class AutoMitigationService {
 			int maxExtensionHours,
 			String updatedBy
 	) {
-		if (properties.isViewerMode()) {
-			throw new IllegalStateException("Auto-mitigation settings cannot be modified in read-only VIEWER mode.");
+		if (!properties.getMode().isBackgroundProcessingEnabled()) {
+			throw new IllegalStateException("Auto-mitigation settings cannot be modified in " + properties.getMode() + " mode.");
 		}
 		long safeMaxAuthRequests = Math.max(0L, maxAuthenticatedRequests);
 		settingsRepository.setSetting(KEY_ENABLED, String.valueOf(enabled), "Auto-mitigation master switch", updatedBy);
@@ -225,8 +225,8 @@ public class AutoMitigationService {
 	}
 
 	public void resetToDefaults(String updatedBy) {
-		if (properties.isViewerMode()) {
-			throw new IllegalStateException("Auto-mitigation settings cannot be reset in read-only VIEWER mode.");
+		if (!properties.getMode().isBackgroundProcessingEnabled()) {
+			throw new IllegalStateException("Auto-mitigation settings cannot be reset in " + properties.getMode() + " mode.");
 		}
 		settingsRepository.deleteSetting(KEY_ENABLED);
 		settingsRepository.deleteSetting(KEY_DRY_RUN);
@@ -287,8 +287,8 @@ public class AutoMitigationService {
 	 * Evaluates active carpet attack candidates and enforces auto-blocks or dry-run audit entries.
 	 */
 	public List<CarpetAttackCandidate> evaluateAndEnforce(EffectiveAutoSettings config) {
-		if (properties.isViewerMode()) {
-			throw new IllegalStateException("Autonomous mitigation evaluation is disabled in read-only VIEWER mode.");
+		if (!properties.getMode().isBackgroundProcessingEnabled()) {
+			throw new IllegalStateException("Autonomous mitigation evaluation is disabled in " + properties.getMode() + " mode.");
 		}
 		Instant now = Instant.now();
 		List<CarpetAttackCandidate> candidates = findCarpetAttackCandidates(config, config.carpetWindowHours());
@@ -486,8 +486,8 @@ public class AutoMitigationService {
 	 * Automatically extends active rules for persistent attackers if enabled.
 	 */
 	public int evaluateExtensions(EffectiveAutoSettings config) {
-		if (properties.isViewerMode()) {
-			throw new IllegalStateException("Autonomous rule extension is disabled in read-only VIEWER mode.");
+		if (!properties.getMode().isBackgroundProcessingEnabled()) {
+			throw new IllegalStateException("Autonomous rule extension is disabled in " + properties.getMode() + " mode.");
 		}
 		Instant now = Instant.now();
 		mitigationService.refreshDeterrenceMetrics();

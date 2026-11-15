@@ -418,9 +418,9 @@ public class DashboardController {
 			@RequestParam(name = "offset", defaultValue = "0") int offset,
 			HttpServletResponse response,
 			Model model) {
-		if (properties.isViewerMode()) {
+		if (!properties.canPerformSystemAdmin()) {
 			response.setStatus(org.springframework.http.HttpStatus.FORBIDDEN.value());
-			model.addAttribute("errorMessage", "Subnet profile refresh is disabled in read-only VIEWER mode.");
+			model.addAttribute("errorMessage", "Subnet profile refresh is disabled in " + properties.getMode() + " mode.");
 			populateProfilesModel(activityPattern, minRequests, clientQuery, asn, clientTypes, sortBy, limit, offset, model);
 			return "profiles";
 		}
@@ -592,9 +592,9 @@ public class DashboardController {
 			Model model,
 			org.springframework.web.servlet.mvc.support.RedirectAttributes redirectAttributes) {
 
-		if (properties.isViewerMode()) {
+		if (!properties.canPerformSystemAdmin()) {
 			response.setStatus(org.springframework.http.HttpStatus.FORBIDDEN.value());
-			model.addAttribute("errorMessage", "Deleting valves or history is disabled in read-only VIEWER mode.");
+			model.addAttribute("errorMessage", "Deleting valves or history is disabled in " + properties.getMode() + " mode.");
 			return serverDetails(serverId, null, "ALL", model);
 		}
 
@@ -803,7 +803,7 @@ public class DashboardController {
 
 		switch (effectiveGroupBy) {
 		case "PROFILES" -> {
-			if (!properties.isViewerMode() && subnetProfileService != null
+			if (properties.canPerformSystemAdmin() && subnetProfileService != null
 					&& subnetProfileService.countProfilesFiltered("ALL", null, null, null, null, null) == 0) {
 				try {
 					subnetProfileService.refreshProfiles();
@@ -913,7 +913,7 @@ public class DashboardController {
 			int offset,
 			Model model) {
 
-		if (!properties.isViewerMode() && subnetProfileService != null
+		if (properties.canPerformSystemAdmin() && subnetProfileService != null
 				&& subnetProfileService.countProfilesFiltered("ALL", null, null, null, null, null) == 0) {
 			try {
 				subnetProfileService.refreshProfiles();

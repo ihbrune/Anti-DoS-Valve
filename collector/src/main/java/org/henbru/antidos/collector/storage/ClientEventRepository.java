@@ -184,8 +184,8 @@ public class ClientEventRepository {
 
 	@PostConstruct
 	public void repairUnnormalizedEvents() {
-		if (properties != null && properties.isViewerMode()) {
-			log.debug("Skipping startup event normalization repair in read-only VIEWER mode.");
+		if (properties != null && !properties.getMode().isBackgroundProcessingEnabled()) {
+			log.debug("Skipping startup event normalization repair in {} mode.", properties.getMode());
 			return;
 		}
 		try {

@@ -85,6 +85,21 @@ public class AntiDoSCollectorApplication {
 				}
 				effectiveList.remove(i);
 				i--;
+			} else if ("operator".equals(lower) || "--operator".equals(lower)) {
+				requestedMode = selectMode(requestedMode, CollectorMode.OPERATOR);
+				effectiveList.remove(i);
+				if (i < effectiveList.size() && isPositionalDbPath(effectiveList.get(i))) {
+					viewerDbPath = effectiveList.remove(i).trim();
+				}
+				i--;
+			} else if (lower.startsWith("operator=") || lower.startsWith("--operator=")) {
+				requestedMode = selectMode(requestedMode, CollectorMode.OPERATOR);
+				String val = a.substring(a.indexOf('=') + 1).trim();
+				if (!val.isEmpty()) {
+					viewerDbPath = val;
+				}
+				effectiveList.remove(i);
+				i--;
 			} else if (lower.startsWith("--collector.mode=") || lower.startsWith("collector.mode=")) {
 				String val = a.substring(a.indexOf('=') + 1).trim();
 				requestedMode = selectMode(requestedMode, CollectorMode.fromString(val));
@@ -143,7 +158,8 @@ public class AntiDoSCollectorApplication {
 			return false;
 		}
 		String lower = arg.toLowerCase(Locale.ROOT);
-		return !"demo".equals(lower) && !"headless".equals(lower) && !"viewer".equals(lower)
+		return !"demo".equals(lower) && !"headless".equals(lower)
+				&& !"operator".equals(lower) && !"viewer".equals(lower)
 				&& !lower.contains("=");
 	}
 

@@ -140,10 +140,10 @@ public class SystemController {
 	}
 
 	private boolean rejectViewerMaintenance(HttpServletResponse response, Model model, String actionName) {
-		if (properties.isViewerMode()) {
+		if (!properties.canPerformSystemAdmin()) {
 			response.setStatus(HttpStatus.FORBIDDEN.value());
 			model.addAttribute("actionSuccess", false);
-			model.addAttribute("actionMessage", actionName + " is disabled in read-only VIEWER mode.");
+			model.addAttribute("actionMessage", actionName + " is disabled in " + properties.getMode() + " mode.");
 			populateModel(model);
 			return true;
 		}

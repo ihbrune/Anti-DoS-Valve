@@ -46,6 +46,16 @@ public class GlobalModelAdvice {
 		return properties != null && properties.isViewerMode();
 	}
 
+	@ModelAttribute("operatorMode")
+	public boolean operatorMode() {
+		return properties != null && properties.isOperatorMode();
+	}
+
+	@ModelAttribute("systemAdminReadOnly")
+	public boolean systemAdminReadOnly() {
+		return properties != null && !properties.canPerformSystemAdmin();
+	}
+
 	@ModelAttribute("collectorMode")
 	public String collectorMode() {
 		return properties != null ? properties.getMode().name() : CollectorMode.FULL.name();

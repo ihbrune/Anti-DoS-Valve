@@ -206,10 +206,10 @@ public class ApiController {
 	@org.springframework.web.bind.annotation.PostMapping("/rollups/subnets/aggregate")
 	public ResponseEntity<Map<String, Object>> triggerRollupAggregation(
 			@RequestParam(name = "hours", defaultValue = "24") int hours) {
-		if (properties != null && properties.isViewerMode()) {
+		if (properties != null && !properties.canPerformSystemAdmin()) {
 			return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of(
 					"status", "FORBIDDEN",
-					"message", "Rollup aggregation is disabled in read-only VIEWER mode."
+					"message", "Rollup aggregation is disabled in " + properties.getMode() + " mode."
 			));
 		}
 		int count = rollupAggregationService.aggregateCatchUp(hours);
@@ -223,10 +223,10 @@ public class ApiController {
 
 	@org.springframework.web.bind.annotation.PostMapping("/rollups/subnets/profiles/refresh")
 	public ResponseEntity<Map<String, Object>> refreshSubnetProfiles() {
-		if (properties != null && properties.isViewerMode()) {
+		if (properties != null && !properties.canPerformSystemAdmin()) {
 			return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of(
 					"status", "FORBIDDEN",
-					"message", "Subnet profile refresh is disabled in read-only VIEWER mode."
+					"message", "Subnet profile refresh is disabled in " + properties.getMode() + " mode."
 			));
 		}
 		if (subnetProfileService == null) {
