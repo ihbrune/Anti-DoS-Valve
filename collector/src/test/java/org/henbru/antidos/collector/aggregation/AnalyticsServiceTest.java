@@ -424,4 +424,68 @@ class AnalyticsServiceTest {
 		assertEquals(1, dto.indicatorStats().mitigationMatchCount());
 		assertEquals(0, dto.indicatorStats().automatedCount());
 	}
+
+	@Test
+	void testGetUserAgentAnalytics_WithBrowserVersionGroundTruth() {
+		ClientEventRepository clientRepo = mock(ClientEventRepository.class);
+		MonitoredValveRepository valveRepo = mock(MonitoredValveRepository.class);
+		org.henbru.antidos.collector.storage.MitigationRuleRepository mitigationRepo =
+				mock(org.henbru.antidos.collector.storage.MitigationRuleRepository.class);
+
+		org.henbru.antidos.collector.config.CollectorProperties properties =
+				new org.henbru.antidos.collector.config.CollectorProperties();
+		org.henbru.antidos.collector.enrichment.BrowserVersionSyncService versionService =
+				new org.henbru.antidos.collector.enrichment.BrowserVersionSyncService(properties, new com.fasterxml.jackson.databind.ObjectMapper());
+		versionService.init();
+
+		AnalyticsService service = new AnalyticsService(
+				rollupRepository, rollupAggregationService, null, null, clientRepo, valveRepo, mitigationRepo, versionService);
+
+		String betaChrome = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.7200.5 Safari/537.36";
+		String futureChrome = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/185.0.0.0 Safari/537.36";
+		String ancientChrome = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.157 Safari/537.36";
+
+		when(clientRepo.findUserAgentAggregations(any(), any(), any(), any(), anyInt()))
+				.thenReturn(List.of(
+						new ClientEventRepository.RawUserAgentAggregation(betaChrome, 500L, 10, 0, 0, 10, 5, 2, 1, 0, 8),
+						new ClientEventRepository.RawUserAgentAggregation(futureChrome, 1200L, 20, 0, 0, 20, 0, 5, 2, 0, 4),
+						new ClientEventRepository.RawUserAgentAggregation(ancientChrome, 3000L, 50, 0, 0, 50, 0, 10, 3, 0, 5)
+				));
+
+		when(clientRepo.findUserAgentTopOrigins(any(), any(), any(), any(), any(), anyInt()))
+				.thenReturn(List.of());
+
+		when(mitigationRepo.findActiveRules(any())).thenReturn(List.of());
+		when(mitigationRepo.findRulesCreatedBetween(any(), any())).thenReturn(List.of());
+
+		UserAgentAnalyticsDto dto = service.getUserAgentAnalytics(24, null, null, null, null);
+
+		assertNotNull(dto);
+		assertEquals(3, dto.userAgents().size());
+
+		// 1. Beta Chrome
+		UserAgentItemSummary betaItem = dto.userAgents().get(0);
+		assertTrue(betaItem.isPreReleasePreview());
+		assertFalse(betaItem.isSuspicious(), "Beta developer builds must remain non-suspicious");
+		assertEquals(158, betaItem.parsedMajorVersion());
+
+		// 2. Future Chrome
+		UserAgentItemSummary futureItem = dto.userAgents().get(1);
+		assertTrue(futureItem.isImplausibleFutureVersion());
+		assertTrue(futureItem.isSuspicious(), "Impossible future version must be flagged as suspicious");
+		assertTrue(futureItem.suspicionReason().contains("Implausible future version"));
+
+		// 3. Ancient Chrome
+		UserAgentItemSummary ancientItem = dto.userAgents().get(2);
+		assertTrue(ancientItem.isObsoleteVersion());
+		assertTrue(ancientItem.isSuspicious(), "Ancient Chrome 74 must be flagged as obsolete anomaly");
+		assertTrue(ancientItem.suspicionReason().contains("Obsolete browser version"));
+
+		// Ground Truth Reference
+		assertNotNull(dto.browserReference());
+		assertEquals(4, dto.browserReference().families().size());
+		for (var fam : dto.browserReference().families()) {
+			assertEquals(5, fam.topVersions().size(), fam.familyName() + " must have exactly 5 top versions");
+		}
+	}
 }

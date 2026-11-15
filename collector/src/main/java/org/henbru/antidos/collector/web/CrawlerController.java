@@ -3,9 +3,11 @@ package org.henbru.antidos.collector.web;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 import org.henbru.antidos.collector.config.CollectorProperties;
+import org.henbru.antidos.collector.enrichment.BrowserVersionSyncService;
 import org.henbru.antidos.collector.enrichment.CrawlerSyncService;
 import org.henbru.antidos.collector.model.CrawlerFeed;
 import org.henbru.antidos.collector.storage.CrawlerFeedRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
@@ -24,14 +26,25 @@ public class CrawlerController {
 	private final CrawlerFeedRepository crawlerFeedRepository;
 	private final CrawlerSyncService crawlerSyncService;
 	private final CollectorProperties properties;
+	private final BrowserVersionSyncService browserVersionSyncService;
+
+	@Autowired
+	public CrawlerController(
+			CrawlerFeedRepository crawlerFeedRepository,
+			CrawlerSyncService crawlerSyncService,
+			CollectorProperties properties,
+			@Autowired(required = false) BrowserVersionSyncService browserVersionSyncService) {
+		this.crawlerFeedRepository = crawlerFeedRepository;
+		this.crawlerSyncService = crawlerSyncService;
+		this.properties = properties;
+		this.browserVersionSyncService = browserVersionSyncService;
+	}
 
 	public CrawlerController(
 			CrawlerFeedRepository crawlerFeedRepository,
 			CrawlerSyncService crawlerSyncService,
 			CollectorProperties properties) {
-		this.crawlerFeedRepository = crawlerFeedRepository;
-		this.crawlerSyncService = crawlerSyncService;
-		this.properties = properties;
+		this(crawlerFeedRepository, crawlerSyncService, properties, null);
 	}
 
 	@GetMapping("/crawlers")
@@ -67,6 +80,21 @@ public class CrawlerController {
 		crawlerSyncService.syncAll();
 		populateModel(model);
 		return "fragments/crawlers-table :: crawlersTable";
+	}
+
+	@PostMapping("/crawlers/sync-browser-feeds")
+	public String syncBrowserFeeds(HttpServletResponse response, Model model) {
+		if (properties.isViewerMode()) {
+			response.setStatus(HttpStatus.FORBIDDEN.value());
+			model.addAttribute("viewerError", "Browser version feed synchronization is disabled in read-only VIEWER mode.");
+			populateModel(model);
+			return "fragments/browser-feeds-card :: browserFeedsCard";
+		}
+		if (browserVersionSyncService != null) {
+			browserVersionSyncService.syncAll();
+		}
+		populateModel(model);
+		return "fragments/browser-feeds-card :: browserFeedsCard";
 	}
 
 	private void ensureInitialFeedsLoaded() {
@@ -107,5 +135,9 @@ public class CrawlerController {
 		model.addAttribute("feeds", feeds);
 		model.addAttribute("syncEnabled", properties.getEnrichment().isCrawlerSyncEnabled());
 		model.addAttribute("syncCron", properties.getEnrichment().getCrawlerSyncCron());
+		model.addAttribute("viewerMode", properties.isViewerMode());
+		if (browserVersionSyncService != null) {
+			model.addAttribute("browserReference", browserVersionSyncService.getOverview());
+		}
 	}
 }

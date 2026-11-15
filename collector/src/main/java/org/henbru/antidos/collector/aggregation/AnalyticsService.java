@@ -14,7 +14,10 @@ import java.util.Set;
 
 import org.henbru.antidos.collector.advisor.AdvisorReport;
 import org.henbru.antidos.collector.annotation.NetworkAnnotationService;
+import org.henbru.antidos.collector.enrichment.BrowserVersionSyncService;
 import org.henbru.antidos.collector.model.AnalyticsDashboardDto;
+import org.henbru.antidos.collector.model.BrowserReferenceOverviewDto;
+import org.henbru.antidos.collector.model.BrowserVersionLagAssessment;
 import org.henbru.antidos.collector.model.ClientType;
 import org.henbru.antidos.collector.model.MitigationRule;
 import org.henbru.antidos.collector.model.NetworkAnnotation;
@@ -48,6 +51,7 @@ public class AnalyticsService {
 	private final org.henbru.antidos.collector.storage.ClientEventRepository clientEventRepository;
 	private final MonitoredValveRepository monitoredValveRepository;
 	private final MitigationRuleRepository mitigationRuleRepository;
+	private final BrowserVersionSyncService browserVersionSyncService;
 
 	@Autowired
 	public AnalyticsService(
@@ -57,7 +61,8 @@ public class AnalyticsService {
 			@Autowired(required = false) org.henbru.antidos.collector.advisor.AdvisorService advisorService,
 			@Autowired(required = false) org.henbru.antidos.collector.storage.ClientEventRepository clientEventRepository,
 			@Autowired(required = false) MonitoredValveRepository monitoredValveRepository,
-			@Autowired(required = false) MitigationRuleRepository mitigationRuleRepository
+			@Autowired(required = false) MitigationRuleRepository mitigationRuleRepository,
+			@Autowired(required = false) BrowserVersionSyncService browserVersionSyncService
 	) {
 		this.subnetRollupRepository = subnetRollupRepository;
 		this.rollupAggregationService = rollupAggregationService;
@@ -66,6 +71,19 @@ public class AnalyticsService {
 		this.clientEventRepository = clientEventRepository;
 		this.monitoredValveRepository = monitoredValveRepository;
 		this.mitigationRuleRepository = mitigationRuleRepository;
+		this.browserVersionSyncService = browserVersionSyncService;
+	}
+
+	public AnalyticsService(
+			SubnetRollupRepository subnetRollupRepository,
+			RollupAggregationService rollupAggregationService,
+			NetworkAnnotationService networkAnnotationService,
+			org.henbru.antidos.collector.advisor.AdvisorService advisorService,
+			org.henbru.antidos.collector.storage.ClientEventRepository clientEventRepository,
+			MonitoredValveRepository monitoredValveRepository,
+			MitigationRuleRepository mitigationRuleRepository
+	) {
+		this(subnetRollupRepository, rollupAggregationService, networkAnnotationService, advisorService, clientEventRepository, monitoredValveRepository, mitigationRuleRepository, null);
 	}
 
 	public AnalyticsService(
@@ -449,6 +467,26 @@ public class AnalyticsService {
 				reasons.add(mitigationDetails != null ? mitigationDetails : "Origin in mitigated network");
 			}
 
+			// Authoritative browser version assessment
+			BrowserVersionLagAssessment versionAssessment = BrowserVersionLagAssessment.UNTRACKED;
+			Integer parsedMajorVersion = null;
+			Integer versionLagMajors = null;
+
+			if (browserVersionSyncService != null) {
+				var vRes = browserVersionSyncService.assessUserAgent(family, row.userAgent());
+				versionAssessment = vRes.assessment();
+				parsedMajorVersion = vRes.parsedMajorVersion();
+				versionLagMajors = vRes.versionLagMajors();
+
+				if (versionAssessment == BrowserVersionLagAssessment.IMPLAUSIBLE_FUTURE) {
+					isSuspicious = true;
+					reasons.add(String.format(Locale.ROOT, "Implausible future version (%s v%d)", vRes.browserFamily(), parsedMajorVersion));
+				} else if (versionAssessment == BrowserVersionLagAssessment.OBSOLETE_ANOMALY) {
+					isSuspicious = true;
+					reasons.add(String.format(Locale.ROOT, "Obsolete browser version (%s v%d, -%d lag)", vRes.browserFamily(), parsedMajorVersion, versionLagMajors));
+				}
+			}
+
 			items.add(new UserAgentItemSummary(
 					row.userAgent(),
 					family,
@@ -469,7 +507,10 @@ public class AnalyticsService {
 					origins,
 					residentialZeroAuth,
 					mitigationMatch,
-					mitigationDetails
+					mitigationDetails,
+					versionAssessment,
+					parsedMajorVersion,
+					versionLagMajors
 			));
 		}
 
@@ -564,7 +605,8 @@ public class AnalyticsService {
 				confidenceMessage,
 				families,
 				items,
-				indicatorStats
+				indicatorStats,
+				browserVersionSyncService != null ? browserVersionSyncService.getOverview() : BrowserReferenceOverviewDto.empty()
 		);
 	}
 

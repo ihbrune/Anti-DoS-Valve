@@ -1,0 +1,73 @@
+{
+  "lastUpdated": "2026-11-15T00:00:00Z",
+  "families": [
+    {
+      "familyName": "Chrome",
+      "icon": "&#x1F310;",
+      "latestStableMajor": 157,
+      "maxPreviewMajor": 159,
+      "minSupportedMajor": 155,
+      "sourceName": "Google Version History API",
+      "automatedSync": true,
+      "sourceNotice": "Live automated feed via Google Version History API",
+      "topVersions": [
+        { "family": "Chrome", "majorVersion": 159, "fullVersion": "159.0.7250.0", "channel": "CANARY", "releaseDate": "2026-11", "source": "GOOGLE_API", "isPreview": true, "isSupportedLegacy": false },
+        { "family": "Chrome", "majorVersion": 158, "fullVersion": "158.0.7200.5", "channel": "BETA", "releaseDate": "2026-10", "source": "GOOGLE_API", "isPreview": true, "isSupportedLegacy": false },
+        { "family": "Chrome", "majorVersion": 157, "fullVersion": "157.0.7100.12", "channel": "STABLE", "releaseDate": "2026-10", "source": "GOOGLE_API", "isPreview": false, "isSupportedLegacy": false },
+        { "family": "Chrome", "majorVersion": 156, "fullVersion": "156.0.7050.40", "channel": "EXTENDED", "releaseDate": "2026-09", "source": "GOOGLE_API", "isPreview": false, "isSupportedLegacy": true },
+        { "family": "Chrome", "majorVersion": 155, "fullVersion": "155.0.7000.20", "channel": "PREVIOUS", "releaseDate": "2026-08", "source": "GOOGLE_API", "isPreview": false, "isSupportedLegacy": true }
+      ]
+    },
+    {
+      "familyName": "Edge",
+      "icon": "&#x1F310;",
+      "latestStableMajor": 157,
+      "maxPreviewMajor": 159,
+      "minSupportedMajor": 155,
+      "sourceName": "Chromium Core Alignment",
+      "automatedSync": true,
+      "sourceNotice": "Synchronized with Chromium release schedule",
+      "topVersions": [
+        { "family": "Edge", "majorVersion": 159, "fullVersion": "159.0.3150.0", "channel": "CANARY", "releaseDate": "2026-11", "source": "GOOGLE_API", "isPreview": true, "isSupportedLegacy": false },
+        { "family": "Edge", "majorVersion": 158, "fullVersion": "158.0.3100.3", "channel": "BETA", "releaseDate": "2026-10", "source": "GOOGLE_API", "isPreview": true, "isSupportedLegacy": false },
+        { "family": "Edge", "majorVersion": 157, "fullVersion": "157.0.3050.15", "channel": "STABLE", "releaseDate": "2026-10", "source": "GOOGLE_API", "isPreview": false, "isSupportedLegacy": false },
+        { "family": "Edge", "majorVersion": 156, "fullVersion": "156.0.3000.22", "channel": "EXTENDED", "releaseDate": "2026-09", "source": "GOOGLE_API", "isPreview": false, "isSupportedLegacy": true },
+        { "family": "Edge", "majorVersion": 155, "fullVersion": "155.0.2950.10", "channel": "PREVIOUS", "releaseDate": "2026-08", "source": "GOOGLE_API", "isPreview": false, "isSupportedLegacy": true }
+      ]
+    },
+    {
+      "familyName": "Firefox",
+      "icon": "&#x1F98A;",
+      "latestStableMajor": 153,
+      "maxPreviewMajor": 155,
+      "minSupportedMajor": 140,
+      "sourceName": "Mozilla Product Details API",
+      "automatedSync": true,
+      "sourceNotice": "Live automated feed via Mozilla Product Details API",
+      "topVersions": [
+        { "family": "Firefox", "majorVersion": 155, "fullVersion": "155.0a1", "channel": "NIGHTLY", "releaseDate": "2026-11", "source": "MOZILLA_API", "isPreview": true, "isSupportedLegacy": false },
+        { "family": "Firefox", "majorVersion": 154, "fullVersion": "154.0b9", "channel": "BETA", "releaseDate": "2026-10", "source": "MOZILLA_API", "isPreview": true, "isSupportedLegacy": false },
+        { "family": "Firefox", "majorVersion": 153, "fullVersion": "153.0.1", "channel": "STABLE", "releaseDate": "2026-10", "source": "MOZILLA_API", "isPreview": false, "isSupportedLegacy": false },
+        { "family": "Firefox", "majorVersion": 152, "fullVersion": "152.0.2", "channel": "PREVIOUS", "releaseDate": "2026-09", "source": "MOZILLA_API", "isPreview": false, "isSupportedLegacy": true },
+        { "family": "Firefox", "majorVersion": 140, "fullVersion": "140.4.0esr", "channel": "ESR", "releaseDate": "2026-06", "source": "MOZILLA_API", "isPreview": false, "isSupportedLegacy": true }
+      ]
+    },
+    {
+      "familyName": "Safari",
+      "icon": "&#x1F9ED;",
+      "latestStableMajor": 18,
+      "maxPreviewMajor": 18,
+      "minSupportedMajor": 16,
+      "sourceName": "Configurable OS Matrix",
+      "automatedSync": false,
+      "sourceNotice": "Static OS-bound matrix. Configurable via collector.browser-reference.safari-versions without code changes.",
+      "topVersions": [
+        { "family": "Safari", "majorVersion": 18, "fullVersion": "18.2 STP", "channel": "PREVIEW", "releaseDate": "2026-11", "source": "CONFIGURED_MATRIX", "isPreview": true, "isSupportedLegacy": false },
+        { "family": "Safari", "majorVersion": 18, "fullVersion": "18.1 Sequoia", "channel": "STABLE", "releaseDate": "2026-10", "source": "CONFIGURED_MATRIX", "isPreview": false, "isSupportedLegacy": false },
+        { "family": "Safari", "majorVersion": 18, "fullVersion": "18.0 Sequoia", "channel": "STABLE", "releaseDate": "2026-09", "source": "CONFIGURED_MATRIX", "isPreview": false, "isSupportedLegacy": false },
+        { "family": "Safari", "majorVersion": 17, "fullVersion": "17.6 Sonoma", "channel": "SUPPORTED_LEGACY", "releaseDate": "2026-07", "source": "CONFIGURED_MATRIX", "isPreview": false, "isSupportedLegacy": true },
+        { "family": "Safari", "majorVersion": 16, "fullVersion": "16.6 Ventura", "channel": "SUPPORTED_LEGACY", "releaseDate": "2025-09", "source": "CONFIGURED_MATRIX", "isPreview": false, "isSupportedLegacy": true }
+      ]
+    }
+  ]
+}

@@ -317,6 +317,17 @@ The **User-Agents** focus tab cross-correlates request header samples captured b
      4. **Empty User-Agent:** The User-Agent header is missing or blank (`UserAgentFamily.EMPTY`).
      5. **Residential Zero-Auth Anomaly:** The User-Agent demonstrates substantial consumer residential presence ($\ge 10$ residential samples, or $\ge 25$ samples overall with $\ge 50\%$ residential share) combined with strictly **$0.0\%$ authenticated traffic** (`authenticatedCount == 0`). This reliably detects stealth scrapers rotating through residential broadband proxies while spoofing popular desktop or mobile browser User-Agents.
      6. **Active / Recent Mitigation Correlation:** The User-Agent originates from subnets or ASNs that are currently or were recently subjected to dynamic mitigation rules (e.g. `AUTO_CARPET` or `ASN_BATCH` blocks).
+     7. **Authoritative Browser Release Lag & Synthetic Forgery Anomaly:**
+        * **Implausible Future Version:** User-Agents asserting browser versions higher than the authoritative preview horizon ($> \text{Stable} + 2$ and unlisted in live Canary/Dev/Nightly feeds). Flagged as definitive synthetic forgery (e.g. *Chrome 185* when Stable is 157 and Canary is 159).
+        * **Obsolete Anomaly:** User-Agents claiming versions that are more than 3 years / 30 major versions obsolete (e.g. *Chrome 74* in 2026), indicating ancient frozen scraper stacks.
+        * **Plausible Preview Exemption:** Authentic developer, QA, and enthusiast traffic using Beta, Dev, Canary, Nightly, or Safari Technology Preview builds ($\text{Stable} + 1$ to $\text{Stable} + 2$) is explicitly recognized as legitimate preview traffic (`[🛠️ Preview v...]`) and protected from false-positive flags.
+
+   * **Authoritative Browser Release Ground Truth (Top 5 Versions):**
+     Directly embedded within the User-Agents tab, an authoritative version reference displays the **top 5 most recent versions** for Chrome, Edge, Firefox, and Safari:
+     * **Google Chrome & Chromium Core:** Live automated sync via Google Version History API (Canary, Beta, Stable, Extended, Previous).
+     * **Microsoft Edge:** Synchronized with Chromium release channels.
+     * **Mozilla Firefox:** Live automated sync via Mozilla Product Details API (Nightly, Beta, Stable, Previous, ESR).
+     * **Apple Safari (Configurable OS Matrix):** Static OS-bound matrix reflecting macOS/iOS generations. Fully configurable via `collector.browser-reference.safari-versions` in `collector-config.yaml` or `application.properties` without requiring Java code changes or rebuilds. A prominent indicator badge (*"Configurable Matrix"*) clearly informs operators of its static nature.
 
    * **Heuristic Risk Indicators & Signal Distribution Mini-Display:**
      Directly above the forensic User-Agent table, an indicator breakdown bar provides operators with an instant quantitative pulse of fleet-wide heuristic activity:
@@ -330,8 +341,8 @@ The **User-Agents** focus tab cross-correlates request header samples captured b
 
    * **UI Assessment Badge Resolution:**
      Based on the suspicion calculation and authentication telemetry, each table row displays a primary badge and micro indicator chips:
-     * 🔴 **`Suspicious`** (with detailed rationale): Triggered when `isSuspicious == true`. Accompanied by micro-chips highlighting every triggered indicator (e.g. `[🏡 Res Zero-Auth]`, `[🛡️ Mitigation Match]`, `[🤖 Tool Sig]`, `[⚡ Incidents ≥50%]`, `[🏢 Datacenter]`).
-     * 🟢 **`Legitimate Traffic`**: Triggered when `isSuspicious == false` **AND** at least one authenticated request sample has been recorded (`authenticatedCount > 0`). Accompanied by the `[✔ Auth]` micro-chip.
+     * 🔴 **`Suspicious`** (with detailed rationale): Triggered when `isSuspicious == true`. Accompanied by micro-chips highlighting every triggered indicator (e.g. `[🏡 Res Zero-Auth]`, `[🛡️ Mitigation Match]`, `[🤖 Tool Sig]`, `[⚡ Incidents ≥50%]`, `[🏢 Datacenter]`, `[🟣 Future v...]`, `[⚠️ Obsolete v...]`).
+     * 🟢 **`Legitimate Traffic`**: Triggered when `isSuspicious == false` **AND** at least one authenticated request sample has been recorded (`authenticatedCount > 0`). Accompanied by the `[✔ Auth]` micro-chip and developer preview indicators (e.g. `[🛠️ Preview v...]`) when applicable.
      * ⚪ **`Standard`**: Neutral fallback applied when `isSuspicious == false` **BUT** zero authenticated sessions have been observed (`authenticatedCount == 0`). Represents unauthenticated, non-automated web traffic that has not crossed incident, residential anomaly, or mitigation thresholds.
 
 #### Forensic Analysis: The Residential Proxy Scraper Blind Spot
@@ -727,20 +738,38 @@ Accessible via `/reports`. Generates permanent daily executive summaries, normal
 
 ---
 
-## Verified Crawlers & AI Bot Manager
+## Verified Crawlers, AI Bots & Browser Intelligence Manager
 
-Accessible via `/crawlers`. Maintains verified IP intelligence feeds for legitimate web indexing bots and commercial AI scrapers.
+Accessible via `/crawlers`. Maintains verified IP intelligence feeds for legitimate web indexing bots, commercial AI scrapers, and authoritative browser release version references.
 
 ### 1. Categories Managed
 * **Search Engine Bots:** Googlebot, Bingbot / MSN. Essential for public SEO; false-positive blocks can harm search visibility.
 * **AI Scrapers:** OpenAI (GPTBot, ChatGPT-User), Anthropic ClaudeBot, PerplexityBot, Common Crawl, Bytespider.
 * **Tor Exit Nodes:** Real-time directory of active Tor network relays.
+* **Browser Release Intelligence:** Authoritative release matrices for Chrome, Edge, Firefox, and Safari to detect frozen scraper stacks, obsolete tools, and synthetic future versions.
 
 ### 2. Operational Features
 * **Feed Status & IP Range Counts:** Displays active status, total IPv4 and IPv6 CIDR blocks registered, and last sync timestamp.
 * **Automatic Daily Synchronization:** Scheduled background tasks pull updated official JSON feeds every 24 hours.
-* **Manual "Sync All Feeds" Trigger:** Immediately contacts official feed URLs and refreshes in-memory threat intelligence.
+* **Manual Synchronization Triggers:** Dedicated triggers allow operators to immediately refresh either all crawler IP feeds (*"Synchronize All Feeds Now"*) or browser release version feeds (*"Synchronize Browser Feeds Now"*).
 * **Automatic Orphan Pruning:** Ensures decommissioned crawler IP ranges are automatically evicted from the database upon synchronization.
+
+### 3. Browser Release Intelligence Feeds & Safari Configuration
+The browser intelligence section surfaces live release versions directly from official browser vendor APIs:
+* **Google Chrome & Chromium:** Automatically pulled from Google Version History API (`https://versionhistory.googleapis.com`), tracking Stable, Beta, Dev, and Canary channels.
+* **Microsoft Edge:** Synchronized with Chromium release channels.
+* **Mozilla Firefox:** Automatically pulled from Mozilla Product Details API (`https://product-details.mozilla.org`), tracking Stable, Beta, Nightly, and ESR.
+* **Apple Safari (Configurable OS-Bound Matrix):** Because Safari releases are tied to Apple macOS/iOS generation upgrades, Safari versions are maintained via an administrative matrix. A prominent badge (*"Configurable Matrix"*) clearly indicates this. Operators can add or update Safari versions without rebuilding Java code by setting the following in `collector-config.yaml` or `application.properties`:
+  ```yaml
+  collector:
+    browser-reference:
+      safari-versions:
+        - "19.0 STP"
+        - "19.0"
+        - "18.2"
+        - "18.1"
+        - "17.6"
+  ```
 
 ---
 
