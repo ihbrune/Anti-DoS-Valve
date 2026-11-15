@@ -26,9 +26,9 @@ To test the collector without connecting live Tomcat instances:
 
 ```bash
 # Using the Fat-JAR:
-java -jar collector/target/anti-dos-collector-1.9.0.jar demo
+java -jar collector/target/anti-dos-collector-2.0.0.jar demo
 # Or with a larger fleet (e.g. 3 instances per server type = 9 total servers A, B, C):
-java -jar collector/target/anti-dos-collector-1.9.0.jar demo 3
+java -jar collector/target/anti-dos-collector-2.0.0.jar demo 3
 
 # Or using Maven:
 mvn spring-boot:run -pl collector -Dspring-boot.run.arguments="demo"
@@ -48,7 +48,7 @@ mvn spring-boot:run -pl collector -Dspring-boot.run.arguments="demo"
 ```bash
 mvn package -pl collector
 ```
-Produces the executable Spring Boot JAR in `collector/target/anti-dos-collector-1.9.0.jar`.
+Produces the executable Spring Boot JAR in `collector/target/anti-dos-collector-2.0.0.jar`.
 
 ### 2. Configure Monitored Endpoints
 ```bash
@@ -68,20 +68,20 @@ collector:
 ### 3. Verify an Endpoint or Generate Access Tokens via CLI
 ```bash
 # Test a remote Valve endpoint
-java -jar collector/target/anti-dos-collector-1.9.0.jar test-endpoint \
+java -jar collector/target/anti-dos-collector-2.0.0.jar test-endpoint \
   --url "http://localhost:8080/antidos-status" \
   --token "secretToken1" \
   --name "Web-Node-1"
 
 # Generate a cryptographically random hex token (default 32 bytes = 64 hex chars)
-java -jar collector/target/anti-dos-collector-1.9.0.jar generate-token \
+java -jar collector/target/anti-dos-collector-2.0.0.jar generate-token \
   --name "soc-operator" \
   --role OPERATOR
 ```
 
 ### 4. Run the Collector
 ```bash
-java -jar collector/target/anti-dos-collector-1.9.0.jar
+java -jar collector/target/anti-dos-collector-2.0.0.jar
 ```
 Dashboard available at **`http://localhost:8090`**.
 
@@ -204,7 +204,7 @@ collector:
 
 #### Step 3: Install the Executable Binary
 ```bash
-sudo cp collector/target/anti-dos-collector-1.9.0.jar /opt/antidos-collector/anti-dos-collector.jar
+sudo cp collector/target/anti-dos-collector-2.0.0.jar /opt/antidos-collector/anti-dos-collector.jar
 sudo chown antidos:antidos /opt/antidos-collector/anti-dos-collector.jar
 sudo chmod 750 /opt/antidos-collector/anti-dos-collector.jar
 ```
