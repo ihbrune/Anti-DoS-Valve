@@ -1,6 +1,5 @@
 package org.henbru.antidos.collector.web;
 
-import jakarta.servlet.http.HttpServletResponse;
 import org.henbru.antidos.collector.aggregation.RollupAggregationService;
 import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.enrichment.EntityResolver;
@@ -14,6 +13,8 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
+
+import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Controller serving the System Status & Configuration dashboard, displaying data retention schedules,

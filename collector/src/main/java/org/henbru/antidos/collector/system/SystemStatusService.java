@@ -1,7 +1,5 @@
 package org.henbru.antidos.collector.system;
 
-import com.zaxxer.hikari.HikariDataSource;
-import com.zaxxer.hikari.HikariPoolMXBean;
 import java.io.File;
 import java.lang.management.ManagementFactory;
 import java.lang.management.RuntimeMXBean;
@@ -11,7 +9,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+
 import javax.sql.DataSource;
+
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 import org.henbru.antidos.collector.aggregation.RollupAggregationService;
@@ -33,6 +33,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+
+import com.zaxxer.hikari.HikariDataSource;
+import com.zaxxer.hikari.HikariPoolMXBean;
 
 /**
  * Service consolidating diagnostic telemetry, storage metrics, active cascade configurations,
@@ -234,7 +237,7 @@ public class SystemStatusService {
 			} catch (Exception e) {
 				log.debug("Unable to read Flyway info: {}", e.getMessage());
 			}
-		} else if (properties.isViewerMode()) {
+		} else if (!properties.getMode().isBackgroundProcessingEnabled()) {
 			try {
 				List<Map<String, Object>> rows = jdbcTemplate.queryForList(
 						"SELECT version, description, installed_on FROM flyway_schema_history WHERE success = 1 ORDER BY installed_rank DESC LIMIT 1");
@@ -245,12 +248,12 @@ public class SystemStatusService {
 					Object inst = row.get("installed_on");
 					flywayInfo = new SystemStatusDto.FlywayInfo(
 							ver != null ? ver.toString() : "Unknown",
-							desc != null ? desc.toString() : "Flyway disabled in VIEWER mode",
+							desc != null ? desc.toString() : "Flyway disabled in " + properties.getMode() + " mode",
 							inst != null ? inst.toString() : null
 					);
 				}
 			} catch (Exception e) {
-				log.debug("Unable to read flyway_schema_history in VIEWER mode: {}", e.getMessage());
+				log.debug("Unable to read flyway_schema_history in {} mode: {}", properties.getMode(), e.getMessage());
 			}
 		}
 

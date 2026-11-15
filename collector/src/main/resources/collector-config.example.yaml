@@ -30,6 +30,8 @@ collector:
   # Operational mode:
   #   FULL     - Default mode: background polling, enrichment, mitigation, rollups + web UI/API
   #   HEADLESS - Background workers only without starting an embedded HTTP server
+  #   OPERATOR - Web UI for analysts/operators (notes, daily report comments/regeneration, dynamic rules);
+  #              background pollers and system/admin maintenance are disabled
   #   VIEWER   - Strictly read-only web UI & API for inspecting an existing database snapshot
   mode: FULL
 

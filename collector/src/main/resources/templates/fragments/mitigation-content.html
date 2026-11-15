@@ -66,8 +66,8 @@
                 <div style="display: flex; gap: 8px; align-items: center;">
                     <button type="button" class="btn btn-primary" hx-post="/mitigation/sync"
                         hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:top"
-                        th:disabled="${viewerMode}"
-                        th:title="${viewerMode ? 'Disabled in read-only VIEWER mode' : 'Synchronize active rules and refresh deterrence telemetry'}"
+                        th:disabled="${systemAdminReadOnly}"
+                        th:title="${systemAdminReadOnly ? ('Disabled in ' + collectorMode + ' mode') : 'Synchronize active rules and refresh deterrence telemetry'}"
                         style="font-size: 12px; padding: 6px 14px;">
                         <span>&#x1F504;</span> Sync Fleet &amp; Refresh Deterrence
                     </button>
@@ -203,7 +203,7 @@
                             th:classappend="${autoSettings.enabled ? 'btn-danger' : 'btn-success'}"
                             th:attr="hx-post=@{/mitigation/auto/toggle(property='enabled')}"
                             hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:top"
-                            th:disabled="${viewerMode}" style="font-size: 12px; padding: 6px 14px;"
+                            th:disabled="${systemAdminReadOnly}" style="font-size: 12px; padding: 6px 14px;"
                             th:title="${autoSettings.enabled ? 'Disable autonomous defense engine' : 'Enable autonomous defense engine'}">
                             <span th:if="${autoSettings.enabled}">&#x23F8;&#xFE0F; Disable Auto-Mitigation</span>
                             <span th:if="${!autoSettings.enabled}">&#x25B6;&#xFE0F; Enable Auto-Mitigation</span>
@@ -214,7 +214,7 @@
                             th:classappend="${autoSettings.dryRun ? 'btn-primary' : 'btn-secondary'}"
                             th:attr="hx-post=@{/mitigation/auto/toggle(property='dryRun')}"
                             hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:top"
-                            th:disabled="${viewerMode}" style="font-size: 12px; padding: 6px 14px;"
+                            th:disabled="${systemAdminReadOnly}" style="font-size: 12px; padding: 6px 14px;"
                             title="Toggle simulation mode (log actions without modifying fleet rules)">
                             <span th:if="${autoSettings.dryRun}">&#x1F9EA; Mode: Dry-Run Simulation</span>
                             <span th:if="${!autoSettings.dryRun}">&#x1F6E1;&#xFE0F; Mode: Live Blocking</span>
@@ -223,7 +223,7 @@
                         <!-- Run Scan Now -->
                         <button type="button" class="btn" hx-post="/mitigation/auto/evaluate"
                             hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:top"
-                            th:disabled="${viewerMode}" style="font-size: 12px; padding: 6px 14px;"
+                            th:disabled="${systemAdminReadOnly}" style="font-size: 12px; padding: 6px 14px;"
                             title="Trigger immediate autonomous evaluation scan across telemetry">
                             <span>&#x1F50D;</span> Evaluate Now
                         </button>
@@ -411,7 +411,8 @@
                                     <span><span>&#x1F4E3;</span> Webhook &amp; Slack Alerting</span>
                                     <button type="button" class="btn" hx-post="/mitigation/webhook/test"
                                         hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:top"
-                                        th:disabled="${viewerMode}" style="font-size: 11.5px; padding: 4px 12px;"
+                                        th:disabled="${systemAdminReadOnly}"
+                                        style="font-size: 11.5px; padding: 4px 12px;"
                                         title="Send a sample test notification to the configured webhook URL">
                                         <span>&#x1F514;</span> Send Test Notification
                                     </button>
@@ -475,12 +476,12 @@
                                 <button type="button" class="btn btn-secondary"
                                     th:if="${autoSettings.hasDatabaseOverrides or (notificationSettings != null and notificationSettings.hasDatabaseOverrides)}"
                                     hx-post="/mitigation/auto/reset" hx-target="#mitigation-dashboard-container"
-                                    hx-swap="outerHTML show:top" th:disabled="${viewerMode}"
+                                    hx-swap="outerHTML show:top" th:disabled="${systemAdminReadOnly}"
                                     style="font-size: 12px; padding: 6px 12px;"
                                     title="Delete database overrides and revert to application.yaml defaults">
                                     Reset to Defaults
                                 </button>
-                                <button type="submit" class="btn btn-primary" th:disabled="${viewerMode}"
+                                <button type="submit" class="btn btn-primary" th:disabled="${systemAdminReadOnly}"
                                     style="font-size: 12px; font-weight: 700; padding: 6px 16px;">
                                     Save Settings to Database
                                 </button>

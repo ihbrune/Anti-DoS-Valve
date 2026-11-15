@@ -317,7 +317,7 @@ public class MitigationController {
 
 	@PostMapping("/mitigation/sync")
 	public String syncFleet(HttpServletResponse response, Model model) {
-		if (rejectViewerMutation(response, model, "Fleet mitigation synchronization")) {
+		if (rejectNonAdminMutation(response, model, "Fleet mitigation synchronization")) {
 			return "fragments/mitigation-content :: mitigationDashboard";
 		}
 		mitigationService.refreshDeterrenceMetrics();
@@ -355,7 +355,7 @@ public class MitigationController {
 			@RequestParam(value = "notifyOnEmergencyFlush", defaultValue = "false") boolean notifyOnEmergencyFlush,
 			HttpServletResponse response,
 			Model model) {
-		if (rejectViewerMutation(response, model, "Updating autonomous defense settings")) {
+		if (rejectNonAdminMutation(response, model, "Updating autonomous defense settings")) {
 			return "fragments/mitigation-content :: mitigationDashboard";
 		}
 		try {
@@ -407,8 +407,8 @@ public class MitigationController {
 			boolean autoExtendPersistent,
 			int maxExtensionHours,
 			Model model) {
-		if (properties.isViewerMode()) {
-			populateMitigationModel(model, null, "Updating autonomous defense settings is disabled in read-only VIEWER mode.");
+		if (!properties.canPerformSystemAdmin()) {
+			populateMitigationModel(model, null, "Updating autonomous defense settings is disabled in " + properties.getMode() + " mode.");
 			return "fragments/mitigation-content :: mitigationDashboard";
 		}
 		try {
@@ -429,7 +429,7 @@ public class MitigationController {
 			@RequestParam("property") String property,
 			HttpServletResponse response,
 			Model model) {
-		if (rejectViewerMutation(response, model, "Toggling autonomous defense settings")) {
+		if (rejectNonAdminMutation(response, model, "Toggling autonomous defense settings")) {
 			return "fragments/mitigation-content :: mitigationDashboard";
 		}
 		try {
@@ -460,7 +460,7 @@ public class MitigationController {
 
 	@PostMapping("/mitigation/auto/reset")
 	public String resetAutoMitigationSettings(HttpServletResponse response, Model model) {
-		if (rejectViewerMutation(response, model, "Resetting autonomous defense settings")) {
+		if (rejectNonAdminMutation(response, model, "Resetting autonomous defense settings")) {
 			return "fragments/mitigation-content :: mitigationDashboard";
 		}
 		try {
@@ -481,7 +481,7 @@ public class MitigationController {
 
 	@PostMapping("/mitigation/webhook/test")
 	public String testWebhook(HttpServletResponse response, Model model) {
-		if (rejectViewerMutation(response, model, "Sending test webhook notifications")) {
+		if (rejectNonAdminMutation(response, model, "Sending test webhook notifications")) {
 			return "fragments/mitigation-content :: mitigationDashboard";
 		}
 		if (notificationService != null) {
@@ -499,7 +499,7 @@ public class MitigationController {
 
 	@PostMapping("/mitigation/auto/evaluate")
 	public String triggerAutoEvaluation(HttpServletResponse response, Model model) {
-		if (rejectViewerMutation(response, model, "Autonomous defense evaluation")) {
+		if (rejectNonAdminMutation(response, model, "Autonomous defense evaluation")) {
 			return "fragments/mitigation-content :: mitigationDashboard";
 		}
 		try {
@@ -525,6 +525,17 @@ public class MitigationController {
 				response.setStatus(HttpStatus.FORBIDDEN.value());
 			}
 			populateMitigationModel(model, null, actionLabel + " is disabled in read-only VIEWER mode.");
+			return true;
+		}
+		return false;
+	}
+
+	private boolean rejectNonAdminMutation(HttpServletResponse response, Model model, String actionLabel) {
+		if (!properties.canPerformSystemAdmin()) {
+			if (response != null) {
+				response.setStatus(HttpStatus.FORBIDDEN.value());
+			}
+			populateMitigationModel(model, null, actionLabel + " is disabled in " + properties.getMode() + " mode.");
 			return true;
 		}
 		return false;

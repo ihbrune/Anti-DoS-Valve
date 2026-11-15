@@ -110,8 +110,8 @@
                     hx-post="/crawlers/sync-all"
                     hx-target="#crawlers-table-container"
                     hx-swap="outerHTML"
-                    th:disabled="${viewerMode}"
-                    th:title="${viewerMode ? 'Disabled in read-only VIEWER mode' : 'Synchronize all configured crawler feeds immediately'}">
+                    th:disabled="${systemAdminReadOnly}"
+                    th:title="${systemAdminReadOnly ? ('Disabled in ' + collectorMode + ' mode') : 'Synchronize all configured crawler feeds immediately'}">
                 &#x21BB; Synchronize All Feeds Now
             </button>
         </div>

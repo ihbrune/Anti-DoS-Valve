@@ -81,20 +81,24 @@ Dashboard available at **`http://localhost:8090`**.
 
 ---
 
-## Operational Modes (`FULL`, `HEADLESS`, `VIEWER`)
+## Operational Modes (`FULL`, `HEADLESS`, `OPERATOR`, `VIEWER`)
 
-The Collector supports three operational modes controlled via `collector.mode` (environment variable `COLLECTOR_MODE`) or CLI shortcuts:
+The Collector supports four operational modes controlled via `collector.mode` (environment variable `COLLECTOR_MODE`) or CLI shortcuts:
 
-| Mode | Embedded Web Server / UI | Background Workers & Writes | Intended Use Case |
-|---|---|---|---|
-| **`FULL`** (default) | Enabled (`http://localhost:8090`) | Enabled | Standard single-host deployment combining polling, enrichment, mitigation, and UI. |
-| **`HEADLESS`** | **Disabled** (`WebApplicationType.NONE`, `keep-alive=true`) | Enabled | Runs on isolated backend servers with no exposed HTTP port; collects and enriches telemetry into SQLite or PostgreSQL. |
-| **`VIEWER`** | Enabled (strict read-only UI & REST GET APIs) | **Disabled** (zero DB writes) | Safe forensic inspection of a copied `.db` snapshot, read-only volume, or remote database without mutating data or polling endpoints. |
+| Mode | Embedded Web Server / UI | Background Workers | Database Writes Allowed | Intended Use Case |
+|---|---|---|---|---|
+| **`FULL`** (default) | Enabled (`http://localhost:8090`) | Enabled | Full Read/Write (`WAL`) | Standard single-host deployment combining polling, enrichment, mitigation, and UI. |
+| **`HEADLESS`** | **Disabled** (`WebApplicationType.NONE`, `keep-alive=true`) | Enabled | Full Read/Write (`WAL`) | Runs on isolated backend servers with no exposed HTTP port; collects telemetry and synchronizes dynamic rules onto Valves. |
+| **`OPERATOR`** | Enabled (analyst UI, notes, reports, dynamic rules) | **Disabled** | **Scoped Read/Write** (notes, daily reports, dynamic mitigation rules only) | Analyst and operator interface: view telemetry, edit network notes, comment/regenerate daily reports, and create/revoke dynamic CIDR blocks while leaving background polling, system maintenance (`VACUUM`, retention, valve deletion), and auto-mitigation configuration disabled. |
+| **`VIEWER`** | Enabled (strict read-only UI & REST GET APIs) | **Disabled** | **Disabled** (zero DB writes) | Safe forensic inspection of a copied `.db` snapshot, read-only volume, or remote database without mutating data or polling endpoints. |
 
 ### Quick CLI Launch Examples
 ```bash
 # Start without web UI/server on an isolated server (or set COLLECTOR_MODE=HEADLESS)
 java -jar collector/target/anti-dos-collector-*.jar headless
+
+# Open an existing database in OPERATOR mode (notes, daily reports, and dynamic blocks enabled)
+java -jar collector/target/anti-dos-collector-*.jar operator /path/to/antidos-collector.db
 
 # Open a copied SQLite snapshot in strict read-only VIEWER mode
 java -jar collector/target/anti-dos-collector-*.jar viewer /path/to/copied-antidos-collector.db
@@ -104,11 +108,11 @@ COLLECTOR_MODE=VIEWER java -jar collector/target/anti-dos-collector-*.jar \
   --spring.datasource.url="jdbc:sqlite:/path/to/snapshot.db?busy_timeout=60000"
 ```
 
-### Read-Only Enforcement in `VIEWER` Mode
-* **Database Engine Guard:** For SQLite, the Collector initializes connections with `PRAGMA query_only=ON;` instead of `PRAGMA journal_mode=WAL;`, verifies that the database file already exists (never creating empty DB files or missing directories), and skips Flyway migrations (`spring.flyway.enabled=false`). For PostgreSQL, HikariCP marks connections `readOnly=true`.
-* **Schema Version Override (Opt-In):** Only if you intentionally inspect an un-migrated writable DB copy and want Flyway to run at startup, set `collector.viewer-migrate-on-startup=true`.
-* **Zero Background & HTTP Mutations:** All scheduled tasks (pollers, enrichment, crawler sync, rollups, auto-mitigation, daily reports, retention cleanup), startup repair tasks, and mutating `POST`/`DELETE` endpoints are disabled (returning HTTP `403 Forbidden`), and write actions are hidden or disabled in the dashboard UI.
-* **Mutual Exclusivity:** `HEADLESS` and `VIEWER` cannot be combined with `demo` mode.
+### Guardrails in `VIEWER` and `OPERATOR` Modes
+* **Existing Database Verification & Flyway:** Both `VIEWER` and `OPERATOR` verify that a file-based SQLite database already exists (never creating missing directories or empty `.db` files) and disable Flyway startup migrations (`spring.flyway.enabled=false`) as well as startup event repair and autonomous mitigation (`collector.auto-mitigation.enabled=false`). Set `collector.viewer-migrate-on-startup=true` only if you intentionally need Flyway to run on startup.
+* **Strict Read-Only Enforcement (`VIEWER`):** For SQLite, `VIEWER` initializes connections with `PRAGMA query_only=ON;` instead of `PRAGMA journal_mode=WAL;`; for PostgreSQL, HikariCP marks connections `readOnly=true`. All scheduled tasks, background workers, and mutating `POST`/`DELETE` endpoints reject writes with HTTP `403 Forbidden`.
+* **Scoped Operator Access (`OPERATOR`):** Connects in normal read/write mode (`WAL` on SQLite) while keeping all background pollers, enrichment, rollup schedulers, and system/admin actions (`VACUUM`, retention cleanup, rollup catch-up, crawler sync, valve deletion, auto-mitigation settings, direct fleet sync) disabled (`HTTP 403 Forbidden`). Dynamic rules created or revoked in `OPERATOR` mode are persisted in `mitigation_rules` and pushed to edge Valves by the `HEADLESS` (or `FULL`) collector during its regular polling cycle.
+* **Mutual Exclusivity:** `HEADLESS`, `OPERATOR`, and `VIEWER` cannot be combined with `demo` mode.
 
 ---
 

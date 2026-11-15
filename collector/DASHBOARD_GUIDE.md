@@ -838,7 +838,9 @@ Admins can trigger asynchronous maintenance actions directly from the web interf
 * **Reset Demo Data (Demo Mode Only):** Re-seeds the demo database with clean, realistic 7-day telemetry curves.
 
 > [!NOTE]
-> When the Collector runs in **Read-Only Viewer Mode** (`collector.mode=VIEWER`), every dashboard page displays a prominent `READ-ONLY VIEWER MODE` banner, all maintenance actions, note editors, crawler sync buttons, report generation triggers, and active mitigation controls are hidden or disabled in the UI, and mutating endpoints reject requests with HTTP `403 Forbidden`. The **Configuration Summary** card on `/system` displays the active **Mode** (`FULL` or `VIEWER`).
+> * **Read-Only Viewer Mode (`collector.mode=VIEWER`):** Every dashboard page displays a prominent `READ-ONLY VIEWER MODE` banner, all maintenance actions, note editors, crawler sync buttons, report generation triggers, and active mitigation controls are hidden or disabled in the UI, and mutating endpoints reject requests with HTTP `403 Forbidden`.
+> * **Operator Mode (`collector.mode=OPERATOR`):** Displays an `OPERATOR MODE` banner and enables network note management, daily report commenting/regeneration, and creating, extending, or revoking dynamic mitigation rules, while disabling background pollers and system/admin maintenance triggers (`VACUUM`, retention cleanup, rollup catch-up, crawler feed sync, valve deletion, auto-mitigation configuration, direct fleet sync) with HTTP `403 Forbidden`.
+> * The **Configuration Summary** card on `/system` displays the active **Mode** (`FULL`, `OPERATOR`, or `VIEWER`).
 
 ---
 

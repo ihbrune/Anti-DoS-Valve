@@ -78,11 +78,55 @@ class AntiDoSCollectorApplicationArgsTest {
 	}
 
 	@Test
+	void operatorShortcutParsesOptionalPathAndRespectsExistingDatasource() {
+		String[] positional = AntiDoSCollectorApplication.resolveArgs(
+				new String[]{"--server.port=8091", "operator", "/var/lib/antidos/live.db"},
+				Map.of());
+		assertArrayEquals(
+				new String[]{
+						"--server.port=8091",
+						"--collector.mode=OPERATOR",
+						"--spring.datasource.url=jdbc:sqlite:/var/lib/antidos/live.db?busy_timeout=60000"
+				},
+				positional);
+
+		String[] dashEquals = AntiDoSCollectorApplication.resolveArgs(
+				new String[]{"--operator=/tmp/collector-op.db"},
+				Map.of());
+		assertArrayEquals(
+				new String[]{
+						"--collector.mode=OPERATOR",
+						"--spring.datasource.url=jdbc:sqlite:/tmp/collector-op.db?busy_timeout=60000"
+				},
+				dashEquals);
+
+		String[] operatorOnly = AntiDoSCollectorApplication.resolveArgs(
+				new String[]{"--operator"},
+				Map.of());
+		assertArrayEquals(new String[]{"--collector.mode=OPERATOR"}, operatorOnly);
+
+		String[] explicitDatasource = AntiDoSCollectorApplication.resolveArgs(
+				new String[]{"operator", "/ignored.db", "--spring.datasource.url=jdbc:sqlite:/explicit.db"},
+				Map.of());
+		assertArrayEquals(
+				new String[]{
+						"--spring.datasource.url=jdbc:sqlite:/explicit.db",
+						"--collector.mode=OPERATOR"
+				},
+				explicitDatasource);
+	}
+
+	@Test
 	void resolvesModeFromEnvironmentUnlessOverriddenByCli() {
 		String[] fromEnv = AntiDoSCollectorApplication.resolveArgs(
 				new String[0],
 				Map.of("COLLECTOR_MODE", "headless"));
 		assertArrayEquals(new String[]{"--collector.mode=HEADLESS"}, fromEnv);
+
+		String[] operatorFromEnv = AntiDoSCollectorApplication.resolveArgs(
+				new String[0],
+				Map.of("COLLECTOR_MODE", "operator"));
+		assertArrayEquals(new String[]{"--collector.mode=OPERATOR"}, operatorFromEnv);
 
 		String[] cliOverridesEnv = AntiDoSCollectorApplication.resolveArgs(
 				new String[]{"--collector.mode=VIEWER"},
@@ -97,7 +141,19 @@ class AntiDoSCollectorApplicationArgsTest {
 				Map.of()));
 
 		assertThrows(IllegalArgumentException.class, () -> AntiDoSCollectorApplication.resolveArgs(
+				new String[]{"headless", "operator"},
+				Map.of()));
+
+		assertThrows(IllegalArgumentException.class, () -> AntiDoSCollectorApplication.resolveArgs(
+				new String[]{"viewer", "operator"},
+				Map.of()));
+
+		assertThrows(IllegalArgumentException.class, () -> AntiDoSCollectorApplication.resolveArgs(
 				new String[]{"viewer", "--collector.mode=HEADLESS"},
+				Map.of()));
+
+		assertThrows(IllegalArgumentException.class, () -> AntiDoSCollectorApplication.resolveArgs(
+				new String[]{"operator", "--collector.mode=VIEWER"},
 				Map.of()));
 
 		assertThrows(IllegalArgumentException.class, () -> AntiDoSCollectorApplication.resolveArgs(
@@ -105,11 +161,23 @@ class AntiDoSCollectorApplicationArgsTest {
 				Map.of()));
 
 		assertThrows(IllegalArgumentException.class, () -> AntiDoSCollectorApplication.resolveArgs(
+				new String[]{"demo", "operator"},
+				Map.of()));
+
+		assertThrows(IllegalArgumentException.class, () -> AntiDoSCollectorApplication.resolveArgs(
 				new String[]{"demo", "--collector.mode=VIEWER"},
 				Map.of()));
 
 		assertThrows(IllegalArgumentException.class, () -> AntiDoSCollectorApplication.resolveArgs(
+				new String[]{"demo", "--collector.mode=OPERATOR"},
+				Map.of()));
+
+		assertThrows(IllegalArgumentException.class, () -> AntiDoSCollectorApplication.resolveArgs(
 				new String[]{"viewer"},
+				Map.of("COLLECTOR_DEMO_MODE", "true")));
+
+		assertThrows(IllegalArgumentException.class, () -> AntiDoSCollectorApplication.resolveArgs(
+				new String[]{"operator"},
 				Map.of("COLLECTOR_DEMO_MODE", "true")));
 
 		assertThrows(IllegalArgumentException.class, () -> AntiDoSCollectorApplication.resolveArgs(

@@ -1,7 +1,7 @@
 package org.henbru.antidos.collector.web;
 
-import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
+
 import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.enrichment.BrowserVersionSyncService;
 import org.henbru.antidos.collector.enrichment.CrawlerSyncService;
@@ -15,6 +15,8 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+
+import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Controller providing the crawler feed dashboard and manual sync triggers.
@@ -136,6 +138,7 @@ public class CrawlerController {
 		model.addAttribute("syncEnabled", properties.getEnrichment().isCrawlerSyncEnabled());
 		model.addAttribute("syncCron", properties.getEnrichment().getCrawlerSyncCron());
 		model.addAttribute("viewerMode", properties.isViewerMode());
+		model.addAttribute("systemAdminReadOnly", !properties.canPerformSystemAdmin());
 		if (browserVersionSyncService != null) {
 			model.addAttribute("browserReference", browserVersionSyncService.getOverview());
 		}

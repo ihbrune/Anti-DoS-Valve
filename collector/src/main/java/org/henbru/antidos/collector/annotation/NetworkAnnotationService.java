@@ -1,15 +1,14 @@
 package org.henbru.antidos.collector.annotation;
 
-import jakarta.annotation.PostConstruct;
-import java.time.Instant;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.InputStream;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+
 import org.henbru.antidos.collector.model.AnnotationTargetType;
 import org.henbru.antidos.collector.model.AnnotationVerdict;
 import org.henbru.antidos.collector.model.IpNetworkInfo;
@@ -19,6 +18,10 @@ import org.henbru.antidos.collector.util.IpNetworkUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import jakarta.annotation.PostConstruct;
 
 /**
  * Service managing persistent network annotations (ASN and Subnet notes).

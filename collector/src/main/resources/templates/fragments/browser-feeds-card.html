@@ -1,76 +1,85 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
+
 <body>
 
-<!-- Browser Release Intelligence & Version Feeds Card -->
-<div th:fragment="browserFeedsCard" id="browser-feeds-card-container" class="table-card" style="padding: 20px; margin-top: 24px;">
-    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
-        <div>
-            <div style="font-size: 15px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
-                <span>&#x1F310;</span> Browser Release Intelligence &amp; Version Feeds
-            </div>
-            <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; max-width: 680px;">
-                Authoritative browser release versions for Chrome, Edge, Firefox, and Safari used by the analytics engine
-                to identify frozen scraper stacks, obsolete tools, and synthetic future versions.
-            </div>
-        </div>
-        <div style="display: flex; align-items: center; gap: 10px;">
-            <div th:if="${browserReference != null and browserReference.lastSynced != null}"
-                style="font-size: 11px; color: var(--text-muted);">
-                Last synced: <strong th:text="${#temporals.format(browserReference.lastSynced, 'yyyy-MM-dd HH:mm')}">2026-11-15 10:00</strong>
-            </div>
-            <button class="btn btn-secondary"
-                    style="font-size: 12px; padding: 6px 12px;"
-                    hx-post="/crawlers/sync-browser-feeds"
-                    hx-target="#browser-feeds-card-container"
-                    hx-swap="outerHTML"
-                    th:disabled="${viewerMode}"
-                    th:title="${viewerMode ? 'Disabled in read-only VIEWER mode' : 'Synchronize browser version feeds from official sources now'}">
-                &#x21BB; Synchronize Browser Feeds Now
-            </button>
-        </div>
-    </div>
-
-    <!-- 4 Browser Intelligence Cards -->
-    <div th:if="${browserReference != null and !browserReference.families.empty}"
-        style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px;">
-        <div th:each="fam : ${browserReference.families}"
-            style="padding: 14px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 6px; display: flex; flex-direction: column; gap: 8px;">
-            <!-- Header -->
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div style="font-size: 13px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
-                    <span th:utext="${fam.icon()}">&#x1F310;</span>
-                    <span th:text="${fam.familyName()}">Chrome</span>
-                </div>
-                <span th:if="${fam.automatedSync()}" class="badge badge-success" style="font-size: 10px; padding: 2px 6px;"
-                    th:title="${fam.sourceNotice()}">Live Automated Feed</span>
-                <span th:unless="${fam.automatedSync()}" class="badge badge-warning" style="font-size: 10px; padding: 2px 6px;"
-                    th:title="${fam.sourceNotice()}">Configurable Matrix</span>
-            </div>
-
-            <!-- Top 5 Versions Strip -->
+    <!-- Browser Release Intelligence & Version Feeds Card -->
+    <div th:fragment="browserFeedsCard" id="browser-feeds-card-container" class="table-card"
+        style="padding: 20px; margin-top: 24px;">
+        <div
+            style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
             <div>
-                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 5px;">Top 5 Authoritative Versions:</div>
-                <div style="display: flex; gap: 4px; flex-wrap: wrap;">
-                    <div th:each="ver : ${fam.topVersions()}"
-                        class="badge"
-                        th:classappend="${ver.channelBadgeClass()}"
-                        style="font-size: 10.5px; padding: 3px 7px; cursor: default;"
-                        th:title="${fam.familyName()} + ' ' + ${ver.fullVersion()} + ' (' + ${ver.channel()} + ')'">
-                        <strong th:text="${ver.displayVersion()}">157</strong>
-                        <span style="font-size: 9px; opacity: 0.85; margin-left: 3px;" th:text="${ver.channel()}">STABLE</span>
+                <div
+                    style="font-size: 15px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                    <span>&#x1F310;</span> Browser Release Intelligence &amp; Version Feeds
+                </div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; max-width: 680px;">
+                    Authoritative browser release versions for Chrome, Edge, Firefox, and Safari used by the analytics
+                    engine
+                    to identify frozen scraper stacks, obsolete tools, and synthetic future versions.
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div th:if="${browserReference != null and browserReference.lastSynced != null}"
+                    style="font-size: 11px; color: var(--text-muted);">
+                    Last synced: <strong
+                        th:text="${#temporals.format(browserReference.lastSynced, 'yyyy-MM-dd HH:mm')}">2026-11-15
+                        10:00</strong>
+                </div>
+                <button class="btn btn-secondary" style="font-size: 12px; padding: 6px 12px;"
+                    hx-post="/crawlers/sync-browser-feeds" hx-target="#browser-feeds-card-container" hx-swap="outerHTML"
+                    th:disabled="${systemAdminReadOnly}"
+                    th:title="${systemAdminReadOnly ? ('Disabled in ' + collectorMode + ' mode') : 'Synchronize browser version feeds from official sources now'}">
+                    &#x21BB; Synchronize Browser Feeds Now
+                </button>
+            </div>
+        </div>
+
+        <!-- 4 Browser Intelligence Cards -->
+        <div th:if="${browserReference != null and !browserReference.families.empty}"
+            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px;">
+            <div th:each="fam : ${browserReference.families}"
+                style="padding: 14px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 6px; display: flex; flex-direction: column; gap: 8px;">
+                <!-- Header -->
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div
+                        style="font-size: 13px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                        <span th:utext="${fam.icon()}">&#x1F310;</span>
+                        <span th:text="${fam.familyName()}">Chrome</span>
+                    </div>
+                    <span th:if="${fam.automatedSync()}" class="badge badge-success"
+                        style="font-size: 10px; padding: 2px 6px;" th:title="${fam.sourceNotice()}">Live Automated
+                        Feed</span>
+                    <span th:unless="${fam.automatedSync()}" class="badge badge-warning"
+                        style="font-size: 10px; padding: 2px 6px;" th:title="${fam.sourceNotice()}">Configurable
+                        Matrix</span>
+                </div>
+
+                <!-- Top 5 Versions Strip -->
+                <div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 5px;">Top 5 Authoritative
+                        Versions:</div>
+                    <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                        <div th:each="ver : ${fam.topVersions()}" class="badge"
+                            th:classappend="${ver.channelBadgeClass()}"
+                            style="font-size: 10.5px; padding: 3px 7px; cursor: default;"
+                            th:title="${fam.familyName()} + ' ' + ${ver.fullVersion()} + ' (' + ${ver.channel()} + ')'">
+                            <strong th:text="${ver.displayVersion()}">157</strong>
+                            <span style="font-size: 9px; opacity: 0.85; margin-left: 3px;"
+                                th:text="${ver.channel()}">STABLE</span>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Provenance & Configuration Notice -->
-            <div style="font-size: 10.5px; color: var(--text-muted); margin-top: auto; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.05); line-height: 1.35;"
-                th:text="${fam.sourceNotice()}">
-                Live automated feed via Google Version History API
+                <!-- Provenance & Configuration Notice -->
+                <div style="font-size: 10.5px; color: var(--text-muted); margin-top: auto; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.05); line-height: 1.35;"
+                    th:text="${fam.sourceNotice()}">
+                    Live automated feed via Google Version History API
+                </div>
             </div>
         </div>
     </div>
-</div>
 
 </body>
+
 </html>

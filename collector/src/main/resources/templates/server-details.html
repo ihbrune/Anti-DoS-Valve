@@ -357,7 +357,7 @@
                             <span style="color: var(--text-secondary);">This valve was not reported in the latest server
                                 poll (may have been renamed or removed).</span>
                         </div>
-                        <div th:unless="${viewerMode}" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <div th:unless="${systemAdminReadOnly}" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                             <form th:action="@{'/server/' + ${serverId} + '/valves/' + ${rv.valveName} + '/delete'}"
                                 method="post" style="display: inline;"
                                 onsubmit="return confirm('Do you want to remove this inactive valve configuration? (Historical telemetry slot data will be preserved)');">

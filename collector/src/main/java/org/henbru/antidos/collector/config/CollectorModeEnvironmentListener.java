@@ -2,6 +2,7 @@ package org.henbru.antidos.collector.config;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+
 import org.springframework.boot.context.event.ApplicationEnvironmentPreparedEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.core.Ordered;

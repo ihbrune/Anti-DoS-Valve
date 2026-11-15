@@ -1,23 +1,13 @@
 package org.henbru.antidos.collector.config;
 
-import static org.hamcrest.Matchers.containsString;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
+
 import org.flywaydb.core.Flyway;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import org.henbru.antidos.collector.AntiDoSCollectorApplication;
 import org.henbru.antidos.collector.demo.MockValveController;
 import org.henbru.antidos.collector.poller.CollectorPollerService;
@@ -30,6 +20,12 @@ import org.henbru.antidos.collector.web.GlobalModelAdvice;
 import org.henbru.antidos.collector.web.MitigationController;
 import org.henbru.antidos.collector.web.NotesController;
 import org.henbru.antidos.collector.web.SystemController;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -42,6 +38,11 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.test.web.servlet.MockMvc;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
@@ -58,6 +59,7 @@ class CollectorModeTest {
 			assertEquals(CollectorMode.FULL, CollectorMode.fromString("full"));
 			assertEquals(CollectorMode.HEADLESS, CollectorMode.fromString(" headless "));
 			assertEquals(CollectorMode.VIEWER, CollectorMode.fromString("Viewer"));
+			assertEquals(CollectorMode.OPERATOR, CollectorMode.fromString(" OpErAtOr "));
 			assertThrows(IllegalArgumentException.class, () -> CollectorMode.fromString("invalid"));
 		}
 
@@ -67,16 +69,33 @@ class CollectorModeTest {
 			assertTrue(CollectorMode.FULL.isBackgroundProcessingEnabled());
 			assertFalse(CollectorMode.FULL.isHeadless());
 			assertFalse(CollectorMode.FULL.isViewer());
+			assertFalse(CollectorMode.FULL.isOperator());
+			assertTrue(CollectorMode.FULL.canModifyOperationalData());
+			assertTrue(CollectorMode.FULL.canPerformSystemAdmin());
 
 			assertFalse(CollectorMode.HEADLESS.isWebEnabled());
 			assertTrue(CollectorMode.HEADLESS.isBackgroundProcessingEnabled());
 			assertTrue(CollectorMode.HEADLESS.isHeadless());
 			assertFalse(CollectorMode.HEADLESS.isViewer());
+			assertFalse(CollectorMode.HEADLESS.isOperator());
+			assertFalse(CollectorMode.HEADLESS.canModifyOperationalData());
+			assertFalse(CollectorMode.HEADLESS.canPerformSystemAdmin());
 
 			assertTrue(CollectorMode.VIEWER.isWebEnabled());
 			assertFalse(CollectorMode.VIEWER.isBackgroundProcessingEnabled());
 			assertFalse(CollectorMode.VIEWER.isHeadless());
 			assertTrue(CollectorMode.VIEWER.isViewer());
+			assertFalse(CollectorMode.VIEWER.isOperator());
+			assertFalse(CollectorMode.VIEWER.canModifyOperationalData());
+			assertFalse(CollectorMode.VIEWER.canPerformSystemAdmin());
+
+			assertTrue(CollectorMode.OPERATOR.isWebEnabled());
+			assertFalse(CollectorMode.OPERATOR.isBackgroundProcessingEnabled());
+			assertFalse(CollectorMode.OPERATOR.isHeadless());
+			assertFalse(CollectorMode.OPERATOR.isViewer());
+			assertTrue(CollectorMode.OPERATOR.isOperator());
+			assertTrue(CollectorMode.OPERATOR.canModifyOperationalData());
+			assertFalse(CollectorMode.OPERATOR.canPerformSystemAdmin());
 		}
 	}
 
@@ -113,6 +132,15 @@ class CollectorModeTest {
 		}
 
 		@Test
+		void operatorDisablesFlywayAndAutoMitigationByDefault() {
+			MockEnvironment env = new MockEnvironment().withProperty("collector.mode", "OPERATOR");
+			fire(env);
+
+			assertEquals("false", env.getProperty("spring.flyway.enabled"));
+			assertEquals("false", env.getProperty("collector.auto-mitigation.enabled"));
+		}
+
+		@Test
 		void viewerKeepsFlywayEnabledWhenMigrateOnStartupIsTrue() {
 			MockEnvironment env = new MockEnvironment()
 					.withProperty("collector.mode", "VIEWER")
@@ -125,7 +153,19 @@ class CollectorModeTest {
 		}
 
 		@Test
-		void rejectsDemoModeCombinedWithHeadlessOrViewer() {
+		void operatorKeepsFlywayEnabledWhenMigrateOnStartupIsTrue() {
+			MockEnvironment env = new MockEnvironment()
+					.withProperty("collector.mode", "OPERATOR")
+					.withProperty("collector.viewer-migrate-on-startup", "true")
+					.withProperty("spring.flyway.enabled", "true");
+			fire(env);
+
+			assertEquals("true", env.getProperty("spring.flyway.enabled"));
+			assertEquals("false", env.getProperty("collector.auto-mitigation.enabled"));
+		}
+
+		@Test
+		void rejectsDemoModeCombinedWithHeadlessViewerOrOperator() {
 			MockEnvironment headlessDemo = new MockEnvironment()
 					.withProperty("collector.mode", "HEADLESS")
 					.withProperty("collector.demo-mode", "true");
@@ -135,6 +175,11 @@ class CollectorModeTest {
 					.withProperty("collector.mode", "VIEWER")
 					.withProperty("collector.demo-mode", "true");
 			assertThrows(IllegalStateException.class, () -> fire(viewerDemo));
+
+			MockEnvironment operatorDemo = new MockEnvironment()
+					.withProperty("collector.mode", "OPERATOR")
+					.withProperty("collector.demo-mode", "true");
+			assertThrows(IllegalStateException.class, () -> fire(operatorDemo));
 		}
 	}
 
@@ -294,6 +339,184 @@ class CollectorModeTest {
 						jdbc.queryForObject("SELECT COUNT(*) FROM mitigation_rules", Integer.class));
 				assertEquals(profilesCountBefore,
 						jdbc.queryForObject("SELECT COUNT(*) FROM subnet_profiles", Integer.class));
+			}
+		}
+
+		@Test
+		void operatorModeFailsFastWhenSqliteFileDoesNotExist(@TempDir Path tempDir) {
+			Path missingDir = tempDir.resolve("nonexistent-operator-dir");
+			Path missingDb = missingDir.resolve("missing.db");
+			String jdbcUrl = "jdbc:sqlite:" + missingDb.toAbsolutePath() + "?busy_timeout=60000";
+
+			assertThrows(RuntimeException.class, () -> {
+				try (ConfigurableApplicationContext ignored = new SpringApplicationBuilder(
+						AntiDoSCollectorApplication.class)
+						.run(
+								"--collector.mode=OPERATOR",
+								"--spring.datasource.url=" + jdbcUrl,
+								"--server.port=0")) {
+					// Expected to fail before opening or creating missing database file
+				}
+			});
+
+			assertFalse(Files.exists(missingDir), "Operator mode must not create missing parent directories");
+			assertFalse(Files.exists(missingDb), "Operator mode must not create missing SQLite files");
+		}
+
+		@Test
+		void operatorModeAllowsNotesReportsAndMitigationsWhileBlockingSystemAdmin(@TempDir Path tempDir)
+				throws Exception {
+			Path dbPath = tempDir.resolve("operator-live.db");
+			String jdbcUrl = "jdbc:sqlite:" + dbPath.toAbsolutePath() + "?busy_timeout=60000";
+
+			Flyway.configure()
+					.dataSource(jdbcUrl, "", "")
+					.locations("classpath:db/migration/sqlite")
+					.load()
+					.migrate();
+
+			try (ConfigurableApplicationContext ctx = new SpringApplicationBuilder(AntiDoSCollectorApplication.class)
+					.run(
+							"--collector.mode=OPERATOR",
+							"--spring.datasource.url=" + jdbcUrl,
+							"--server.port=0")) {
+				assertTrue(ctx instanceof WebApplicationContext);
+
+				CollectorProperties props = ctx.getBean(CollectorProperties.class);
+				assertTrue(props.isOperatorMode());
+				assertFalse(props.isViewerMode());
+				assertFalse(props.isHeadlessMode());
+				assertTrue(props.canModifyOperationalData());
+				assertFalse(props.canPerformSystemAdmin());
+				assertEquals(CollectorMode.OPERATOR, props.getMode());
+
+				JdbcTemplate jdbc = ctx.getBean(JdbcTemplate.class);
+				Integer queryOnly = jdbc.queryForObject("PRAGMA query_only", Integer.class);
+				assertEquals(0, queryOnly);
+
+				String journalMode = jdbc.queryForObject("PRAGMA journal_mode", String.class);
+				assertNotNull(journalMode);
+				assertEquals("wal", journalMode.toLowerCase(Locale.ROOT));
+
+				MockMvc mockMvc = MockMvcBuilders.webAppContextSetup((WebApplicationContext) ctx).build();
+
+				List<String> htmlPages = List.of(
+						"/", "/events", "/offenders", "/profiles", "/analytics",
+						"/mitigation", "/notes", "/reports", "/crawlers", "/system", "/poll-log", "/help");
+				for (String path : htmlPages) {
+					var result = mockMvc.perform(get(path))
+							.andExpect(status().isOk())
+							.andExpect(content().string(containsString("OPERATOR MODE")));
+					if (!"/help".equals(path)) {
+						result.andExpect(content().string(not(containsString("READ-ONLY VIEWER MODE"))));
+					}
+				}
+
+				mockMvc.perform(get("/system"))
+						.andExpect(status().isOk())
+						.andExpect(content().string(containsString("OPERATOR")));
+
+				mockMvc.perform(get("/api/v1/fleet"))
+						.andExpect(status().isOk());
+				mockMvc.perform(get("/api/v1/mitigation/rules"))
+						.andExpect(status().isOk());
+
+				// Allowed: Network notes create + delete
+				mockMvc.perform(post("/notes")
+								.param("targetType", "SUBNET")
+								.param("targetKey", "203.0.113.0/24")
+								.param("verdict", "SUSPICIOUS")
+								.param("noteMarkdown", "Operator triage note"))
+						.andExpect(status().isOk());
+				assertEquals(1, jdbc.queryForObject(
+						"SELECT COUNT(*) FROM network_annotations WHERE target_key = '203.0.113.0/24'",
+						Integer.class));
+				Long noteId = jdbc.queryForObject(
+						"SELECT id FROM network_annotations WHERE target_key = '203.0.113.0/24'",
+						Long.class);
+				assertNotNull(noteId);
+
+				mockMvc.perform(delete("/notes/" + noteId))
+						.andExpect(status().isOk());
+				assertEquals(0, jdbc.queryForObject(
+						"SELECT COUNT(*) FROM network_annotations WHERE target_key = '203.0.113.0/24'",
+						Integer.class));
+
+				// Allowed: Daily report notes + report generation
+				mockMvc.perform(post("/reports/2026-11-14/note")
+								.header("HX-Request", "true")
+								.param("noteMarkdown", "Operator shift handoff"))
+						.andExpect(status().isOk());
+				assertEquals(1, jdbc.queryForObject(
+						"SELECT COUNT(*) FROM daily_report_notes WHERE report_date = '2026-11-14'",
+						Integer.class));
+
+				mockMvc.perform(post("/reports/generate")
+								.param("date", "2026-11-14"))
+						.andExpect(status().is3xxRedirection());
+				assertEquals(1, jdbc.queryForObject(
+						"SELECT COUNT(*) FROM daily_reports WHERE report_date = '2026-11-14'",
+						Integer.class));
+
+				// Allowed: Dynamic mitigation block -> extend -> revoke (persisted to DB without outbound Valve push)
+				mockMvc.perform(post("/mitigation/block")
+								.param("cidrInput", "203.0.113.0/24")
+								.param("ttlMinutes", "30")
+								.param("reason", "Operator manual block"))
+						.andExpect(status().isOk());
+
+				Long ruleId = jdbc.queryForObject(
+						"SELECT id FROM mitigation_rules WHERE cidr = '203.0.113.0/24' AND status = 'ACTIVE'",
+						Long.class);
+				assertNotNull(ruleId);
+				String initialExpiresAt = jdbc.queryForObject(
+						"SELECT expires_at FROM mitigation_rules WHERE id = ?",
+						String.class,
+						ruleId);
+
+				mockMvc.perform(post("/mitigation/" + ruleId + "/extend")
+								.param("additionalMinutes", "60"))
+						.andExpect(status().isOk());
+				String extendedExpiresAt = jdbc.queryForObject(
+						"SELECT expires_at FROM mitigation_rules WHERE id = ?",
+						String.class,
+						ruleId);
+				assertNotEquals(initialExpiresAt, extendedExpiresAt);
+
+				mockMvc.perform(post("/mitigation/" + ruleId + "/revoke")
+								.param("reason", "Cleared by operator"))
+						.andExpect(status().isOk());
+				String statusAfterRevoke = jdbc.queryForObject(
+						"SELECT status FROM mitigation_rules WHERE id = ?",
+						String.class,
+						ruleId);
+				assertEquals("REVOKED", statusAfterRevoke);
+				Integer auditCount = jdbc.queryForObject(
+						"SELECT COUNT(*) FROM mitigation_audit_log WHERE rule_id = ?",
+						Integer.class,
+						ruleId);
+				assertNotNull(auditCount);
+				assertTrue(auditCount >= 3);
+
+				// Blocked: System admin, maintenance, crawlers, profiles, valve deletion, fleet sync & auto-mitigation
+				mockMvc.perform(post("/system/retention-cleanup")).andExpect(status().isForbidden());
+				mockMvc.perform(post("/system/vacuum")).andExpect(status().isForbidden());
+				mockMvc.perform(post("/system/rollup-catchup")).andExpect(status().isForbidden());
+				mockMvc.perform(post("/system/clear-cache")).andExpect(status().isForbidden());
+				mockMvc.perform(post("/crawlers/sync-all")).andExpect(status().isForbidden());
+				mockMvc.perform(post("/crawlers/spamhaus-drop/sync")).andExpect(status().isForbidden());
+				mockMvc.perform(post("/crawlers/sync-browser-feeds")).andExpect(status().isForbidden());
+				mockMvc.perform(post("/profiles/refresh")).andExpect(status().isForbidden());
+				mockMvc.perform(post("/server/srv-1/valves/valve-1/delete")).andExpect(status().isForbidden());
+				mockMvc.perform(post("/api/v1/rollups/subnets/aggregate")).andExpect(status().isForbidden());
+				mockMvc.perform(post("/api/v1/rollups/subnets/profiles/refresh")).andExpect(status().isForbidden());
+				mockMvc.perform(post("/mitigation/sync")).andExpect(status().isForbidden());
+				mockMvc.perform(post("/mitigation/auto/toggle")
+								.param("property", "enabled"))
+						.andExpect(status().isForbidden());
+				mockMvc.perform(post("/mitigation/auto/reset")).andExpect(status().isForbidden());
+				mockMvc.perform(post("/mitigation/auto/evaluate")).andExpect(status().isForbidden());
+				mockMvc.perform(post("/mitigation/webhook/test")).andExpect(status().isForbidden());
 			}
 		}
 	}

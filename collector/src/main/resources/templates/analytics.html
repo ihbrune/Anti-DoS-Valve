@@ -183,8 +183,8 @@
                 </div>
 
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <button th:unless="${viewerMode}" type="button" class="btn" hx-post="/api/v1/rollups/subnets/aggregate?hours=24"
-                        hx-swap="none"
+                    <button th:unless="${systemAdminReadOnly}" type="button" class="btn"
+                        hx-post="/api/v1/rollups/subnets/aggregate?hours=24" hx-swap="none"
                         hx-on::after-request="htmx.ajax('GET', '/fragments/analytics-overview?hours=24', '#analytics-container')"
                         title="Force immediate rollup aggregation catch-up across all nodes">
                         <span>&#x26A1;</span> Refresh Subnet Rollups

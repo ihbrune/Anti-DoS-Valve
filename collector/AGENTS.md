@@ -9,7 +9,7 @@ This document serves as the architectural reference and development guide for hu
 **Anti-DoS-Collector** is an automated aggregation, monitoring, and analytics service designed to poll, persist, and visualize security telemetry from a fleet of **Anti-DoS-Valve** instances across multiple servers.
 
 ### Core Architectural Layers:
-* **`config/`:** Configuration management for endpoints, database connection, retention policies, operational mode (`CollectorMode`: `FULL`, `HEADLESS`, `VIEWER`, `CollectorModeEnvironmentListener`), and application settings.
+* **`config/`:** Configuration management for endpoints, database connection, retention policies, operational mode (`CollectorMode`: `FULL`, `HEADLESS`, `OPERATOR`, `VIEWER`, `CollectorModeEnvironmentListener`), and application settings.
 * **`poller/`:** Scheduled polling engine utilizing Java 21 `HttpClient` and Virtual Threads. Handles endpoint polling, intermediate in-progress slot updates, and recovery of missed slots via `slotKey`.
 * **`enrichment/`:** Asynchronous IP metadata enrichment engine. Includes `MmdbEnrichmentProvider` (DB-IP / MaxMind MMDB), `AsnClassifierService` (layered defaults + custom overlay), `CrawlerSyncService` (dynamic JSON feed synchronizer with orphan cleanup), and `BackgroundEnrichmentWorker`.
 * **`aggregation/`:** Long-term time-window rollup engine (`RollupAggregationService`) computing persistent subnet bucket aggregates (`client_subnet_rollups`, `dim_user_agent`, `rollup_signatures`) with configurable window duration (`rollup-window-minutes`), automatic startup catch-up, and botnet/proxy cluster heuristics.
@@ -67,6 +67,7 @@ This document serves as the architectural reference and development guide for hu
 | `mvn spring-boot:run -pl collector -Dspring-boot.run.arguments="demo"` | Starts the collector in zero-configuration Demo Mode with isolated database. |
 | `mvn spring-boot:run -pl collector -Dspring-boot.run.arguments="demo 4"` | Starts Demo Mode with fleet scaling (4 instances per type = 12 total servers A..D). |
 | `mvn spring-boot:run -pl collector -Dspring-boot.run.arguments="headless"` | Starts the collector in `HEADLESS` mode (background workers only, no HTTP server). |
+| `mvn spring-boot:run -pl collector -Dspring-boot.run.arguments="operator /path/to/collector.db"` | Starts the collector in `OPERATOR` mode (notes, daily reports, dynamic rules enabled; background workers and system maintenance disabled). |
 | `mvn spring-boot:run -pl collector -Dspring-boot.run.arguments="viewer /path/to/snapshot.db"` | Starts the collector in strict read-only `VIEWER` mode to inspect an existing SQLite snapshot. |
 
 ---

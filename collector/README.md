@@ -250,7 +250,7 @@ Configure your Collector to poll the fleet at matching intervals:
 
 ```yaml
 collector:
-  # Optional operational mode: FULL (default), HEADLESS (no web server), VIEWER (strict read-only UI/API)
+  # Optional operational mode: FULL (default), HEADLESS (no web server), OPERATOR (analyst UI + dynamic rules), VIEWER (strict read-only UI/API)
   mode: FULL
 
   # 1. Matching Poll Frequency (harmonized with Valve slotLength="60")
@@ -310,7 +310,7 @@ collector:
 | **Telemetry Lease** | `collectorIntegration="auto"` | Continuous Polling | Keeps Valve telemetry active during operational monitoring, but automatically suspends Valve bitmask overhead if the Collector is taken down. |
 | **Visitor Affirmation** | `visitorCookieEnabled="true"` | Analytics Bot-Mix View | Allows the Collector to break down traffic into verified returning visitors, legitimate crawlers, and unverified bot traffic. |
 | **Storage Engine** | N/A (Stateless) | SQLite (WAL) vs. PostgreSQL | Use SQLite with WAL mode for small-to-medium clusters (1–10 nodes); use PostgreSQL for enterprise fleets (>10 nodes or high-concurrency analysts). |
-| **Operational Mode** | Edge Enforcement | `FULL` / `HEADLESS` / `VIEWER` | Run `HEADLESS` on isolated backend hosts (pollers only, no HTTP port) and inspect copied SQLite snapshots or DB replicas offline in strict read-only `VIEWER` mode. |
+| **Operational Mode** | Edge Enforcement | `FULL` / `HEADLESS` / `OPERATOR` / `VIEWER` | Run `HEADLESS` on isolated backend hosts (pollers only, no HTTP port), delegate analyst notes, daily report comments, and dynamic blocks to `OPERATOR`, or inspect databases safely in strict read-only `VIEWER` mode. |
 
 ---
 

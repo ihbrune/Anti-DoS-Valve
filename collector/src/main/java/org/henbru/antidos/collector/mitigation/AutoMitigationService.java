@@ -7,9 +7,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.model.CarpetRadarEntry;
-import org.henbru.antidos.collector.model.MitigationAuditEntry;
 import org.henbru.antidos.collector.model.MitigationRule;
 import org.henbru.antidos.collector.notification.AlertNotificationService;
 import org.henbru.antidos.collector.storage.SystemSettingsRepository;

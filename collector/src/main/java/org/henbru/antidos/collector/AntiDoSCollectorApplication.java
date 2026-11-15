@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+
 import org.henbru.antidos.collector.cli.CollectorCliRunner;
 import org.henbru.antidos.collector.config.CollectorMode;
 import org.springframework.boot.SpringApplication;
