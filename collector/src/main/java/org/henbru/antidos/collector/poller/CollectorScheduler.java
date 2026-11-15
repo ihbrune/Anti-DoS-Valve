@@ -55,11 +55,19 @@ public class CollectorScheduler {
 	@jakarta.annotation.PostConstruct
 	@SuppressWarnings("null")
 	public void logConfigurationSummary() {
+		org.henbru.antidos.collector.config.CollectorMode mode = properties.getMode();
+		if (properties.isViewerMode()) {
+			log.info("Collector started in {} (strict read-only) mode; background pollers, enrichment, mitigation, and retention are disabled.",
+					mode);
+			return;
+		}
 		java.util.List<org.henbru.antidos.collector.config.EndpointConfig> endpoints = properties.getEndpoints();
 		if (endpoints.isEmpty()) {
-			log.info("Collector started: 0 endpoints configured (create 'collector-config.yaml' to add Tomcat servers).");
+			log.info("Collector started in {} mode: 0 endpoints configured (create 'collector-config.yaml' to add Tomcat servers).",
+					mode);
 		} else {
-			log.info("Collector started: Loaded {} configured endpoint(s): {}",
+			log.info("Collector started in {} mode: Loaded {} configured endpoint(s): {}",
+					mode,
 					endpoints.size(),
 					endpoints.stream().map(org.henbru.antidos.collector.config.EndpointConfig::getName).toList());
 		}
@@ -67,6 +75,9 @@ public class CollectorScheduler {
 
 	@Scheduled(fixedDelayString = "#{${collector.poll-interval-seconds:15} * 1000}", initialDelay = 2000)
 	public void runScheduledPoll() {
+		if (!properties.getMode().isBackgroundProcessingEnabled()) {
+			return;
+		}
 		try {
 			pollerService.pollFleet();
 		} catch (Exception e) {
@@ -100,6 +111,9 @@ public class CollectorScheduler {
 	 */
 	@Scheduled(cron = "${collector.active-event-cleanup-cron:0 15 * * * *}")
 	public int runHourlyActiveEventCleanup() {
+		if (!properties.getMode().isBackgroundProcessingEnabled()) {
+			return 0;
+		}
 		try {
 			int hours = properties.getActiveEventRetentionHours() > 0 ? properties.getActiveEventRetentionHours() : 24;
 			Instant activeCutoff = Instant.now().minus(hours, ChronoUnit.HOURS);
@@ -123,6 +137,9 @@ public class CollectorScheduler {
 	 */
 	@Scheduled(cron = "0 0 3 * * *") // Daily at 03:00 AM
 	public RetentionCleanupResult runRetentionCleanup() {
+		if (properties.isViewerMode()) {
+			throw new IllegalStateException("Retention cleanup is disabled in read-only VIEWER mode.");
+		}
 		long start = System.currentTimeMillis();
 		int days = properties.getRetentionDays() > 0 ? properties.getRetentionDays() : 30;
 		Instant cutoff = Instant.now().minus(days, ChronoUnit.DAYS);
@@ -187,6 +204,9 @@ public class CollectorScheduler {
 	 */
 	@Scheduled(cron = "${collector.report.cron:0 0 1 * * *}")
 	public void runScheduledDailyReport() {
+		if (!properties.getMode().isBackgroundProcessingEnabled()) {
+			return;
+		}
 		if (properties.isReportEnabled() && dailyReportService != null) {
 			try {
 				dailyReportService.generateReportForYesterday();
@@ -201,6 +221,9 @@ public class CollectorScheduler {
 	 */
 	@Scheduled(cron = "${collector.enrichment.crawler-sync-cron:0 0 4 * * *}")
 	public void runScheduledCrawlerSync() {
+		if (!properties.getMode().isBackgroundProcessingEnabled()) {
+			return;
+		}
 		try {
 			crawlerSyncService.syncAll();
 		} catch (Exception e) {
@@ -213,7 +236,7 @@ public class CollectorScheduler {
 	 */
 	@Scheduled(cron = "${collector.enrichment.crawler-retry-cron:0 15 * * * *}")
 	public void runScheduledCrawlerRetry() {
-		if (crawlerSyncService == null) {
+		if (!properties.getMode().isBackgroundProcessingEnabled() || crawlerSyncService == null) {
 			return;
 		}
 		try {

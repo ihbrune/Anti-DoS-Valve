@@ -120,7 +120,7 @@
                 Subnet rollups are automatically aggregated in background windows. You can wait for the next scheduled
                 cycle or trigger an immediate catch-up.
             </div>
-            <button type="button" class="btn btn-primary" hx-post="/api/v1/rollups/subnets/aggregate?hours=24"
+            <button th:unless="${viewerMode}" type="button" class="btn btn-primary" hx-post="/api/v1/rollups/subnets/aggregate?hours=24"
                 hx-swap="none"
                 hx-on::after-request="htmx.ajax('GET', '/fragments/analytics-overview?hours=24', '#analytics-container')">
                 <span>&#x26A1;</span> Trigger Rollup Catch-Up

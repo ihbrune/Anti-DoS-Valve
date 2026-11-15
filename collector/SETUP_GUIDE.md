@@ -81,6 +81,37 @@ Dashboard available at **`http://localhost:8090`**.
 
 ---
 
+## Operational Modes (`FULL`, `HEADLESS`, `VIEWER`)
+
+The Collector supports three operational modes controlled via `collector.mode` (environment variable `COLLECTOR_MODE`) or CLI shortcuts:
+
+| Mode | Embedded Web Server / UI | Background Workers & Writes | Intended Use Case |
+|---|---|---|---|
+| **`FULL`** (default) | Enabled (`http://localhost:8090`) | Enabled | Standard single-host deployment combining polling, enrichment, mitigation, and UI. |
+| **`HEADLESS`** | **Disabled** (`WebApplicationType.NONE`, `keep-alive=true`) | Enabled | Runs on isolated backend servers with no exposed HTTP port; collects and enriches telemetry into SQLite or PostgreSQL. |
+| **`VIEWER`** | Enabled (strict read-only UI & REST GET APIs) | **Disabled** (zero DB writes) | Safe forensic inspection of a copied `.db` snapshot, read-only volume, or remote database without mutating data or polling endpoints. |
+
+### Quick CLI Launch Examples
+```bash
+# Start without web UI/server on an isolated server (or set COLLECTOR_MODE=HEADLESS)
+java -jar collector/target/anti-dos-collector-*.jar headless
+
+# Open a copied SQLite snapshot in strict read-only VIEWER mode
+java -jar collector/target/anti-dos-collector-*.jar viewer /path/to/copied-antidos-collector.db
+
+# Or configure via property / environment variable:
+COLLECTOR_MODE=VIEWER java -jar collector/target/anti-dos-collector-*.jar \
+  --spring.datasource.url="jdbc:sqlite:/path/to/snapshot.db?busy_timeout=60000"
+```
+
+### Read-Only Enforcement in `VIEWER` Mode
+* **Database Engine Guard:** For SQLite, the Collector initializes connections with `PRAGMA query_only=ON;` instead of `PRAGMA journal_mode=WAL;`, verifies that the database file already exists (never creating empty DB files or missing directories), and skips Flyway migrations (`spring.flyway.enabled=false`). For PostgreSQL, HikariCP marks connections `readOnly=true`.
+* **Schema Version Override (Opt-In):** Only if you intentionally inspect an un-migrated writable DB copy and want Flyway to run at startup, set `collector.viewer-migrate-on-startup=true`.
+* **Zero Background & HTTP Mutations:** All scheduled tasks (pollers, enrichment, crawler sync, rollups, auto-mitigation, daily reports, retention cleanup), startup repair tasks, and mutating `POST`/`DELETE` endpoints are disabled (returning HTTP `403 Forbidden`), and write actions are hidden or disabled in the dashboard UI.
+* **Mutual Exclusivity:** `HEADLESS` and `VIEWER` cannot be combined with `demo` mode.
+
+---
+
 ## Production Setup & Zero-Friction Update Guide
 
 To run the Collector as a robust, 24/7 background service in production—and ensure that future updates via `git pull` from GitHub will **never** overwrite your configuration, delete your database, or cause git merge conflicts—follow this recommended deployment architecture.

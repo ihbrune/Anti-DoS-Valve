@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- Fragment: viewerBanner -->
+<div th:fragment="viewerBanner" th:if="${viewerMode}" class="viewer-banner" role="status">
+    <div class="viewer-badge">READ-ONLY VIEWER MODE</div>
+    <div class="viewer-text">
+        Connected in strict read-only inspection mode. Background pollers, database migrations, maintenance triggers,
+        dynamic mitigations, and annotation edits are disabled.
+    </div>
+</div>
+
+</body>
+</html>

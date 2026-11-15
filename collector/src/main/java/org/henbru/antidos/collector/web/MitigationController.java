@@ -13,8 +13,11 @@ import org.henbru.antidos.collector.mitigation.MitigationService;
 import org.henbru.antidos.collector.model.MitigationAuditEntry;
 import org.henbru.antidos.collector.model.MitigationRule;
 import org.henbru.antidos.collector.model.MonitoredValve;
+import jakarta.servlet.http.HttpServletResponse;
 import org.henbru.antidos.collector.notification.AlertNotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -29,6 +32,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
  * pre-flight collateral damage checks, deterrence monitoring, and audit trails.
  */
 @Controller
+@ConditionalOnWebApplication
 public class MitigationController {
 
 	private final MitigationService mitigationService;
@@ -157,7 +161,12 @@ public class MitigationController {
 			@RequestParam(value = "reason", required = false) String reason,
 			@RequestParam(value = "source", defaultValue = "MANUAL") String source,
 			@RequestParam(value = "confirmOverride", defaultValue = "false") boolean confirmOverride,
+			HttpServletResponse response,
 			Model model) {
+
+		if (rejectViewerMutation(response, model, "Creating dynamic blocks")) {
+			return "fragments/mitigation-content :: mitigationDashboard";
+		}
 
 		List<String> rawCidrs = parseInputCidrs(cidrInput);
 		MitigationService.PreflightCheckResult preflight = mitigationService.evaluatePreflight(rawCidrs);
@@ -207,7 +216,11 @@ public class MitigationController {
 			@RequestParam(value = "hours", defaultValue = "24") int hours,
 			@RequestParam(value = "ttlMinutes", defaultValue = "60") int ttlMinutes,
 			@RequestParam(value = "reason", required = false) String reason,
+			HttpServletResponse response,
 			Model model) {
+		if (rejectViewerMutation(response, model, "Blocking ASN subnets")) {
+			return "fragments/mitigation-content :: mitigationDashboard";
+		}
 		try {
 			List<MitigationRule> created = mitigationService.blockAsnSubnets(asn, hours, ttlMinutes, reason, "ADMIN");
 			if (created.isEmpty()) {
@@ -231,7 +244,11 @@ public class MitigationController {
 			@PathVariable("id") long id,
 			@RequestParam(value = "additionalMinutes", defaultValue = "60") int additionalMinutes,
 			@RequestParam(value = "tab", defaultValue = "active") String tab,
+			HttpServletResponse response,
 			Model model) {
+		if (rejectViewerMutation(response, model, "Extending dynamic blocks")) {
+			return "fragments/mitigation-content :: mitigationDashboard";
+		}
 		var updated = mitigationService.extendBlock(id, additionalMinutes, "ADMIN");
 		if (updated.isPresent()) {
 			populateMitigationModel(model, tab, null, "ALL", 1, 50, null, "ALL", "ALL", 1, 50,
@@ -249,7 +266,11 @@ public class MitigationController {
 			@PathVariable("id") long id,
 			@RequestParam(value = "reason", required = false) String reason,
 			@RequestParam(value = "tab", defaultValue = "active") String tab,
+			HttpServletResponse response,
 			Model model) {
+		if (rejectViewerMutation(response, model, "Revoking dynamic blocks")) {
+			return "fragments/mitigation-content :: mitigationDashboard";
+		}
 		var revoked = mitigationService.revokeBlock(id, reason, "ADMIN");
 		if (revoked.isPresent()) {
 			populateMitigationModel(model, tab, null, "ALL", 1, 50, null, "ALL", "ALL", 1, 50,
@@ -266,7 +287,11 @@ public class MitigationController {
 	public String revokeBatch(
 			@RequestParam("batchId") String batchId,
 			@RequestParam(value = "reason", required = false) String reason,
+			HttpServletResponse response,
 			Model model) {
+		if (rejectViewerMutation(response, model, "Revoking mitigation batches")) {
+			return "fragments/mitigation-content :: mitigationDashboard";
+		}
 		int count = mitigationService.revokeBatch(batchId, reason, "ADMIN");
 		populateMitigationModel(model,
 				"Revoked " + count + " rule(s) in batch '" + batchId + "' and synchronized to fleet.",
@@ -277,7 +302,11 @@ public class MitigationController {
 	@PostMapping("/mitigation/flush")
 	public String flushAllRules(
 			@RequestParam(value = "reason", required = false) String reason,
+			HttpServletResponse response,
 			Model model) {
+		if (rejectViewerMutation(response, model, "Emergency flush")) {
+			return "fragments/mitigation-content :: mitigationDashboard";
+		}
 		int count = mitigationService.revokeAll(reason, "ADMIN");
 		populateMitigationModel(model,
 				"Emergency flush executed: Revoked all " + count + " active dynamic rule(s) across the entire fleet.",
@@ -286,7 +315,10 @@ public class MitigationController {
 	}
 
 	@PostMapping("/mitigation/sync")
-	public String syncFleet(Model model) {
+	public String syncFleet(HttpServletResponse response, Model model) {
+		if (rejectViewerMutation(response, model, "Fleet mitigation synchronization")) {
+			return "fragments/mitigation-content :: mitigationDashboard";
+		}
 		mitigationService.refreshDeterrenceMetrics();
 		MitigationService.FleetSyncResult res = mitigationService.syncFleetMitigations();
 		if (res.errors().isEmpty()) {
@@ -319,7 +351,11 @@ public class MitigationController {
 			@RequestParam(value = "webhookUrl", required = false) String webhookUrl,
 			@RequestParam(value = "notifyOnDryRun", defaultValue = "false") boolean notifyOnDryRun,
 			@RequestParam(value = "notifyOnEmergencyFlush", defaultValue = "false") boolean notifyOnEmergencyFlush,
+			HttpServletResponse response,
 			Model model) {
+		if (rejectViewerMutation(response, model, "Updating autonomous defense settings")) {
+			return "fragments/mitigation-content :: mitigationDashboard";
+		}
 		try {
 			autoMitigationService.updateSettings(
 					enabled, dryRun, carpetMinSubnets, carpetMinRequests,
@@ -349,16 +385,31 @@ public class MitigationController {
 			boolean autoExtendPersistent,
 			int maxExtensionHours,
 			Model model) {
-		return updateAutoMitigationSettings(
-				enabled, dryRun, carpetMinSubnets, carpetMinRequests, carpetWindowHours,
-				protectedAsns, maxReturningRatioPct, maxActiveRules, defaultTtlMinutes,
-				autoExtendPersistent, maxExtensionHours, false, null, false, false, model);
+		if (properties.isViewerMode()) {
+			populateMitigationModel(model, null, "Updating autonomous defense settings is disabled in read-only VIEWER mode.");
+			return "fragments/mitigation-content :: mitigationDashboard";
+		}
+		try {
+			autoMitigationService.updateSettings(
+					enabled, dryRun, carpetMinSubnets, carpetMinRequests,
+					carpetWindowHours, protectedAsns,
+					maxReturningRatioPct, maxActiveRules, defaultTtlMinutes,
+					autoExtendPersistent, maxExtensionHours, "ADMIN");
+			populateMitigationModel(model, "Autonomous defense and notification settings saved to system_settings.", null);
+		} catch (Exception e) {
+			populateMitigationModel(model, null, "Failed to update autonomous defense settings: " + e.getMessage());
+		}
+		return "fragments/mitigation-content :: mitigationDashboard";
 	}
 
 	@PostMapping("/mitigation/auto/toggle")
 	public String toggleAutoMitigationSetting(
 			@RequestParam("property") String property,
+			HttpServletResponse response,
 			Model model) {
+		if (rejectViewerMutation(response, model, "Toggling autonomous defense settings")) {
+			return "fragments/mitigation-content :: mitigationDashboard";
+		}
 		try {
 			AutoMitigationService.EffectiveAutoSettings current = autoMitigationService.getEffectiveSettings();
 			boolean newEnabled = current.enabled();
@@ -380,8 +431,15 @@ public class MitigationController {
 		return "fragments/mitigation-content :: mitigationDashboard";
 	}
 
+	public String toggleAutoMitigationSetting(String property, Model model) {
+		return toggleAutoMitigationSetting(property, null, model);
+	}
+
 	@PostMapping("/mitigation/auto/reset")
-	public String resetAutoMitigationSettings(Model model) {
+	public String resetAutoMitigationSettings(HttpServletResponse response, Model model) {
+		if (rejectViewerMutation(response, model, "Resetting autonomous defense settings")) {
+			return "fragments/mitigation-content :: mitigationDashboard";
+		}
 		try {
 			autoMitigationService.resetToDefaults("ADMIN");
 			if (notificationService != null) {
@@ -394,8 +452,15 @@ public class MitigationController {
 		return "fragments/mitigation-content :: mitigationDashboard";
 	}
 
+	public String resetAutoMitigationSettings(Model model) {
+		return resetAutoMitigationSettings(null, model);
+	}
+
 	@PostMapping("/mitigation/webhook/test")
-	public String testWebhook(Model model) {
+	public String testWebhook(HttpServletResponse response, Model model) {
+		if (rejectViewerMutation(response, model, "Sending test webhook notifications")) {
+			return "fragments/mitigation-content :: mitigationDashboard";
+		}
 		if (notificationService != null) {
 			AlertNotificationService.TestResult res = notificationService.sendTestNotification();
 			if (res.success()) {
@@ -410,7 +475,10 @@ public class MitigationController {
 	}
 
 	@PostMapping("/mitigation/auto/evaluate")
-	public String triggerAutoEvaluation(Model model) {
+	public String triggerAutoEvaluation(HttpServletResponse response, Model model) {
+		if (rejectViewerMutation(response, model, "Autonomous defense evaluation")) {
+			return "fragments/mitigation-content :: mitigationDashboard";
+		}
 		try {
 			AutoMitigationService.EffectiveAutoSettings config = autoMitigationService.getEffectiveSettings();
 			var candidates = autoMitigationService.evaluateAndEnforce(config);
@@ -422,6 +490,21 @@ public class MitigationController {
 			populateMitigationModel(model, null, "Evaluation error: " + e.getMessage());
 		}
 		return "fragments/mitigation-content :: mitigationDashboard";
+	}
+
+	public String triggerAutoEvaluation(Model model) {
+		return triggerAutoEvaluation(null, model);
+	}
+
+	private boolean rejectViewerMutation(HttpServletResponse response, Model model, String actionLabel) {
+		if (properties.isViewerMode()) {
+			if (response != null) {
+				response.setStatus(HttpStatus.FORBIDDEN.value());
+			}
+			populateMitigationModel(model, null, actionLabel + " is disabled in read-only VIEWER mode.");
+			return true;
+		}
+		return false;
 	}
 
 	// =========================================================================

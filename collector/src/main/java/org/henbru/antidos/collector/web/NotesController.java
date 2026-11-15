@@ -15,7 +15,9 @@ import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.model.AnnotationTargetType;
 import org.henbru.antidos.collector.model.AnnotationVerdict;
 import org.henbru.antidos.collector.model.NetworkAnnotation;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -35,6 +37,7 @@ import jakarta.servlet.http.HttpServletResponse;
  * and interactive HTMX modal endpoints for creating, editing, viewing, and deleting notes.
  */
 @Controller
+@ConditionalOnWebApplication
 @SuppressWarnings("null")
 public class NotesController {
 
@@ -82,8 +85,12 @@ public class NotesController {
 			@RequestParam(required = false) AnnotationVerdict verdict,
 			@RequestParam(required = false) String initialMarkdown,
 			@RequestParam(required = false, defaultValue = "list") String context,
+			HttpServletResponse response,
 			Model model
 	) {
+		if (properties.isViewerMode()) {
+			return rejectViewerNoteMutation(response, model);
+		}
 		model.addAttribute("mode", "CREATE");
 		model.addAttribute("targetType", targetType != null ? targetType : AnnotationTargetType.SUBNET);
 		model.addAttribute("targetKey", targetKey != null ? targetKey.trim() : "");
@@ -100,8 +107,12 @@ public class NotesController {
 	public String editNoteModal(
 			@PathVariable long id,
 			@RequestParam(required = false, defaultValue = "list") String context,
+			HttpServletResponse response,
 			Model model
 	) {
+		if (properties.isViewerMode()) {
+			return rejectViewerNoteMutation(response, model);
+		}
 		Optional<NetworkAnnotation> opt = annotationService.getAnnotationById(id);
 		if (opt.isEmpty()) {
 			return "fragments/note-modal :: noteNotFound";
@@ -156,6 +167,12 @@ public class NotesController {
 			return "fragments/note-modal :: noteModal";
 		}
 
+		if (properties.isViewerMode()) {
+			model.addAttribute("targetType", targetType);
+			model.addAttribute("targetKey", targetKey);
+			return "fragments/note-modal :: noteNotFound";
+		}
+
 		// If no note exists yet for this target, open pre-filled create modal!
 		model.addAttribute("mode", "CREATE");
 		model.addAttribute("targetType", targetType);
@@ -180,6 +197,9 @@ public class NotesController {
 			HttpServletResponse response,
 			Model model
 	) {
+		if (properties.isViewerMode()) {
+			return rejectViewerNoteMutation(response, model);
+		}
 		NetworkAnnotation saved = annotationService.saveAnnotation(id, targetType, targetKey, verdict, noteMarkdown);
 		response.addHeader("HX-Trigger", "annotationChanged");
 
@@ -205,6 +225,9 @@ public class NotesController {
 			HttpServletResponse response,
 			Model model
 	) {
+		if (properties.isViewerMode()) {
+			return rejectViewerNoteMutation(response, model);
+		}
 		annotationService.deleteAnnotation(id);
 		response.addHeader("HX-Trigger", "annotationChanged");
 
@@ -227,7 +250,10 @@ public class NotesController {
 	}
 
 	@GetMapping("/notes/modal/import")
-	public String importNotesModal(Model model) {
+	public String importNotesModal(HttpServletResponse response, Model model) {
+		if (properties.isViewerMode()) {
+			return rejectViewerNoteMutation(response, model);
+		}
 		model.addAttribute("conflictStrategies", NoteImportConflictStrategy.values());
 		model.addAttribute("defaultStrategy", NoteImportConflictStrategy.APPEND);
 		return "fragments/note-modal :: noteImportModal";
@@ -240,6 +266,9 @@ public class NotesController {
 			HttpServletResponse response,
 			Model model
 	) {
+		if (properties.isViewerMode()) {
+			return rejectViewerNoteMutation(response, model);
+		}
 		if (file == null || file.isEmpty()) {
 			model.addAttribute("errorMessage", "Please select a JSON file to upload.");
 			model.addAttribute("conflictStrategies", NoteImportConflictStrategy.values());
@@ -286,5 +315,11 @@ public class NotesController {
 		model.addAttribute("sortBy", sortBy != null ? sortBy : "updated_desc");
 		model.addAttribute("targetTypes", AnnotationTargetType.values());
 		model.addAttribute("verdicts", AnnotationVerdict.values());
+	}
+
+	private String rejectViewerNoteMutation(HttpServletResponse response, Model model) {
+		response.setStatus(HttpStatus.FORBIDDEN.value());
+		model.addAttribute("errorMessage", "Network annotations cannot be modified in read-only VIEWER mode.");
+		return "fragments/note-modal :: noteReadOnly";
 	}
 }

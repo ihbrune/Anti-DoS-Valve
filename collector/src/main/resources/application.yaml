@@ -40,6 +40,8 @@ spring:
 
 collector:
   config-file: ${COLLECTOR_CONFIG_FILE:collector-config.yaml}
+  mode: ${COLLECTOR_MODE:FULL}
+  viewer-migrate-on-startup: ${COLLECTOR_VIEWER_MIGRATE_ON_STARTUP:false}
   poll-interval-seconds: 15
   retention-days: 30
   active-event-retention-hours: ${COLLECTOR_ACTIVE_EVENT_RETENTION_HOURS:24}

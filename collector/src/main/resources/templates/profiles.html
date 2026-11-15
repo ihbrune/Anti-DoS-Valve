@@ -91,6 +91,13 @@
         </div>
     </header>
 
+    <!-- Read-Only Viewer Mode Notice Banner -->
+    <div th:replace="~{fragments/viewer-banner :: viewerBanner}"></div>
+
+    <div th:if="${errorMessage != null}" class="alert alert-danger" style="margin-bottom: 16px;" role="alert">
+        <span>&#x26A0;&#xFE0F;</span> <span th:text="${errorMessage}">Error</span>
+    </div>
+
     <!-- Header & Title -->
     <div class="section-header" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
         <div>
@@ -116,7 +123,7 @@
                 <span th:if="${freshness.hasUnaggregatedEvents()}" style="opacity: 0.85; font-size: 11px;"
                       th:text="'(' + ${freshness.unaggregatedMinutes()} + 'm lag)'">(20m lag)</span>
             </div>
-            <form method="post" th:action="@{/profiles/refresh}" style="margin: 0;">
+            <form th:unless="${viewerMode}" method="post" th:action="@{/profiles/refresh}" style="margin: 0;">
                 <input type="hidden" name="activityPattern" th:value="${activityPattern}">
                 <input type="hidden" name="minRequests" th:value="${minRequests}">
                 <input type="hidden" name="clientQuery" th:value="${clientQuery}">

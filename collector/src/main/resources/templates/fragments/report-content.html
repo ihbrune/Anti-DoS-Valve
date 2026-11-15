@@ -4,11 +4,16 @@
 <body>
 
     <div th:fragment="reportContent" id="report-display-container">
-        <!-- Success / Action message banner -->
+        <!-- Success / Error Action message banner -->
         <div th:if="${noteActionMessage != null}" class="alert alert-success"
             style="margin-bottom: 16px; padding: 10px 14px; font-size: 13px; display: flex; align-items: center; gap: 8px;">
             <span>&#x2705;</span>
             <span th:text="${noteActionMessage}">Operator note updated.</span>
+        </div>
+        <div th:if="${noteActionError != null}" class="alert alert-danger"
+            style="margin-bottom: 16px; padding: 10px 14px; font-size: 13px; display: flex; align-items: center; gap: 8px;">
+            <span>&#x26A0;&#xFE0F;</span>
+            <span th:text="${noteActionError}">Operation disabled in VIEWER mode.</span>
         </div>
 
         <!-- Case A: Existing Daily Report -->
@@ -45,7 +50,7 @@
 
                     <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                         <!-- Note Button -->
-                        <button type="button" class="btn"
+                        <button th:unless="${viewerMode}" type="button" class="btn"
                             th:hx-get="@{'/reports/' + ${selectedReport.reportDate()} + '/note/modal'}"
                             hx-target="#report-note-modal-container"
                             title="Add or edit personal operator note for this day">
@@ -62,7 +67,7 @@
                             title="Download raw Markdown report as a file">
                             <span>&#x1F4BE;</span> Download .md
                         </a>
-                        <form th:if="${rawTelemetryAvailable}" th:action="@{/reports/generate}" method="post" style="display: inline-block;">
+                        <form th:if="${rawTelemetryAvailable and !viewerMode}" th:action="@{/reports/generate}" method="post" style="display: inline-block;">
                             <input type="hidden" name="date" th:value="${selectedReport.reportDate()}">
                             <button type="submit" class="btn btn-secondary"
                                 title="Re-aggregate metrics from raw telemetry slots for this date">
@@ -87,7 +92,7 @@
                         <span>&#x1F4DD;</span>
                         <span>Operator Notes &amp; Observations</span>
                     </div>
-                    <button type="button" class="btn" style="font-size: 12px; padding: 3px 10px;"
+                    <button th:unless="${viewerMode}" type="button" class="btn" style="font-size: 12px; padding: 3px 10px;"
                         th:hx-get="@{'/reports/' + ${selectedReport.reportDate()} + '/note/modal'}"
                         hx-target="#report-note-modal-container">
                         <span>&#x270F;&#xFE0F;</span> Edit
@@ -126,7 +131,7 @@
                         </span>
                     </div>
 
-                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <div th:unless="${viewerMode}" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                         <button type="button" class="btn btn-primary"
                             th:hx-get="@{'/reports/' + ${todayDate} + '/note/modal'}"
                             hx-target="#report-note-modal-container">
@@ -161,7 +166,7 @@
                         <span>&#x1F4DD;</span>
                         <span>Operator Notes for Today</span>
                     </div>
-                    <button type="button" class="btn" style="font-size: 12.5px; padding: 4px 12px;"
+                    <button th:unless="${viewerMode}" type="button" class="btn" style="font-size: 12.5px; padding: 4px 12px;"
                         th:hx-get="@{'/reports/' + ${todayDate} + '/note/modal'}"
                         hx-target="#report-note-modal-container">
                         <span>&#x270F;&#xFE0F;</span> Edit Note
@@ -187,7 +192,7 @@
                     traffic).
                     They will be safely retained and included when the final report is compiled.
                 </p>
-                <button type="button" class="btn btn-primary" th:hx-get="@{'/reports/' + ${todayDate} + '/note/modal'}"
+                <button th:unless="${viewerMode}" type="button" class="btn btn-primary" th:hx-get="@{'/reports/' + ${todayDate} + '/note/modal'}"
                     hx-target="#report-note-modal-container">
                     <span>&#x2795;</span> Add Note for Today
                 </button>
@@ -207,7 +212,7 @@
                                         <span>&#x1F4DD;</span>
                                         <span>Operator Notes for <span th:text="${selectedDate}"></span></span>
                                     </div>
-                                    <button type="button" class="btn" style="font-size: 12.5px; padding: 4px 12px;"
+                                    <button th:unless="${viewerMode}" type="button" class="btn" style="font-size: 12.5px; padding: 4px 12px;"
                                         th:hx-get="@{'/reports/' + ${selectedDate} + '/note/modal'}"
                                         hx-target="#report-note-modal-container">
                                         <span>&#x270F;&#xFE0F;</span> Edit Note
@@ -229,7 +234,7 @@
                 Select a past date from the archive on the left, or generate an operational summary using the
                 actions below.
             </p>
-            <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+            <div th:unless="${viewerMode}" style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
                 <button th:if="${selectedDate != null and !selectedDate.isBlank()}" type="button" class="btn"
                     th:hx-get="@{'/reports/' + ${selectedDate} + '/note/modal'}"
                     hx-target="#report-note-modal-container">

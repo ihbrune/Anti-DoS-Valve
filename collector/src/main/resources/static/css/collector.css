@@ -864,6 +864,37 @@ tr:hover td {
     line-height: 1.4;
 }
 
+/* Read-Only Viewer Mode Banner */
+.viewer-banner {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: linear-gradient(90deg, rgba(56, 189, 248, 0.14) 0%, rgba(16, 185, 129, 0.08) 100%);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: var(--radius-md);
+    padding: 12px 20px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 15px -3px rgba(56, 189, 248, 0.12);
+}
+
+.viewer-badge {
+    background: var(--color-primary);
+    color: #0b0f19;
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+}
+
+.viewer-text {
+    font-size: 13px;
+    color: var(--text-primary);
+    line-height: 1.4;
+}
+
 /* ==========================================================================
    Advanced Filters & Search Panels
    ========================================================================== */

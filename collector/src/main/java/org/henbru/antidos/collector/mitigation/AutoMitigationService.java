@@ -160,6 +160,9 @@ public class AutoMitigationService {
 			int maxExtensionHours,
 			String updatedBy
 	) {
+		if (properties.isViewerMode()) {
+			throw new IllegalStateException("Auto-mitigation settings cannot be modified in read-only VIEWER mode.");
+		}
 		settingsRepository.setSetting(KEY_ENABLED, String.valueOf(enabled), "Auto-mitigation master switch", updatedBy);
 		settingsRepository.setSetting(KEY_DRY_RUN, String.valueOf(dryRun), "Auto-mitigation dry-run simulation mode", updatedBy);
 		settingsRepository.setSetting(KEY_CARPET_MIN_SUBNETS, String.valueOf(Math.max(1, carpetMinSubnets)), "Min subnets per ASN for carpet attack detection", updatedBy);
@@ -176,6 +179,9 @@ public class AutoMitigationService {
 	}
 
 	public void resetToDefaults(String updatedBy) {
+		if (properties.isViewerMode()) {
+			throw new IllegalStateException("Auto-mitigation settings cannot be reset in read-only VIEWER mode.");
+		}
 		settingsRepository.deleteSetting(KEY_ENABLED);
 		settingsRepository.deleteSetting(KEY_DRY_RUN);
 		settingsRepository.deleteSetting(KEY_CARPET_MIN_SUBNETS);
@@ -205,6 +211,9 @@ public class AutoMitigationService {
 	 */
 	@Scheduled(fixedDelay = 120_000, initialDelay = 30_000)
 	public void scheduledAutonomousEvaluation() {
+		if (!properties.getMode().isBackgroundProcessingEnabled()) {
+			return;
+		}
 		EffectiveAutoSettings config = getEffectiveSettings();
 		if (!config.enabled()) {
 			return;
@@ -231,6 +240,9 @@ public class AutoMitigationService {
 	 * Evaluates active carpet attack candidates and enforces auto-blocks or dry-run audit entries.
 	 */
 	public List<CarpetAttackCandidate> evaluateAndEnforce(EffectiveAutoSettings config) {
+		if (properties.isViewerMode()) {
+			throw new IllegalStateException("Autonomous mitigation evaluation is disabled in read-only VIEWER mode.");
+		}
 		Instant now = Instant.now();
 		List<CarpetAttackCandidate> candidates = findCarpetAttackCandidates(config, config.carpetWindowHours());
 
@@ -427,6 +439,9 @@ public class AutoMitigationService {
 	 * Automatically extends active rules for persistent attackers if enabled.
 	 */
 	public int evaluateExtensions(EffectiveAutoSettings config) {
+		if (properties.isViewerMode()) {
+			throw new IllegalStateException("Autonomous rule extension is disabled in read-only VIEWER mode.");
+		}
 		Instant now = Instant.now();
 		mitigationService.refreshDeterrenceMetrics();
 		List<MitigationRule> activeRules = mitigationService.getActiveRules();

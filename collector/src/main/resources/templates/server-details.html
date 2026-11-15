@@ -82,11 +82,19 @@
             </div>
         </header>
 
+        <!-- Read-Only Viewer Mode Notice Banner -->
+        <div th:replace="~{fragments/viewer-banner :: viewerBanner}"></div>
+
         <!-- Flash / Status Alert Message -->
         <div th:if="${message != null}" class="alert alert-success"
             style="margin-bottom: 24px; padding: 12px 18px; border-radius: var(--radius-sm); font-size: 13px;"
             th:text="${message}">
             Operation successful.
+        </div>
+        <div th:if="${errorMessage != null}" class="alert alert-danger"
+            style="margin-bottom: 24px; padding: 12px 18px; border-radius: var(--radius-sm); font-size: 13px;"
+            th:text="${errorMessage}">
+            Error message.
         </div>
 
         <!-- Server Header Card -->
@@ -349,7 +357,7 @@
                             <span style="color: var(--text-secondary);">This valve was not reported in the latest server
                                 poll (may have been renamed or removed).</span>
                         </div>
-                        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <div th:unless="${viewerMode}" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                             <form th:action="@{'/server/' + ${serverId} + '/valves/' + ${rv.valveName} + '/delete'}"
                                 method="post" style="display: inline;"
                                 onsubmit="return confirm('Do you want to remove this inactive valve configuration? (Historical telemetry slot data will be preserved)');">

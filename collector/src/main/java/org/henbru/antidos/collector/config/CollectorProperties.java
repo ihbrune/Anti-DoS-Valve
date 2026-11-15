@@ -27,6 +27,8 @@ public class CollectorProperties {
 	private int maxCatchUpLagSlots = 6;
 	private long endpointPollTimeoutMs = 25_000L;
 	private int hostConcurrencyTimeoutSeconds = 15;
+	private CollectorMode mode = CollectorMode.FULL;
+	private boolean viewerMigrateOnStartup = false;
 	private boolean demoMode = false;
 	private int demoInstanceCount = 1;
 	private boolean parallelFleetPolling = true;
@@ -163,6 +165,30 @@ public class CollectorProperties {
 
 	public void setHostConcurrencyTimeoutSeconds(int hostConcurrencyTimeoutSeconds) {
 		this.hostConcurrencyTimeoutSeconds = hostConcurrencyTimeoutSeconds;
+	}
+
+	public CollectorMode getMode() {
+		return mode != null ? mode : CollectorMode.FULL;
+	}
+
+	public void setMode(CollectorMode mode) {
+		this.mode = mode != null ? mode : CollectorMode.FULL;
+	}
+
+	public boolean isViewerMode() {
+		return getMode().isViewer();
+	}
+
+	public boolean isHeadlessMode() {
+		return getMode().isHeadless();
+	}
+
+	public boolean isViewerMigrateOnStartup() {
+		return viewerMigrateOnStartup;
+	}
+
+	public void setViewerMigrateOnStartup(boolean viewerMigrateOnStartup) {
+		this.viewerMigrateOnStartup = viewerMigrateOnStartup;
 	}
 
 	public boolean isDemoMode() {

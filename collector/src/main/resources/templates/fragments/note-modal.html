@@ -81,13 +81,13 @@
                                 title="View aggregated Top Offenders for this subnet">
                                 <span>&#x26A0;</span> Top Offenders &rarr;
                             </a>
-                            <a th:if="${annotation.isAsn()}"
+                            <a th:if="${annotation.isAsn() and !viewerMode}"
                                 th:href="@{/mitigation(asn=${annotation.asn() != null ? annotation.asn() : annotation.targetKey()},reason='Note: ' + ${annotation.targetKey()},source='NOTE')}"
                                 class="btn btn-danger" style="font-size: 12px; padding: 4px 10px; font-weight: 700;"
                                 title="Batch mitigate active unauthenticated subnets of this ASN">
                                 <span>&#x1F6E1;&#xFE0F;</span> Mitigate ASN Subnets &rarr;
                             </a>
-                            <a th:if="${annotation.isSubnet()}"
+                            <a th:if="${annotation.isSubnet() and !viewerMode}"
                                 th:href="@{/mitigation(cidr=${annotation.targetKey()},reason='Note: ' + ${annotation.targetKey()},source='NOTE')}"
                                 class="btn btn-danger" style="font-size: 12px; padding: 4px 10px; font-weight: 700;"
                                 title="Create dynamic CIDR block for this subnet">
@@ -98,7 +98,7 @@
                 </div>
 
                 <div class="note-modal-footer">
-                    <button type="button" class="btn btn-danger"
+                    <button th:unless="${viewerMode}" type="button" class="btn btn-danger"
                         th:hx-delete="@{'/notes/' + ${annotation.id()}(context=${context != null ? context : 'table'})}"
                         hx-confirm="Are you sure you want to permanently delete this note?"
                         th:hx-target="${context == 'list' ? '#notes-list-container' : '#note-modal-container'}"
@@ -107,8 +107,8 @@
                         onclick="if (this.dataset.context === 'list') closeNoteModal(event)" title="Delete note">
                         <span>&#x1F5D1;</span> Delete
                     </button>
-                    <div style="display: flex; gap: 10px;">
-                        <button type="button" class="btn"
+                    <div style="display: flex; gap: 10px; margin-left: auto;">
+                        <button th:unless="${viewerMode}" type="button" class="btn"
                             th:hx-get="@{'/notes/modal/edit/' + ${annotation.id()}(context=${context != null ? context : 'table'})}"
                             hx-target="#note-modal-container">
                             <span>&#x270F;&#xFE0F;</span> Edit
@@ -228,7 +228,30 @@
                 <button type="button" class="drawer-close-btn" onclick="closeNoteModal(event)">&times;</button>
             </div>
             <div class="note-modal-body">
-                <p style="color: var(--text-muted);">The requested note no longer exists.</p>
+                <p style="color: var(--text-muted);" th:if="${viewerMode and targetKey != null}">
+                    No network note has been recorded for <code th:text="${targetKey}">target</code>.
+                    Creating or editing annotations is disabled in read-only VIEWER mode.
+                </p>
+                <p style="color: var(--text-muted);" th:unless="${viewerMode and targetKey != null}">The requested note no longer exists.</p>
+            </div>
+            <div class="note-modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeNoteModal(event)">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fragment: noteReadOnly -->
+    <div th:fragment="noteReadOnly" class="note-modal-overlay">
+        <div class="note-modal-backdrop" onclick="closeNoteModal(event)"></div>
+        <div class="note-modal-dialog">
+            <div class="note-modal-header">
+                <div class="note-modal-title">Read-Only VIEWER Mode</div>
+                <button type="button" class="drawer-close-btn" onclick="closeNoteModal(event)">&times;</button>
+            </div>
+            <div class="note-modal-body">
+                <p style="color: var(--text-muted);" th:text="${errorMessage != null ? errorMessage : 'Creating, editing, importing, or deleting network notes is disabled in read-only VIEWER mode.'}">
+                    Disabled in read-only VIEWER mode.
+                </p>
             </div>
             <div class="note-modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="closeNoteModal(event)">Close</button>

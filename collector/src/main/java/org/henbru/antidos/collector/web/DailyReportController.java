@@ -5,13 +5,16 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
+import jakarta.servlet.http.HttpServletResponse;
 import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.model.DailyReport;
 import org.henbru.antidos.collector.model.DailyReportNote;
 import org.henbru.antidos.collector.report.DailyReportService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -30,6 +33,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
  * and endpoints for viewing, downloading, operator notes, and on-demand generation.
  */
 @Controller
+@ConditionalOnWebApplication
 @SuppressWarnings("null")
 public class DailyReportController {
 
@@ -90,10 +94,14 @@ public class DailyReportController {
 			@PathVariable String date,
 			@RequestParam(required = false, defaultValue = "") String noteMarkdown,
 			@RequestHeader(value = "HX-Request", required = false) String hxRequest,
+			HttpServletResponse response,
 			Model model,
 			RedirectAttributes redirectAttributes
 	) {
 		String cleanDate = date.trim();
+		if (properties.isViewerMode()) {
+			return rejectViewerMutation(cleanDate, hxRequest, response, model, "Operator notes cannot be saved in read-only VIEWER mode.");
+		}
 		dailyReportService.saveNote(cleanDate, noteMarkdown);
 		if (!"true".equalsIgnoreCase(hxRequest)) {
 			redirectAttributes.addFlashAttribute("successMessage", "Operator note saved successfully.");
@@ -108,10 +116,14 @@ public class DailyReportController {
 	public String deleteReportNote(
 			@PathVariable String date,
 			@RequestHeader(value = "HX-Request", required = false) String hxRequest,
+			HttpServletResponse response,
 			Model model,
 			RedirectAttributes redirectAttributes
 	) {
 		String cleanDate = date.trim();
+		if (properties.isViewerMode()) {
+			return rejectViewerMutation(cleanDate, hxRequest, response, model, "Operator notes cannot be removed in read-only VIEWER mode.");
+		}
 		dailyReportService.deleteNote(cleanDate);
 		if (!"true".equalsIgnoreCase(hxRequest)) {
 			redirectAttributes.addFlashAttribute("successMessage", "Operator note removed.");
@@ -173,8 +185,14 @@ public class DailyReportController {
 	@PostMapping("/reports/generate")
 	public String generateReport(
 			@RequestParam(required = false) String date,
+			HttpServletResponse response,
+			Model model,
 			RedirectAttributes redirectAttributes
 	) {
+		if (properties.isViewerMode()) {
+			String fallbackDate = (date != null && !date.isBlank()) ? date.trim() : LocalDate.now().minusDays(1).toString();
+			return rejectViewerMutation(fallbackDate, null, response, model, "Report generation is disabled in read-only VIEWER mode.");
+		}
 		LocalDate targetDate;
 		try {
 			if (date != null && !date.isBlank()) {
@@ -211,5 +229,23 @@ public class DailyReportController {
 			redirectAttributes.addFlashAttribute("errorMessage", "Error generating report for " + targetDate + ": " + e.getMessage());
 			return "redirect:/reports?date=" + targetDate;
 		}
+	}
+
+	private String rejectViewerMutation(
+			String targetDate,
+			String hxRequest,
+			HttpServletResponse response,
+			Model model,
+			String message
+	) {
+		response.setStatus(HttpStatus.FORBIDDEN.value());
+		populateReportModel(model, targetDate);
+		model.addAttribute("errorMessage", message);
+		if ("true".equalsIgnoreCase(hxRequest)) {
+			model.addAttribute("noteActionError", message);
+			return "fragments/report-content :: reportContent";
+		}
+		model.addAttribute("reports", dailyReportService.getRecentReports(90));
+		return "reports";
 	}
 }

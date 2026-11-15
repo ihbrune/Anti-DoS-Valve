@@ -41,8 +41,42 @@ public record SystemStatusDto(
 			boolean demoMode,
 			ValveRuleConfig defaultValveRules,
 			Map<String, ValveRuleConfig> valveRules,
-			List<EndpointDisplayInfo> endpoints
-	) {}
+			List<EndpointDisplayInfo> endpoints,
+			String collectorMode,
+			boolean viewerMode
+	) {
+		public ConfigInfo(
+				String configFile,
+				boolean configFileExists,
+				String configAbsolutePath,
+				int pollIntervalSeconds,
+				boolean parallelFleetPolling,
+				int slowPollThresholdMs,
+				int retentionDays,
+				int activeEventRetentionHours,
+				int pollLogRetentionDays,
+				int entityRetentionDays,
+				boolean rollupEnabled,
+				int rollupWindowMinutes,
+				int rollupRetentionDays,
+				int lowActivityRollupRetentionDays,
+				long lowActivityRollupMaxRequests,
+				int enrichmentTtlDays,
+				boolean autoVacuumEnabled,
+				long vacuumThresholdBytes,
+				String vacuumThresholdFormatted,
+				boolean demoMode,
+				ValveRuleConfig defaultValveRules,
+				Map<String, ValveRuleConfig> valveRules,
+				List<EndpointDisplayInfo> endpoints) {
+			this(configFile, configFileExists, configAbsolutePath, pollIntervalSeconds, parallelFleetPolling,
+					slowPollThresholdMs, retentionDays, activeEventRetentionHours, pollLogRetentionDays,
+					entityRetentionDays, rollupEnabled, rollupWindowMinutes, rollupRetentionDays,
+					lowActivityRollupRetentionDays, lowActivityRollupMaxRequests, enrichmentTtlDays,
+					autoVacuumEnabled, vacuumThresholdBytes, vacuumThresholdFormatted, demoMode,
+					defaultValveRules, valveRules, endpoints, "FULL", false);
+		}
+	}
 
 	public record EndpointDisplayInfo(
 			String name,

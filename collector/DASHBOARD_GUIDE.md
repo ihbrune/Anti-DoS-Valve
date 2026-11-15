@@ -800,13 +800,16 @@ Accessible via `/system`. The administrative and telemetry health center of the 
 * **Custom ASN Overlay:** Location and state of custom datacenter ASN definitions (`custom-datacenter-asns.txt`).
 
 ### 5. Operational Maintenance Triggers
-Admins can trigger asynchronous maintenance actions directly from the web interface:
+Admins can trigger asynchronous maintenance actions directly from the web interface (disabled when running in **Read-Only Viewer Mode**):
 * **Run Retention Cleanup Now:** Triggers an immediate retention cleanup purging aged snapshots, events (with differential retention for active vs. incident events), logs, and orphan entities.
 * **Compact SQLite (VACUUM):** Runs a full database compaction (`VACUUM`) on SQLite standalone instances, immediately reclaiming unallocated freelist pages and shrinking the database file on disk.
 * **Catch Up Subnet Rollups:** Manually recalculates persistent subnet aggregations across recent events.
 * **Clear Resolver Cache:** Clears the in-memory ASN/crawler IP classification cache, forcing fresh lookups against persistent storage and MMDB.
 * **Force Fleet Poll:** Triggers an immediate polling sweep across all monitored servers.
 * **Reset Demo Data (Demo Mode Only):** Re-seeds the demo database with clean, realistic 7-day telemetry curves.
+
+> [!NOTE]
+> When the Collector runs in **Read-Only Viewer Mode** (`collector.mode=VIEWER`), every dashboard page displays a prominent `READ-ONLY VIEWER MODE` banner, all maintenance actions, note editors, crawler sync buttons, report generation triggers, and active mitigation controls are hidden or disabled in the UI, and mutating endpoints reject requests with HTTP `403 Forbidden`. The **Configuration Summary** card on `/system` displays the active **Mode** (`FULL` or `VIEWER`).
 
 ---
 

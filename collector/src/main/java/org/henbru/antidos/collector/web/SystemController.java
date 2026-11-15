@@ -1,11 +1,14 @@
 package org.henbru.antidos.collector.web;
 
+import jakarta.servlet.http.HttpServletResponse;
 import org.henbru.antidos.collector.aggregation.RollupAggregationService;
 import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.enrichment.EntityResolver;
 import org.henbru.antidos.collector.poller.CollectorScheduler;
 import org.henbru.antidos.collector.system.SystemStatusDto;
 import org.henbru.antidos.collector.system.SystemStatusService;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,6 +20,7 @@ import org.springframework.web.bind.annotation.PostMapping;
  * telemetry cascades, threat intel indices, and operational maintenance triggers.
  */
 @Controller
+@ConditionalOnWebApplication
 public class SystemController {
 
 	private final SystemStatusService systemStatusService;
@@ -53,7 +57,10 @@ public class SystemController {
 	}
 
 	@PostMapping("/system/retention-cleanup")
-	public String triggerRetentionCleanup(Model model) {
+	public String triggerRetentionCleanup(HttpServletResponse response, Model model) {
+		if (rejectViewerMaintenance(response, model, "Retention cleanup")) {
+			return "fragments/retention-card :: retentionCard";
+		}
 		try {
 			CollectorScheduler.RetentionCleanupResult result = collectorScheduler.runRetentionCleanup();
 			model.addAttribute("actionSuccess", true);
@@ -72,7 +79,10 @@ public class SystemController {
 	}
 
 	@PostMapping("/system/vacuum")
-	public String triggerVacuum(Model model) {
+	public String triggerVacuum(HttpServletResponse response, Model model) {
+		if (rejectViewerMaintenance(response, model, "Database compaction (VACUUM)")) {
+			return "fragments/retention-card :: retentionCard";
+		}
 		try {
 			if (databaseMaintenanceService == null || !databaseMaintenanceService.isSqlite()) {
 				model.addAttribute("actionSuccess", false);
@@ -91,7 +101,10 @@ public class SystemController {
 	}
 
 	@PostMapping("/system/rollup-catchup")
-	public String triggerRollupCatchUp(Model model) {
+	public String triggerRollupCatchUp(HttpServletResponse response, Model model) {
+		if (rejectViewerMaintenance(response, model, "Subnet rollup catch-up")) {
+			return "fragments/retention-card :: retentionCard";
+		}
 		try {
 			RollupAggregationService.RollupExecutionResult result = rollupAggregationService.executeManualCatchUp(6);
 			model.addAttribute("actionSuccess", true);
@@ -108,7 +121,10 @@ public class SystemController {
 	}
 
 	@PostMapping("/system/clear-cache")
-	public String triggerClearCache(Model model) {
+	public String triggerClearCache(HttpServletResponse response, Model model) {
+		if (rejectViewerMaintenance(response, model, "Cache invalidation")) {
+			return "fragments/retention-card :: retentionCard";
+		}
 		try {
 			if (entityResolver != null) {
 				entityResolver.clearCache();
@@ -121,6 +137,17 @@ public class SystemController {
 		}
 		populateModel(model);
 		return "fragments/retention-card :: retentionCard";
+	}
+
+	private boolean rejectViewerMaintenance(HttpServletResponse response, Model model, String actionName) {
+		if (properties.isViewerMode()) {
+			response.setStatus(HttpStatus.FORBIDDEN.value());
+			model.addAttribute("actionSuccess", false);
+			model.addAttribute("actionMessage", actionName + " is disabled in read-only VIEWER mode.");
+			populateModel(model);
+			return true;
+		}
+		return false;
 	}
 
 	private void populateModel(Model model) {

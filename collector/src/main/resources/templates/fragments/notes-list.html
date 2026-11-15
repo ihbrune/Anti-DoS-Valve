@@ -99,7 +99,7 @@
                           th:text="${a.verdict().icon() + ' ' + a.verdict().displayName()}">🟢 Legitimate</span>
                     <span class="badge badge-secondary" style="font-size: 10px; padding: 2px 6px;" th:text="${a.targetType().displayName()}">ASN</span>
                 </div>
-                <div style="display: flex; gap: 6px;">
+                <div th:unless="${viewerMode}" style="display: flex; gap: 6px;">
                     <button type="button" class="btn btn-icon"
                             th:hx-get="@{'/notes/modal/edit/' + ${a.id()}}"
                             hx-target="#note-modal-container"

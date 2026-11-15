@@ -12,6 +12,8 @@ import org.henbru.antidos.collector.storage.ClientEventRepository;
 import org.henbru.antidos.collector.storage.HeartbeatRepository;
 import org.henbru.antidos.collector.storage.PollEventLogRepository;
 import org.henbru.antidos.collector.storage.SlotSnapshotRepository;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/v1")
+@ConditionalOnWebApplication
 @SuppressWarnings("null")
 public class ApiController {
 
@@ -37,6 +40,7 @@ public class ApiController {
 	private final org.henbru.antidos.collector.aggregation.AnalyticsService analyticsService;
 	private final org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository;
 	private final org.henbru.antidos.collector.aggregation.SubnetProfileService subnetProfileService;
+	private final org.henbru.antidos.collector.config.CollectorProperties properties;
 
 	@org.springframework.beans.factory.annotation.Autowired
 	public ApiController(
@@ -48,7 +52,8 @@ public class ApiController {
 			org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService,
 			org.henbru.antidos.collector.aggregation.AnalyticsService analyticsService,
 			org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository,
-			@org.springframework.beans.factory.annotation.Autowired(required = false) org.henbru.antidos.collector.aggregation.SubnetProfileService subnetProfileService) {
+			@org.springframework.beans.factory.annotation.Autowired(required = false) org.henbru.antidos.collector.aggregation.SubnetProfileService subnetProfileService,
+			@org.springframework.beans.factory.annotation.Autowired(required = false) org.henbru.antidos.collector.config.CollectorProperties properties) {
 		this.heartbeatRepository = heartbeatRepository;
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
@@ -58,6 +63,21 @@ public class ApiController {
 		this.analyticsService = analyticsService;
 		this.monitoredValveRepository = monitoredValveRepository;
 		this.subnetProfileService = subnetProfileService;
+		this.properties = properties;
+	}
+
+	public ApiController(
+			HeartbeatRepository heartbeatRepository,
+			SlotSnapshotRepository slotSnapshotRepository,
+			ClientEventRepository clientEventRepository,
+			PollEventLogRepository pollEventLogRepository,
+			org.henbru.antidos.collector.storage.SubnetRollupRepository subnetRollupRepository,
+			org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService,
+			org.henbru.antidos.collector.aggregation.AnalyticsService analyticsService,
+			org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository,
+			org.henbru.antidos.collector.aggregation.SubnetProfileService subnetProfileService) {
+		this(heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
+				subnetRollupRepository, rollupAggregationService, analyticsService, monitoredValveRepository, subnetProfileService, null);
 	}
 
 	public ApiController(
@@ -69,7 +89,7 @@ public class ApiController {
 			org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService,
 			org.henbru.antidos.collector.aggregation.AnalyticsService analyticsService) {
 		this(heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
-				subnetRollupRepository, rollupAggregationService, analyticsService, null, null);
+				subnetRollupRepository, rollupAggregationService, analyticsService, null, null, null);
 	}
 
 	@GetMapping("/fleet")
@@ -184,28 +204,40 @@ public class ApiController {
 	}
 
 	@org.springframework.web.bind.annotation.PostMapping("/rollups/subnets/aggregate")
-	public Map<String, Object> triggerRollupAggregation(
+	public ResponseEntity<Map<String, Object>> triggerRollupAggregation(
 			@RequestParam(name = "hours", defaultValue = "24") int hours) {
+		if (properties != null && properties.isViewerMode()) {
+			return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of(
+					"status", "FORBIDDEN",
+					"message", "Rollup aggregation is disabled in read-only VIEWER mode."
+			));
+		}
 		int count = rollupAggregationService.aggregateCatchUp(hours);
-		return Map.of(
+		return ResponseEntity.ok(Map.of(
 				"status", "SUCCESS",
 				"lookbackHours", hours,
 				"persistedRollups", count,
 				"executedAt", Instant.now().toString()
- 		);
+		));
 	}
 
 	@org.springframework.web.bind.annotation.PostMapping("/rollups/subnets/profiles/refresh")
-	public Map<String, Object> refreshSubnetProfiles() {
+	public ResponseEntity<Map<String, Object>> refreshSubnetProfiles() {
+		if (properties != null && properties.isViewerMode()) {
+			return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of(
+					"status", "FORBIDDEN",
+					"message", "Subnet profile refresh is disabled in read-only VIEWER mode."
+			));
+		}
 		if (subnetProfileService == null) {
-			return Map.of("status", "UNAVAILABLE", "message", "SubnetProfileService is not available");
+			return ResponseEntity.ok(Map.of("status", "UNAVAILABLE", "message", "SubnetProfileService is not available"));
 		}
 		int count = subnetProfileService.refreshProfiles();
-		return Map.of(
+		return ResponseEntity.ok(Map.of(
 				"status", "SUCCESS",
 				"refreshedProfiles", count,
 				"executedAt", Instant.now().toString()
-		);
+		));
 	}
 
 	@GetMapping("/rollups/subnets/profiles")

@@ -154,7 +154,9 @@ public class SystemStatusService {
 				properties.isDemoMode(),
 				properties.getDefaultValveRules(),
 				properties.getValveRules(),
-				endpointDisplays
+				endpointDisplays,
+				properties.getMode().name(),
+				properties.isViewerMode()
 		);
 	}
 
@@ -231,6 +233,24 @@ public class SystemStatusService {
 				}
 			} catch (Exception e) {
 				log.debug("Unable to read Flyway info: {}", e.getMessage());
+			}
+		} else if (properties.isViewerMode()) {
+			try {
+				List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+						"SELECT version, description, installed_on FROM flyway_schema_history WHERE success = 1 ORDER BY installed_rank DESC LIMIT 1");
+				if (!rows.isEmpty()) {
+					Map<String, Object> row = rows.getFirst();
+					Object ver = row.get("version");
+					Object desc = row.get("description");
+					Object inst = row.get("installed_on");
+					flywayInfo = new SystemStatusDto.FlywayInfo(
+							ver != null ? ver.toString() : "Unknown",
+							desc != null ? desc.toString() : "Flyway disabled in VIEWER mode",
+							inst != null ? inst.toString() : null
+					);
+				}
+			} catch (Exception e) {
+				log.debug("Unable to read flyway_schema_history in VIEWER mode: {}", e.getMessage());
 			}
 		}
 
@@ -456,9 +476,10 @@ public class SystemStatusService {
 
 		int online = 0;
 		int offline = 0;
+		List<EndpointHeartbeat> heartbeats = List.of();
 		if (heartbeatRepository != null) {
 			try {
-				List<EndpointHeartbeat> heartbeats = heartbeatRepository.findAll();
+				heartbeats = heartbeatRepository.findAll();
 				for (EndpointHeartbeat hb : heartbeats) {
 					if (hb.online()) {
 						online++;
@@ -468,6 +489,10 @@ public class SystemStatusService {
 				}
 			} catch (Exception ignored) {
 			}
+		}
+		if (properties.isViewerMode() && total == 0 && !heartbeats.isEmpty()) {
+			total = heartbeats.size();
+			enabled = heartbeats.size();
 		}
 
 		return new SystemStatusDto.FleetHealthInfo(total, enabled, online, offline);

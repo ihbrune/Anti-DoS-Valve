@@ -31,12 +31,14 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import jakarta.servlet.http.HttpServletResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 
 /**
  * Controller serving the main Web UI, specialized forensic investigation views, and dynamic HTMX fragments.
  */
 @Controller
+@org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
 @SuppressWarnings("null")
 public class DashboardController {
 
@@ -414,7 +416,14 @@ public class DashboardController {
 			@RequestParam(name = "sortBy", required = false, defaultValue = "SURGE") String sortBy,
 			@RequestParam(name = "limit", defaultValue = "50") int limit,
 			@RequestParam(name = "offset", defaultValue = "0") int offset,
+			HttpServletResponse response,
 			Model model) {
+		if (properties.isViewerMode()) {
+			response.setStatus(org.springframework.http.HttpStatus.FORBIDDEN.value());
+			model.addAttribute("errorMessage", "Subnet profile refresh is disabled in read-only VIEWER mode.");
+			populateProfilesModel(activityPattern, minRequests, clientQuery, asn, clientTypes, sortBy, limit, offset, model);
+			return "profiles";
+		}
 		if (rollupAggregationService != null) {
 			try {
 				rollupAggregationService.executeManualCatchUp(6);
@@ -579,7 +588,15 @@ public class DashboardController {
 			@PathVariable(name = "serverId") String serverId,
 			@PathVariable(name = "valveName") String valveName,
 			@RequestParam(name = "deleteHistory", required = false, defaultValue = "false") boolean deleteHistory,
+			HttpServletResponse response,
+			Model model,
 			org.springframework.web.servlet.mvc.support.RedirectAttributes redirectAttributes) {
+
+		if (properties.isViewerMode()) {
+			response.setStatus(org.springframework.http.HttpStatus.FORBIDDEN.value());
+			model.addAttribute("errorMessage", "Deleting valves or history is disabled in read-only VIEWER mode.");
+			return serverDetails(serverId, null, "ALL", model);
+		}
 
 		int configsDeleted = (monitoredValveRepository != null)
 				? monitoredValveRepository.deleteByServerIdAndValveName(serverId, valveName)
@@ -786,7 +803,8 @@ public class DashboardController {
 
 		switch (effectiveGroupBy) {
 		case "PROFILES" -> {
-			if (subnetProfileService != null && subnetProfileService.countProfilesFiltered("ALL", null, null, null, null, null) == 0) {
+			if (!properties.isViewerMode() && subnetProfileService != null
+					&& subnetProfileService.countProfilesFiltered("ALL", null, null, null, null, null) == 0) {
 				try {
 					subnetProfileService.refreshProfiles();
 				} catch (Exception ignored) {
@@ -895,7 +913,8 @@ public class DashboardController {
 			int offset,
 			Model model) {
 
-		if (subnetProfileService != null && subnetProfileService.countProfilesFiltered("ALL", null, null, null, null, null) == 0) {
+		if (!properties.isViewerMode() && subnetProfileService != null
+				&& subnetProfileService.countProfilesFiltered("ALL", null, null, null, null, null) == 0) {
 			try {
 				subnetProfileService.refreshProfiles();
 			} catch (Exception ignored) {

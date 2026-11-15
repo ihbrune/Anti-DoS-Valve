@@ -54,7 +54,7 @@ public class BackgroundEnrichmentWorker {
 
 	@Scheduled(fixedDelay = 2000, initialDelay = 3000)
 	public void processPendingEnrichments() {
-		if (!properties.getEnrichment().isEnabled()) {
+		if (!properties.getMode().isBackgroundProcessingEnabled() || !properties.getEnrichment().isEnabled()) {
 			return;
 		}
 		try {

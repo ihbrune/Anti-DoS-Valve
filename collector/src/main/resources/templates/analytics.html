@@ -97,6 +97,9 @@
             </div>
         </header>
 
+        <!-- Read-Only Viewer Mode Notice Banner -->
+        <div th:replace="~{fragments/viewer-banner :: viewerBanner}"></div>
+
         <!-- Header & Title -->
         <div class="section-header" style="margin-bottom: 20px;">
             <div>
@@ -180,7 +183,7 @@
                 </div>
 
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <button type="button" class="btn" hx-post="/api/v1/rollups/subnets/aggregate?hours=24"
+                    <button th:unless="${viewerMode}" type="button" class="btn" hx-post="/api/v1/rollups/subnets/aggregate?hours=24"
                         hx-swap="none"
                         hx-on::after-request="htmx.ajax('GET', '/fragments/analytics-overview?hours=24', '#analytics-container')"
                         title="Force immediate rollup aggregation catch-up across all nodes">

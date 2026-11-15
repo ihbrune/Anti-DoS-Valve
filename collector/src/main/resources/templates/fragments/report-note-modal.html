@@ -52,13 +52,14 @@
                             style="font-size: 12.5px;" th:hx-delete="@{'/reports/' + ${reportDate} + '/note'}"
                             hx-target="#report-display-container" hx-swap="outerHTML"
                             hx-confirm="Are you sure you want to delete this day note?"
+                            th:disabled="${viewerMode}"
                             title="Delete this note">
                             <span>&#x1F5D1;</span> Delete
                         </button>
                     </div>
                     <div style="display: flex; gap: 8px;">
                         <button type="button" class="btn btn-secondary" onclick="closeReportNoteModal()">Cancel</button>
-                        <button type="submit" class="btn btn-primary">
+                        <button type="submit" class="btn btn-primary" th:disabled="${viewerMode}">
                             <span>&#x1F4BE;</span> Save Note
                         </button>
                     </div>

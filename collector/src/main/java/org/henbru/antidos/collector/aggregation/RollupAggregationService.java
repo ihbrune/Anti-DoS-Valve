@@ -170,7 +170,7 @@ public class RollupAggregationService {
 	 * asynchronously on a Virtual Thread without blocking the caller (poller).
 	 */
 	public void signalRealtimeRollupRefresh() {
-		if (!properties.isRollupEnabled()) {
+		if (!properties.getMode().isBackgroundProcessingEnabled() || !properties.isRollupEnabled()) {
 			return;
 		}
 		realtimePending.set(true);
@@ -207,7 +207,7 @@ public class RollupAggregationService {
 	 * have near-real-time visibility without waiting for the 15-minute cron.
 	 */
 	public int aggregateCurrentBucket() {
-		if (!properties.isRollupEnabled()) {
+		if (!properties.getMode().isBackgroundProcessingEnabled() || !properties.isRollupEnabled()) {
 			return 0;
 		}
 		int windowMinutes = Math.max(1, properties.getRollupWindowMinutes());
@@ -225,7 +225,7 @@ public class RollupAggregationService {
 	 */
 	@Scheduled(cron = "${collector.rollup.cron:0 */15 * * * *}")
 	public void scheduleRollup() {
-		if (!properties.isRollupEnabled()) {
+		if (!properties.getMode().isBackgroundProcessingEnabled() || !properties.isRollupEnabled()) {
 			return;
 		}
 
@@ -287,7 +287,7 @@ public class RollupAggregationService {
 
 	@org.springframework.context.event.EventListener(org.springframework.boot.context.event.ApplicationReadyEvent.class)
 	public void onStartup() {
-		if (properties.isRollupEnabled()) {
+		if (properties.getMode().isBackgroundProcessingEnabled() && properties.isRollupEnabled()) {
 			Thread.ofVirtual().name("rollup-startup-catchup").start(() -> {
 				try {
 					Thread.sleep(5000);
@@ -310,7 +310,7 @@ public class RollupAggregationService {
 	 */
 	@Scheduled(cron = "${collector.rollup.cleanup-cron:0 30 3 * * *}")
 	public void cleanupOldRollups() {
-		if (!properties.isRollupEnabled()) {
+		if (!properties.getMode().isBackgroundProcessingEnabled() || !properties.isRollupEnabled()) {
 			return;
 		}
 

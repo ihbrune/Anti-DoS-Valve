@@ -1,10 +1,13 @@
 package org.henbru.antidos.collector.web;
 
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.enrichment.CrawlerSyncService;
 import org.henbru.antidos.collector.model.CrawlerFeed;
 import org.henbru.antidos.collector.storage.CrawlerFeedRepository;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,6 +18,7 @@ import org.springframework.web.bind.annotation.PostMapping;
  * Controller providing the crawler feed dashboard and manual sync triggers.
  */
 @Controller
+@ConditionalOnWebApplication
 public class CrawlerController {
 
 	private final CrawlerFeedRepository crawlerFeedRepository;
@@ -32,20 +36,34 @@ public class CrawlerController {
 
 	@GetMapping("/crawlers")
 	public String crawlersPage(Model model) {
-		ensureInitialFeedsLoaded();
+		if (!properties.isViewerMode()) {
+			ensureInitialFeedsLoaded();
+		}
 		populateModel(model);
 		return "crawlers";
 	}
 
 	@PostMapping("/crawlers/{feedKey}/sync")
-	public String syncSingleFeed(@PathVariable(name = "feedKey") String feedKey, Model model) {
+	public String syncSingleFeed(@PathVariable(name = "feedKey") String feedKey, HttpServletResponse response, Model model) {
+		if (properties.isViewerMode()) {
+			response.setStatus(HttpStatus.FORBIDDEN.value());
+			model.addAttribute("viewerError", "Crawler feed synchronization is disabled in read-only VIEWER mode.");
+			populateModel(model);
+			return "fragments/crawlers-table :: crawlersTable";
+		}
 		crawlerSyncService.syncFeedByKey(feedKey);
 		populateModel(model);
 		return "fragments/crawlers-table :: crawlersTable";
 	}
 
 	@PostMapping("/crawlers/sync-all")
-	public String syncAllFeeds(Model model) {
+	public String syncAllFeeds(HttpServletResponse response, Model model) {
+		if (properties.isViewerMode()) {
+			response.setStatus(HttpStatus.FORBIDDEN.value());
+			model.addAttribute("viewerError", "Crawler feed synchronization is disabled in read-only VIEWER mode.");
+			populateModel(model);
+			return "fragments/crawlers-table :: crawlersTable";
+		}
 		crawlerSyncService.syncAll();
 		populateModel(model);
 		return "fragments/crawlers-table :: crawlersTable";

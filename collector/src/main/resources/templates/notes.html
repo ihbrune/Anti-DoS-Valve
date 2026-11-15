@@ -88,6 +88,9 @@
             </div>
         </header>
 
+        <!-- Read-Only Viewer Mode Notice Banner -->
+        <div th:replace="~{fragments/viewer-banner :: viewerBanner}"></div>
+
         <!-- Header & Title -->
         <div class="page-header" style="margin-bottom: 24px;">
             <div
@@ -106,11 +109,11 @@
                     <a href="/notes/export" class="btn btn-secondary" title="Export all notes to JSON file">
                         <span>&#x1F4E5;</span> Export JSON
                     </a>
-                    <button type="button" class="btn btn-secondary" hx-get="/notes/modal/import"
+                    <button th:unless="${viewerMode}" type="button" class="btn btn-secondary" hx-get="/notes/modal/import"
                         hx-target="#note-modal-container" title="Import notes from JSON file">
                         <span>&#x1F4E4;</span> Import JSON
                     </button>
-                    <button type="button" class="btn btn-primary" hx-get="/notes/modal/new"
+                    <button th:unless="${viewerMode}" type="button" class="btn btn-primary" hx-get="/notes/modal/new"
                         hx-target="#note-modal-container">
                         <span>&#x2795;</span> New Note
                     </button>

@@ -28,18 +28,31 @@ import org.springframework.stereotype.Service;
 public class NetworkAnnotationService {
 
 	private static final Logger log = LoggerFactory.getLogger(NetworkAnnotationService.class);
+	private static final long VIEWER_CACHE_TTL_MS = 15_000L;
 
 	private final NetworkAnnotationRepository repository;
 	private final AnnotationMarkdownService markdownService;
 	private final ObjectMapper objectMapper;
+	private final org.henbru.antidos.collector.config.CollectorProperties properties;
 
 	private final Map<Long, NetworkAnnotation> asnCache = new ConcurrentHashMap<>();
 	private final Map<String, NetworkAnnotation> subnetCache = new ConcurrentHashMap<>();
+	private volatile long lastCacheRefreshMillis = 0L;
 
 	public NetworkAnnotationService(NetworkAnnotationRepository repository, AnnotationMarkdownService markdownService, ObjectMapper objectMapper) {
+		this(repository, markdownService, objectMapper, null);
+	}
+
+	@org.springframework.beans.factory.annotation.Autowired
+	public NetworkAnnotationService(
+			NetworkAnnotationRepository repository,
+			AnnotationMarkdownService markdownService,
+			ObjectMapper objectMapper,
+			org.henbru.antidos.collector.config.CollectorProperties properties) {
 		this.repository = repository;
 		this.markdownService = markdownService;
 		this.objectMapper = objectMapper;
+		this.properties = properties;
 	}
 
 	@PostConstruct
@@ -71,6 +84,7 @@ public class NetworkAnnotationService {
 
 			subnetCache.clear();
 			subnetCache.putAll(newSubnet);
+			lastCacheRefreshMillis = System.currentTimeMillis();
 
 			log.info("Loaded {} network annotations into memory cache ({} ASNs, {} Subnets)",
 					all.size(), newAsn.size(), newSubnet.size());
@@ -88,6 +102,7 @@ public class NetworkAnnotationService {
 	}
 
 	public Optional<NetworkAnnotation> getAnnotationByTarget(AnnotationTargetType targetType, String targetKey) {
+		refreshCacheIfViewerStale();
 		if (targetType == AnnotationTargetType.ASN) {
 			Long asnNum = parseAsnNumber(targetKey);
 			if (asnNum != null) {
@@ -108,6 +123,9 @@ public class NetworkAnnotationService {
 			AnnotationVerdict verdict,
 			String noteMarkdown
 	) {
+		if (properties != null && properties.isViewerMode()) {
+			throw new IllegalStateException("Network annotations cannot be modified in read-only VIEWER mode.");
+		}
 		if (targetType == null) {
 			throw new IllegalArgumentException("Target type (ASN or SUBNET) is required");
 		}
@@ -192,6 +210,9 @@ public class NetworkAnnotationService {
 	}
 
 	public boolean deleteAnnotation(long id) {
+		if (properties != null && properties.isViewerMode()) {
+			throw new IllegalStateException("Network annotations cannot be deleted in read-only VIEWER mode.");
+		}
 		boolean deleted = repository.deleteById(id);
 		if (deleted) {
 			refreshCache();
@@ -203,6 +224,7 @@ public class NetworkAnnotationService {
 		if (asn == null) {
 			return Optional.empty();
 		}
+		refreshCacheIfViewerStale();
 		NetworkAnnotation cached = asnCache.get(asn);
 		if (cached != null) {
 			return Optional.of(cached);
@@ -214,6 +236,7 @@ public class NetworkAnnotationService {
 		if (subnetGroup == null || subnetGroup.isBlank()) {
 			return Optional.empty();
 		}
+		refreshCacheIfViewerStale();
 		NetworkAnnotation cached = subnetCache.get(subnetGroup.trim());
 		if (cached != null) {
 			return Optional.of(cached);
@@ -222,11 +245,20 @@ public class NetworkAnnotationService {
 	}
 
 	public Map<Long, NetworkAnnotation> getAsnAnnotationMap() {
+		refreshCacheIfViewerStale();
 		return Collections.unmodifiableMap(asnCache);
 	}
 
 	public Map<String, NetworkAnnotation> getSubnetAnnotationMap() {
+		refreshCacheIfViewerStale();
 		return Collections.unmodifiableMap(subnetCache);
+	}
+
+	private void refreshCacheIfViewerStale() {
+		if (properties != null && properties.isViewerMode()
+				&& System.currentTimeMillis() - lastCacheRefreshMillis >= VIEWER_CACHE_TTL_MS) {
+			refreshCache();
+		}
 	}
 
 	public Map<AnnotationVerdict, Long> getVerdictCounts() {
@@ -268,6 +300,9 @@ public class NetworkAnnotationService {
 	 * @return NoteImportResult containing counts of created, updated, skipped notes and any warnings
 	 */
 	public NoteImportResult importAnnotations(InputStream inputStream, NoteImportConflictStrategy conflictStrategy) {
+		if (properties != null && properties.isViewerMode()) {
+			throw new IllegalStateException("Importing network annotations is disabled in read-only VIEWER mode.");
+		}
 		if (conflictStrategy == null) {
 			conflictStrategy = NoteImportConflictStrategy.APPEND;
 		}

@@ -41,9 +41,17 @@ public class ClientEventRepository {
 	private static final Logger log = LoggerFactory.getLogger(ClientEventRepository.class);
 
 	private final JdbcTemplate jdbcTemplate;
+	private final org.henbru.antidos.collector.config.CollectorProperties properties;
 
 	public ClientEventRepository(JdbcTemplate jdbcTemplate) {
+		this(jdbcTemplate, null);
+	}
+
+	@org.springframework.beans.factory.annotation.Autowired
+	public ClientEventRepository(JdbcTemplate jdbcTemplate,
+			org.henbru.antidos.collector.config.CollectorProperties properties) {
 		this.jdbcTemplate = jdbcTemplate;
+		this.properties = properties;
 	}
 
 	@NonNull
@@ -176,6 +184,10 @@ public class ClientEventRepository {
 
 	@PostConstruct
 	public void repairUnnormalizedEvents() {
+		if (properties != null && properties.isViewerMode()) {
+			log.debug("Skipping startup event normalization repair in read-only VIEWER mode.");
+			return;
+		}
 		try {
 			List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
 					SELECT id, client_key FROM client_events

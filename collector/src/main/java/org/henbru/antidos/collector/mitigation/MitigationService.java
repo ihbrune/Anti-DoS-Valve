@@ -336,7 +336,9 @@ public class MitigationService {
 	}
 
 	public long getExpectedRevision(Instant now) {
-		ruleRepository.expireElapsedRules(now);
+		if (!properties.isViewerMode()) {
+			ruleRepository.expireElapsedRules(now);
+		}
 		List<MitigationRule> active = ruleRepository.findActiveRules(now);
 		if (active.isEmpty()) {
 			return 0L;
@@ -546,6 +548,7 @@ public class MitigationService {
 			String source,
 			String batchId,
 			String actor) {
+		requireWriteMode("Creating or updating mitigation blocks");
 		NormalizedCidr norm = normalizeAndValidateCidr(rawCidr, getEffectiveMinIpv4Prefix(), getEffectiveMinIpv6Prefix());
 		int effectiveTtlMin = ttlMinutes > 0 ? ttlMinutes : properties.getDefaultMitigationTtlMinutes();
 		int maxTtlSec = getEffectiveMaxTtlSeconds();
@@ -636,6 +639,7 @@ public class MitigationService {
 			String source,
 			String batchIdPrefix,
 			String actor) {
+		requireWriteMode("Creating batch mitigation blocks");
 		if (rawCidrs == null || rawCidrs.isEmpty()) {
 			return List.of();
 		}
@@ -764,6 +768,7 @@ public class MitigationService {
 	 * and blocks them as a single batch.
 	 */
 	public List<MitigationRule> blockAsnSubnets(long asn, int hours, int ttlMinutes, String reason, String actor) {
+		requireWriteMode("Blocking ASN subnets");
 		AsnBatchPreview preview = previewAsnBatch(asn, hours);
 		if (preview.candidates().isEmpty()) {
 			return List.of();
@@ -776,6 +781,7 @@ public class MitigationService {
 	}
 
 	public Optional<MitigationRule> extendBlock(long ruleId, int additionalMinutes, String actor) {
+		requireWriteMode("Extending mitigation blocks");
 		Optional<MitigationRule> opt = ruleRepository.findById(ruleId);
 		if (opt.isEmpty()) {
 			return Optional.empty();
@@ -827,6 +833,7 @@ public class MitigationService {
 	}
 
 	public Optional<MitigationRule> revokeBlock(long ruleId, String revokeReason, String actor) {
+		requireWriteMode("Revoking mitigation blocks");
 		Optional<MitigationRule> opt = ruleRepository.findById(ruleId);
 		if (opt.isEmpty()) {
 			return Optional.empty();
@@ -874,6 +881,7 @@ public class MitigationService {
 	}
 
 	public int revokeBatch(String batchId, String revokeReason, String actor) {
+		requireWriteMode("Revoking mitigation batches");
 		if (batchId == null || batchId.isBlank()) {
 			return 0;
 		}
@@ -941,6 +949,7 @@ public class MitigationService {
 	 * @return Number of revoked active rules
 	 */
 	public int revokeAll(String revokeReason, String actor) {
+		requireWriteMode("Emergency flush");
 		Instant now = Instant.now();
 		String safeRevokeReason = (revokeReason != null && !revokeReason.isBlank())
 				? revokeReason.trim()
@@ -973,6 +982,7 @@ public class MitigationService {
 	 * that have {@code dynamicMitigationEnabled = true}.
 	 */
 	public FleetSyncResult syncFleetMitigations() {
+		requireWriteMode("Fleet mitigation synchronization");
 		Instant now = Instant.now();
 		ruleRepository.expireElapsedRules(now);
 		List<MitigationRule> activeRules = ruleRepository.findActiveRules(now);
@@ -1071,7 +1081,8 @@ public class MitigationService {
 	 * across divergent hash versions or guardrail rejections.
 	 */
 	public void syncValveIfNeeded(EndpointConfig endpoint, ValveOverviewDto.ValveSummaryDto valveSummary, Instant now) {
-		if (endpoint == null || valveSummary == null || !valveSummary.dynamicMitigationEnabledOrDefault()) {
+		if (!properties.getMode().isBackgroundProcessingEnabled()
+				|| endpoint == null || valveSummary == null || !valveSummary.dynamicMitigationEnabledOrDefault()) {
 			return;
 		}
 		String valveKey = endpoint.getName() + "/" + valveSummary.monitorName();
@@ -1259,6 +1270,9 @@ public class MitigationService {
 	 * for all active dynamic mitigation rules.
 	 */
 	public void refreshDeterrenceMetricsAsync() {
+		if (properties.isViewerMode()) {
+			return;
+		}
 		deterrenceRefreshPending.set(true);
 		if (deterrenceWorkerRunning.compareAndSet(false, true)) {
 			Thread.ofVirtual().name("mitigation-deterrence-worker").start(() -> {
@@ -1285,6 +1299,9 @@ public class MitigationService {
 	}
 
 	public void refreshDeterrenceMetrics() {
+		if (properties.isViewerMode()) {
+			return;
+		}
 		Instant now = Instant.now();
 		ruleRepository.expireElapsedRules(now);
 		List<MitigationRule> activeRules = ruleRepository.findActiveRules(now);
@@ -1341,8 +1358,16 @@ public class MitigationService {
 
 	public List<MitigationRule> getActiveRules() {
 		Instant now = Instant.now();
-		ruleRepository.expireElapsedRules(now);
+		if (!properties.isViewerMode()) {
+			ruleRepository.expireElapsedRules(now);
+		}
 		return ruleRepository.findActiveRules(now);
+	}
+
+	private void requireWriteMode(String operation) {
+		if (properties.isViewerMode()) {
+			throw new IllegalStateException(operation + " is disabled in read-only VIEWER mode.");
+		}
 	}
 
 	public List<MitigationRule> getRecentRules(int limit) {

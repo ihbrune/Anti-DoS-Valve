@@ -4,6 +4,10 @@
 
 <!-- Fragment: crawlersTable -->
 <div th:fragment="crawlersTable" id="crawlers-table-container">
+    <div th:if="${viewerError != null}" class="alert alert-danger" style="margin-bottom: 16px;">
+        <span>&#x26A0;&#xFE0F;</span> <span th:text="${viewerError}">Crawler synchronization disabled.</span>
+    </div>
+
     <div th:if="${#lists.isEmpty(feeds)}" class="empty-state">
         <p>No crawler or bot feeds configured in collector-config.yaml.</p>
     </div>
@@ -64,7 +68,7 @@
                                 th:hx-post="@{'/crawlers/' + ${feed.feedKey} + '/sync'}"
                                 hx-target="#crawlers-table-container"
                                 hx-swap="outerHTML"
-                                th:disabled="${feed.status == 'INVALID_CONFIG' or feed.status == 'DISABLED'}">
+                                th:disabled="${viewerMode or feed.status == 'INVALID_CONFIG' or feed.status == 'DISABLED'}">
                             &#x21BB; Sync Now
                         </button>
                     </td>

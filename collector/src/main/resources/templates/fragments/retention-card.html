@@ -93,6 +93,9 @@
     <div style="margin-top: auto; display: flex; flex-direction: column; gap: 8px;">
         <div style="font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 2px;">
             Manual Maintenance Triggers:
+            <span th:if="${viewerMode}" class="badge badge-secondary" style="margin-left: 6px; font-size: 10px;">
+                Disabled in Read-Only VIEWER mode
+            </span>
         </div>
         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
             <button type="button" class="btn"
@@ -100,7 +103,8 @@
                     hx-post="/system/retention-cleanup"
                     hx-target="#retention-card"
                     hx-swap="outerHTML"
-                    hx-disabled-elt="this">
+                    hx-disabled-elt="this"
+                    th:disabled="${viewerMode}">
                 <span>&#x1F9F9;</span> Run Retention Cleanup Now
             </button>
             <button th:if="${status.database.isSqlite}"
@@ -109,7 +113,8 @@
                     hx-post="/system/vacuum"
                     hx-target="#retention-card"
                     hx-swap="outerHTML"
-                    hx-disabled-elt="this">
+                    hx-disabled-elt="this"
+                    th:disabled="${viewerMode}">
                 <span>&#x1F4BE;</span> Compact SQLite (VACUUM)
             </button>
             <button type="button" class="btn"
@@ -117,7 +122,8 @@
                     hx-post="/system/rollup-catchup"
                     hx-target="#retention-card"
                     hx-swap="outerHTML"
-                    hx-disabled-elt="this">
+                    hx-disabled-elt="this"
+                    th:disabled="${viewerMode}">
                 <span>&#x1F4CA;</span> Catch Up Subnet Rollups
             </button>
             <button type="button" class="btn"
@@ -125,7 +131,8 @@
                     hx-post="/system/clear-cache"
                     hx-target="#retention-card"
                     hx-swap="outerHTML"
-                    hx-disabled-elt="this">
+                    hx-disabled-elt="this"
+                    th:disabled="${viewerMode}">
                 <span>&#x267B;&#xFE0F;</span> Clear Resolver Cache
             </button>
         </div>

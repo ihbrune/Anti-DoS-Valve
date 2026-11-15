@@ -139,6 +139,14 @@ public class CollectorCliRunner {
 				      Starts the collector with simulated AntiDoSValve endpoints (Edge EU, API Gateway US, Staging Node)
 				      enabling an immediate out-of-the-box exploration experience.
 
+				  java -jar anti-dos-collector-*.jar headless
+				      Starts the collector in HEADLESS mode (background pollers, enrichment, mitigation, and rollups only,
+				      with no embedded HTTP server or web dashboard exposed).
+
+				  java -jar anti-dos-collector-*.jar viewer [path/to/antidos-collector.db]
+				      Starts the collector in strictly read-only VIEWER mode to inspect an existing SQLite snapshot or
+				      configured database without performing any database writes or background polling.
+
 				  java -jar anti-dos-collector-*.jar test-endpoint --url <url> [--token <token>] [--name <name>]
 				      Tests connectivity to an AntiDoSValve endpoint and prints a ready-to-use YAML configuration block.
 

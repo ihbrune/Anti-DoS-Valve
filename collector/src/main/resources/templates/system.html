@@ -96,6 +96,9 @@
             </div>
         </header>
 
+        <!-- Read-Only Viewer Mode Notice Banner -->
+        <div th:replace="~{fragments/viewer-banner :: viewerBanner}"></div>
+
         <!-- Demo Mode Notice Banner -->
         <div th:if="${demoMode}" class="demo-banner">
             <div class="demo-badge">DEMO MODE ACTIVE</div>
@@ -242,6 +245,9 @@
                     <span>&#x1F6A1;</span> Fleet &amp; Polling Configuration
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="badge"
+                        th:classappend="${status.config.viewerMode ? 'badge-info' : 'badge-success'}"
+                        th:text="'Mode: ' + ${status.config.collectorMode}">Mode: FULL</span>
                     <span th:if="${status.config.parallelFleetPolling}" class="badge badge-success">Virtual
                         Threads</span>
                     <span th:unless="${status.config.parallelFleetPolling}"

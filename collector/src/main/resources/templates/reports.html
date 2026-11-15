@@ -133,6 +133,9 @@
             </div>
         </header>
 
+        <!-- Read-Only Viewer Mode Notice Banner -->
+        <div th:replace="~{fragments/viewer-banner :: viewerBanner}"></div>
+
         <!-- Flash Messages -->
         <div th:if="${successMessage != null}" class="alert alert-success"
             style="margin-bottom: 20px; padding: 12px 18px; border-radius: var(--radius-md);" role="alert">
@@ -157,7 +160,7 @@
                         immune to nightly data retention cleanups.
                     </p>
                 </div>
-                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <div th:unless="${viewerMode}" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                     <!-- Generate Report Form -->
                     <form th:action="@{/reports/generate}" method="post"
                         style="display: flex; gap: 8px; align-items: center;">

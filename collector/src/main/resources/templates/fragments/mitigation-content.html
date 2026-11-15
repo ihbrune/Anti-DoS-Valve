@@ -64,6 +64,8 @@
                         hx-post="/mitigation/sync"
                         hx-target="#mitigation-dashboard-container"
                         hx-swap="outerHTML show:top"
+                        th:disabled="${viewerMode}"
+                        th:title="${viewerMode ? 'Disabled in read-only VIEWER mode' : 'Synchronize active rules and refresh deterrence telemetry'}"
                         style="font-size: 12px; padding: 6px 14px;">
                     <span>&#x1F504;</span> Sync Fleet &amp; Refresh Deterrence
                 </button>
@@ -187,6 +189,7 @@
                         th:attr="hx-post=@{/mitigation/auto/toggle(property='enabled')}"
                         hx-target="#mitigation-dashboard-container"
                         hx-swap="outerHTML show:top"
+                        th:disabled="${viewerMode}"
                         style="font-size: 12px; padding: 6px 14px;"
                         th:title="${autoSettings.enabled ? 'Disable autonomous defense engine' : 'Enable autonomous defense engine'}">
                     <span th:if="${autoSettings.enabled}">&#x23F8;&#xFE0F; Disable Auto-Mitigation</span>
@@ -199,6 +202,7 @@
                         th:attr="hx-post=@{/mitigation/auto/toggle(property='dryRun')}"
                         hx-target="#mitigation-dashboard-container"
                         hx-swap="outerHTML show:top"
+                        th:disabled="${viewerMode}"
                         style="font-size: 12px; padding: 6px 14px;"
                         title="Toggle simulation mode (log actions without modifying fleet rules)">
                     <span th:if="${autoSettings.dryRun}">&#x1F9EA; Mode: Dry-Run Simulation</span>
@@ -210,6 +214,7 @@
                         hx-post="/mitigation/auto/evaluate"
                         hx-target="#mitigation-dashboard-container"
                         hx-swap="outerHTML show:top"
+                        th:disabled="${viewerMode}"
                         style="font-size: 12px; padding: 6px 14px;"
                         title="Trigger immediate autonomous evaluation scan across telemetry">
                     <span>&#x1F50D;</span> Evaluate Now
@@ -365,6 +370,7 @@
                                     hx-post="/mitigation/webhook/test"
                                     hx-target="#mitigation-dashboard-container"
                                     hx-swap="outerHTML show:top"
+                                    th:disabled="${viewerMode}"
                                     style="font-size: 11.5px; padding: 4px 12px;"
                                     title="Send a sample test notification to the configured webhook URL">
                                 <span>&#x1F514;</span> Send Test Notification
@@ -418,11 +424,12 @@
                                 hx-post="/mitigation/auto/reset"
                                 hx-target="#mitigation-dashboard-container"
                                 hx-swap="outerHTML show:top"
+                                th:disabled="${viewerMode}"
                                 style="font-size: 12px; padding: 6px 12px;"
                                 title="Delete database overrides and revert to application.yaml defaults">
                             Reset to Defaults
                         </button>
-                        <button type="submit" class="btn btn-primary" style="font-size: 12px; font-weight: 700; padding: 6px 16px;">
+                        <button type="submit" class="btn btn-primary" th:disabled="${viewerMode}" style="font-size: 12px; font-weight: 700; padding: 6px 16px;">
                             Save Settings to Database
                         </button>
                     </div>
@@ -494,7 +501,7 @@
                             style="font-size: 12px;">
                         <span>&#x1F50D;</span> Run Pre-Flight Check
                     </button>
-                    <button type="submit" class="btn btn-danger" style="font-size: 12.5px; font-weight: 700; padding: 7px 16px;">
+                    <button type="submit" class="btn btn-danger" th:disabled="${viewerMode}" style="font-size: 12.5px; font-weight: 700; padding: 7px 16px;">
                         <span>&#x1F6E1;&#xFE0F;</span> Activate Dynamic Block
                     </button>
                 </div>
@@ -567,7 +574,7 @@
                             style="font-size: 12px;">
                         <span>&#x1F50E;</span> Preview ASN Subnets
                     </button>
-                    <button type="submit" class="btn btn-danger" style="font-size: 12.5px; font-weight: 700; padding: 7px 16px;">
+                    <button type="submit" class="btn btn-danger" th:disabled="${viewerMode}" style="font-size: 12.5px; font-weight: 700; padding: 7px 16px;">
                         <span>&#x26A1;</span> Block Unauthenticated ASN Subnets
                     </button>
                 </div>
@@ -597,6 +604,7 @@
                         th:attr="hx-post=@{/mitigation/batch/revoke(batchId=${b.batchId})}"
                         hx-target="#mitigation-dashboard-container"
                         hx-swap="outerHTML show:top"
+                        th:disabled="${viewerMode}"
                         title="Immediately revoke all active rules in this batch">
                     Revoke Batch
                 </button>
@@ -625,6 +633,7 @@
                         hx-target="#mitigation-dashboard-container"
                         hx-swap="outerHTML show:top"
                         hx-confirm="EMERGENCY FLUSH: Are you sure you want to revoke ALL active dynamic CIDR blocks immediately and flush them from all Tomcat Valves across the entire fleet?"
+                        th:disabled="${viewerMode}"
                         style="font-size: 12px; padding: 6px 14px; display: inline-flex; align-items: center; gap: 6px;"
                         title="Immediately revoke all dynamic blocks and clear in-memory registries on all Valves">
                     <span>&#x1F6A8;</span> Emergency Flush (Revoke All)
@@ -751,6 +760,7 @@
                                     th:attr="hx-post=@{/mitigation/{id}/extend(id=${r.id},additionalMinutes=60,tab='active')}"
                                     hx-target="#mitigation-dashboard-container"
                                     hx-swap="outerHTML"
+                                    th:disabled="${viewerMode}"
                                     title="Extend TTL by +60 minutes">
                                 +1h
                             </button>
@@ -759,6 +769,7 @@
                                     th:attr="hx-post=@{/mitigation/{id}/extend(id=${r.id},additionalMinutes=360,tab='active')}"
                                     hx-target="#mitigation-dashboard-container"
                                     hx-swap="outerHTML"
+                                    th:disabled="${viewerMode}"
                                     title="Extend TTL by +6 hours">
                                 +6h
                             </button>
@@ -767,6 +778,7 @@
                                     th:attr="hx-post=@{/mitigation/{id}/revoke(id=${r.id},tab='active')}"
                                     hx-target="#mitigation-dashboard-container"
                                     hx-swap="outerHTML"
+                                    th:disabled="${viewerMode}"
                                     title="Immediately lift this CIDR block across all Valves">
                                 Revoke
                             </button>
@@ -834,6 +846,7 @@
                                         th:attr="hx-post=@{/mitigation/{id}/extend(id=${h.id},additionalMinutes=60,tab='active')}"
                                         hx-target="#mitigation-dashboard-container"
                                         hx-swap="outerHTML"
+                                        th:disabled="${viewerMode}"
                                         title="Re-activate this rule for 60 minutes">
                                     Re-Block 1h
                                 </button>
@@ -1155,6 +1168,7 @@
                                         th:attr="hx-post=@{/mitigation/{id}/extend(id=${h.id},additionalMinutes=60,tab='history')}"
                                         hx-target="#mitigation-dashboard-container"
                                         hx-swap="outerHTML"
+                                        th:disabled="${viewerMode}"
                                         title="Re-activate this rule across all Valves for 60 minutes">
                                     Re-Block 1h
                                 </button>
@@ -1163,6 +1177,7 @@
                                         th:attr="hx-post=@{/mitigation/{id}/extend(id=${h.id},additionalMinutes=360,tab='history')}"
                                         hx-target="#mitigation-dashboard-container"
                                         hx-swap="outerHTML"
+                                        th:disabled="${viewerMode}"
                                         title="Re-activate this rule across all Valves for 6 hours">
                                     +6h
                                 </button>

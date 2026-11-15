@@ -27,6 +27,12 @@
 #     driver-class-name: "org.postgresql.Driver"
 
 collector:
+  # Operational mode:
+  #   FULL     - Default mode: background polling, enrichment, mitigation, rollups + web UI/API
+  #   HEADLESS - Background workers only without starting an embedded HTTP server
+  #   VIEWER   - Strictly read-only web UI & API for inspecting an existing database snapshot
+  mode: FULL
+
   # Global default poll interval in seconds
   poll-interval-seconds: 15
 
