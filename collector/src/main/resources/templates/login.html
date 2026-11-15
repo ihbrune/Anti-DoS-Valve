@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In - Anti-DoS Collector</title>
+    <link rel="stylesheet" th:href="@{/css/collector.css}">
+    <script th:src="@{/js/theme.js}"></script>
+    <style>
+        .login-shell {
+            max-width: 460px;
+            margin: 28px auto;
+            padding: 0 16px;
+        }
+
+        .login-topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 18px;
+        }
+
+        .login-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-card);
+            padding: 24px;
+        }
+
+        .login-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .login-subtitle {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 18px;
+        }
+
+        .login-alert {
+            padding: 10px 12px;
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            margin-bottom: 16px;
+            border: 1px solid transparent;
+        }
+
+        .login-alert-error {
+            background: rgba(244, 63, 94, 0.14);
+            border-color: rgba(244, 63, 94, 0.35);
+            color: var(--color-danger);
+        }
+
+        .login-alert-info {
+            background: rgba(16, 185, 129, 0.14);
+            border-color: rgba(16, 185, 129, 0.35);
+            color: var(--color-success);
+        }
+
+        .login-alert-warn {
+            background: rgba(245, 158, 11, 0.14);
+            border-color: rgba(245, 158, 11, 0.35);
+            color: var(--color-warning);
+        }
+
+        .login-field {
+            margin-bottom: 16px;
+        }
+
+        .login-label {
+            display: block;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .login-input {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-color);
+            background: var(--bg-surface);
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+
+        .login-input:focus {
+            outline: 2px solid var(--color-primary);
+            border-color: var(--border-accent);
+        }
+
+        .login-submit {
+            width: 100%;
+            padding: 10px 16px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-accent);
+            background: rgba(56, 189, 248, 0.16);
+            color: var(--color-primary);
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s ease, border-color 0.15s ease;
+        }
+
+        .login-submit:hover {
+            background: rgba(56, 189, 248, 0.28);
+            border-color: var(--color-primary);
+        }
+
+        .login-meta {
+            margin-top: 18px;
+            padding-top: 14px;
+            border-top: 1px solid var(--border-color);
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        .login-meta code {
+            color: var(--text-secondary);
+        }
+
+        .theme-btn {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 6px 10px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+
+<body>
+    <main class="login-shell">
+        <div class="login-topbar">
+            <a href="/" class="brand">
+                <div class="brand-icon">&#x1F6E1;</div>
+                <div>
+                    <div class="brand-title">Anti-DoS Collector</div>
+                    <div class="brand-subtitle" th:text="'Mode: ' + ${collectorMode}">Mode: FULL</div>
+                </div>
+            </a>
+            <button type="button" class="theme-btn" onclick="toggleTheme()" title="Toggle Light/Dark Theme">&#x25D0; Theme</button>
+        </div>
+
+        <section class="login-card" aria-labelledby="login-heading">
+            <h1 id="login-heading" class="login-title">Sign In</h1>
+            <p class="login-subtitle">Authenticate with an API or operator access token configured for this Collector instance.</p>
+
+            <div th:if="${errorMessage}" class="login-alert login-alert-error" role="alert" th:text="${errorMessage}">
+                Invalid authentication token.
+            </div>
+            <div th:if="${logoutMessage}" class="login-alert login-alert-info" role="status" th:text="${logoutMessage}">
+                You have been signed out.
+            </div>
+            <div th:if="${!authConfigured}" class="login-alert login-alert-warn" role="status">
+                No authentication tokens are currently configured in <code>collector.security.tokens</code>.
+            </div>
+
+            <form method="post" action="/login">
+                <div class="login-field">
+                    <label for="token" class="login-label">Access Token</label>
+                    <input
+                        type="password"
+                        id="token"
+                        name="token"
+                        class="login-input"
+                        autocomplete="current-password"
+                        enterkeyhint="done"
+                        spellcheck="false"
+                        placeholder="Paste configured hex access token"
+                        required>
+                </div>
+                <button type="submit" class="login-submit">Sign In</button>
+            </form>
+
+            <div class="login-meta">
+                Sessions are stored in an HTTP-only signed cookie scoped to your token's configured role
+                (<code>ADMIN</code>, <code>OPERATOR</code>, <code>AI_AGENT</code>, or <code>VIEWER</code>).
+                Generate tokens via:
+                <code>java -jar anti-dos-collector.jar generate-token --name operator-ui --role OPERATOR</code>
+            </div>
+        </section>
+    </main>
+</body>
+
+</html>

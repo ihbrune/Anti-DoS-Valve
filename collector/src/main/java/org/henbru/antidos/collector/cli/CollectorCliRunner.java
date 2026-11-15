@@ -1,8 +1,11 @@
 package org.henbru.antidos.collector.cli;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.security.SecureRandom;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
+import org.henbru.antidos.collector.config.CollectorTokenRole;
 import org.henbru.antidos.collector.config.EndpointConfig;
 import org.henbru.antidos.collector.model.ValveOverviewDto;
 import org.henbru.antidos.collector.poller.ValveStatusClient;
@@ -16,6 +19,8 @@ import org.henbru.antidos.collector.poller.ValveStatusClient;
  */
 public class CollectorCliRunner {
 
+	private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
 	private final ValveStatusClient statusClient;
 
 	public CollectorCliRunner(ValveStatusClient statusClient) {
@@ -26,12 +31,26 @@ public class CollectorCliRunner {
 		if (args == null || args.length == 0) {
 			return false;
 		}
-		String command = args[0].toLowerCase();
+		String command = args[0].toLowerCase(Locale.ROOT);
 		return "test-endpoint".equals(command)
 				|| "add-endpoint".equals(command)
+				|| "generate-token".equals(command)
+				|| "--generate-token".equals(command)
 				|| "--help".equals(command)
 				|| "-h".equals(command)
 				|| "help".equals(command);
+	}
+
+	public static String generateSecureHexToken(int numBytes) {
+		int boundedBytes = Math.max(16, Math.min(64, numBytes));
+		byte[] bytes = new byte[boundedBytes];
+		SECURE_RANDOM.nextBytes(bytes);
+		StringBuilder sb = new StringBuilder(boundedBytes * 2);
+		for (byte b : bytes) {
+			sb.append(Character.forDigit((b >>> 4) & 0xF, 16));
+			sb.append(Character.forDigit(b & 0xF, 16));
+		}
+		return sb.toString();
 	}
 
 	public static int runCli(String... args) {
@@ -47,10 +66,14 @@ public class CollectorCliRunner {
 			return 1;
 		}
 
-		String command = args[0].toLowerCase();
+		String command = args[0].toLowerCase(Locale.ROOT);
 		if ("--help".equals(command) || "-h".equals(command) || "help".equals(command)) {
 			printUsage();
 			return 0;
+		}
+
+		if ("generate-token".equals(command) || "--generate-token".equals(command)) {
+			return executeGenerateToken(args);
 		}
 
 		if (!"test-endpoint".equals(command) && !"add-endpoint".equals(command)) {
@@ -154,6 +177,10 @@ public class CollectorCliRunner {
 				  java -jar anti-dos-collector-*.jar test-endpoint --url <url> [--token <token>] [--name <name>]
 				      Tests connectivity to an AntiDoSValve endpoint and prints a ready-to-use YAML configuration block.
 
+				  java -jar anti-dos-collector-*.jar generate-token [--name <name>] [--role <ADMIN|OPERATOR|AI_AGENT|VIEWER>] [--bytes <16..64>]
+				      Generates a cryptographically secure random hex token (default: 32 bytes / 256-bit) and prints a YAML snippet
+				      ready for collector.security.tokens.
+
 				Options for test-endpoint:
 				  --url     Full HTTP/HTTPS URL to the Valve status endpoint (e.g. http://localhost:8080/antidos-status)
 				  --token   Bearer authentication token (optional, if statusToken is configured on the Valve)
@@ -173,5 +200,52 @@ public class CollectorCliRunner {
 			}
 		}
 		return map;
+	}
+
+	private int executeGenerateToken(String[] args) {
+		Map<String, String> params = parseArgs(args);
+		String name = params.getOrDefault("name", "operator-1").trim();
+		if (name.isEmpty()) {
+			name = "operator-1";
+		}
+
+		CollectorTokenRole role;
+		try {
+			role = CollectorTokenRole.fromString(params.getOrDefault("role", "OPERATOR"));
+		} catch (IllegalArgumentException e) {
+			System.err.println("Error: " + e.getMessage());
+			return 1;
+		}
+
+		int numBytes = 32;
+		if (params.containsKey("bytes")) {
+			try {
+				int parsed = Integer.parseInt(params.get("bytes").trim());
+				if (parsed < 16 || parsed > 64) {
+					System.err.println("Error: --bytes must be between 16 and 64.");
+					return 1;
+				}
+				numBytes = parsed;
+			} catch (NumberFormatException e) {
+				System.err.println("Error: Invalid --bytes value: " + params.get("bytes"));
+				return 1;
+			}
+		}
+
+		String token = generateSecureHexToken(numBytes);
+		System.out.println("================================================================================");
+		System.out.println("Anti-DoS Collector: Generated " + (numBytes * 8) + "-bit Authentication Token");
+		System.out.println("================================================================================");
+		System.out.println("Token: " + token);
+		System.out.println();
+		System.out.println("Add to collector-config.yaml:");
+		System.out.println("collector:");
+		System.out.println("  security:");
+		System.out.println("    tokens:");
+		System.out.println("      - name: \"" + name + "\"");
+		System.out.println("        role: " + role.name());
+		System.out.println("        token: \"" + token + "\"");
+		System.out.println("================================================================================");
+		return 0;
 	}
 }

@@ -65,12 +65,18 @@ collector:
       poll-intermediate-slots: false
 ```
 
-### 3. Verify an Endpoint via CLI
+### 3. Verify an Endpoint or Generate Access Tokens via CLI
 ```bash
+# Test a remote Valve endpoint
 java -jar collector/target/anti-dos-collector-1.9.0.jar test-endpoint \
   --url "http://localhost:8080/antidos-status" \
   --token "secretToken1" \
   --name "Web-Node-1"
+
+# Generate a cryptographically random hex token (default 32 bytes = 64 hex chars)
+java -jar collector/target/anti-dos-collector-1.9.0.jar generate-token \
+  --name "soc-operator" \
+  --role OPERATOR
 ```
 
 ### 4. Run the Collector
@@ -827,12 +833,81 @@ The database separates real-time transient telemetry, persistent subnet aggregat
 
 ## REST & Forensics API
 
-| Endpoint | Method | Parameters | Description |
+| Endpoint | Method | Role / Mode Requirement | Description |
 |---|---|---|---|
-| `/api/v1/fleet` | `GET` | - | Fleet overview: online status, 24h request totals, active valves. |
-| `/api/v1/valves` | `GET` | `serverId` (optional) | Query live and persisted Valve runtime configurations across the fleet or filtered by node. |
-| `/api/v1/valves/{valveName}` | `GET` | `serverId` (required) | Query detailed runtime configuration for a specific named Valve on a specific server node. |
-| `/api/v1/rollups/subnets` | `GET` | `servers`, `valves`, `hours`, `subnetQuery`, `asn`, `clientTypes`, `limit`, `offset` | Retrieve persistent subnet rollups with botnet heuristics. |
-| `/api/v1/rollups/subnets/aggregate` | `POST` | `hours` | On-demand trigger to calculate completed rollup buckets. |
-| `/api/v1/reputation/blocked-ips` | `GET` | `hours`, `format` (`json` or `text`) | Export blocked IP addresses as a plain text blocklist for firewall ingest or JSON. |
-| `/api/v1/poll-log` | `GET` | `beforeId`, `status`, `serverId`, `limit` | Paginated query of polling audit log entries. |
+| `/api/v1/fleet` | `GET` | Read auth (`require-auth-for-read`) | Fleet overview: online status, 24h request totals, active valves. |
+| `/api/v1/valves` | `GET` | Read auth (`require-auth-for-read`) | Query live and persisted Valve runtime configurations across the fleet or filtered by node. |
+| `/api/v1/valves/{valveName}` | `GET` | Read auth (`require-auth-for-read`) | Query detailed runtime configuration for a specific named Valve on a specific server node. |
+| `/api/v1/rollups/subnets` | `GET` | Read auth (`require-auth-for-read`) | Retrieve persistent subnet rollups with botnet heuristics. |
+| `/api/v1/rollups/subnets/aggregate` | `POST` | `ADMIN` + `FULL` mode | On-demand trigger to calculate completed rollup buckets. |
+| `/api/v1/rollups/subnets/profiles/refresh` | `POST` | `ADMIN` + `FULL` mode | Refresh behavioral 30-day subnet baselines. |
+| `/api/v1/reputation/blocked-ips` | `GET` | Read auth (`require-auth-for-read`) | Export blocked IP addresses as a plain text blocklist for firewall ingest or JSON. |
+| `/api/v1/poll-log` | `GET` | Read auth (`require-auth-for-read`) | Paginated query of polling audit log entries. |
+| `/api/v1/notes` | `GET` / `POST` | Read auth / Write (`ADMIN`, `OPERATOR`, `AI_AGENT`) | List or create/update ASN and subnet investigative annotations. |
+| `/api/v1/notes/{id}` | `GET` / `DELETE` | Read auth / Human write (`ADMIN`, `OPERATOR`) | Retrieve or delete an annotation (deletion forbidden for `AI_AGENT`). |
+| `/api/v1/reports` | `GET` | Read auth (`require-auth-for-read`) | List persisted operational daily reports (`?limit=30`). |
+| `/api/v1/reports/{date}` | `GET` | Read auth (`require-auth-for-read`) | Retrieve daily report Markdown and operator note for `YYYY-MM-DD`. |
+| `/api/v1/reports/{date}/note` | `POST` / `DELETE` | Write / Human write | Add or delete daily report notes (`AI_AGENT` always appends cleanly). |
+| `/api/v1/reports/generate` | `POST` | Write (`ADMIN`, `OPERATOR`, `AI_AGENT`) | Generate a report when raw telemetry is available (`409` if telemetry expired). |
+| `/api/v1/mitigation/rules` | `GET` | Read auth (`require-auth-for-read`) | List currently active dynamic CIDR mitigation rules and mitigation-capable valves. |
+| `/api/v1/mitigation/alerts` | `GET` | Read auth (`require-auth-for-read`) | Fetch autonomous mitigation alerts since `sinceId`. |
+| `/api/v1/mitigation/preflight` | `POST` | Read auth / Authenticated caller | Dry-run preflight collateral-damage check for candidate CIDRs. |
+| `/api/v1/mitigation/block` | `POST` | Write (`ADMIN`, `OPERATOR`, `AI_AGENT`) | Create or extend a dynamic CIDR block (strictly guarded for `AI_AGENT`). |
+| `/api/v1/mitigation/asn-block` | `POST` | Write (`ADMIN`, `OPERATOR`, optionally `AI_AGENT`) | Block candidate subnets of an ASN (disabled for `AI_AGENT` unless allowed). |
+| `/api/v1/mitigation/{id}/extend` | `POST` | Write (`ADMIN`, `OPERATOR`, `AI_AGENT` owner) | Extend rule TTL (`AI_AGENT` restricted to `AI_AGENT`-sourced rules and TTL cap). |
+| `/api/v1/mitigation/{id}/revoke` | `POST` | Write (`ADMIN`, `OPERATOR`, `AI_AGENT` owner) | Revoke rule (`AI_AGENT` restricted to `AI_AGENT`-sourced rules). |
+
+---
+
+## Authentication, Multi-Token RBAC, Self-Protection & AI Guardrails
+
+### 1. Multi-Token Role Model & Mode Intersection
+Configure named tokens under `collector.security.tokens` using tokens generated by `generate-token`:
+```yaml
+collector:
+  security:
+    require-auth-for-read: true
+    api-enabled: true
+    session-ttl-seconds: 28800
+    max-auth-failures: 5
+    auth-lockout-seconds: 300
+    tokens:
+      - name: "soc-lead"
+        role: ADMIN
+        token: "<hex-token>"
+        enabled: true
+      - name: "soc-operator"
+        role: OPERATOR
+        token: "<hex-token>"
+        enabled: true
+      - name: "triage-bot"
+        role: AI_AGENT
+        token: "<hex-token>"
+        enabled: true
+      - name: "dashboard-tv"
+        role: VIEWER
+        token: "<hex-token>"
+        enabled: true
+```
+The effective authorization is always the **intersection** of `collector.mode` and the authenticated token's role:
+- **`ADMIN`** + **`FULL`** mode: full system, poller/enrichment/maintenance, operational, and UI access.
+- **`OPERATOR`** (or `OPERATOR` mode): operational notes, daily reports, and manual/API mitigation (`preflight`, `block`, `extend`, `revoke`), without system-admin settings.
+- **`AI_AGENT`**: permitted only through the guarded `/api/v1/{notes,reports,mitigation}/**` endpoints; Web-UI form mutations are rejected (`403`), audit entries are tagged `AI_AGENT:<token-name>`, and safety limits apply automatically.
+- **`VIEWER`** (or `VIEWER` mode): strictly read-only; no token role can bypass `collector.mode: VIEWER`.
+
+### 2. Fail-Closed API Defaults & Web-UI Session Cookie
+- **Read API (`require-auth-for-read: true` by default):** Once any enabled token exists in `collector.security.tokens`, all `/api/v1/**` read and write endpoints require `Authorization: Bearer <token>`, `X-AntiDoS-Token: <token>`, `?token=<token>`, or a valid browser session cookie. If no tokens are configured yet, non-loopback non-demo API read requests fail closed (`401`).
+- **Operational Write APIs (`/api/v1/{notes,reports,mitigation}/**`):** Strictly fail-closed even on `localhost` — `POST`/`DELETE` operational endpoints reject requests (`401`) unless at least one token is configured and the caller is authenticated.
+- **Browser Session Login (`/login`, `/logout`):** Unauthenticated Web-UI requests redirect to `/login` (`HX-Redirect` for HTMX requests) when tokens are configured. Valid tokens issue an HMAC-SHA256 signed `HttpOnly` `SameSite=Lax` cookie (`_adc_session`) re-validated against currently configured active tokens on every request.
+
+### 3. Collector Self-Protection (`AntiDoSValve` + Auth Lockout)
+- **Embedded Valve (`collector.self-protection`):** Registers `AntiDoSValve` inside Collector's own embedded Tomcat container (default `enabled: true`, `allowed-requests-per-slot: 600` per 60s slot, `max-ip-cache-size: 10000`, static assets excluded). Floods are rejected early at Tomcat with HTTP `429`.
+- **Auth Brute-Force Lockout:** Repeated invalid token or `/login` failures from the same IP (`request.getRemoteAddr()`) trigger an automatic temporary HTTP `429` lockout (`max-auth-failures: 5`, `auth-lockout-seconds: 300`).
+
+### 4. AI-Agent Safety Guardrails (`collector.security.ai-guardrails`)
+When authenticated as `AI_AGENT`:
+- **Bounded Scope & TTL:** Enforces minimum CIDR specificity (`min-ipv4-prefix: 24`, `min-ipv6-prefix: 48`), caps block & extension durations (`max-ttl-minutes: 120`), and requires descriptive justification (`min-reason-length: 15`).
+- **Collateral-Damage Refusal:** Any preflight critical warning (`hasCriticalWarnings()`) causes `422 COLLATERAL_DAMAGE_RISK` and cannot be bypassed via `forceOverride=true`.
+- **Hourly Rate Limit & ASN Guard:** Enforces `max-blocks-per-hour: 20` across AI actions and blocks ASN batch blocking by default (`allow-asn-batch-block: false`).
+- **Ownership & Human-Work Preservation:** `AI_AGENT` may extend or revoke only `AI_AGENT`-sourced mitigation rules (`403 OWNERSHIP_VIOLATION` on manual/auto rules), cannot delete annotations or daily report notes (`403 AI_DELETE_FORBIDDEN`), and cannot overwrite existing human-authored annotations without `append=true` (`409 HUMAN_NOTE_PROTECTED`).
+

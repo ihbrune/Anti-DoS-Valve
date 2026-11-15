@@ -494,11 +494,11 @@ flowchart LR
         P2D["Split Modes (HEADLESS, OPERATOR, VIEWER)"]
     end
 
-    subgraph P3["Phase 3: Closed-Loop Defense (Active + Roadmap)"]
+    subgraph P3["Phase 3: Closed-Loop Defense & Guarded APIs"]
         P3A["Active: Fleet-Wide CIDR/ASN Rule Push"]
         P3B["Active: 7-Guardrail Autonomous Defense & Webhooks"]
-        P3C["Roadmap: Adaptive Dynamic Valve Limits"]
-        P3D["Roadmap: Cloud WAF Sync & Token-Scoped AI API"]
+        P3C["Active: Multi-Token RBAC, Self-Protection Valve & Guarded AI API"]
+        P3D["Roadmap: Adaptive Dynamic Valve Limits & Cloud WAF Sync"]
     end
 
     P1 --> P2 --> P3
@@ -508,11 +508,11 @@ flowchart LR
 * **Authenticated Dynamic Blocklist Push:** Operators (in `FULL` or `OPERATOR` mode) and automated rules write dynamic CIDR/ASN mitigation rules that are synchronized across mitigation-enabled Tomcat Valves via signed `mitigationToken` (`POST /antidos-status?cmd=mitigate`) — directly in `FULL` mode or asynchronously via the `HEADLESS` worker in split-plane topologies.
 * **7-Guardrail Autonomous Defense:** Detects cross-subnet ASN carpet-bombing attacks with low returning-visitor ratios and enforces time-bounded mitigation automatically while honoring strict safety ceilings (protected ASNs, minimum subnet/request thresholds, dry-run evaluation).
 * **Role-Separated Deployment Architecture:** Operational triage and emergency mitigation (`OPERATOR`) can run completely decoupled from Valve tokens and network routes (`HEADLESS`).
+* **Multi-Token Auth, Self-Protection & Guarded AI API:** Named API/Web-UI tokens (`ADMIN`, `OPERATOR`, `AI_AGENT`, `VIEWER`) generated via `generate-token` CLI, HMAC-signed HTTP-only Web-UI session cookies (`/login`), fail-closed API defaults (`require-auth-for-read: true`, fail-closed write APIs), embedded `AntiDoSValve` + brute-force lockout protection on Collector itself, and strict safety guardrails (`ttl`, prefix specificity, collateral-damage veto, rate limit, ownership checks, and human-note preservation) for automated `AI_AGENT` triage callers.
 
 ### Future Roadmap Items
 * **Adaptive Fleet Thresholds:** Coordinated dynamic threshold adjustments across Tomcat nodes during flash sales or planned traffic spikes to prevent false positives without weakening edge protection.
 * **Centralized WAF & Edge Integration:** Automated export of validated malicious subnets and residential proxy clusters into cloud WAFs (Cloudflare, AWS WAF) or perimeter firewall chains (`iptables`/`nftables`).
-* **Token-Scoped Write API & AI Assisted Triage:** Fine-grained API tokens with Valve-equivalent brute-force rate limiting and bounded guardrails for automated or AI-assisted incident response.
 
 ---
 

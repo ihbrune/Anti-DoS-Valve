@@ -15,6 +15,7 @@ import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.model.AnnotationTargetType;
 import org.henbru.antidos.collector.model.AnnotationVerdict;
 import org.henbru.antidos.collector.model.NetworkAnnotation;
+import org.henbru.antidos.collector.security.CollectorAuthContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -88,7 +89,7 @@ public class NotesController {
 			HttpServletResponse response,
 			Model model
 	) {
-		if (properties.isViewerMode()) {
+		if (properties.isViewerMode() || CollectorAuthContext.isAiAgent()) {
 			return rejectViewerNoteMutation(response, model);
 		}
 		model.addAttribute("mode", "CREATE");
@@ -110,7 +111,7 @@ public class NotesController {
 			HttpServletResponse response,
 			Model model
 	) {
-		if (properties.isViewerMode()) {
+		if (properties.isViewerMode() || CollectorAuthContext.isAiAgent()) {
 			return rejectViewerNoteMutation(response, model);
 		}
 		Optional<NetworkAnnotation> opt = annotationService.getAnnotationById(id);
@@ -167,7 +168,7 @@ public class NotesController {
 			return "fragments/note-modal :: noteModal";
 		}
 
-		if (properties.isViewerMode()) {
+		if (properties.isViewerMode() || CollectorAuthContext.isAiAgent()) {
 			model.addAttribute("targetType", targetType);
 			model.addAttribute("targetKey", targetKey);
 			return "fragments/note-modal :: noteNotFound";
@@ -197,7 +198,7 @@ public class NotesController {
 			HttpServletResponse response,
 			Model model
 	) {
-		if (properties.isViewerMode()) {
+		if (properties.isViewerMode() || CollectorAuthContext.isAiAgent()) {
 			return rejectViewerNoteMutation(response, model);
 		}
 		NetworkAnnotation saved = annotationService.saveAnnotation(id, targetType, targetKey, verdict, noteMarkdown);
@@ -225,7 +226,7 @@ public class NotesController {
 			HttpServletResponse response,
 			Model model
 	) {
-		if (properties.isViewerMode()) {
+		if (properties.isViewerMode() || CollectorAuthContext.isAiAgent()) {
 			return rejectViewerNoteMutation(response, model);
 		}
 		annotationService.deleteAnnotation(id);
@@ -251,7 +252,7 @@ public class NotesController {
 
 	@GetMapping("/notes/modal/import")
 	public String importNotesModal(HttpServletResponse response, Model model) {
-		if (properties.isViewerMode()) {
+		if (properties.isViewerMode() || CollectorAuthContext.isAiAgent()) {
 			return rejectViewerNoteMutation(response, model);
 		}
 		model.addAttribute("conflictStrategies", NoteImportConflictStrategy.values());
@@ -266,7 +267,7 @@ public class NotesController {
 			HttpServletResponse response,
 			Model model
 	) {
-		if (properties.isViewerMode()) {
+		if (properties.isViewerMode() || CollectorAuthContext.isAiAgent()) {
 			return rejectViewerNoteMutation(response, model);
 		}
 		if (file == null || file.isEmpty()) {
@@ -319,7 +320,11 @@ public class NotesController {
 
 	private String rejectViewerNoteMutation(HttpServletResponse response, Model model) {
 		response.setStatus(HttpStatus.FORBIDDEN.value());
-		model.addAttribute("errorMessage", "Network annotations cannot be modified in read-only VIEWER mode.");
+		if (CollectorAuthContext.isAiAgent()) {
+			model.addAttribute("errorMessage", "AI_AGENT callers must use the guarded /api/v1/notes endpoints instead of Web-UI routes.");
+		} else {
+			model.addAttribute("errorMessage", "Network annotations cannot be modified in read-only VIEWER mode.");
+		}
 		return "fragments/note-modal :: noteReadOnly";
 	}
 }

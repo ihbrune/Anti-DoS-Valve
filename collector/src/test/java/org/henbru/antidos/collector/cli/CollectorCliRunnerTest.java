@@ -16,6 +16,8 @@ class CollectorCliRunnerTest {
 	void testIsCliCommand() {
 		assertTrue(CollectorCliRunner.isCliCommand(new String[]{"test-endpoint", "--url", "http://localhost:8080"}));
 		assertTrue(CollectorCliRunner.isCliCommand(new String[]{"add-endpoint", "--url", "http://localhost:8080"}));
+		assertTrue(CollectorCliRunner.isCliCommand(new String[]{"generate-token", "--name", "op", "--role", "OPERATOR"}));
+		assertTrue(CollectorCliRunner.isCliCommand(new String[]{"--generate-token"}));
 		assertTrue(CollectorCliRunner.isCliCommand(new String[]{"--help"}));
 		assertTrue(CollectorCliRunner.isCliCommand(new String[]{"-h"}));
 		assertTrue(CollectorCliRunner.isCliCommand(new String[]{"help"}));
@@ -23,6 +25,46 @@ class CollectorCliRunnerTest {
 		assertFalse(CollectorCliRunner.isCliCommand(null));
 		assertFalse(CollectorCliRunner.isCliCommand(new String[0]));
 		assertFalse(CollectorCliRunner.isCliCommand(new String[]{"--server.port=9090"}));
+	}
+
+	@Test
+	void testGenerateTokenDefaultAndCustomOptions() {
+		ValveStatusClient client = mock(ValveStatusClient.class);
+		CollectorCliRunner runner = new CollectorCliRunner(client);
+
+		java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+		java.io.PrintStream originalOut = System.out;
+		System.setOut(new java.io.PrintStream(out));
+		try {
+			int code = runner.execute("generate-token", "--name", "soc-bot", "--role", "AI_AGENT", "--bytes", "24");
+			assertEquals(0, code);
+			String output = out.toString();
+			assertTrue(output.contains("192-bit Authentication Token"));
+			assertTrue(output.contains("name: \"soc-bot\""));
+			assertTrue(output.contains("role: AI_AGENT"));
+			String tokenLine = output.lines()
+					.filter(line -> line.startsWith("Token: "))
+					.findFirst()
+					.orElseThrow();
+			String hex = tokenLine.substring("Token: ".length()).trim();
+			assertEquals(48, hex.length());
+			assertTrue(hex.matches("[0-9a-f]{48}"));
+		} finally {
+			System.setOut(originalOut);
+		}
+		verifyNoInteractions(client);
+	}
+
+	@Test
+	void testGenerateTokenRejectsInvalidRoleOrBytes() {
+		ValveStatusClient client = mock(ValveStatusClient.class);
+		CollectorCliRunner runner = new CollectorCliRunner(client);
+
+		assertEquals(1, runner.execute("generate-token", "--role", "SUPERUSER"));
+		assertEquals(1, runner.execute("generate-token", "--bytes", "8"));
+		assertEquals(1, runner.execute("generate-token", "--bytes", "128"));
+		assertEquals(1, runner.execute("--generate-token", "--bytes", "not-a-number"));
+		verifyNoInteractions(client);
 	}
 
 	@Test

@@ -254,3 +254,62 @@ collector:
       - "18.2"
       - "17.6"
 
+  # ---------------------------------------------------------------------------
+  # Security: Multi-Token Authentication, Read API Lockout & AI Guardrails
+  # ---------------------------------------------------------------------------
+  security:
+    # Default: true (fail-closed outside loopback / configured tokens)
+    require-auth-for-read: true
+    # Enable or disable /api/v1/** REST API (browser sessions remain accessible)
+    api-enabled: true
+    # Signed browser login cookie lifetime in seconds (default: 8 hours = 28800)
+    session-ttl-seconds: 28800
+    # Lock out IP addresses temporarily after repeated invalid token attempts
+    max-auth-failures: 5
+    auth-lockout-seconds: 300
+
+    # Generate cryptographically secure hex tokens using:
+    #   java -jar anti-dos-collector.jar generate-token --name <name> --role <ROLE>
+    # Supported roles: ADMIN, OPERATOR, AI_AGENT, VIEWER
+    # tokens:
+    #   - name: "soc-admin"
+    #     role: ADMIN
+    #     token: "replace-with-generated-64-hex-token"
+    #     enabled: true
+    #   - name: "soc-operator"
+    #     role: OPERATOR
+    #     token: "replace-with-generated-64-hex-token"
+    #     enabled: true
+    #   - name: "triage-bot"
+    #     role: AI_AGENT
+    #     token: "replace-with-generated-64-hex-token"
+    #     enabled: true
+    #   - name: "readonly-audit"
+    #     role: VIEWER
+    #     token: "replace-with-generated-64-hex-token"
+    #     enabled: true
+
+    # Safety boundaries automatically enforced whenever an AI_AGENT token calls /api/v1/**
+    ai-guardrails:
+      max-ttl-minutes: 120
+      max-blocks-per-hour: 20
+      min-reason-length: 15
+      allow-asn-batch-block: false
+      min-ipv4-prefix: 24
+      min-ipv6-prefix: 48
+
+  # ---------------------------------------------------------------------------
+  # Collector Self-Protection (Embedded Tomcat AntiDoSValve)
+  # ---------------------------------------------------------------------------
+  self-protection:
+    enabled: true
+    monitor-name: "Collector-Self-Protection"
+    slot-length: 60
+    number-of-slots: 5
+    allowed-requests-per-slot: 600
+    max-ip-cache-size: 10000
+    always-allow-private-ips: false
+    # Optional diagnostic valve endpoint inside Collector (omit to disable)
+    # status-uri: "/internal-self-status"
+
+

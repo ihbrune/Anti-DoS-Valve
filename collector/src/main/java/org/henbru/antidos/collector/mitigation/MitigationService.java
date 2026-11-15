@@ -993,7 +993,7 @@ public class MitigationService {
 				.filter(MonitoredValve::dynamicMitigationEnabled)
 				.toList();
 
-		if (properties.isOperatorMode()) {
+		if (properties.getMode().isOperator()) {
 			log.info("Operator mode: persisted {} active mitigation rule(s) (expected revision {}); active Valve push delegated to HEADLESS/FULL collector.",
 					activeRules.size(), expectedRevision);
 			return new FleetSyncResult(mitigationValves.size(), 0, activeRules.size(), expectedRevision, List.of());
@@ -1368,6 +1368,16 @@ public class MitigationService {
 			ruleRepository.expireElapsedRules(now);
 		}
 		return ruleRepository.findActiveRules(now);
+	}
+
+	public Optional<MitigationRule> getRuleById(long ruleId) {
+		return ruleRepository.findById(ruleId);
+	}
+
+	public int countRecentAiBlockActions(Instant since) {
+		int byActor = ruleRepository.countRecentBlockActionsByActorPrefix("AI_AGENT", since);
+		int bySource = ruleRepository.countRecentRulesBySource(MitigationRule.SOURCE_AI_AGENT, since);
+		return Math.max(byActor, bySource);
 	}
 
 	private void requireWriteMode(String operation) {

@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.henbru.antidos.collector.config.CollectorProperties;
+import org.henbru.antidos.collector.security.CollectorAuthContext;
 import org.henbru.antidos.collector.mitigation.AutoMitigationService;
 import org.henbru.antidos.collector.mitigation.MitigationService;
 import org.henbru.antidos.collector.model.MitigationAuditEntry;
@@ -191,15 +192,16 @@ public class MitigationController {
 		}
 
 		try {
+			String actor = CollectorAuthContext.getEffectiveActor(properties.getMode().isOperator() ? "OPERATOR" : "ADMIN");
 			if (preflight.validCidrs().size() == 1) {
 				MitigationRule saved = mitigationService.createOrUpdateBlock(
-						preflight.validCidrs().getFirst(), ttlMinutes, reason, source, null, "ADMIN");
+						preflight.validCidrs().getFirst(), ttlMinutes, reason, source, null, actor);
 				populateMitigationModel(model,
 						"Dynamic block active for " + saved.cidr() + " (TTL: " + ttlMinutes + " min) and synchronized to fleet.",
 						null);
 			} else {
 				List<MitigationRule> created = mitigationService.createBatchBlocks(
-						preflight.validCidrs(), ttlMinutes, reason, source, "MANUAL-BATCH", "ADMIN");
+						preflight.validCidrs(), ttlMinutes, reason, source, "MANUAL-BATCH", actor);
 				populateMitigationModel(model,
 						"Activated batch of " + created.size() + " dynamic CIDR blocks (TTL: " + ttlMinutes + " min) and synchronized to fleet.",
 						null);
@@ -223,7 +225,8 @@ public class MitigationController {
 			return "fragments/mitigation-content :: mitigationDashboard";
 		}
 		try {
-			List<MitigationRule> created = mitigationService.blockAsnSubnets(asn, hours, ttlMinutes, reason, "ADMIN");
+			String actor = CollectorAuthContext.getEffectiveActor(properties.getMode().isOperator() ? "OPERATOR" : "ADMIN");
+			List<MitigationRule> created = mitigationService.blockAsnSubnets(asn, hours, ttlMinutes, reason, actor);
 			if (created.isEmpty()) {
 				populateMitigationModel(model, null, null);
 				model.addAttribute("asnPreviewError",
@@ -250,7 +253,8 @@ public class MitigationController {
 		if (rejectViewerMutation(response, model, "Extending dynamic blocks")) {
 			return "fragments/mitigation-content :: mitigationDashboard";
 		}
-		var updated = mitigationService.extendBlock(id, additionalMinutes, "ADMIN");
+		String actor = CollectorAuthContext.getEffectiveActor(properties.getMode().isOperator() ? "OPERATOR" : "ADMIN");
+		var updated = mitigationService.extendBlock(id, additionalMinutes, actor);
 		if (updated.isPresent()) {
 			populateMitigationModel(model, tab, null, "ALL", 1, 50, null, "ALL", "ALL", 1, 50,
 					"Extended dynamic block " + updated.get().cidr() + " by +" + additionalMinutes + " minutes.",
@@ -272,7 +276,8 @@ public class MitigationController {
 		if (rejectViewerMutation(response, model, "Revoking dynamic blocks")) {
 			return "fragments/mitigation-content :: mitigationDashboard";
 		}
-		var revoked = mitigationService.revokeBlock(id, reason, "ADMIN");
+		String actor = CollectorAuthContext.getEffectiveActor(properties.getMode().isOperator() ? "OPERATOR" : "ADMIN");
+		var revoked = mitigationService.revokeBlock(id, reason, actor);
 		if (revoked.isPresent()) {
 			populateMitigationModel(model, tab, null, "ALL", 1, 50, null, "ALL", "ALL", 1, 50,
 					"Revoked dynamic block " + revoked.get().cidr() + " and removed from fleet.",
@@ -293,7 +298,8 @@ public class MitigationController {
 		if (rejectViewerMutation(response, model, "Revoking mitigation batches")) {
 			return "fragments/mitigation-content :: mitigationDashboard";
 		}
-		int count = mitigationService.revokeBatch(batchId, reason, "ADMIN");
+		String actor = CollectorAuthContext.getEffectiveActor(properties.getMode().isOperator() ? "OPERATOR" : "ADMIN");
+		int count = mitigationService.revokeBatch(batchId, reason, actor);
 		populateMitigationModel(model,
 				"Revoked " + count + " rule(s) in batch '" + batchId + "' and synchronized to fleet.",
 				null);
@@ -308,7 +314,8 @@ public class MitigationController {
 		if (rejectViewerMutation(response, model, "Emergency flush")) {
 			return "fragments/mitigation-content :: mitigationDashboard";
 		}
-		int count = mitigationService.revokeAll(reason, "ADMIN");
+		String actor = CollectorAuthContext.getEffectiveActor(properties.getMode().isOperator() ? "OPERATOR" : "ADMIN");
+		int count = mitigationService.revokeAll(reason, actor);
 		populateMitigationModel(model,
 				"Emergency flush executed: Revoked all " + count + " active dynamic rule(s) across the entire fleet.",
 				null);
@@ -520,6 +527,13 @@ public class MitigationController {
 	}
 
 	private boolean rejectViewerMutation(HttpServletResponse response, Model model, String actionLabel) {
+		if (CollectorAuthContext.isAiAgent()) {
+			if (response != null) {
+				response.setStatus(HttpStatus.FORBIDDEN.value());
+			}
+			populateMitigationModel(model, null, actionLabel + " is disabled on Web-UI routes for AI_AGENT. Use guarded /api/v1/mitigation endpoints.");
+			return true;
+		}
 		if (properties.isViewerMode()) {
 			if (response != null) {
 				response.setStatus(HttpStatus.FORBIDDEN.value());

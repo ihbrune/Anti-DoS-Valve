@@ -64,6 +64,35 @@ collector:
   host-concurrency-timeout-seconds: ${COLLECTOR_HOST_CONCURRENCY_TIMEOUT_SECONDS:15}
   demo-mode: ${COLLECTOR_DEMO_MODE:false}
   demo-instance-count: ${COLLECTOR_DEMO_INSTANCE_COUNT:1}
+
+  # Authentication, API authorization & AI-Agent guardrails
+  security:
+    require-auth-for-read: ${COLLECTOR_REQUIRE_AUTH_FOR_READ:true}
+    api-enabled: ${COLLECTOR_API_ENABLED:true}
+    session-ttl-seconds: ${COLLECTOR_SESSION_TTL_SECONDS:28800}
+    max-auth-failures: ${COLLECTOR_MAX_AUTH_FAILURES:5}
+    auth-lockout-seconds: ${COLLECTOR_AUTH_LOCKOUT_SECONDS:300}
+    ai-guardrails:
+      max-ttl-minutes: ${COLLECTOR_AI_MAX_TTL_MINUTES:120}
+      max-blocks-per-hour: ${COLLECTOR_AI_MAX_BLOCKS_PER_HOUR:20}
+      min-reason-length: ${COLLECTOR_AI_MIN_REASON_LENGTH:15}
+      allow-asn-batch-block: ${COLLECTOR_AI_ALLOW_ASN_BATCH_BLOCK:false}
+      min-ipv4-prefix: ${COLLECTOR_AI_MIN_IPV4_PREFIX:24}
+      min-ipv6-prefix: ${COLLECTOR_AI_MIN_IPV6_PREFIX:48}
+
+  # Embedded AntiDoSValve protecting Collector's own Tomcat HTTP listener
+  self-protection:
+    enabled: ${COLLECTOR_SELF_PROTECTION_ENABLED:true}
+    monitor-name: ${COLLECTOR_SELF_PROTECTION_MONITOR_NAME:Collector-Self-Protection}
+    slot-length: ${COLLECTOR_SELF_PROTECTION_SLOT_LENGTH:60}
+    number-of-slots: ${COLLECTOR_SELF_PROTECTION_NUMBER_OF_SLOTS:5}
+    allowed-requests-per-slot: ${COLLECTOR_SELF_PROTECTION_ALLOWED_REQUESTS_PER_SLOT:600}
+    share-of-retained-former-requests: ${COLLECTOR_SELF_PROTECTION_RETAINED_SHARE:0.25}
+    max-ip-cache-size: ${COLLECTOR_SELF_PROTECTION_MAX_IP_CACHE_SIZE:10000}
+    ipv4-subnet-mask: ${COLLECTOR_SELF_PROTECTION_IPV4_MASK:32}
+    ipv6-subnet-mask: ${COLLECTOR_SELF_PROTECTION_IPV6_MASK:64}
+    non-relevant-paths: ${COLLECTOR_SELF_PROTECTION_NON_RELEVANT_PATHS:.*\.(css|js|png|jpg|jpeg|gif|ico|woff|woff2|svg)$}
+    always-allow-private-ips: ${COLLECTOR_SELF_PROTECTION_ALWAYS_ALLOW_PRIVATE_IPS:false}
   enrichment:
     enabled: true
     ttl-days: 30

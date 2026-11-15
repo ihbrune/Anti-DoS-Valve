@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import org.henbru.antidos.collector.security.CollectorAuthContext;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -48,6 +49,8 @@ public class CollectorProperties {
 	private AutoMitigationConfig autoMitigation = new AutoMitigationConfig();
 	private NotificationConfig notification = new NotificationConfig();
 	private BrowserReferenceConfig browserReference = new BrowserReferenceConfig();
+	private SecurityConfig security = new SecurityConfig();
+	private SelfProtectionConfig selfProtection = new SelfProtectionConfig();
 	private List<EndpointConfig> endpoints = new ArrayList<>();
 	private EnrichmentConfig enrichment = new EnrichmentConfig();
 	private List<InternalNetworkConfig> internalNetworks = new ArrayList<>();
@@ -176,8 +179,30 @@ public class CollectorProperties {
 		this.mode = mode != null ? mode : CollectorMode.FULL;
 	}
 
+	/**
+	 * Resolves the effective runtime mode for the current request by intersecting the
+	 * instance-wide {@link #getMode()} with any authenticated request token or session role.
+	 */
+	public CollectorMode getEffectiveMode() {
+		CollectorMode base = getMode();
+		if (base == CollectorMode.HEADLESS || base == CollectorMode.VIEWER) {
+			return base;
+		}
+		CollectorAuthContext.AuthPrincipal principal = CollectorAuthContext.get();
+		if (principal == null || principal.role() == null) {
+			return base;
+		}
+		if (principal.role().isViewer()) {
+			return CollectorMode.VIEWER;
+		}
+		if (principal.role().isOperatorEquivalent()) {
+			return CollectorMode.OPERATOR;
+		}
+		return base;
+	}
+
 	public boolean isViewerMode() {
-		return getMode().isViewer();
+		return getEffectiveMode().isViewer();
 	}
 
 	public boolean isHeadlessMode() {
@@ -185,15 +210,37 @@ public class CollectorProperties {
 	}
 
 	public boolean isOperatorMode() {
-		return getMode().isOperator();
+		return getEffectiveMode().isOperator();
 	}
 
 	public boolean canModifyOperationalData() {
-		return getMode().canModifyOperationalData();
+		return getEffectiveMode().canModifyOperationalData();
 	}
 
 	public boolean canPerformSystemAdmin() {
-		return getMode().canPerformSystemAdmin();
+		return getEffectiveMode().canPerformSystemAdmin();
+	}
+
+	public SecurityConfig getSecurity() {
+		if (security == null) {
+			security = new SecurityConfig();
+		}
+		return security;
+	}
+
+	public void setSecurity(SecurityConfig security) {
+		this.security = security != null ? security : new SecurityConfig();
+	}
+
+	public SelfProtectionConfig getSelfProtection() {
+		if (selfProtection == null) {
+			selfProtection = new SelfProtectionConfig();
+		}
+		return selfProtection;
+	}
+
+	public void setSelfProtection(SelfProtectionConfig selfProtection) {
+		this.selfProtection = selfProtection != null ? selfProtection : new SelfProtectionConfig();
 	}
 
 	public boolean isViewerMigrateOnStartup() {
@@ -495,5 +542,142 @@ public class CollectorProperties {
 			}
 			return Collections.unmodifiableSet(set);
 		}
+	}
+
+	/**
+	 * Multi-token authentication, brute-force protection, read access policy, and AI guardrails.
+	 */
+	public static class SecurityConfig {
+		private boolean requireAuthForRead = true;
+		private boolean apiEnabled = true;
+		private int sessionTtlSeconds = 28800;
+		private int maxAuthFailures = 5;
+		private int authLockoutSeconds = 300;
+		private List<TokenEntry> tokens = new ArrayList<>();
+		private AiGuardrailsConfig aiGuardrails = new AiGuardrailsConfig();
+
+		public boolean isRequireAuthForRead() { return requireAuthForRead; }
+		public void setRequireAuthForRead(boolean requireAuthForRead) { this.requireAuthForRead = requireAuthForRead; }
+		public boolean isApiEnabled() { return apiEnabled; }
+		public void setApiEnabled(boolean apiEnabled) { this.apiEnabled = apiEnabled; }
+		public int getSessionTtlSeconds() { return sessionTtlSeconds; }
+		public void setSessionTtlSeconds(int sessionTtlSeconds) { this.sessionTtlSeconds = Math.max(60, sessionTtlSeconds); }
+		public int getMaxAuthFailures() { return maxAuthFailures; }
+		public void setMaxAuthFailures(int maxAuthFailures) { this.maxAuthFailures = Math.max(1, maxAuthFailures); }
+		public int getAuthLockoutSeconds() { return authLockoutSeconds; }
+		public void setAuthLockoutSeconds(int authLockoutSeconds) { this.authLockoutSeconds = Math.max(10, authLockoutSeconds); }
+		public List<TokenEntry> getTokens() { return tokens; }
+		public void setTokens(List<TokenEntry> tokens) { this.tokens = tokens != null ? tokens : new ArrayList<>(); }
+		public AiGuardrailsConfig getAiGuardrails() {
+			if (aiGuardrails == null) {
+				aiGuardrails = new AiGuardrailsConfig();
+			}
+			return aiGuardrails;
+		}
+		public void setAiGuardrails(AiGuardrailsConfig aiGuardrails) {
+			this.aiGuardrails = aiGuardrails != null ? aiGuardrails : new AiGuardrailsConfig();
+		}
+	}
+
+	/**
+	 * Named authentication token entry with scoped authorization role.
+	 */
+	public static class TokenEntry {
+		private String name;
+		private CollectorTokenRole role = CollectorTokenRole.VIEWER;
+		private String token;
+		private boolean enabled = true;
+
+		public TokenEntry() {}
+
+		public TokenEntry(String name, CollectorTokenRole role, String token, boolean enabled) {
+			this.name = name;
+			this.role = role != null ? role : CollectorTokenRole.VIEWER;
+			this.token = token;
+			this.enabled = enabled;
+		}
+
+		public String getName() { return name; }
+		public void setName(String name) { this.name = name != null ? name.trim() : null; }
+		public CollectorTokenRole getRole() { return role != null ? role : CollectorTokenRole.VIEWER; }
+		public void setRole(CollectorTokenRole role) { this.role = role != null ? role : CollectorTokenRole.VIEWER; }
+		public String getToken() { return token; }
+		public void setToken(String token) { this.token = token != null ? token.trim() : null; }
+		public boolean isEnabled() { return enabled; }
+		public void setEnabled(boolean enabled) { this.enabled = enabled; }
+	}
+
+	/**
+	 * Safety guardrails applied automatically to tokens with {@link CollectorTokenRole#AI_AGENT}.
+	 */
+	public static class AiGuardrailsConfig {
+		private int maxTtlMinutes = 120;
+		private int maxBlocksPerHour = 20;
+		private int minReasonLength = 15;
+		private boolean allowAsnBatchBlock = false;
+		private int minIpv4Prefix = 24;
+		private int minIpv6Prefix = 48;
+
+		public int getMaxTtlMinutes() { return maxTtlMinutes; }
+		public void setMaxTtlMinutes(int maxTtlMinutes) { this.maxTtlMinutes = Math.max(1, maxTtlMinutes); }
+		public int getMaxBlocksPerHour() { return maxBlocksPerHour; }
+		public void setMaxBlocksPerHour(int maxBlocksPerHour) { this.maxBlocksPerHour = Math.max(1, maxBlocksPerHour); }
+		public int getMinReasonLength() { return minReasonLength; }
+		public void setMinReasonLength(int minReasonLength) { this.minReasonLength = Math.max(0, minReasonLength); }
+		public boolean isAllowAsnBatchBlock() { return allowAsnBatchBlock; }
+		public void setAllowAsnBatchBlock(boolean allowAsnBatchBlock) { this.allowAsnBatchBlock = allowAsnBatchBlock; }
+		public int getMinIpv4Prefix() { return minIpv4Prefix; }
+		public void setMinIpv4Prefix(int minIpv4Prefix) { this.minIpv4Prefix = Math.max(16, Math.min(32, minIpv4Prefix)); }
+		public int getMinIpv6Prefix() { return minIpv6Prefix; }
+		public void setMinIpv6Prefix(int minIpv6Prefix) { this.minIpv6Prefix = Math.max(32, Math.min(128, minIpv6Prefix)); }
+	}
+
+	/**
+	 * Configuration for the embedded {@code AntiDoSValve} protecting the Collector's own Tomcat HTTP server.
+	 */
+	public static class SelfProtectionConfig {
+		private boolean enabled = true;
+		private String monitorName = "Collector-Self-Protection";
+		private int slotLength = 60;
+		private int numberOfSlots = 5;
+		private int allowedRequestsPerSlot = 600;
+		private float shareOfRetainedFormerRequests = 0.25f;
+		private int maxIpCacheSize = 10000;
+		private int ipv4SubnetMask = 32;
+		private int ipv6SubnetMask = 64;
+		private String nonRelevantPaths = ".*\\.(css|js|png|jpg|jpeg|gif|ico|woff|woff2|svg)$";
+		private boolean alwaysAllowPrivateIPs = false;
+		private String statusUri = null;
+
+		public boolean isEnabled() { return enabled; }
+		public void setEnabled(boolean enabled) { this.enabled = enabled; }
+		public String getMonitorName() { return monitorName; }
+		public void setMonitorName(String monitorName) {
+			if (monitorName != null && !monitorName.isBlank()) {
+				this.monitorName = monitorName.trim();
+			}
+		}
+		public int getSlotLength() { return slotLength; }
+		public void setSlotLength(int slotLength) { this.slotLength = Math.max(1, slotLength); }
+		public int getNumberOfSlots() { return numberOfSlots; }
+		public void setNumberOfSlots(int numberOfSlots) { this.numberOfSlots = Math.max(1, numberOfSlots); }
+		public int getAllowedRequestsPerSlot() { return allowedRequestsPerSlot; }
+		public void setAllowedRequestsPerSlot(int allowedRequestsPerSlot) { this.allowedRequestsPerSlot = Math.max(1, allowedRequestsPerSlot); }
+		public float getShareOfRetainedFormerRequests() { return shareOfRetainedFormerRequests; }
+		public void setShareOfRetainedFormerRequests(float shareOfRetainedFormerRequests) {
+			this.shareOfRetainedFormerRequests = Math.max(0.0f, Math.min(1.0f, shareOfRetainedFormerRequests));
+		}
+		public int getMaxIpCacheSize() { return maxIpCacheSize; }
+		public void setMaxIpCacheSize(int maxIpCacheSize) { this.maxIpCacheSize = Math.max(100, maxIpCacheSize); }
+		public int getIpv4SubnetMask() { return ipv4SubnetMask; }
+		public void setIpv4SubnetMask(int ipv4SubnetMask) { this.ipv4SubnetMask = Math.max(1, Math.min(32, ipv4SubnetMask)); }
+		public int getIpv6SubnetMask() { return ipv6SubnetMask; }
+		public void setIpv6SubnetMask(int ipv6SubnetMask) { this.ipv6SubnetMask = Math.max(1, Math.min(128, ipv6SubnetMask)); }
+		public String getNonRelevantPaths() { return nonRelevantPaths; }
+		public void setNonRelevantPaths(String nonRelevantPaths) { this.nonRelevantPaths = nonRelevantPaths; }
+		public boolean isAlwaysAllowPrivateIPs() { return alwaysAllowPrivateIPs; }
+		public void setAlwaysAllowPrivateIPs(boolean alwaysAllowPrivateIPs) { this.alwaysAllowPrivateIPs = alwaysAllowPrivateIPs; }
+		public String getStatusUri() { return statusUri; }
+		public void setStatusUri(String statusUri) { this.statusUri = (statusUri != null && !statusUri.isBlank()) ? statusUri.trim() : null; }
 	}
 }

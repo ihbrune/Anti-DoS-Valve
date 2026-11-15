@@ -251,6 +251,29 @@ public class MitigationRuleRepository {
 				""", AUDIT_MAPPER, Timestamp.from(start), Timestamp.from(end));
 	}
 
+	public int countRecentBlockActionsByActorPrefix(String actorPrefix, Instant since) {
+		Integer auditCount = jdbcTemplate.queryForObject(
+				"""
+				SELECT COUNT(*) FROM mitigation_audit_log
+				WHERE actor LIKE ?
+				  AND action IN ('CREATE', 'EXTEND', 'BATCH_CREATE', 'AUTO_BLOCK')
+				  AND created_at >= ?
+				""",
+				Integer.class, actorPrefix + "%", Timestamp.from(since));
+		return auditCount != null ? auditCount : 0;
+	}
+
+	public int countRecentRulesBySource(String source, Instant since) {
+		Integer ruleCount = jdbcTemplate.queryForObject(
+				"""
+				SELECT COUNT(*) FROM mitigation_rules
+				WHERE source = ?
+				  AND updated_at >= ?
+				""",
+				Integer.class, source, Timestamp.from(since));
+		return ruleCount != null ? ruleCount : 0;
+	}
+
 	public List<MitigationRule> findHistoricalRulesFiltered(String search, String status, int offset, int limit) {
 		StringBuilder sql = new StringBuilder("SELECT * FROM mitigation_rules WHERE status IN ('EXPIRED', 'REVOKED')");
 		List<Object> params = new java.util.ArrayList<>();

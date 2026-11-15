@@ -13,12 +13,31 @@
                 dynamic mitigations, and annotation edits are disabled.
             </div>
         </div>
-        <div th:if="${operatorMode}" class="viewer-banner" role="status">
+        <div th:if="${operatorMode and !aiAgentMode}" class="viewer-banner" role="status">
             <div class="viewer-badge">OPERATOR MODE</div>
             <div class="viewer-text">
                 Connected in analyst &amp; operator mode. Network notes, daily report comments/regeneration, and dynamic
                 mitigation rules are enabled; background pollers and system maintenance triggers are disabled.
             </div>
+        </div>
+        <div th:if="${aiAgentMode}" class="viewer-banner" role="status">
+            <div class="viewer-badge">AI AGENT MODE</div>
+            <div class="viewer-text">
+                Authenticated as AI Agent (<span th:text="${authenticatedPrincipalName}">ai-agent</span>).
+                Guarded operational mutations are scoped exclusively to guarded <code>/api/v1/**</code> endpoints;
+                system administration is disabled.
+            </div>
+        </div>
+        <div th:if="${authEnabled and authenticatedRole != null}" class="viewer-banner" role="status"
+            style="justify-content: space-between; align-items: center; gap: 12px;">
+            <div class="viewer-text" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <span class="badge badge-info" th:text="${authenticatedRole}">ROLE</span>
+                <span>Signed in as <strong th:text="${authenticatedPrincipalName}">operator</strong></span>
+                <span class="badge badge-secondary" th:text="'Effective Mode: ' + ${collectorMode}">FULL</span>
+            </div>
+            <form method="post" action="/logout" style="margin: 0; flex-shrink: 0;">
+                <button type="submit" class="btn btn-sm">Logout</button>
+            </form>
         </div>
     </th:block>
 

@@ -70,6 +70,13 @@
 	</dependencyManagement>
 
 	<dependencies>
+		<!-- Embedded Edge Protection Valve (Self-Protection for Collector Web Endpoint) -->
+		<dependency>
+			<groupId>org.henbru.antidos</groupId>
+			<artifactId>anti-dos-valve</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+
 		<!-- Spring Boot Starters -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

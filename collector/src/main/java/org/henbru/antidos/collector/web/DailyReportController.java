@@ -10,6 +10,7 @@ import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.model.DailyReport;
 import org.henbru.antidos.collector.model.DailyReportNote;
 import org.henbru.antidos.collector.report.DailyReportService;
+import org.henbru.antidos.collector.security.CollectorAuthContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -99,8 +100,11 @@ public class DailyReportController {
 			RedirectAttributes redirectAttributes
 	) {
 		String cleanDate = date.trim();
-		if (properties.isViewerMode()) {
-			return rejectViewerMutation(cleanDate, hxRequest, response, model, "Operator notes cannot be saved in read-only VIEWER mode.");
+		if (properties.isViewerMode() || CollectorAuthContext.isAiAgent()) {
+			String msg = CollectorAuthContext.isAiAgent()
+					? "AI_AGENT callers must use guarded /api/v1/reports endpoints instead of Web-UI routes."
+					: "Operator notes cannot be saved in read-only VIEWER mode.";
+			return rejectViewerMutation(cleanDate, hxRequest, response, model, msg);
 		}
 		dailyReportService.saveNote(cleanDate, noteMarkdown);
 		if (!"true".equalsIgnoreCase(hxRequest)) {
@@ -121,8 +125,11 @@ public class DailyReportController {
 			RedirectAttributes redirectAttributes
 	) {
 		String cleanDate = date.trim();
-		if (properties.isViewerMode()) {
-			return rejectViewerMutation(cleanDate, hxRequest, response, model, "Operator notes cannot be removed in read-only VIEWER mode.");
+		if (properties.isViewerMode() || CollectorAuthContext.isAiAgent()) {
+			String msg = CollectorAuthContext.isAiAgent()
+					? "AI_AGENT callers must use guarded /api/v1/reports endpoints instead of Web-UI routes."
+					: "Operator notes cannot be removed in read-only VIEWER mode.";
+			return rejectViewerMutation(cleanDate, hxRequest, response, model, msg);
 		}
 		dailyReportService.deleteNote(cleanDate);
 		if (!"true".equalsIgnoreCase(hxRequest)) {
@@ -189,9 +196,12 @@ public class DailyReportController {
 			Model model,
 			RedirectAttributes redirectAttributes
 	) {
-		if (properties.isViewerMode()) {
+		if (properties.isViewerMode() || CollectorAuthContext.isAiAgent()) {
 			String fallbackDate = (date != null && !date.isBlank()) ? date.trim() : LocalDate.now().minusDays(1).toString();
-			return rejectViewerMutation(fallbackDate, null, response, model, "Report generation is disabled in read-only VIEWER mode.");
+			String msg = CollectorAuthContext.isAiAgent()
+					? "AI_AGENT callers must use guarded /api/v1/reports endpoints instead of Web-UI routes."
+					: "Report generation is disabled in read-only VIEWER mode.";
+			return rejectViewerMutation(fallbackDate, null, response, model, msg);
 		}
 		LocalDate targetDate;
 		try {
