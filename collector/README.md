@@ -21,6 +21,7 @@ The documentation suite is tailored for distinct operational roles:
 * **[⚙️ Setup, Deployment & Operations Guide (SETUP_GUIDE.md)](SETUP_GUIDE.md)**
   Technical reference for **DevOps Engineers, SREs, and System Administrators**.
   * Zero-Configuration Demo Mode Setup
+  * Operational Modes (`FULL`, `HEADLESS`, `OPERATOR`, `VIEWER`) & Split-Plane Deployment Topologies
   * Linux `systemd` Production Service Deployment
   * Frictionless GitHub Updates (`git pull` workflow with decoupled code, config, and data)
   * Active Fleet Mitigation & Autonomous Defense (Tomcat Valve interplay, token hierarchy, and 7 safety guardrails)
@@ -60,35 +61,34 @@ Modern distributed web architectures face a fundamental conflict when defending 
 
 The Anti-DoS ecosystem resolves this tension through a strict **Separation of Concerns: Data Plane vs. Intelligence Plane**.
 
-```
-                           ┌────────────────────────────────────────────────────────┐
-                           │               CENTRAL INTELLIGENCE PLANE               │
-                           │                 (Anti-DoS Collector)                   │
-                           │                                                        │
-                           │  • Long-Term Timeseries & DB Storage (SQLite/Postgres) │
-                           │  • Deep Offline Enrichment (GeoIP, ASN, Org, Overlays) │
-                           │  • Subnet Profiling & 30-Day Moving Baseline Surges    │
-                           │  • Forensic 2D Cluster Scatterplots (Res-Proxy Heuristic)
-                           │  • Verified Search Engine & AI Scraper Feed Sync       │
-                           │  • Persistent Operator Knowledge Store (/notes)        │
-                           └──────────────────────────┬─────────────────────────────┘
-                                                      │
-                               Pulls Finalized Slots  │  Maintains 2-Minute
-                         (?format=json&slot=previous) │  Telemetry Lease
-                                                      │
-           ┌──────────────────────────────────────────┼──────────────────────────────────────────┐
-           │                                          │                                          │
-           ▼                                          ▼                                          ▼
-   ┌──────────────────────────────┐        ┌──────────────────────────────┐        ┌──────────────────────────────┐
-   │        DATA PLANE            │        │        DATA PLANE            │        │        DATA PLANE            │
-   │  Tomcat Node 1 (Edge Valve)  │        │  Tomcat Node 2 (Edge Valve)  │        │  Tomcat Node N (Edge Valve)  │
-   │                              │        │                              │        │                              │
-   │ • Zero Allocation Hot Path   │        │ • Zero Allocation Hot Path   │        │ • Zero Allocation Hot Path   │
-   │ • Hard Rate Limiting (HTTP 429)│      │ • Hard Rate Limiting (HTTP 429)│      │ • Hard Rate Limiting (HTTP 429)│
-   │ • Lock-Free 256-Bit Bitmask  │        │ • Lock-Free 256-Bit Bitmask  │        │ • Lock-Free 256-Bit Bitmask  │
-   │ • Visitor Cookie HMAC (_adv) │        │ • Visitor Cookie HMAC (_adv) │        │ • Visitor Cookie HMAC (_adv) │
-   │ • Zero Long-Term History     │        │ • Zero Long-Term History     │        │ • Zero Long-Term History     │
-   └──────────────────────────────┘        └──────────────────────────────┘        └──────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph IP["Central Intelligence Plane (Anti-DoS Collector)"]
+        C1["Long-Term Timeseries & DB Storage - SQLite / PostgreSQL"]
+        C2["Deep Offline Enrichment - GeoIP, ASN, Org, Overlays"]
+        C3["Subnet Profiling & 30-Day Moving Baseline Surges"]
+        C4["Forensic 2D Scatterplots & Verified Crawler Feed Sync"]
+        C5["Persistent Operator Knowledge Store (/notes)"]
+    end
+
+    subgraph N1["Edge Data Plane - Tomcat Node 1 (Edge Valve)"]
+        V1A["Zero Allocation Hot Path & Lock-Free 256-Bit Bitmask"]
+        V1B["Hard Rate Limiting (HTTP 429) & Visitor Cookie HMAC (_adv)"]
+    end
+
+    subgraph N2["Edge Data Plane - Tomcat Node 2 (Edge Valve)"]
+        V2A["Zero Allocation Hot Path & Lock-Free 256-Bit Bitmask"]
+        V2B["Hard Rate Limiting (HTTP 429) & Visitor Cookie HMAC (_adv)"]
+    end
+
+    subgraph NN["Edge Data Plane - Tomcat Node N (Edge Valve)"]
+        VNA["Zero Allocation Hot Path & Lock-Free 256-Bit Bitmask"]
+        VNB["Hard Rate Limiting (HTTP 429) & Visitor Cookie HMAC (_adv)"]
+    end
+
+    IP -->|"Poll (?format=json&slot=previous) & 2-Min Lease"| N1
+    IP -->|"Poll (?format=json&slot=previous) & Push (?cmd=mitigate)"| N2
+    IP -->|"Poll (?format=json&slot=previous) & Push (?cmd=mitigate)"| NN
 ```
 
 ### The Edge Data Plane (Anti-DoS-Valve)
@@ -102,6 +102,131 @@ The Anti-DoS ecosystem resolves this tension through a strict **Separation of Co
 * **Operational Scope:** Asynchronously polls many Tomcat nodes out-of-band via Java 21 Virtual Threads, capturing long-term time-series in a relational database.
 * **Guarantees:** Completely decoupled from the servlet execution path. An outage, heavy analytical query, or database lock on the Collector has **zero impact** on Tomcat's ability to serve traffic and enforce edge rate limits.
 * **Forensic Role:** Enriches raw IP events with ASN, Country, organization names, verified bot status, and baseline profiles to expose residential proxy botnets, AI scrapers, and stealthy crawling operations.
+
+---
+
+## 1.1 Collector Operational Modes & Deployment Topologies
+
+Because **Data Plane** (Tomcat Valves) and **Intelligence Plane** (Collector) already operate asynchronously, the Collector itself can be split into specialized security and organizational roles via `collector.mode` (`COLLECTOR_MODE` environment variable, or CLI shortcuts). Instead of exposing full administrative privileges alongside outbound Valve control on a single HTTP port, operators can separate ingestion, analyst triage, and read-only inspection cleanly.
+
+### Operational Mode Capability Matrix
+
+| Capability | `FULL` *(default)* | `HEADLESS` | `OPERATOR` | `VIEWER` |
+|---|---|---|---|---|
+| **Embedded Web Server & UI / GET APIs** | Yes | No (`web-application-type=none`) | Yes (`OPERATOR MODE` banner) | Yes (`READ-ONLY VIEWER MODE` banner) |
+| **Background Valve Polling, Enrichment & Rollups** | Yes | Yes | No | No |
+| **Autonomous Defense Engine & Outbound Valve Push** | Yes | Yes | **DB write only** (outbound Valve HTTP push skipped; delegated to `HEADLESS`/`FULL`) | No (`403 Forbidden`) |
+| **Analyst & Operator Mutations** (Network Notes, Daily Report Notes/Regen, Dynamic CIDR/ASN Blocks & Revocations) | Yes | N/A (no UI) | Yes | No (`403 Forbidden`) |
+| **System Admin & Maintenance** (Retention Cleanup, Vacuum, Crawler Sync, Profile Refresh, Valve Delete, Auto-Mitigation Config, Manual Fleet Sync) | Yes | Automated via scheduler | No (`403 Forbidden`) | No (`403 Forbidden`) |
+| **Database Access Mode** | Read/Write + Flyway migrations on startup | Read/Write + Flyway migrations on startup | Read/Write on **existing DB** (WAL; fail-fast if missing; Flyway off unless `collector.viewer-migrate-on-startup=true`) | **Strict Read-Only** (`PRAGMA query_only=ON`, Hikari `readOnly=true`; fail-fast if missing) |
+
+---
+
+### Topology 1: Classic All-in-One (`FULL`)
+
+**Best for:** Small-to-medium setups, single-node deployments, lab/demo testing, or environments where the Collector UI is already isolated behind a corporate VPN or SSH bastion.
+
+```mermaid
+flowchart LR
+    B["Browser / Admin"] -->|"HTTPS / VPN"| C["Collector (FULL)"]
+    C -->|"HTTP + Valve Tokens"| V["Tomcat Valves"]
+    C -->|"Read / Write (WAL)"| DB["SQLite (WAL) / PostgreSQL"]
+```
+
+* One process manages background polling, MMDB enrichment, daily report scheduling, autonomous defense, Valve mitigation pushes, and the full web interface.
+* **Launch:** `java -jar anti-dos-collector-1.9.0.jar` (defaults to `collector.mode=FULL`).
+
+---
+
+### Topology 2: Hardened Split-Plane / DMZ Separation (`HEADLESS` + `OPERATOR`)
+
+**Best for:** Production deployments enforcing **network segmentation and least privilege** — separating backend fleet control from analyst triage.
+
+```mermaid
+flowchart TD
+    subgraph DMZ["DMZ / Edge Network"]
+        V["Tomcat Nodes + Edge Valves"]
+        VT["Validates statusToken & mitigationToken"]
+    end
+
+    subgraph BACKEND["Isolated Backend Zone"]
+        H["Collector (HEADLESS) - No HTTP port exposed"]
+        H2["Polls Valves, Enriches Telemetry, Runs Auto-Mitigation & Pushes Rules"]
+    end
+
+    subgraph SOC["Analyst / SOC Zone"]
+        O["Collector (OPERATOR) - Web UI & GET APIs"]
+        O2["Zero Valve Access/Tokens - Notes, Reports & Blocks OK - Admin 403"]
+    end
+
+    subgraph PERSIST["Shared Persistence"]
+        DB["Shared DB: SQLite (WAL on same host) / PostgreSQL"]
+    end
+
+    BACKEND -->|"Outbound Polling & Mitigation Push (Valve Tokens)"| DMZ
+    BACKEND -->|"Ingest Events & Poll Rule Revisions"| DB
+    SOC -->|"Write Notes, Reports & Dynamic Rules (DB Only)"| DB
+```
+
+* **Zero Web Attack Surface on the Poller:** The `HEADLESS` collector listens on no TCP port and holds the sensitive Valve `auth-token` / `mitigation-token` secrets plus network routes to the Tomcat management endpoints.
+* **Zero Direct Valve Access for Analysts:** The `OPERATOR` instance requires no Valve tokens and no network connectivity to Tomcat servers. Analysts investigate incidents, manage `/notes`, comment/regenerate `/reports`, and create/extend/revoke dynamic mitigation rules directly in the shared database (`OPERATOR` intentionally skips outbound Valve HTTP calls).
+* **Asynchronous Enforcement Loop:** On its regular poll cycle, the co-located `HEADLESS` collector detects updated mitigation revisions in the database and automatically pushes active rules out to all mitigation-enabled Tomcat Valves.
+* **Administrative Guardrails:** Maintenance actions (`vacuum`, retention cleanup), crawler/profile refreshes, Valve deletions, manual sync triggers, and auto-mitigation threshold changes are blocked with `HTTP 403 Forbidden`.
+* **Launch (same host sharing SQLite WAL DB):**
+  ```bash
+  # Process 1 (Systemd backend worker — no HTTP port)
+  java -jar anti-dos-collector-1.9.0.jar headless
+
+  # Process 2 (SOC web cockpit on internal port)
+  java -jar anti-dos-collector-1.9.0.jar --operator=/var/lib/antidos/antidos-collector.db --server.port=8091
+  ```
+
+---
+
+### Topology 3: Air-Gapped Offline Forensics & Read-Only Wallboards (`HEADLESS` + `VIEWER`)
+
+**Best for:** Post-incident forensics on copied database snapshots on an analyst workstation, or permanent read-only NOC status monitors on production data.
+
+```mermaid
+flowchart LR
+    subgraph PROD["Production Host (HEADLESS)"]
+        PDB["Live SQLite DB (prod.db)"]
+    end
+
+    subgraph LAPTOP["Analyst Laptop / NOC Monitor (VIEWER)"]
+        VIEW["anti-dos-collector.jar viewer"]
+        GUARD["PRAGMA query_only=ON - Zero WAL/SHM writes - All mutations HTTP 403"]
+    end
+
+    PDB -->|"scp / rsync snapshot"| LAPTOP
+```
+
+* Opening an archive or live SQLite file in `VIEWER` mode enforces database-level read-only guarantees (`PRAGMA query_only=ON`, Hikari `readOnly=true`), skips Flyway and startup repairs, and disables every mutating web/API endpoint (`HTTP 403 Forbidden`).
+* **Launch:**
+  ```bash
+  java -jar anti-dos-collector-1.9.0.jar viewer /path/to/prod-snapshot.db
+  ```
+
+---
+
+### Topology 4: Enterprise Multi-Role Fleet on PostgreSQL (`HEADLESS` + `OPERATOR` + `VIEWER`)
+
+**Best for:** Multi-server fleets and larger security teams requiring concurrent access across separate network zones or hosts.
+
+```mermaid
+flowchart TD
+    PG["Central PostgreSQL Database"]
+
+    H["Collector (HEADLESS) - 1x Backend Poller & Valve Enforcer"]
+    O["Collector (OPERATOR) - SOC Analysts & Incident Response"]
+    V["Collector (VIEWER) - NOC Wallboard & Read-Only Stakeholders"]
+
+    PG <-->|"Ingestion, Rules & Revisions"| H
+    PG <-->|"Triage Notes, Reports & Blocks"| O
+    PG -->|"Read-Only Queries"| V
+```
+
+* Because PostgreSQL removes single-host filesystem boundaries, `HEADLESS`, `OPERATOR`, and `VIEWER` instances can run on dedicated VMs or containers in distinct firewall zones (`COLLECTOR_MODE=HEADLESS|OPERATOR|VIEWER` with shared `SPRING_DATASOURCE_URL`).
 
 ---
 
@@ -350,24 +475,44 @@ graph TD
 
 ---
 
-# 5. Strategic Roadmap: Toward Closed-Loop Fleet Defense
+# 5. Closed-Loop Fleet Defense & Strategic Roadmap
 
-The current architecture provides world-class edge protection coupled with centralized observability and forensics. The long-term vision extends this synergy into an **autonomous, closed-loop defense network**:
+The Anti-DoS ecosystem combines stateless nanosecond edge enforcement with centralized forensics and authenticated fleet-wide mitigation:
 
+```mermaid
+flowchart LR
+    subgraph P1["Phase 1: Edge Defense (Implemented)"]
+        P1A["Standalone Tomcat Valves"]
+        P1B["Lock-Free Local Thresholds & Hard 429 Drops"]
+        P1C["In-Memory Sliding Slots & Subnet Bitmasks"]
+    end
+
+    subgraph P2["Phase 2: Central Intelligence (Implemented)"]
+        P2A["Asynchronous Polling & Offline GeoIP/ASN"]
+        P2B["30-Day Subnet Surge Profiling"]
+        P2C["Persistent Notes & Daily Reports"]
+        P2D["Split Modes (HEADLESS, OPERATOR, VIEWER)"]
+    end
+
+    subgraph P3["Phase 3: Closed-Loop Defense (Active + Roadmap)"]
+        P3A["Active: Fleet-Wide CIDR/ASN Rule Push"]
+        P3B["Active: 7-Guardrail Autonomous Defense & Webhooks"]
+        P3C["Roadmap: Adaptive Dynamic Valve Limits"]
+        P3D["Roadmap: Cloud WAF Sync & Token-Scoped AI API"]
+    end
+
+    P1 --> P2 --> P3
 ```
-[ Phase 1: Edge Defense ]          [ Phase 2: Central Intelligence ]          [ Phase 3: Closed-Loop Defense ]
-      (Completed)                               (Current)                                (Future Vision)
-┌──────────────────────┐           ┌──────────────────────────────┐           ┌──────────────────────────────┐
-│  • Standalone Valves │           │  • Asynchronous Ingestion   │           │  • Automated Feedback Loop   │
-│  • Local Thresholds  │    ───►   │  • Offline GeoIP/ASN Lookup  │    ───►   │  • Fleet-Wide Blocklist Push │
-│  • Hard 429 Drops    │           │  • Subnet Surge Profiling    │           │  • Adaptive Dynamic Limits   │
-│  • In-Memory Slots   │           │  • Persistent Notes Archive  │           │  • Centralized WAF Sync      │
-└──────────────────────┘           └──────────────────────────────┘           └──────────────────────────────┘
-```
 
-* **Automated Blocklist Push:** When the Collector detects a residential proxy cluster breaching surge thresholds across multiple nodes, it will push temporary, high-priority block rules directly to all Valves in the fleet via an authenticated management channel.
-* **Adaptive Fleet Thresholds:** During site-wide flash sales or marketing campaigns, the Collector will coordinate dynamic threshold adjustments across all nodes, preventing false positives while maintaining protection against actual DoS attacks.
-* **Centralized WAF & Edge Integration:** Exporting validated malicious subnets and residential proxy clusters directly from the Collector into cloud WAFs (Cloudflare, AWS WAF) or perimeter firewall rules (iptables/nftables) via automated webhooks.
+### Currently Active Closed-Loop Capabilities
+* **Authenticated Dynamic Blocklist Push:** Operators (in `FULL` or `OPERATOR` mode) and automated rules write dynamic CIDR/ASN mitigation rules that are synchronized across mitigation-enabled Tomcat Valves via signed `mitigationToken` (`POST /antidos-status?cmd=mitigate`) — directly in `FULL` mode or asynchronously via the `HEADLESS` worker in split-plane topologies.
+* **7-Guardrail Autonomous Defense:** Detects cross-subnet ASN carpet-bombing attacks with low returning-visitor ratios and enforces time-bounded mitigation automatically while honoring strict safety ceilings (protected ASNs, minimum subnet/request thresholds, dry-run evaluation).
+* **Role-Separated Deployment Architecture:** Operational triage and emergency mitigation (`OPERATOR`) can run completely decoupled from Valve tokens and network routes (`HEADLESS`).
+
+### Future Roadmap Items
+* **Adaptive Fleet Thresholds:** Coordinated dynamic threshold adjustments across Tomcat nodes during flash sales or planned traffic spikes to prevent false positives without weakening edge protection.
+* **Centralized WAF & Edge Integration:** Automated export of validated malicious subnets and residential proxy clusters into cloud WAFs (Cloudflare, AWS WAF) or perimeter firewall chains (`iptables`/`nftables`).
+* **Token-Scoped Write API & AI Assisted Triage:** Fine-grained API tokens with Valve-equivalent brute-force rate limiting and bounded guardrails for automated or AI-assisted incident response.
 
 ---
 
