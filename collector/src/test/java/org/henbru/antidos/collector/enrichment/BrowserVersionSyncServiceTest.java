@@ -45,16 +45,28 @@ class BrowserVersionSyncServiceTest {
 
 	@Test
 	void testSafariConfigurableMatrixOverrides() {
-		properties.getBrowserReference().setSafariVersions(List.of("19.0 STP", "19.0", "18.5", "17.6", "16.6"));
+		properties.getBrowserReference().setSafariVersions(List.of("27.0 STP", "26.1", "26.0", "18.2", "17.6"));
 		BrowserVersionSyncService customService = new BrowserVersionSyncService(properties, new ObjectMapper());
 		customService.init();
 
 		BrowserFamilyReference safari = customService.getFamilyReference("Safari");
 		assertNotNull(safari);
 		assertEquals(5, safari.topVersions().size());
-		assertEquals(19, safari.latestStableMajor());
-		assertEquals("19.0 STP", safari.topVersions().get(0).fullVersion());
+		assertEquals(26, safari.latestStableMajor());
+		assertEquals(27, safari.maxPreviewMajor());
+		assertEquals("27.0 STP", safari.topVersions().get(0).fullVersion());
+		assertEquals("27.0 STP", safari.topVersions().get(0).displayVersion());
 		assertTrue(safari.topVersions().get(0).isPreview());
+		assertEquals("PREVIEW", safari.topVersions().get(0).channel());
+
+		assertEquals("26.1", safari.topVersions().get(1).displayVersion());
+		assertEquals("STABLE", safari.topVersions().get(1).channel());
+
+		assertEquals("26.0", safari.topVersions().get(2).displayVersion());
+		assertEquals("PREVIOUS", safari.topVersions().get(2).channel());
+
+		assertEquals("18.2", safari.topVersions().get(3).displayVersion());
+		assertEquals("SUPPORTED_LEGACY", safari.topVersions().get(3).channel());
 	}
 
 	@Test
@@ -117,15 +129,22 @@ class BrowserVersionSyncServiceTest {
 
 	@Test
 	void testAssessSafariVersions() {
-		// Current Safari 18
+		// Current Safari 26 (Tahoe)
+		var rSafari26 = service.assessUserAgent(UserAgentFamily.SAFARI_DESKTOP,
+				"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Safari/605.1.15");
+		assertEquals(BrowserVersionLagAssessment.CURRENT_STABLE, rSafari26.assessment());
+		assertEquals(26, rSafari26.parsedMajorVersion());
+
+		// Legacy Safari 18 (Sequoia) - supported legacy OS generation
 		var rSafari18 = service.assessUserAgent(UserAgentFamily.SAFARI_DESKTOP,
-				"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15");
-		assertEquals(BrowserVersionLagAssessment.CURRENT_STABLE, rSafari18.assessment());
+				"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Safari/605.1.15");
+		assertEquals(BrowserVersionLagAssessment.SUPPORTED_LEGACY, rSafari18.assessment());
 		assertEquals(18, rSafari18.parsedMajorVersion());
 
-		// Legacy Safari 16 (Ventura)
-		var rSafari16 = service.assessUserAgent(UserAgentFamily.SAFARI_DESKTOP,
-				"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Safari/605.1.15");
-		assertEquals(BrowserVersionLagAssessment.SUPPORTED_LEGACY, rSafari16.assessment());
+		// Plausible Preview Safari 27
+		var rSafari27 = service.assessUserAgent(UserAgentFamily.SAFARI_DESKTOP,
+				"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15");
+		assertEquals(BrowserVersionLagAssessment.PRE_RELEASE_PLAUSIBLE, rSafari27.assessment());
+		assertEquals(27, rSafari27.parsedMajorVersion());
 	}
 }

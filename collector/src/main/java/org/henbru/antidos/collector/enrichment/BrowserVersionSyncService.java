@@ -284,13 +284,15 @@ public class BrowserVersionSyncService {
 	private void applyConfiguredSafariMatrix() {
 		List<String> configured = properties != null ? properties.getBrowserReference().getSafariVersions() : null;
 		if (configured == null || configured.isEmpty()) {
-			configured = List.of("18.2", "18.1", "18.0", "17.6", "16.6");
+			configured = List.of("26.2 STP", "26.1", "26.0", "18.2", "17.6");
 		}
 
 		List<BrowserVersionEntry> versions = new ArrayList<>();
-		int latestStable = 18;
-		int minSupported = 16;
+		int latestStable = 26;
+		int maxPreview = 26;
+		int minSupported = 17;
 
+		boolean foundStable = false;
 		for (int i = 0; i < configured.size() && i < 5; i++) {
 			String verStr = configured.get(i).trim();
 			int major = parseMajorFromVersionString(verStr);
@@ -300,18 +302,31 @@ public class BrowserVersionSyncService {
 			boolean isPreview = false;
 			boolean isLegacy = false;
 
-			if (i == 0 && verStr.toLowerCase(Locale.ROOT).contains("stp")) {
+			String lower = verStr.toLowerCase(Locale.ROOT);
+			if (lower.contains("stp") || lower.contains("preview") || lower.contains("beta")) {
 				channel = "PREVIEW";
 				isPreview = true;
-			} else if (i <= 2) {
+				if (major > maxPreview) {
+					maxPreview = major;
+				}
+			} else if (!foundStable) {
 				channel = "STABLE";
+				foundStable = true;
+				latestStable = major;
+				if (latestStable > maxPreview) {
+					maxPreview = latestStable;
+				}
+			} else if (major == latestStable) {
+				channel = "PREVIOUS";
+				isLegacy = true;
 			} else {
 				channel = "SUPPORTED_LEGACY";
 				isLegacy = true;
 			}
 
-			if (i == 0) latestStable = major;
-			if (major < minSupported) minSupported = major;
+			if (major < minSupported) {
+				minSupported = major;
+			}
 
 			versions.add(new BrowserVersionEntry(
 					"Safari", major, verStr, channel, null, "CONFIGURED_MATRIX", isPreview, isLegacy
@@ -319,11 +334,11 @@ public class BrowserVersionSyncService {
 		}
 
 		if (versions.isEmpty()) {
-			versions.add(new BrowserVersionEntry("Safari", 18, "18.1", "STABLE", null, "CONFIGURED_MATRIX", false, false));
+			versions.add(new BrowserVersionEntry("Safari", 26, "26.1", "STABLE", null, "CONFIGURED_MATRIX", false, false));
 		}
 
 		BrowserFamilyReference safariRef = new BrowserFamilyReference(
-				"Safari", "&#x1F9ED;", latestStable, latestStable, minSupported,
+				"Safari", "&#x1F9ED;", latestStable, maxPreview, minSupported,
 				"Configurable OS Matrix", false,
 				"Static OS-bound matrix. Configurable via collector.browser-reference.safari-versions without code changes.",
 				Instant.now(), versions

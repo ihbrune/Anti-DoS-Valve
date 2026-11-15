@@ -146,3 +146,15 @@ collector:
         category: "TOR_EXIT_NODE"
         url: "https://check.torproject.org/torbulkexitlist"
         enabled: true
+  browser-reference:
+    enabled: ${COLLECTOR_BROWSER_REFERENCE_ENABLED:true}
+    chrome-api-url: ${COLLECTOR_BROWSER_CHROME_API_URL:https://versionhistory.googleapis.com/v1/chrome/platforms/all/channels/all/versions}
+    firefox-api-url: ${COLLECTOR_BROWSER_FIREFOX_API_URL:https://product-details.mozilla.org/1.0/firefox_versions.json}
+    sync-interval-hours: ${COLLECTOR_BROWSER_SYNC_INTERVAL_HOURS:24}
+    safari-versions:
+      - "26.2 STP"
+      - "26.1"
+      - "26.0"
+      - "18.2"
+      - "17.6"
+

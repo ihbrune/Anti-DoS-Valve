@@ -228,3 +228,27 @@ collector:
     #   # Example 3: Override URL of Tor Bulk Exit list (e.g. internal mirror):
     #   # tor-exit-nodes:
     #   #   url: "https://internal-mirror.local/torbulkexitlist"
+
+  # ---------------------------------------------------------------------------
+  # Authoritative Browser Release Intelligence (Ground Truth)
+  # ---------------------------------------------------------------------------
+  # Used in /analytics?tab=useragents to detect frozen scraper stacks, obsolete tools,
+  # and synthetic future versions while recognizing legitimate preview/canary builds.
+  # Chrome, Edge, and Firefox versions are automatically synced online via vendor APIs.
+  # Safari releases are tied to macOS/iOS generations; you can configure the latest
+  # supported Safari versions below without modifying Java code or rebuilding:
+  browser-reference:
+    enabled: true
+    # Automated background sync frequency in hours (default: 24)
+    # sync-interval-hours: 24
+    # Vendor feed API endpoints:
+    # chrome-api-url: "https://versionhistory.googleapis.com/v1/chrome/platforms/all/channels/all/versions"
+    # firefox-api-url: "https://product-details.mozilla.org/1.0/firefox_versions.json"
+    # Configurable Safari version matrix (top 5 most recent versions):
+    safari-versions:
+      - "26.2 STP"
+      - "26.1"
+      - "26.0"
+      - "18.2"
+      - "17.6"
+

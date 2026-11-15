@@ -764,10 +764,10 @@ The browser intelligence section surfaces live release versions directly from of
   collector:
     browser-reference:
       safari-versions:
-        - "19.0 STP"
-        - "19.0"
+        - "26.2 STP"
+        - "26.1"
+        - "26.0"
         - "18.2"
-        - "18.1"
         - "17.6"
   ```
 

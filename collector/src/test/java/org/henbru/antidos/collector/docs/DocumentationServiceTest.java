@@ -123,6 +123,24 @@ class DocumentationServiceTest {
 		assertNotNull(reportDaySectionHtml);
 		assertTrue(reportDaySectionHtml.contains("Operational Day Reports &amp; Operator Notes") || reportDaySectionHtml.contains("Operational Day Reports & Operator Notes"));
 		assertTrue(reportDaySectionHtml.length() < 10000, "Should only extract the specific section, not full handbook");
+
+		// Extract section for Verified Crawlers & Browser Intelligence (must resolve to specific section, not entire handbook)
+		String crawlerSectionHtml = service.getSectionHtml(DocumentationService.DOC_UI, "verified-crawlers");
+		assertNotNull(crawlerSectionHtml);
+		assertTrue(crawlerSectionHtml.contains("Verified Crawlers, AI Bots &amp; Browser Intelligence Manager") || crawlerSectionHtml.contains("Verified Crawlers, AI Bots & Browser Intelligence Manager"));
+		assertTrue(crawlerSectionHtml.contains("Browser Release Intelligence Feeds &amp; Safari Configuration") || crawlerSectionHtml.contains("Browser Release Intelligence Feeds & Safari Configuration"));
+		assertTrue(crawlerSectionHtml.length() < 15000, "Should only extract the specific section, not full handbook (" + crawlerSectionHtml.length() + ")");
+
+		// Both legacy anchor and generic "crawlers" anchor must also resolve specifically
+		String legacyCrawlerSectionHtml = service.getSectionHtml(DocumentationService.DOC_UI, "verified-crawlers-ai-bot-manager");
+		assertNotNull(legacyCrawlerSectionHtml);
+		assertTrue(legacyCrawlerSectionHtml.length() < 15000, "Legacy anchor should only extract the specific section, not full handbook (" + legacyCrawlerSectionHtml.length() + ")");
+		assertTrue(legacyCrawlerSectionHtml.contains("Verified Crawlers"));
+
+		String genericCrawlerSectionHtml = service.getSectionHtml(DocumentationService.DOC_UI, "crawlers");
+		assertNotNull(genericCrawlerSectionHtml);
+		assertTrue(genericCrawlerSectionHtml.length() < 15000, "Generic crawlers anchor should only extract the specific section, not full handbook (" + genericCrawlerSectionHtml.length() + ")");
+		assertTrue(genericCrawlerSectionHtml.contains("Verified Crawlers"));
 	}
 
 

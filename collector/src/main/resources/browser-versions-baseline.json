@@ -55,18 +55,18 @@
     {
       "familyName": "Safari",
       "icon": "&#x1F9ED;",
-      "latestStableMajor": 18,
-      "maxPreviewMajor": 18,
-      "minSupportedMajor": 16,
+      "latestStableMajor": 26,
+      "maxPreviewMajor": 27,
+      "minSupportedMajor": 17,
       "sourceName": "Configurable OS Matrix",
       "automatedSync": false,
       "sourceNotice": "Static OS-bound matrix. Configurable via collector.browser-reference.safari-versions without code changes.",
       "topVersions": [
-        { "family": "Safari", "majorVersion": 18, "fullVersion": "18.2 STP", "channel": "PREVIEW", "releaseDate": "2026-11", "source": "CONFIGURED_MATRIX", "isPreview": true, "isSupportedLegacy": false },
-        { "family": "Safari", "majorVersion": 18, "fullVersion": "18.1 Sequoia", "channel": "STABLE", "releaseDate": "2026-10", "source": "CONFIGURED_MATRIX", "isPreview": false, "isSupportedLegacy": false },
-        { "family": "Safari", "majorVersion": 18, "fullVersion": "18.0 Sequoia", "channel": "STABLE", "releaseDate": "2026-09", "source": "CONFIGURED_MATRIX", "isPreview": false, "isSupportedLegacy": false },
-        { "family": "Safari", "majorVersion": 17, "fullVersion": "17.6 Sonoma", "channel": "SUPPORTED_LEGACY", "releaseDate": "2026-07", "source": "CONFIGURED_MATRIX", "isPreview": false, "isSupportedLegacy": true },
-        { "family": "Safari", "majorVersion": 16, "fullVersion": "16.6 Ventura", "channel": "SUPPORTED_LEGACY", "releaseDate": "2025-09", "source": "CONFIGURED_MATRIX", "isPreview": false, "isSupportedLegacy": true }
+        { "family": "Safari", "majorVersion": 26, "fullVersion": "26.2 STP", "channel": "PREVIEW", "releaseDate": "2026-11", "source": "CONFIGURED_MATRIX", "isPreview": true, "isSupportedLegacy": false },
+        { "family": "Safari", "majorVersion": 26, "fullVersion": "26.1 Tahoe", "channel": "STABLE", "releaseDate": "2026-10", "source": "CONFIGURED_MATRIX", "isPreview": false, "isSupportedLegacy": false },
+        { "family": "Safari", "majorVersion": 26, "fullVersion": "26.0 Tahoe", "channel": "PREVIOUS", "releaseDate": "2026-09", "source": "CONFIGURED_MATRIX", "isPreview": false, "isSupportedLegacy": true },
+        { "family": "Safari", "majorVersion": 18, "fullVersion": "18.2 Sequoia", "channel": "SUPPORTED_LEGACY", "releaseDate": "2026-08", "source": "CONFIGURED_MATRIX", "isPreview": false, "isSupportedLegacy": true },
+        { "family": "Safari", "majorVersion": 17, "fullVersion": "17.6 Sonoma", "channel": "SUPPORTED_LEGACY", "releaseDate": "2026-07", "source": "CONFIGURED_MATRIX", "isPreview": false, "isSupportedLegacy": true }
       ]
     }
   ]

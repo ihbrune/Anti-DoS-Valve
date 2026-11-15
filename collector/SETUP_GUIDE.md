@@ -174,6 +174,15 @@ collector:
     country-database-path: "/var/lib/antidos/dbip-country-lite.mmdb"
     custom-datacenter-asns-file: "/etc/antidos/custom-datacenter-asns.txt"
 
+  browser-reference:
+    enabled: true
+    safari-versions:
+      - "26.2 STP"
+      - "26.1"
+      - "26.0"
+      - "18.2"
+      - "17.6"
+
   endpoints:
     - name: "Edge-Node-01"
       url: "http://10.0.1.10:8080/antidos-status"
@@ -674,6 +683,16 @@ All parameters can be configured via `collector-config.yaml` or overridden via e
 | `crawler-sync-enabled` | `COLLECTOR_CRAWLER_SYNC_ENABLED` | `true` | Enables automatic synchronization of official search engine and AI crawler IP ranges. |
 | `crawler-sync-cron` | - | `0 0 4 * * *` | Daily sync cron schedule (04:00 AM). |
 | `crawler-retry-cron` | - | `0 15 * * * *` | Hourly retry cron schedule for transient feed failures. |
+
+### Authoritative Browser Version Intelligence (`collector.browser-reference.*`)
+
+| YAML Property | Environment Variable | Default | Description |
+|---|---|---|---|
+| `enabled` | `COLLECTOR_BROWSER_REFERENCE_ENABLED` | `true` | Enables authoritative browser release ground truth for User-Agent analytics. |
+| `chrome-api-url` | `COLLECTOR_BROWSER_CHROME_API_URL` | `https://versionhistory.googleapis.com/...` | Google Version History API endpoint for Chromium/Edge channels. |
+| `firefox-api-url` | `COLLECTOR_BROWSER_FIREFOX_API_URL` | `https://product-details.mozilla.org/...` | Mozilla Product Details API endpoint for Firefox channels. |
+| `safari-versions` | `COLLECTOR_BROWSER_SAFARI_VERSIONS` | `26.2 STP, 26.1, 26.0, 18.2, 17.6` | Configurable static version list for OS-bound Apple Safari releases. |
+| `sync-interval-hours` | `COLLECTOR_BROWSER_SYNC_INTERVAL_HOURS` | `24` | Background synchronization interval (in hours) for upstream vendor feeds. |
 
 ---
 

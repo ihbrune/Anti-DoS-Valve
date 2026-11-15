@@ -375,7 +375,7 @@ public class CollectorProperties {
 		private boolean enabled = true;
 		private String chromeApiUrl = "https://versionhistory.googleapis.com/v1/chrome/platforms/all/channels/all/versions";
 		private String firefoxApiUrl = "https://product-details.mozilla.org/1.0/firefox_versions.json";
-		private List<String> safariVersions = new ArrayList<>(List.of("18.2", "18.1", "18.0", "17.6", "16.6"));
+		private List<String> safariVersions = new ArrayList<>(List.of("26.2 STP", "26.1", "26.0", "18.2", "17.6"));
 		private int syncIntervalHours = 24;
 
 		public boolean isEnabled() { return enabled; }

@@ -1122,7 +1122,7 @@
                                     th:classappend="${ver.channelBadgeClass()}"
                                     style="font-size: 10px; padding: 2px 6px; cursor: default;"
                                     th:title="${fam.familyName()} + ' ' + ${ver.fullVersion()} + ' (' + ${ver.channel()} + ')'">
-                                    <span th:text="${ver.majorVersion()}">157</span>
+                                    <span th:text="${ver.displayVersion()}">157</span>
                                     <span style="font-size: 8.5px; opacity: 0.85; margin-left: 2px;" th:text="${ver.channel()}">STABLE</span>
                                 </div>
                             </div>

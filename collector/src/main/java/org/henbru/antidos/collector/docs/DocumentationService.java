@@ -120,8 +120,21 @@ public class DocumentationService {
 			String anchorId = idGen.generateId(title);
 			String simplifiedAnchor = anchorId.replace("-", "");
 			String simplifiedTarget = cleanTarget.replace("-", "");
-			String variantAnchor = simplifiedAnchor.replace("daily", "day");
-			String variantTarget = simplifiedTarget.replace("daily", "day");
+			String variantAnchor = simplifiedAnchor.replace("daily", "day").replace("crawlers", "crawler").replace("bots", "bot");
+			String variantTarget = simplifiedTarget.replace("daily", "day").replace("crawlers", "crawler").replace("bots", "bot");
+
+			boolean tokenPrefixMatch = false;
+			String[] targetTokens = cleanTarget.split("[^a-z0-9]+");
+			String[] anchorTokens = anchorId.split("[^a-z0-9]+");
+			if (targetTokens.length >= 2 && anchorTokens.length >= 2) {
+				String t0 = stemWord(targetTokens[0]);
+				String t1 = stemWord(targetTokens[1]);
+				String a0 = stemWord(anchorTokens[0]);
+				String a1 = stemWord(anchorTokens[1]);
+				if (t0.equals(a0) && (t1.equals(a1) || t1.startsWith(a1) || a1.startsWith(t1))) {
+					tokenPrefixMatch = true;
+				}
+			}
 
 			if (anchorId.equalsIgnoreCase(cleanTarget)
 					|| simplifiedAnchor.equalsIgnoreCase(simplifiedTarget)
@@ -130,7 +143,8 @@ public class DocumentationService {
 					|| simplifiedAnchor.contains(simplifiedTarget)
 					|| simplifiedTarget.contains(simplifiedAnchor)
 					|| variantAnchor.contains(variantTarget)
-					|| variantTarget.contains(variantAnchor)) {
+					|| variantTarget.contains(variantAnchor)
+					|| tokenPrefixMatch) {
 				targetHeading = h;
 				break;
 			}
@@ -174,6 +188,15 @@ public class DocumentationService {
 			s = s.substring(1);
 		}
 		return s;
+	}
+
+	private String stemWord(String word) {
+		if (word == null) return "";
+		String w = word.trim().toLowerCase();
+		if (w.endsWith("ies")) return w.substring(0, w.length() - 3) + "y";
+		if (w.endsWith("es")) return w.substring(0, w.length() - 2);
+		if (w.endsWith("s") && w.length() > 3) return w.substring(0, w.length() - 1);
+		return w;
 	}
 
 	private void ensureParsed(String key) {

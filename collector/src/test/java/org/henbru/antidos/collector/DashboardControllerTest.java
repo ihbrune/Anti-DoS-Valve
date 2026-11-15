@@ -559,6 +559,14 @@ class DashboardControllerTest {
 	}
 
 	@Test
+	void testHelpFragmentWithCrawlersSectionReturnsDrawerSection() throws Exception {
+		mockMvc.perform(get("/fragments/help").param("doc", "ui").param("section", "verified-crawlers"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Verified Crawlers, AI Bots &amp; Browser Intelligence Manager")))
+				.andExpect(content().string(containsString("Browser Release Intelligence Feeds &amp; Safari Configuration")));
+	}
+
+	@Test
 	void testOffendersPageWithRollupModeLoads() throws Exception {
 		mockMvc.perform(get("/offenders").param("groupBy", "ROLLUP"))
 				.andExpect(status().isOk())

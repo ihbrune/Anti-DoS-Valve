@@ -287,6 +287,16 @@ collector:
         - name: "Production-Web-Valve"
           status-path: "/antidos-status"
           auth-token: "${VALVE_SECRET_TOKEN}"
+
+  # 5. Authoritative Browser Release Intelligence (Safari Matrix Override)
+  browser-reference:
+    enabled: true
+    safari-versions:
+      - "26.2 STP"
+      - "26.1"
+      - "26.0"
+      - "18.2"
+      - "17.6"
 ```
 
 ---
