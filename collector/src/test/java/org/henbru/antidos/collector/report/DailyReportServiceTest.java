@@ -1,5 +1,6 @@
 package org.henbru.antidos.collector.report;
 
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -1181,5 +1182,134 @@ class DailyReportServiceTest {
 		String privRow = md.substring(privIdx, nextNewline);
 		assertTrue(privRow.contains("| – |"), "Private network row must show country '–': " + privRow);
 		assertFalse(privRow.contains("| US |"), "Private network row must NOT inherit country 'US': " + privRow);
+	}
+
+	@Test
+	void testDailyReportSeparatesCloudAsnFromVerifiedBotTraffic() {
+		LocalDate reportDate = LocalDate.parse("2026-08-20");
+		dailyReportRepository.deleteByReportDate(reportDate.toString());
+		Instant dayStart = reportDate.atStartOfDay(ZoneId.systemDefault()).toInstant();
+		Instant dayEnd = dayStart.plus(1, ChronoUnit.DAYS);
+		jdbcTemplate.update("DELETE FROM slot_snapshots WHERE start_time >= ? AND start_time < ?", Timestamp.from(dayStart), Timestamp.from(dayEnd));
+		jdbcTemplate.update("DELETE FROM client_events WHERE slot_time >= ? AND slot_time < ?", Timestamp.from(dayStart), Timestamp.from(dayEnd));
+		jdbcTemplate.update("DELETE FROM monitored_valves WHERE server_id = 'SRV-BOT-TEST'");
+
+		monitoredValveRepository.upsert(new MonitoredValve(
+				"SRV-BOT-TEST", "VALVE-BOT", "Bot Test Node", 1, "BLOCKING", false, false,
+				429, 500, 10, 6, 0.5f, 24, 64, 10000, 5000, "", "", "", "", "/status", "*", "auto",
+				false, "_adv", Instant.now(), 2222, true
+		));
+
+		Instant t1 = dayStart.plus(10, ChronoUnit.HOURS);
+
+		slotSnapshotRepository.upsert(new SlotSnapshot(
+				null, "SRV-BOT-TEST", "VALVE-BOT", 501L, t1, t1.plus(60, ChronoUnit.SECONDS),
+				15500L, 0, 0, true, t1.plus(60, ChronoUnit.SECONDS)
+		));
+
+		// 1. AS8075: Azure Datacenter scraper / generic VM (10,000 requests, DATACENTER)
+		clientEventRepository.batchUpsert(List.of(new ClientEvent(
+				null, "SRV-BOT-TEST", "VALVE-BOT", 501L, t1, "20.245.1.1",
+				4, 32, null, null, null, null, "20.245.1.0/24",
+				10000, 0, false, ClientEvent.STATUS_ACTIVE, true, t1,
+				8075L, "Microsoft Corporation", "US", ClientType.DATACENTER, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+		)));
+
+		// 2. AS8075: OpenAI SearchBot running on Azure (2,500 requests, SEARCH_ENGINE)
+		clientEventRepository.batchUpsert(List.of(new ClientEvent(
+				null, "SRV-BOT-TEST", "VALVE-BOT", 501L, t1, "20.15.1.1",
+				4, 32, null, null, null, null, "20.15.1.0/24",
+				2500, 0, false, ClientEvent.STATUS_ACTIVE, true, t1,
+				8075L, "OpenAI SearchBot", "US", ClientType.SEARCH_ENGINE, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+		)));
+
+		// 3. AS15169: Googlebot (1,500 requests, SEARCH_ENGINE)
+		clientEventRepository.batchUpsert(List.of(new ClientEvent(
+				null, "SRV-BOT-TEST", "VALVE-BOT", 501L, t1, "66.249.66.1",
+				4, 32, null, null, null, null, "66.249.66.0/24",
+				1500, 0, false, ClientEvent.STATUS_ACTIVE, true, t1,
+				15169L, "Googlebot", "US", ClientType.SEARCH_ENGINE, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+		)));
+
+		// 4. AS15169: Google general traffic (500 requests, DATACENTER)
+		clientEventRepository.batchUpsert(List.of(new ClientEvent(
+				null, "SRV-BOT-TEST", "VALVE-BOT", 501L, t1, "8.8.8.8",
+				4, 32, null, null, null, null, "8.8.8.0/24",
+				500, 0, false, ClientEvent.STATUS_ACTIVE, true, t1,
+				15169L, "Google LLC", "US", ClientType.DATACENTER, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+		)));
+
+		// 5. AS16509: Anthropic ClaudeBot on AWS (800 requests, AI_CRAWLER)
+		clientEventRepository.batchUpsert(List.of(new ClientEvent(
+				null, "SRV-BOT-TEST", "VALVE-BOT", 501L, t1, "54.210.1.1",
+				4, 32, null, null, null, null, "54.210.1.0/24",
+				800, 0, false, ClientEvent.STATUS_ACTIVE, true, t1,
+				16509L, "Anthropic ClaudeBot", "US", ClientType.AI_CRAWLER, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+		)));
+
+		// 6. AS16509: AWS general traffic (200 requests, DATACENTER)
+		clientEventRepository.batchUpsert(List.of(new ClientEvent(
+				null, "SRV-BOT-TEST", "VALVE-BOT", 501L, t1, "52.0.0.1",
+				4, 32, null, null, null, null, "52.0.0.0/24",
+				200, 0, false, ClientEvent.STATUS_ACTIVE, true, t1,
+				16509L, "Amazon.com, Inc.", "US", ClientType.DATACENTER, org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED
+		)));
+
+		DailyReport report = dailyReportService.generateDailyReport(reportDate);
+		assertNotNull(report);
+		String md = report.reportMarkdown();
+		assertNotNull(md);
+
+		// Assert Top Autonomous Systems by Traffic Volume:
+		// AS8075 must be named Microsoft Corporation with category DATACENTER (total 12,500 requests)
+		assertTrue(md.contains("### 🌐 Top Autonomous Systems by Traffic Volume (Fleet Traffic Share)"));
+		int as8075Idx = md.indexOf("`AS8075`");
+		assertTrue(as8075Idx > 0, "AS8075 should be present in Top ASNs");
+		int as8075End = md.indexOf("\n", as8075Idx);
+		String as8075Row = md.substring(as8075Idx, as8075End);
+		assertTrue(as8075Row.contains("Microsoft Corporation"), "AS8075 operator must be Microsoft Corporation: " + as8075Row);
+		assertFalse(as8075Row.contains("OpenAI SearchBot"), "AS8075 operator must NOT be OpenAI SearchBot in ASN table: " + as8075Row);
+		assertTrue(as8075Row.contains("`DATACENTER`"), "AS8075 category must be DATACENTER: " + as8075Row);
+		assertTrue(as8075Row.contains("12,500"), "AS8075 must aggregate all Azure requests (12,500): " + as8075Row);
+
+		// AS15169 must be Google LLC (total 2,000 requests)
+		int as15169Idx = md.indexOf("`AS15169`");
+		assertTrue(as15169Idx > 0, "AS15169 should be present in Top ASNs");
+		int as15169End = md.indexOf("\n", as15169Idx);
+		String as15169Row = md.substring(as15169Idx, as15169End);
+		assertTrue(as15169Row.contains("Google LLC"), "AS15169 operator must be Google LLC: " + as15169Row);
+		assertFalse(as15169Row.contains("Googlebot"), "AS15169 operator must NOT be Googlebot in ASN table: " + as15169Row);
+
+		// AS16509 must be Amazon.com, Inc. (total 1,000 requests)
+		int as16509Idx = md.indexOf("`AS16509`");
+		assertTrue(as16509Idx > 0, "AS16509 should be present in Top ASNs");
+		int as16509End = md.indexOf("\n", as16509Idx);
+		String as16509Row = md.substring(as16509Idx, as16509End);
+		assertTrue(as16509Row.contains("Amazon.com, Inc."), "AS16509 operator must be Amazon.com, Inc.: " + as16509Row);
+		assertFalse(as16509Row.contains("Anthropic ClaudeBot"), "AS16509 operator must NOT be Anthropic ClaudeBot in ASN table: " + as16509Row);
+
+		// Assert Dedicated Verified Search Engines & Commercial AI Crawlers table:
+		assertTrue(md.contains("### 🤖 Verified Search Engines & Commercial AI Crawlers"),
+				"Report should contain Verified Search Engines & Commercial AI Crawlers table");
+		int botSectionIdx = md.indexOf("### 🤖 Verified Search Engines & Commercial AI Crawlers");
+		String botSection = md.substring(botSectionIdx);
+
+		assertTrue(botSection.contains("**OpenAI SearchBot**"), "Must list OpenAI SearchBot");
+		assertTrue(botSection.contains("`SEARCH_ENGINE`"), "OpenAI SearchBot must be categorized as SEARCH_ENGINE");
+		assertTrue(botSection.contains("AS8075 (Microsoft Corporation)"), "OpenAI SearchBot host network must show AS8075 (Microsoft Corporation)");
+		assertTrue(botSection.contains("2,500"), "OpenAI SearchBot must show 2,500 requests");
+
+		assertTrue(botSection.contains("**Googlebot**"), "Must list Googlebot");
+		assertTrue(botSection.contains("AS15169 (Google LLC)"), "Googlebot host network must show AS15169 (Google LLC)");
+		assertTrue(botSection.contains("1,500"), "Googlebot must show 1,500 requests");
+
+		assertTrue(botSection.contains("**Anthropic ClaudeBot**"), "Must list Anthropic ClaudeBot");
+		assertTrue(botSection.contains("`AI_CRAWLER`"), "Anthropic ClaudeBot must be categorized as AI_CRAWLER");
+		assertTrue(botSection.contains("AS16509 (Amazon.com, Inc.)"), "Anthropic ClaudeBot host network must show AS16509 (Amazon.com, Inc.)");
+		assertTrue(botSection.contains("800"), "Anthropic ClaudeBot must show 800 requests");
+
+		// Assert Executive Summary mentions verified bots
+		assertTrue(md.contains("| **Verified Search & AI Bots** |"), "Executive summary must contain Verified Search & AI Bots metric");
+		assertTrue(md.contains("4,800"), "Executive summary must show total 4,800 bot requests");
 	}
 }

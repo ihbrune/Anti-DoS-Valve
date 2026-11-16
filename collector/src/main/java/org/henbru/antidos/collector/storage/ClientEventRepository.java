@@ -19,6 +19,7 @@ import org.henbru.antidos.collector.model.EnrichmentStatus;
 import org.henbru.antidos.collector.model.IpNetworkInfo;
 import org.henbru.antidos.collector.model.TopOffenderSummary;
 import org.henbru.antidos.collector.model.UserAgentOriginSummary;
+import org.henbru.antidos.collector.model.VerifiedBotSummary;
 import org.henbru.antidos.collector.util.IpNetworkUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -535,21 +536,29 @@ public class ClientEventRepository {
 			int limit
 	) {
 		String groupCol;
+		String asOrgCol;
+		String clientTypeCol;
 		if ("ASN".equalsIgnoreCase(groupBy)) {
 			groupCol = "CASE WHEN client_type = 'PRIVATE_NETWORK' THEN 'PRIVATE' WHEN asn IS NOT NULL THEN 'AS' || asn ELSE 'AS-UNKNOWN' END";
+			asOrgCol = "COALESCE(MAX(CASE WHEN client_type NOT IN ('SEARCH_ENGINE', 'AI_CRAWLER') THEN as_org ELSE NULL END), MAX(as_org))";
+			clientTypeCol = "COALESCE(MAX(CASE WHEN client_type NOT IN ('SEARCH_ENGINE', 'AI_CRAWLER') THEN client_type ELSE NULL END), MAX(client_type))";
 		} else if ("SUBNET".equalsIgnoreCase(groupBy)) {
 			groupCol = "subnet_group";
+			asOrgCol = "MAX(as_org)";
+			clientTypeCol = "MAX(client_type)";
 		} else {
 			groupCol = "client_key";
+			asOrgCol = "MAX(as_org)";
+			clientTypeCol = "MAX(client_type)";
 		}
 
 		StringBuilder sql = new StringBuilder();
 		sql.append("SELECT ")
 				.append(groupCol).append(" AS client_key, ")
 				.append("MAX(asn) AS asn, ")
-				.append("MAX(as_org) AS as_org, ")
+				.append(asOrgCol).append(" AS as_org, ")
 				.append("MAX(country_code) AS country_code, ")
-				.append("MAX(client_type) AS client_type, ")
+				.append(clientTypeCol).append(" AS client_type, ")
 				.append("CASE WHEN MAX(distinct_clients) > COUNT(DISTINCT client_key) THEN MAX(distinct_clients) ELSE COUNT(DISTINCT client_key) END AS distinct_clients, ")
 				.append("SUM(CASE WHEN UPPER(status) = 'BLOCKED' THEN request_count ELSE 0 END) AS total_blocked_requests, ")
 				.append("SUM(CASE WHEN UPPER(status) = 'MARKED' THEN request_count ELSE 0 END) AS total_marked_requests, ")
@@ -817,6 +826,38 @@ public class ClientEventRepository {
 				"SELECT COUNT(DISTINCT client_key) FROM client_events WHERE status = 'MARKED' AND slot_time >= ?",
 				Long.class, Timestamp.from(since));
 		return count != null ? count : 0L;
+	}
+
+	public List<VerifiedBotSummary> findVerifiedBotSummaries(Instant fromTime, Instant toTime) {
+		String sql = """
+				SELECT 
+				    as_org AS bot_name,
+				    client_type,
+				    MAX(asn) AS asn,
+				    COUNT(DISTINCT client_key) AS distinct_ips,
+				    SUM(request_count) AS total_requests,
+				    SUM(CASE WHEN UPPER(status) = 'BLOCKED' THEN request_count ELSE 0 END) AS total_blocked_requests,
+				    SUM(CASE WHEN UPPER(status) = 'MARKED' THEN request_count ELSE 0 END) AS total_marked_requests
+				FROM client_events
+				WHERE client_type IN ('SEARCH_ENGINE', 'AI_CRAWLER')
+				  AND as_org IS NOT NULL AND TRIM(as_org) != ''
+				  AND slot_time >= ? AND slot_time <= ?
+				GROUP BY as_org, client_type
+				ORDER BY total_requests DESC
+				""";
+		return jdbcTemplate.query(sql, (rs, rowNum) -> {
+			Long asnVal = rs.getLong("asn");
+			if (rs.wasNull()) asnVal = null;
+			return new VerifiedBotSummary(
+					rs.getString("bot_name"),
+					rs.getString("client_type"),
+					asnVal,
+					rs.getInt("distinct_ips"),
+					rs.getLong("total_requests"),
+					rs.getLong("total_blocked_requests"),
+					rs.getLong("total_marked_requests")
+			);
+		}, Timestamp.from(fromTime), Timestamp.from(toTime));
 	}
 
 	public int deleteOlderThan(Instant cutoff) {

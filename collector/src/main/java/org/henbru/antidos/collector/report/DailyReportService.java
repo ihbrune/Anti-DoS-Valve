@@ -37,6 +37,7 @@ import org.henbru.antidos.collector.model.MitigationRule;
 import org.henbru.antidos.collector.model.MonitoredValve;
 import org.henbru.antidos.collector.model.SlotSnapshot;
 import org.henbru.antidos.collector.model.TopOffenderSummary;
+import org.henbru.antidos.collector.model.VerifiedBotSummary;
 import org.henbru.antidos.collector.storage.ClientEventRepository;
 import org.henbru.antidos.collector.storage.DailyReportNoteRepository;
 import org.henbru.antidos.collector.storage.DailyReportRepository;
@@ -973,6 +974,13 @@ public class DailyReportService {
 			log.warn("Error querying top offenders and ASNs for {}: {}", dateStr, e.getMessage());
 		}
 
+		List<VerifiedBotSummary> verifiedBots = Collections.emptyList();
+		try {
+			verifiedBots = clientEventRepository.findVerifiedBotSummaries(startInstant, endInstant);
+		} catch (Exception e) {
+			log.warn("Error querying verified bot summaries for {}: {}", dateStr, e.getMessage());
+		}
+
 		// 6. Valve Capacity & Dropped Counters Audit (from slot_snapshots and monitored_valves)
 		List<ValveCapacityAudit> valveCapacityAudits = new ArrayList<>();
 		try {
@@ -1176,7 +1184,7 @@ public class DailyReportService {
 				fleetPeakBlockRate, fleetPeakBlockRaw, fleetPeakBlockDuration, peakBlockServer, peakBlockValve, fleetPeakBlockTime,
 				fleetPeakMarkRate, fleetPeakMarkRaw, fleetPeakMarkDuration, peakMarkServer, peakMarkValve, fleetPeakMarkTime,
 				valveAggregates, hourlyBuckets, pollSummary, serverPollStats, outageIncidents, topTrafficAsns, topExternalClients, topInternalClients, topAsns, topMarkedClients,
-				valveCapacityAudits, fingerprintAnomalies, baselineSurges,
+				verifiedBots, valveCapacityAudits, fingerprintAnomalies, baselineSurges,
 				noteMarkdown, numFmt,
 				fleetAuthRequests, fleetAuthTrackedRequests,
 				mitigationSummary
@@ -1256,6 +1264,7 @@ public class DailyReportService {
 			List<TopOffenderSummary> topInternalClients,
 			List<TopOffenderSummary> topAsns,
 			List<TopOffenderSummary> topMarkedClients,
+			List<VerifiedBotSummary> verifiedBots,
 			List<ValveCapacityAudit> valveCapacityAudits,
 			List<FingerprintAnomaly> fingerprintAnomalies,
 			List<BaselineSurgeEntry> baselineSurges,
@@ -1321,6 +1330,14 @@ public class DailyReportService {
 		if (distinctMarkedClients > 0 || totalMarkedIncidents > 0) {
 			sb.append("| **Marked Clients** | **").append(numFmt.format(distinctMarkedClients)).append(" unique IPs/subnets** | Flagged by soft-marking or simulation valves (").append(numFmt.format(totalMarkedIncidents)).append(" events) |\n");
 		}
+		long totalBotRequests = (verifiedBots != null) ? verifiedBots.stream().mapToLong(VerifiedBotSummary::totalRequests).sum() : 0L;
+		if (totalBotRequests > 0) {
+			double botRatio = totalRequests > 0 ? (totalBotRequests * 100.0) / totalRequests : 0.0;
+			int botIps = verifiedBots.stream().mapToInt(VerifiedBotSummary::distinctIps).sum();
+			sb.append("| **Verified Search & AI Bots** | **").append(numFmt.format(totalBotRequests))
+					.append(" (").append(String.format(Locale.US, "%.1f%%", botRatio)).append(")** | ")
+					.append(verifiedBots.size()).append(" verified crawler(s) across ").append(numFmt.format(botIps)).append(" distinct IPs |\n");
+		}
 		sb.append("| **Incident Events (Client Log)** | **").append(numFmt.format(totalIncidents)).append("** | Forensic blocking incident events logged in database |\n");
 		if (mitigationSummary != null) {
 			if (mitigationSummary.totalDynamicHits() > 0 || mitigationSummary.rulesCreatedCount() > 0) {
@@ -1382,7 +1399,7 @@ public class DailyReportService {
 		// Actionable Insights & Triage Recommendations
 		sb.append(buildAdminActionItemsMarkdown(
 				topExternalClients, topInternalClients, mitigationSummary,
-				valveCapacityAudits, outageIncidents, fingerprintAnomalies, numFmt));
+				valveCapacityAudits, outageIncidents, fingerprintAnomalies, verifiedBots, numFmt));
 
 		// Server- & Valve-Breakdown
 		sb.append("## ⚡ 2. Server & Valve Telemetry (Normalized Peaks)\n\n");
@@ -1654,18 +1671,9 @@ public class DailyReportService {
 						|| asnTop.clientType() == ClientType.PRIVATE_NETWORK
 						|| (asnTop.clientKey() != null && asnTop.clientKey().toUpperCase().contains("PRIVATE"));
 				String asnLabel = isPrivate ? "Private / Local" : (asnTop.asn() != null ? "AS" + asnTop.asn() : asnTop.clientKey());
-				String org;
-				if (isPrivate) {
-					if (asnTop.asOrg() != null && !asnTop.asOrg().isBlank() && !asnTop.asOrg().equalsIgnoreCase("Internal Infrastructure")) {
-						org = asnTop.asOrg();
-					} else {
-						org = "Internal Infrastructure (RFC 1918)";
-					}
-				} else {
-					org = asnTop.asOrg() != null && !asnTop.asOrg().isBlank() ? asnTop.asOrg() : (asnTop.asn() == null ? "Unresolved Network" : "–");
-				}
+				String org = resolveAsnOrg(asnTop.asn(), asnTop.asOrg(), isPrivate);
 				String country = isPrivate ? "–" : (asnTop.countryCode() != null && !asnTop.countryCode().isBlank() ? asnTop.countryCode() : "–");
-				String clientType = isPrivate ? "PRIVATE_NETWORK" : (asnTop.clientType() != null ? asnTop.clientType().name() : "UNKNOWN");
+				String clientType = resolveAsnCategory(asnTop.asn(), asnTop.clientType(), isPrivate);
 				double share = totalRequests > 0 ? (asnTop.totalRequests() * 100.0) / totalRequests : 0.0;
 				String shareStr = (share < 0.1 && asnTop.totalRequests() > 0) ? "< 0.1%" : String.format(Locale.US, "%.1f%%", share);
 
@@ -1693,6 +1701,50 @@ public class DailyReportService {
 						.append(shareStr).append(" | ")
 						.append(blockedStr).append(" | ")
 						.append(markedStr).append(" |\n");
+			}
+			sb.append("\n");
+		}
+
+		// Verified Search Engines & Commercial AI Crawlers
+		sb.append("### 🤖 Verified Search Engines & Commercial AI Crawlers\n\n");
+		sb.append("> ℹ️ **Bot & Crawler Telemetry:** Aggregates verified search engine indexing robots and commercial AI LLM crawlers ");
+		sb.append("identified via cryptographic reverse DNS and official IP range feeds. Distinguishes legitimate search and AI indexing from anonymous datacenter scraping.\n\n");
+
+		if (verifiedBots == null || verifiedBots.isEmpty()) {
+			sb.append("✅ *No verified search engine or AI crawler traffic recorded on this date.*\n\n");
+		} else {
+			sb.append("| Crawler / Bot | Category | Host Network / ASN | Distinct IPs | Total Requests | Fleet Share | Blocked (HTTP 429) | Marked (Simulation) |\n");
+			sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
+
+			for (VerifiedBotSummary bot : verifiedBots) {
+				String hostNet = bot.asn() != null ? "AS" + bot.asn() + " (" + resolveAsnOrg(bot.asn(), null, false) + ")" : "Unresolved Network";
+				double share = totalRequests > 0 ? (bot.totalRequests() * 100.0) / totalRequests : 0.0;
+				String shareStr = (share < 0.1 && bot.totalRequests() > 0) ? "< 0.1%" : String.format(Locale.US, "%.1f%%", share);
+
+				String blkStr;
+				if (bot.totalBlockedRequests() > 0) {
+					double blkPct = bot.totalRequests() > 0 ? (bot.totalBlockedRequests() * 100.0) / bot.totalRequests() : 0.0;
+					blkStr = "**" + numFmt.format(bot.totalBlockedRequests()) + " (" + String.format(Locale.US, "%.2f%%", blkPct) + ")**";
+				} else {
+					blkStr = "0 (0.00%)";
+				}
+
+				String mrkStr;
+				if (bot.totalMarkedRequests() > 0) {
+					double mrkPct = bot.totalRequests() > 0 ? (bot.totalMarkedRequests() * 100.0) / bot.totalRequests() : 0.0;
+					mrkStr = "**" + numFmt.format(bot.totalMarkedRequests()) + " (" + String.format(Locale.US, "%.2f%%", mrkPct) + ")**";
+				} else {
+					mrkStr = "0 (0.00%)";
+				}
+
+				sb.append("| **").append(bot.botName()).append("** | `")
+						.append(bot.clientType() != null ? bot.clientType() : "UNKNOWN").append("` | ")
+						.append(hostNet).append(" | ")
+						.append(numFmt.format(bot.distinctIps())).append(" | ")
+						.append(numFmt.format(bot.totalRequests())).append(" | ")
+						.append(shareStr).append(" | ")
+						.append(blkStr).append(" | ")
+						.append(mrkStr).append(" |\n");
 			}
 			sb.append("\n");
 		}
@@ -1753,7 +1805,7 @@ public class DailyReportService {
 						|| asnTop.clientType() == ClientType.PRIVATE_NETWORK
 						|| (asnTop.clientKey() != null && asnTop.clientKey().toUpperCase().contains("PRIVATE"));
 				String asnLabel = isPrivate ? "Private / Local" : asnTop.clientKey();
-				String org = isPrivate ? "Internal Infrastructure (RFC 1918)" : (asnTop.asOrg() != null && !asnTop.asOrg().isBlank() ? asnTop.asOrg() : "–");
+				String org = resolveAsnOrg(asnTop.asn(), asnTop.asOrg(), isPrivate);
 				sb.append("| `").append(asnLabel).append("` | ")
 						.append(org).append(" | ")
 						.append(numFmt.format(asnTop.totalRequests())).append(" | ")
@@ -2446,6 +2498,7 @@ public class DailyReportService {
 			List<ValveCapacityAudit> valveCapacityAudits,
 			List<OutageIncident> outageIncidents,
 			List<FingerprintAnomaly> fingerprintAnomalies,
+			List<VerifiedBotSummary> verifiedBots,
 			NumberFormat numFmt
 	) {
 		StringBuilder sb = new StringBuilder();
@@ -2535,6 +2588,20 @@ public class DailyReportService {
 			items.add(String.format(Locale.US,
 					"🕵️ **Scraping / Fingerprint Anomaly Detected:** Subnet `%s` (%s, %s) exhibited **%s** across %d distinct IPs and %d User-Agents (%s requests). Inspect Section 5 for forensic breakdown.",
 					worstFp.subnetGroup(), worstFp.asOrg(), worstFp.countryCode(), worstFp.anomalyType(), worstFp.distinctClients(), worstFp.distinctUserAgents(), numFmt.format(worstFp.totalRequests())));
+		}
+
+		// 7. Verified Search Engine / AI Crawler Rate-Limiting
+		if (verifiedBots != null && !verifiedBots.isEmpty()) {
+			List<VerifiedBotSummary> blockedBots = verifiedBots.stream()
+					.filter(b -> b.totalBlockedRequests() > 0)
+					.toList();
+			if (!blockedBots.isEmpty()) {
+				VerifiedBotSummary topBlocked = blockedBots.get(0);
+				long totalBotBlocked = blockedBots.stream().mapToLong(VerifiedBotSummary::totalBlockedRequests).sum();
+				items.add(String.format(Locale.US,
+						"🤖 **Verified Search Engine / AI Crawler Rate-Limiting:** Legitimate indexing bot **%s** encountered **%s blocked requests** (HTTP 429). If this indexing is desired, consider adding crawler whitelist or adjusting rate thresholds for verified bots.",
+						topBlocked.botName(), numFmt.format(totalBotBlocked)));
+			}
 		}
 
 		if (items.isEmpty()) {
@@ -2766,5 +2833,41 @@ public class DailyReportService {
 			clean = clean.substring(0, 77) + "...";
 		}
 		return clean;
+	}
+
+	public static String resolveAsnOrg(Long asn, String asOrg, boolean isPrivate) {
+		if (isPrivate) {
+			if (asOrg != null && !asOrg.isBlank() && !asOrg.equalsIgnoreCase("Internal Infrastructure")) {
+				return asOrg;
+			}
+			return "Internal Infrastructure (RFC 1918)";
+		}
+		if (asn != null) {
+			if (asn == 8075L) return "Microsoft Corporation";
+			if (asn == 16509L || asn == 14618L) return "Amazon.com, Inc.";
+			if (asn == 15169L) return "Google LLC";
+			if (asn == 396982L) return "Google Cloud Platform";
+			if (asn == 13335L) return "Cloudflare, Inc.";
+			if (asn == 714L) return "Apple Inc.";
+			if (asn == 20940L) return "Akamai Technologies, Inc.";
+			if (asn == 54113L) return "Fastly, Inc.";
+			if (asn == 16276L) return "OVH SAS";
+			if (asn == 24940L) return "Hetzner Online GmbH";
+			if (asn == 14061L) return "DigitalOcean, LLC";
+			if (asn == 63949L) return "Linode, LLC (Akamai)";
+			if (asn == 32934L) return "Meta Platforms, Inc.";
+		}
+		return (asOrg != null && !asOrg.isBlank()) ? asOrg : (asn == null ? "Unresolved Network" : "–");
+	}
+
+	public static String resolveAsnCategory(Long asn, ClientType clientType, boolean isPrivate) {
+		if (isPrivate) return "PRIVATE_NETWORK";
+		if (clientType == ClientType.SEARCH_ENGINE || clientType == ClientType.AI_CRAWLER) {
+			if (asn != null && (asn == 8075L || asn == 16509L || asn == 14618L || asn == 15169L || asn == 396982L
+					|| asn == 13335L || asn == 16276L || asn == 24940L || asn == 14061L || asn == 63949L || asn == 20940L || asn == 54113L)) {
+				return "DATACENTER";
+			}
+		}
+		return clientType != null ? clientType.name() : "UNKNOWN";
 	}
 }
