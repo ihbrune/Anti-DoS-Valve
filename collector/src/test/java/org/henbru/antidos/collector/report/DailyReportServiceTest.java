@@ -1293,6 +1293,8 @@ class DailyReportServiceTest {
 				"Report should contain Verified Search Engines & Commercial AI Crawlers table");
 		int botSectionIdx = md.indexOf("### 🤖 Verified Search Engines & Commercial AI Crawlers");
 		String botSection = md.substring(botSectionIdx);
+		assertTrue(botSection.contains("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |"),
+				"Verified Bots table divider must have exactly 8 columns to match header");
 
 		assertTrue(botSection.contains("**OpenAI SearchBot**"), "Must list OpenAI SearchBot");
 		assertTrue(botSection.contains("`SEARCH_ENGINE`"), "OpenAI SearchBot must be categorized as SEARCH_ENGINE");

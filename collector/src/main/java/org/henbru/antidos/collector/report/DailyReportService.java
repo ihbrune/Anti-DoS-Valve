@@ -1714,7 +1714,7 @@ public class DailyReportService {
 			sb.append("✅ *No verified search engine or AI crawler traffic recorded on this date.*\n\n");
 		} else {
 			sb.append("| Crawler / Bot | Category | Host Network / ASN | Distinct IPs | Total Requests | Fleet Share | Blocked (HTTP 429) | Marked (Simulation) |\n");
-			sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
+			sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
 
 			for (VerifiedBotSummary bot : verifiedBots) {
 				String hostNet = bot.asn() != null ? "AS" + bot.asn() + " (" + resolveAsnOrg(bot.asn(), null, false) + ")" : "Unresolved Network";
