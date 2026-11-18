@@ -234,6 +234,33 @@ public class MitigationRuleRepository {
 		});
 	}
 
+	public record DeterrenceUpdate(
+			long id,
+			long totalBlockedHits,
+			int peakDistinctIps,
+			Instant lastHitAt,
+			String deterrenceState
+	) {}
+
+	public void batchUpdateDeterrenceTelemetry(List<DeterrenceUpdate> updates, Instant now) {
+		if (updates == null || updates.isEmpty()) {
+			return;
+		}
+		String sql = "UPDATE mitigation_rules SET total_blocked_hits = ?, peak_distinct_ips = ?, last_hit_at = COALESCE(?, last_hit_at), deterrence_state = ?, updated_at = ? WHERE id = ?";
+		Timestamp nowTs = Timestamp.from(now);
+		StorageRetryUtil.executeWithRetry("MitigationRuleRepository.batchUpdateDeterrenceTelemetry", () -> {
+			jdbcTemplate.batchUpdate(sql, updates, 500, (ps, u) -> {
+				ps.setLong(1, u.totalBlockedHits());
+				ps.setInt(2, u.peakDistinctIps());
+				ps.setTimestamp(3, u.lastHitAt() != null ? Timestamp.from(u.lastHitAt()) : null);
+				ps.setString(4, u.deterrenceState());
+				ps.setTimestamp(5, nowTs);
+				ps.setLong(6, u.id());
+			});
+			return null;
+		});
+	}
+
 	public void insertAuditEntry(MitigationAuditEntry entry) {
 		String sql = """
 				INSERT INTO mitigation_audit_log (

@@ -62,6 +62,11 @@ public class AutoMitigationService {
 
 	private final AtomicBoolean scanRunning = new AtomicBoolean(false);
 
+	private static final long RADAR_CACHE_TTL_MS = 60_000L;
+	private volatile List<CarpetRadarEntry> cachedRadar;
+	private volatile int cachedRadarHours = -1;
+	private volatile long cachedRadarAtMillis = 0L;
+
 	@Autowired
 	public AutoMitigationService(
 			CollectorProperties properties,
@@ -278,6 +283,7 @@ public class AutoMitigationService {
 		settingsRepository.setSetting(KEY_MAX_EXTENSION_HOURS, String.valueOf(Math.max(1, maxExtensionHours)), "Max extension hours for auto rules", updatedBy);
 		log.info("Auto-mitigation settings updated by '{}': enabled={}, dryRun={}, carpetMinSubnets={}, minReqsPerSubnet={}, windowHours={}, maxAuthReqs={}, protectedAsns='{}'",
 				updatedBy, enabled, dryRun, carpetMinSubnets, safeMinReqsPerSubnet, carpetWindowHours, safeMaxAuthRequests, protectedAsns);
+		invalidateRadarCache();
 	}
 
 	public void resetToDefaults(String updatedBy) {
@@ -298,6 +304,7 @@ public class AutoMitigationService {
 		settingsRepository.deleteSetting(KEY_AUTO_EXTEND);
 		settingsRepository.deleteSetting(KEY_MAX_EXTENSION_HOURS);
 		log.info("Auto-mitigation settings reset to application.yaml defaults by '{}'", updatedBy);
+		invalidateRadarCache();
 	}
 
 	public record CarpetAttackCandidate(
@@ -530,6 +537,10 @@ public class AutoMitigationService {
 			}
 		}
 
+		if (!selected.isEmpty() && !config.dryRun()) {
+			invalidateRadarCache();
+		}
+
 		return candidates;
 	}
 
@@ -542,7 +553,7 @@ public class AutoMitigationService {
 
 		String sql = """
 				SELECT
-				    asn,
+				    (asn + 0) AS asn,
 				    MAX(as_org) AS as_org,
 				    COUNT(DISTINCT subnet_group) AS active_subnets,
 				    SUM(total_requests) AS total_requests,
@@ -551,9 +562,9 @@ public class AutoMitigationService {
 				FROM client_subnet_rollups
 				WHERE bucket_start >= ?
 				  AND asn IS NOT NULL
-				  AND asn > 0
+				  AND (asn + 0) > 0
 				  AND (client_type IS NULL OR client_type NOT IN ('SEARCH_ENGINE', 'AI_CRAWLER', 'PRIVATE_NETWORK', 'INTERNAL_NETWORK'))
-				GROUP BY asn
+				GROUP BY (asn + 0)
 				HAVING COUNT(DISTINCT subnet_group) >= ?
 				   AND SUM(total_requests) >= ?
 				   AND SUM(authenticated_requests) <= ?
@@ -589,41 +600,54 @@ public class AutoMitigationService {
 	}
 
 	/**
+	 * Resolves eligible subnets for the given ASN using a single set-based query and in-memory CIDR validation
+	 * (avoiding per-subnet SQL preflight N+1 queries).
+	 *
 	 * @return Eligible subnets of the ASN mapped to their request volume in the window, highest volume first
 	 */
 	private Map<String, Long> findEligibleSubnetsForAsn(long asn, int hours, double maxReturningPct, long minRequestsPerSubnet) {
-		Instant cutoff = Instant.now().minus(Duration.ofHours(hours));
+		Instant now = Instant.now();
+		Instant windowCutoff = now.minus(Duration.ofHours(hours));
+		Instant safetyCutoff24h = now.minus(Duration.ofHours(Math.max(hours, 24)));
+		int minV4 = mitigationService.getEffectiveMinIpv4Prefix();
+		int minV6 = mitigationService.getEffectiveMinIpv6Prefix();
+
 		String sql = """
 				SELECT
 				    subnet_group,
-				    SUM(total_requests) AS sub_total,
-				    SUM(returning_requests) AS sub_returning,
-				    SUM(authenticated_requests) AS sub_authenticated
+				    SUM(CASE WHEN bucket_start >= ? THEN total_requests ELSE 0 END) AS sub_total,
+				    SUM(CASE WHEN bucket_start >= ? THEN returning_requests ELSE 0 END) AS sub_returning,
+				    SUM(authenticated_requests) AS sub_auth_24h,
+				    MAX(CASE WHEN client_type IN ('SEARCH_ENGINE', 'AI_CRAWLER', 'PRIVATE_NETWORK', 'INTERNAL_NETWORK') THEN 1 ELSE 0 END) AS is_excluded
 				FROM client_subnet_rollups
-				WHERE bucket_start >= ?
-				  AND asn = ?
-				  AND (client_type IS NULL OR client_type NOT IN ('SEARCH_ENGINE', 'AI_CRAWLER', 'PRIVATE_NETWORK', 'INTERNAL_NETWORK'))
+				WHERE asn = ?
+				  AND bucket_start >= ?
 				GROUP BY subnet_group
 				HAVING SUM(authenticated_requests) = 0
-				   AND SUM(total_requests) >= ?
+				   AND MAX(CASE WHEN client_type IN ('SEARCH_ENGINE', 'AI_CRAWLER', 'PRIVATE_NETWORK', 'INTERNAL_NETWORK') THEN 1 ELSE 0 END) = 0
+				   AND SUM(CASE WHEN bucket_start >= ? THEN total_requests ELSE 0 END) >= ?
 				ORDER BY sub_total DESC
 				""";
 
 		Map<String, Long> result = new LinkedHashMap<>();
+		java.sql.Timestamp winTs = java.sql.Timestamp.from(windowCutoff);
+		java.sql.Timestamp safetyTs = java.sql.Timestamp.from(safetyCutoff24h);
 		jdbcTemplate.query(sql, rs -> {
 			String sub = rs.getString("subnet_group");
 			long total = rs.getLong("sub_total");
 			long returning = rs.getLong("sub_returning");
 			double subReturnPct = total > 0 ? (returning * 100.0 / total) : 0.0;
 
-			// Strict safety checks: returning ratio <= threshold, not a search engine, not private
 			if (subReturnPct <= maxReturningPct && sub != null && !sub.isBlank()) {
-				MitigationService.PreflightCheckResult pre = mitigationService.evaluatePreflight(List.of(sub));
-				if (pre.safeToProceedWithoutOverride()) {
-					result.put(sub, total);
+				try {
+					MitigationService.NormalizedCidr norm = MitigationService.normalizeAndValidateCidr(sub, minV4, minV6);
+					if (org.henbru.antidos.collector.util.IpNetworkUtil.getPrivateNetworkDescription(norm.canonicalCidr()) == null) {
+						result.put(norm.canonicalCidr(), total);
+					}
+				} catch (IllegalArgumentException ignored) {
 				}
 			}
-		}, java.sql.Timestamp.from(cutoff), asn, Math.max(0L, minRequestsPerSubnet));
+		}, winTs, winTs, asn, safetyTs, winTs, Math.max(1L, minRequestsPerSubnet));
 
 		return result;
 	}
@@ -699,6 +723,25 @@ public class AutoMitigationService {
 		return extendedCount;
 	}
 
+	public void invalidateRadarCache() {
+		this.cachedRadar = null;
+		this.cachedRadarHours = -1;
+		this.cachedRadarAtMillis = 0L;
+	}
+
+	/**
+	 * Returns the recently cached Carpet Attack Radar snapshot if still fresh ({@code < 60s}), or {@code null}.
+	 */
+	public List<CarpetRadarEntry> getCachedCarpetRadar(int hours) {
+		int safeHours = Math.max(1, Math.min(hours, 720));
+		List<CarpetRadarEntry> snapshot = this.cachedRadar;
+		if (snapshot != null && this.cachedRadarHours == safeHours
+				&& (System.currentTimeMillis() - this.cachedRadarAtMillis) < RADAR_CACHE_TTL_MS) {
+			return snapshot;
+		}
+		return null;
+	}
+
 	/**
 	 * Scans recent telemetry across all active ASNs and evaluates each against the deterministic
 	 * auto-mitigation safety guardrails. Provides full transparency into why an ASN was qualified or suppressed.
@@ -710,7 +753,7 @@ public class AutoMitigationService {
 
 		String sql = """
 				SELECT
-				    asn,
+				    (asn + 0) AS asn,
 				    MAX(as_org) AS as_org,
 				    MAX(country_code) AS country_code,
 				    COUNT(DISTINCT subnet_group) AS active_subnets,
@@ -720,9 +763,9 @@ public class AutoMitigationService {
 				FROM client_subnet_rollups
 				WHERE bucket_start >= ?
 				  AND asn IS NOT NULL
-				  AND asn > 0
+				  AND (asn + 0) > 0
 				  AND (client_type IS NULL OR client_type NOT IN ('SEARCH_ENGINE', 'AI_CRAWLER', 'PRIVATE_NETWORK', 'INTERNAL_NETWORK'))
-				GROUP BY asn
+				GROUP BY (asn + 0)
 				HAVING COUNT(DISTINCT subnet_group) >= 2 OR SUM(total_requests) >= 500
 				ORDER BY total_requests DESC
 				LIMIT 40
@@ -835,7 +878,11 @@ public class AutoMitigationService {
 			));
 		}, java.sql.Timestamp.from(cutoff));
 
-		return entries;
+		List<CarpetRadarEntry> immutableSnapshot = List.copyOf(entries);
+		this.cachedRadar = immutableSnapshot;
+		this.cachedRadarHours = safeHours;
+		this.cachedRadarAtMillis = System.currentTimeMillis();
+		return immutableSnapshot;
 	}
 
 	private List<String> findTopSubnetsForAsn(long asn, int hours, int limit) {

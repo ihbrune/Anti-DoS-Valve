@@ -712,6 +712,49 @@ class AutoMitigationServiceTest {
 		assertEquals(mid + 1, countAudits("FLEET_SYNC"), "Deferred scope must push exactly once");
 	}
 
+	@Test
+	void testEligibleSubnetsRespect24hSafetyWindowAndRadarCaching() {
+		Instant now = Instant.now();
+		// 4 subnets active in last 1h from ASN 64900 (2000 reqs each):
+		// - .101..103 are cleanly unauthenticated over full 24h
+		// - .104 has 0 auth in the 1h carpet window, but had 3 authenticated requests 6 hours ago -> must be excluded!
+		// - .105 has 0 auth in 1h, but had SEARCH_ENGINE traffic 6 hours ago -> must be excluded!
+		insertSubnetRollup("198.51.101.0/24", 64900L, "Mixed History AS", 2000, 10, 0, now.minus(Duration.ofMinutes(10)));
+		insertSubnetRollup("198.51.102.0/24", 64900L, "Mixed History AS", 2000, 10, 0, now.minus(Duration.ofMinutes(10)));
+		insertSubnetRollup("198.51.103.0/24", 64900L, "Mixed History AS", 2000, 10, 0, now.minus(Duration.ofMinutes(10)));
+		insertSubnetRollup("198.51.104.0/24", 64900L, "Mixed History AS", 2000, 10, 0, now.minus(Duration.ofMinutes(10)));
+		insertSubnetRollup("198.51.104.0/24", 64900L, "Mixed History AS", 50, 10, 3, now.minus(Duration.ofHours(6)));
+		insertSubnetRollup("198.51.105.0/24", 64900L, "Mixed History AS", 2000, 10, 0, now.minus(Duration.ofMinutes(10)));
+		jdbcTemplate.update("""
+				INSERT INTO client_subnet_rollups (
+				    bucket_start, bucket_end, bucket_minutes, server_id, valve_name, subnet_group,
+				    asn, as_org, country_code, client_type, total_requests, active_requests,
+				    blocked_requests, marked_requests, distinct_clients, min_requests_per_client,
+				    max_requests_per_client, returning_requests,
+				    returning_tracked_requests, authenticated_requests
+				) VALUES (?, ?, 60, 'Srv01', 'PRIMARY', '198.51.105.0/24', 64900, 'Mixed History AS', 'US',
+				          'SEARCH_ENGINE', 50, 50, 0, 0, 1, 1, 50, 0, 50, 0)
+				""", Timestamp.from(now.minus(Duration.ofHours(6))), Timestamp.from(now.minus(Duration.ofHours(5))));
+
+		AutoMitigationService.EffectiveAutoSettings config = new AutoMitigationService.EffectiveAutoSettings(
+				true, false, 3, 5000L, 1, "8075", 5.0, 0L, 20L, 50, 60, false, 24, false);
+
+		List<AutoMitigationService.CarpetAttackCandidate> candidates = autoMitigationService.findCarpetAttackCandidates(config, 1);
+		assertEquals(1, candidates.size());
+		List<String> eligible = candidates.getFirst().eligibleSubnets();
+		assertEquals(3, eligible.size());
+		assertFalse(eligible.contains("198.51.104.0/24"), "Subnet with auth traffic in 24h window must be excluded");
+		assertFalse(eligible.contains("198.51.105.0/24"), "Subnet with SEARCH_ENGINE traffic in 24h window must be excluded");
+
+		// Radar cache lifecycle: null before scan -> cached after getCarpetRadar -> null after invalidation
+		assertEquals(null, autoMitigationService.getCachedCarpetRadar(1));
+		List<org.henbru.antidos.collector.model.CarpetRadarEntry> radar = autoMitigationService.getCarpetRadar(1);
+		assertFalse(radar.isEmpty());
+		assertNotNull(autoMitigationService.getCachedCarpetRadar(1));
+		autoMitigationService.invalidateRadarCache();
+		assertEquals(null, autoMitigationService.getCachedCarpetRadar(1));
+	}
+
 	private long countAudits(String action) {
 		Long c = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM mitigation_audit_log WHERE action = ?", Long.class, action);
 		return c != null ? c : 0L;

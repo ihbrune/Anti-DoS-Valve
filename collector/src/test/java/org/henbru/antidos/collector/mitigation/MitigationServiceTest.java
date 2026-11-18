@@ -597,4 +597,50 @@ class MitigationServiceTest {
 		long count = mitigationService.countAuditEntriesFiltered(null, "DRY_RUN_SIMULATION", "ALL");
 		assertTrue(count >= 1);
 	}
+
+	@Test
+	void testBatchDeterrenceRefreshUpdatesOnlyChangedRules() {
+		Instant now = Instant.now();
+		MitigationRule persistent = mitigationService.createOrUpdateBlock(
+				"198.51.101.0/24", 60, "Persistent attack", MitigationRule.SOURCE_MANUAL, "B", "ADMIN");
+		MitigationRule deterred = mitigationService.createOrUpdateBlock(
+				"198.51.102.0/24", 60, "Older attack", MitigationRule.SOURCE_MANUAL, "B", "ADMIN");
+		MitigationRule observing = mitigationService.createOrUpdateBlock(
+				"198.51.103.0/24", 60, "Fresh attack", MitigationRule.SOURCE_MANUAL, "B", "ADMIN");
+
+		// Make deterred rule older than the 10-minute observation window
+		jdbcTemplate.update("UPDATE mitigation_rules SET created_at = ?, updated_at = ? WHERE id = ?",
+				Timestamp.from(now.minusSeconds(900)), Timestamp.from(now.minusSeconds(900)), deterred.id());
+		Instant stableObservingTs = Timestamp.from(observing.updatedAt()).toInstant();
+
+		// Insert two BLOCKED events for the persistent rule
+		jdbcTemplate.update("""
+				INSERT INTO client_events (
+				    server_id, valve_name, slot_key, slot_time, client_key, request_count,
+				    retained_count, is_locked, status, is_completed, last_updated_at,
+				    distinct_clients, distinct_user_agents, sample_method, sample_uri, sample_user_agent
+				) VALUES ('Pub01', 'MITIGATION-VALVE', 1001, ?, '198.51.101.0/24', 40, 0, 1, 'BLOCKED', 1, ?, 5, 2, 'GET', '/', 'Bot'),
+				         ('Pub02', 'MITIGATION-VALVE', 1002, ?, '198.51.101.0/24', 60, 0, 1, 'BLOCKED', 1, ?, 12, 3, 'GET', '/', 'Bot')
+				""", Timestamp.from(now), Timestamp.from(now), Timestamp.from(now), Timestamp.from(now));
+
+		mitigationService.refreshDeterrenceMetrics();
+
+		MitigationRule updatedPersistent = ruleRepository.findById(persistent.id()).orElseThrow();
+		assertEquals(100L, updatedPersistent.totalBlockedHits());
+		assertEquals(12, updatedPersistent.peakDistinctIps());
+		assertEquals(MitigationRule.DETERRENCE_PERSISTENT, updatedPersistent.deterrenceState());
+
+		MitigationRule updatedDeterred = ruleRepository.findById(deterred.id()).orElseThrow();
+		assertEquals(0L, updatedDeterred.totalBlockedHits());
+		assertEquals(MitigationRule.DETERRENCE_DETERRED, updatedDeterred.deterrenceState());
+
+		MitigationRule untouchedObserving = ruleRepository.findById(observing.id()).orElseThrow();
+		assertEquals(MitigationRule.DETERRENCE_OBSERVING, untouchedObserving.deterrenceState());
+		assertEquals(stableObservingTs, untouchedObserving.updatedAt(), "Unchanged rule must not be written unnecessarily");
+
+		// Second pass with no new events must not touch updated_at on already-settled rules
+		Instant settledPersistentUpdatedAt = updatedPersistent.updatedAt();
+		mitigationService.refreshDeterrenceMetrics();
+		assertEquals(settledPersistentUpdatedAt, ruleRepository.findById(persistent.id()).orElseThrow().updatedAt());
+	}
 }

@@ -1,5 +1,6 @@
 package org.henbru.antidos.collector.web;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -630,7 +631,7 @@ public class MitigationController {
 			String feedbackSuccess,
 			String feedbackError) {
 		Instant now = Instant.now();
-		mitigationService.refreshDeterrenceMetrics();
+		mitigationService.refreshDeterrenceMetricsIfStale(Duration.ofSeconds(15));
 		List<MitigationRule> activeRules = mitigationService.getActiveRules();
 		List<MonitoredValve> mitigationValves = mitigationService.getMitigationCapableValves();
 
@@ -665,27 +666,45 @@ public class MitigationController {
 				? tab.toLowerCase()
 				: "active";
 
-		// Global counts for tab badges and teasers
+		// Global counts for tab badges
 		long totalHistoricalCount = mitigationService.countHistoricalRulesFiltered(null, "ALL");
 		long totalAuditCount = mitigationService.countAuditEntriesFiltered(null, "ALL", "ALL");
 
-		List<MitigationRule> teaserHistoricalRules = mitigationService.getHistoricalRulesFiltered(null, "ALL", 0, 5);
-		List<MitigationAuditEntry> teaserAuditEntries = mitigationService.getAuditEntriesFiltered(null, "ALL", "ALL", 0, 5);
+		// Load teasers / paginated lists only for the actually active tab
+		List<MitigationRule> teaserHistoricalRules = "active".equals(effectiveTab)
+				? mitigationService.getHistoricalRulesFiltered(null, "ALL", 0, 5)
+				: List.of();
+		List<MitigationAuditEntry> teaserAuditEntries = "active".equals(effectiveTab)
+				? mitigationService.getAuditEntriesFiltered(null, "ALL", "ALL", 0, 5)
+				: List.of();
 
 		// History tab pagination & filtering
 		int hPage = Math.max(1, historyPage);
 		int hLimit = (historyLimit > 0 && historyLimit <= 500) ? historyLimit : 50;
 		int hOffset = (hPage - 1) * hLimit;
-		long filteredHistoryCount = mitigationService.countHistoricalRulesFiltered(historySearch, historyStatus);
-		List<MitigationRule> historicalRules = mitigationService.getHistoricalRulesFiltered(historySearch, historyStatus, hOffset, hLimit);
+		boolean historyUnfiltered = (historySearch == null || historySearch.isBlank())
+				&& (historyStatus == null || historyStatus.isBlank() || "ALL".equalsIgnoreCase(historyStatus));
+		long filteredHistoryCount = "history".equals(effectiveTab)
+				? (historyUnfiltered ? totalHistoricalCount : mitigationService.countHistoricalRulesFiltered(historySearch, historyStatus))
+				: totalHistoricalCount;
+		List<MitigationRule> historicalRules = "history".equals(effectiveTab)
+				? mitigationService.getHistoricalRulesFiltered(historySearch, historyStatus, hOffset, hLimit)
+				: List.of();
 		int totalHistoryPages = Math.max(1, (int) Math.ceil((double) filteredHistoryCount / hLimit));
 
 		// Audit tab pagination & filtering
 		int aPage = Math.max(1, auditPage);
 		int aLimit = (auditLimit > 0 && auditLimit <= 500) ? auditLimit : 50;
 		int aOffset = (aPage - 1) * aLimit;
-		long filteredAuditCount = mitigationService.countAuditEntriesFiltered(auditSearch, auditAction, auditActor);
-		List<MitigationAuditEntry> auditEntries = mitigationService.getAuditEntriesFiltered(auditSearch, auditAction, auditActor, aOffset, aLimit);
+		boolean auditUnfiltered = (auditSearch == null || auditSearch.isBlank())
+				&& (auditAction == null || auditAction.isBlank() || "ALL".equalsIgnoreCase(auditAction))
+				&& (auditActor == null || auditActor.isBlank() || "ALL".equalsIgnoreCase(auditActor));
+		long filteredAuditCount = "audit".equals(effectiveTab)
+				? (auditUnfiltered ? totalAuditCount : mitigationService.countAuditEntriesFiltered(auditSearch, auditAction, auditActor))
+				: totalAuditCount;
+		List<MitigationAuditEntry> auditEntries = "audit".equals(effectiveTab)
+				? mitigationService.getAuditEntriesFiltered(auditSearch, auditAction, auditActor, aOffset, aLimit)
+				: List.of();
 		int totalAuditPages = Math.max(1, (int) Math.ceil((double) filteredAuditCount / aLimit));
 
 		model.addAttribute("now", now);
@@ -719,7 +738,8 @@ public class MitigationController {
 		model.addAttribute("auditHasPrev", aPage > 1);
 		model.addAttribute("auditHasNext", aPage < totalAuditPages);
 
-		long expectedRevision = mitigationService.getExpectedRevision(now);
+		long expectedRevision = MitigationService.computeRevisionForCidrs(
+				activeRules.stream().map(MitigationRule::cidr).toList());
 		model.addAttribute("mitigationValves", mitigationValves);
 		model.addAttribute("expectedRevision", expectedRevision);
 		Map<String, Boolean> valveCircuitBreakers = new LinkedHashMap<>();
@@ -735,9 +755,11 @@ public class MitigationController {
 		model.addAttribute("defaultTtlMinutes", properties.getDefaultMitigationTtlMinutes());
 		AutoMitigationService.EffectiveAutoSettings autoConfig = autoMitigationService.getEffectiveSettings();
 		model.addAttribute("autoSettings", autoConfig);
-		List<org.henbru.antidos.collector.model.CarpetRadarEntry> radar = autoMitigationService.getCarpetRadar(autoConfig.carpetWindowHours());
+		List<org.henbru.antidos.collector.model.CarpetRadarEntry> radar = "radar".equals(effectiveTab)
+				? autoMitigationService.getCarpetRadar(autoConfig.carpetWindowHours())
+				: autoMitigationService.getCachedCarpetRadar(autoConfig.carpetWindowHours());
 		model.addAttribute("carpetRadar", radar);
-		long qualifiedCount = radar.stream().filter(r -> "QUALIFIED".equals(r.status())).count();
+		long qualifiedCount = radar != null ? radar.stream().filter(r -> "QUALIFIED".equals(r.status())).count() : 0L;
 		model.addAttribute("carpetQualifiedCount", qualifiedCount);
 		model.addAttribute("notificationSettings", notificationService != null ? notificationService.getEffectiveSettings() : null);
 		model.addAttribute("feedbackSuccess", feedbackSuccess);

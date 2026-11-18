@@ -144,9 +144,9 @@
                 hx-get="/fragments/mitigation-content?tab=radar" hx-target="#mitigation-dashboard-container"
                 hx-swap="outerHTML show:window:top" hx-push-url="/mitigation?tab=radar">
                 <span>&#x1F4E1;</span> Carpet Attack Radar
-                <span class="badge"
+                <span th:if="${carpetRadar != null}" class="badge"
                     th:classappend="${carpetQualifiedCount != null and carpetQualifiedCount > 0 ? 'badge-danger' : 'badge-secondary'}"
-                    th:text="${carpetRadar != null ? carpetRadar.size() : 0}">0</span>
+                    th:text="${carpetRadar.size()}">0</span>
             </button>
             <button type="button" class="btn" th:classappend="${activeTab == 'history' ? 'active btn-primary' : ''}"
                 style="font-size: 13px; padding: 7px 16px; display: inline-flex; align-items: center; gap: 8px;"
@@ -233,8 +233,7 @@
                             hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top"
                             hx-push-url="/mitigation?tab=radar" style="font-size: 12px; padding: 6px 14px;"
                             title="Open Autonomous Carpet Attack Radar tab">
-                            <span>&#x1F4E1;</span> Open Radar (<span
-                                th:text="${carpetRadar != null ? carpetRadar.size() : 0}">0</span>)
+                            <span>&#x1F4E1;</span> Open Radar<span th:if="${carpetRadar != null}" th:text="' (' + ${carpetRadar.size()} + ')'"></span>
                         </button>
                     </div>
                 </div>

@@ -11,11 +11,13 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -92,6 +94,7 @@ public class MitigationService {
 
 	private final AtomicBoolean deterrenceRefreshPending = new AtomicBoolean(false);
 	private final AtomicBoolean deterrenceWorkerRunning = new AtomicBoolean(false);
+	private volatile long lastDeterrenceRefreshMillis = 0L;
 
 	@Autowired
 	public MitigationService(
@@ -366,7 +369,10 @@ public class MitigationService {
 	 * @return The strictest (largest prefix number) minimal IPv4 prefix configured across active mitigation Valves
 	 */
 	public int getEffectiveMinIpv4Prefix() {
-		List<MonitoredValve> valves = getMitigationCapableValves();
+		return computeMinIpv4Prefix(getMitigationCapableValves());
+	}
+
+	private int computeMinIpv4Prefix(List<MonitoredValve> valves) {
 		int max = MIN_IPV4_PREFIX;
 		for (MonitoredValve v : valves) {
 			if (v.mitigationMinPrefixV4() > max) {
@@ -380,7 +386,10 @@ public class MitigationService {
 	 * @return The strictest (largest prefix number) minimal IPv6 prefix configured across active mitigation Valves
 	 */
 	public int getEffectiveMinIpv6Prefix() {
-		List<MonitoredValve> valves = getMitigationCapableValves();
+		return computeMinIpv6Prefix(getMitigationCapableValves());
+	}
+
+	private int computeMinIpv6Prefix(List<MonitoredValve> valves) {
 		int max = MIN_IPV6_PREFIX;
 		for (MonitoredValve v : valves) {
 			if (v.mitigationMinPrefixV6() > max) {
@@ -394,7 +403,10 @@ public class MitigationService {
 	 * @return The strictest (lowest duration in seconds) maximum TTL configured across active mitigation Valves
 	 */
 	public int getEffectiveMaxTtlSeconds() {
-		List<MonitoredValve> valves = getMitigationCapableValves();
+		return computeMaxTtlSeconds(getMitigationCapableValves());
+	}
+
+	private int computeMaxTtlSeconds(List<MonitoredValve> valves) {
 		int min = 86400;
 		for (MonitoredValve v : valves) {
 			if (v.mitigationMaxTtlSeconds() > 0 && v.mitigationMaxTtlSeconds() < min) {
@@ -408,7 +420,10 @@ public class MitigationService {
 	 * @return The strictest (lowest maximum count) active blocks capacity limit across active mitigation Valves
 	 */
 	public int getEffectiveMaxActiveBlocks() {
-		List<MonitoredValve> valves = getMitigationCapableValves();
+		return computeMaxActiveBlocks(getMitigationCapableValves());
+	}
+
+	private int computeMaxActiveBlocks(List<MonitoredValve> valves) {
 		int min = 5000;
 		for (MonitoredValve v : valves) {
 			if (v.mitigationMaxActiveBlocks() > 0 && v.mitigationMaxActiveBlocks() < min) {
@@ -427,8 +442,9 @@ public class MitigationService {
 			return new PreflightCheckResult(List.of(), List.of("No CIDR or IP specified."), List.of(), 0L, 0L, false);
 		}
 
-		int minV4 = getEffectiveMinIpv4Prefix();
-		int minV6 = getEffectiveMinIpv6Prefix();
+		List<MonitoredValve> mitigationValves = getMitigationCapableValves();
+		int minV4 = computeMinIpv4Prefix(mitigationValves);
+		int minV6 = computeMinIpv6Prefix(mitigationValves);
 
 		List<String> validCidrs = new ArrayList<>();
 		List<String> invalidInputs = new ArrayList<>();
@@ -528,7 +544,7 @@ public class MitigationService {
 
 		// Capacity check against fleet guardrails
 		if (!validCidrs.isEmpty()) {
-			int maxCap = getEffectiveMaxActiveBlocks();
+			int maxCap = computeMaxActiveBlocks(mitigationValves);
 			List<MitigationRule> active = ruleRepository.findActiveRules(Instant.now());
 			Set<String> activeCidrs = new HashSet<>(active.stream().map(MitigationRule::cidr).toList());
 			long newCount = validCidrs.stream().filter(c -> !activeCidrs.contains(c)).count();
@@ -560,9 +576,23 @@ public class MitigationService {
 			String batchId,
 			String actor) {
 		requireWriteMode("Creating or updating mitigation blocks");
-		NormalizedCidr norm = normalizeAndValidateCidr(rawCidr, getEffectiveMinIpv4Prefix(), getEffectiveMinIpv6Prefix());
+		List<MonitoredValve> valves = getMitigationCapableValves();
+		return createOrUpdateBlockInternal(rawCidr, ttlMinutes, reason, source, batchId, actor,
+				computeMinIpv4Prefix(valves), computeMinIpv6Prefix(valves), computeMaxTtlSeconds(valves));
+	}
+
+	private MitigationRule createOrUpdateBlockInternal(
+			String rawCidr,
+			int ttlMinutes,
+			String reason,
+			String source,
+			String batchId,
+			String actor,
+			int minV4,
+			int minV6,
+			int maxTtlSec) {
+		NormalizedCidr norm = normalizeAndValidateCidr(rawCidr, minV4, minV6);
 		int effectiveTtlMin = ttlMinutes > 0 ? ttlMinutes : properties.getDefaultMitigationTtlMinutes();
-		int maxTtlSec = getEffectiveMaxTtlSeconds();
 		if ((long) effectiveTtlMin * 60L > maxTtlSec) {
 			int cappedMin = Math.max(1, maxTtlSec / 60);
 			log.info("Capping requested dynamic block TTL from {} min to fleet max {} min ({} s) for {}",
@@ -660,6 +690,10 @@ public class MitigationService {
 		if (rawCidrs == null || rawCidrs.isEmpty()) {
 			return List.of();
 		}
+		List<MonitoredValve> valves = getMitigationCapableValves();
+		int minV4 = computeMinIpv4Prefix(valves);
+		int minV6 = computeMinIpv6Prefix(valves);
+		int maxTtlSec = computeMaxTtlSeconds(valves);
 		String batchId = (batchIdPrefix != null && !batchIdPrefix.isBlank() ? batchIdPrefix : "BATCH")
 				+ "-" + (System.currentTimeMillis() / 1000L);
 		int effectiveTtlMin = ttlMinutes > 0 ? ttlMinutes : properties.getDefaultMitigationTtlMinutes();
@@ -668,7 +702,8 @@ public class MitigationService {
 			if (raw == null || raw.isBlank()) {
 				continue;
 			}
-			MitigationRule r = createOrUpdateBlock(raw, effectiveTtlMin, reason, source, batchId, actor);
+			MitigationRule r = createOrUpdateBlockInternal(raw, effectiveTtlMin, reason, source, batchId, actor,
+					minV4, minV6, maxTtlSec);
 			created.add(r);
 		}
 		if (!created.isEmpty()) {
@@ -1352,6 +1387,22 @@ public class MitigationService {
 		}
 	}
 
+	/**
+	 * Refreshes deterrence metrics synchronously if the last refresh is older than {@code maxAge},
+	 * otherwise triggers an asynchronous background refresh so UI requests remain fast.
+	 */
+	public void refreshDeterrenceMetricsIfStale(Duration maxAge) {
+		if (properties.isViewerMode()) {
+			return;
+		}
+		long ageMs = System.currentTimeMillis() - lastDeterrenceRefreshMillis;
+		if (lastDeterrenceRefreshMillis == 0L || ageMs >= maxAge.toMillis()) {
+			refreshDeterrenceMetrics();
+		} else {
+			refreshDeterrenceMetricsAsync();
+		}
+	}
+
 	public void refreshDeterrenceMetrics() {
 		if (properties.isViewerMode()) {
 			return;
@@ -1359,53 +1410,101 @@ public class MitigationService {
 		Instant now = Instant.now();
 		ruleRepository.expireElapsedRules(now);
 		List<MitigationRule> activeRules = ruleRepository.findActiveRules(now);
+		lastDeterrenceRefreshMillis = System.currentTimeMillis();
 		if (activeRules.isEmpty()) {
 			return;
 		}
 
 		Instant recentCutoff = now.minusSeconds(DETERRENCE_WINDOW_SECONDS);
-
+		Map<String, List<MitigationRule>> rulesByCidr = new HashMap<>(activeRules.size() * 2);
+		Instant earliestCutoff = null;
 		for (MitigationRule rule : activeRules) {
-			try {
-				Map<String, Object> stats = jdbcTemplate.queryForMap("""
-						SELECT COALESCE(SUM(request_count), 0) AS total_hits,
-						       COALESCE(MAX(distinct_clients), 0) AS peak_ips,
-						       MAX(last_updated_at) AS last_hit
-						FROM client_events
-						WHERE client_key = ?
-						  AND status = 'BLOCKED'
-						  AND slot_time >= ?
-						""",
-						rule.cidr(),
-						Timestamp.from(rule.createdAt().minusSeconds(60)));
+			rulesByCidr.computeIfAbsent(rule.cidr(), k -> new ArrayList<>(1)).add(rule);
+			Instant ruleCutoff = rule.createdAt().minusSeconds(60);
+			if (earliestCutoff == null || ruleCutoff.isBefore(earliestCutoff)) {
+				earliestCutoff = ruleCutoff;
+			}
+		}
 
-				long totalHits = ((Number) stats.get("total_hits")).longValue();
-				int peakIps = ((Number) stats.get("peak_ips")).intValue();
-				Instant lastHit = toInstant(stats.get("last_hit"));
+		Map<Long, DeterrenceStatsAccumulator> statsByRuleId = new HashMap<>();
+		try {
+			jdbcTemplate.query("""
+					SELECT client_key, slot_time, request_count, distinct_clients, last_updated_at
+					FROM client_events
+					WHERE status = 'BLOCKED'
+					  AND slot_time >= ?
+					""",
+					rs -> {
+						String clientKey = rs.getString("client_key");
+						List<MitigationRule> matched = rulesByCidr.get(clientKey);
+						if (matched == null) {
+							return;
+						}
+						Instant slotTime = toInstant(rs.getObject("slot_time"));
+						long reqCount = rs.getLong("request_count");
+						int distinctClients = rs.getInt("distinct_clients");
+						Instant lastUpdated = toInstant(rs.getObject("last_updated_at"));
+						for (MitigationRule rule : matched) {
+							if (slotTime == null || !slotTime.isBefore(rule.createdAt().minusSeconds(60))) {
+								statsByRuleId.computeIfAbsent(rule.id(), k -> new DeterrenceStatsAccumulator())
+										.accept(reqCount, distinctClients, lastUpdated);
+							}
+						}
+					},
+					Timestamp.from(earliestCutoff));
+		} catch (Exception e) {
+			log.debug("Could not batch-query deterrence stats: {}", e.getMessage());
+			return;
+		}
 
-				long effectiveHits = Math.max(rule.totalBlockedHits(), totalHits);
-				int effectivePeakIps = Math.max(rule.peakDistinctIps(), peakIps);
-				Instant effectiveLastHit = lastHit != null ? lastHit : rule.lastHitAt();
+		List<MitigationRuleRepository.DeterrenceUpdate> updates = new ArrayList<>();
+		for (MitigationRule rule : activeRules) {
+			DeterrenceStatsAccumulator acc = statsByRuleId.get(rule.id());
+			long totalHits = acc != null ? acc.totalHits : 0L;
+			int peakIps = acc != null ? acc.peakIps : 0;
+			Instant lastHit = acc != null ? acc.lastHit : null;
 
-				String state;
-				if (effectiveLastHit != null && effectiveLastHit.isAfter(recentCutoff) && effectiveHits > 0) {
-					state = MitigationRule.DETERRENCE_PERSISTENT;
-				} else if (rule.createdAt().isBefore(recentCutoff)) {
-					state = MitigationRule.DETERRENCE_DETERRED;
-				} else {
-					state = MitigationRule.DETERRENCE_OBSERVING;
-				}
+			long effectiveHits = Math.max(rule.totalBlockedHits(), totalHits);
+			int effectivePeakIps = Math.max(rule.peakDistinctIps(), peakIps);
+			Instant effectiveLastHit = (lastHit != null && (rule.lastHitAt() == null || lastHit.isAfter(rule.lastHitAt())))
+					? lastHit
+					: rule.lastHitAt();
 
-				ruleRepository.updateDeterrenceTelemetry(
-						rule.id(),
-						effectiveHits,
-						effectivePeakIps,
-						effectiveLastHit,
-						state,
-						now
-				);
-			} catch (Exception e) {
-				log.debug("Could not refresh deterrence stats for {}: {}", rule.cidr(), e.getMessage());
+			String state;
+			if (effectiveLastHit != null && effectiveLastHit.isAfter(recentCutoff) && effectiveHits > 0) {
+				state = MitigationRule.DETERRENCE_PERSISTENT;
+			} else if (rule.createdAt().isBefore(recentCutoff)) {
+				state = MitigationRule.DETERRENCE_DETERRED;
+			} else {
+				state = MitigationRule.DETERRENCE_OBSERVING;
+			}
+
+			if (effectiveHits != rule.totalBlockedHits()
+					|| effectivePeakIps != rule.peakDistinctIps()
+					|| !Objects.equals(effectiveLastHit, rule.lastHitAt())
+					|| !Objects.equals(state, rule.deterrenceState())) {
+				updates.add(new MitigationRuleRepository.DeterrenceUpdate(
+						rule.id(), effectiveHits, effectivePeakIps, effectiveLastHit, state));
+			}
+		}
+
+		if (!updates.isEmpty()) {
+			ruleRepository.batchUpdateDeterrenceTelemetry(updates, now);
+		}
+	}
+
+	private static final class DeterrenceStatsAccumulator {
+		long totalHits;
+		int peakIps;
+		Instant lastHit;
+
+		void accept(long hits, int distinctClients, Instant updated) {
+			this.totalHits += hits;
+			if (distinctClients > this.peakIps) {
+				this.peakIps = distinctClients;
+			}
+			if (updated != null && (this.lastHit == null || updated.isAfter(this.lastHit))) {
+				this.lastHit = updated;
 			}
 		}
 	}
