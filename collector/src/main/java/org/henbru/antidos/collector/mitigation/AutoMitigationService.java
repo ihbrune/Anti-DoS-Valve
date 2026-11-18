@@ -3,7 +3,13 @@ package org.henbru.antidos.collector.mitigation;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -42,6 +48,7 @@ public class AutoMitigationService {
 	public static final String KEY_PROTECTED_ASNS = "mitigation.auto.protected_asns";
 	public static final String KEY_MAX_RETURNING_PCT = "mitigation.auto.max_returning_ratio_pct";
 	public static final String KEY_MAX_AUTHENTICATED_REQUESTS = "mitigation.auto.max_authenticated_requests";
+	public static final String KEY_CARPET_MIN_REQUESTS_PER_SUBNET = "mitigation.auto.carpet_min_requests_per_subnet";
 	public static final String KEY_MAX_ACTIVE_RULES = "mitigation.auto.max_active_rules";
 	public static final String KEY_DEFAULT_TTL_MINUTES = "mitigation.auto.default_ttl_minutes";
 	public static final String KEY_AUTO_EXTEND = "mitigation.auto.auto_extend_persistent";
@@ -91,12 +98,34 @@ public class AutoMitigationService {
 			String protectedAsns,
 			double maxReturningRatioPct,
 			long maxAuthenticatedRequests,
+			long carpetMinRequestsPerSubnet,
 			int maxActiveRules,
 			int defaultTtlMinutes,
 			boolean autoExtendPersistent,
 			int maxExtensionHours,
 			boolean hasDatabaseOverrides
 	) {
+		/** Backwards-compatible constructor without the per-subnet volume filter (disabled = 0). */
+		public EffectiveAutoSettings(
+				boolean enabled,
+				boolean dryRun,
+				int carpetMinSubnets,
+				long carpetMinRequests,
+				int carpetWindowHours,
+				String protectedAsns,
+				double maxReturningRatioPct,
+				long maxAuthenticatedRequests,
+				int maxActiveRules,
+				int defaultTtlMinutes,
+				boolean autoExtendPersistent,
+				int maxExtensionHours,
+				boolean hasDatabaseOverrides
+		) {
+			this(enabled, dryRun, carpetMinSubnets, carpetMinRequests, carpetWindowHours,
+					protectedAsns, maxReturningRatioPct, maxAuthenticatedRequests, 0L, maxActiveRules,
+					defaultTtlMinutes, autoExtendPersistent, maxExtensionHours, hasDatabaseOverrides);
+		}
+
 		public EffectiveAutoSettings(
 				boolean enabled,
 				boolean dryRun,
@@ -112,7 +141,7 @@ public class AutoMitigationService {
 				boolean hasDatabaseOverrides
 		) {
 			this(enabled, dryRun, carpetMinSubnets, carpetMinRequests, carpetWindowHours,
-					protectedAsns, maxReturningRatioPct, 0L, maxActiveRules, defaultTtlMinutes,
+					protectedAsns, maxReturningRatioPct, 0L, 0L, maxActiveRules, defaultTtlMinutes,
 					autoExtendPersistent, maxExtensionHours, hasDatabaseOverrides);
 		}
 
@@ -125,6 +154,7 @@ public class AutoMitigationService {
 		public Set<Long> getProtectedAsnSet() { return CollectorProperties.AutoMitigationConfig.parseAsnSet(protectedAsns); }
 		public double getMaxReturningRatioPct() { return maxReturningRatioPct; }
 		public long getMaxAuthenticatedRequests() { return maxAuthenticatedRequests; }
+		public long getCarpetMinRequestsPerSubnet() { return carpetMinRequestsPerSubnet; }
 		public int getMaxActiveRules() { return maxActiveRules; }
 		public int getDefaultTtlMinutes() { return defaultTtlMinutes; }
 		public boolean isAutoExtendPersistent() { return autoExtendPersistent; }
@@ -143,6 +173,7 @@ public class AutoMitigationService {
 		Optional<String> dbProtectedAsns = settingsRepository.getString(KEY_PROTECTED_ASNS);
 		Optional<Double> dbMaxReturnPct = settingsRepository.getDouble(KEY_MAX_RETURNING_PCT);
 		Optional<Long> dbMaxAuthReqs = settingsRepository.getLong(KEY_MAX_AUTHENTICATED_REQUESTS);
+		Optional<Long> dbMinReqsPerSubnet = settingsRepository.getLong(KEY_CARPET_MIN_REQUESTS_PER_SUBNET);
 		Optional<Integer> dbMaxActive = settingsRepository.getInt(KEY_MAX_ACTIVE_RULES);
 		Optional<Integer> dbTtl = settingsRepository.getInt(KEY_DEFAULT_TTL_MINUTES);
 		Optional<Boolean> dbExtend = settingsRepository.getBoolean(KEY_AUTO_EXTEND);
@@ -150,8 +181,8 @@ public class AutoMitigationService {
 
 		boolean hasDbOverrides = dbEnabled.isPresent() || dbDryRun.isPresent() || dbMinSubnets.isPresent()
 				|| dbMinReqs.isPresent() || dbWindowHours.isPresent() || dbProtectedAsns.isPresent()
-				|| dbMaxReturnPct.isPresent() || dbMaxAuthReqs.isPresent() || dbMaxActive.isPresent()
-				|| dbTtl.isPresent() || dbExtend.isPresent() || dbMaxExtHours.isPresent();
+				|| dbMaxReturnPct.isPresent() || dbMaxAuthReqs.isPresent() || dbMinReqsPerSubnet.isPresent()
+				|| dbMaxActive.isPresent() || dbTtl.isPresent() || dbExtend.isPresent() || dbMaxExtHours.isPresent();
 
 		return new EffectiveAutoSettings(
 				dbEnabled.orElse(yaml.isEnabled()),
@@ -162,6 +193,7 @@ public class AutoMitigationService {
 				dbProtectedAsns.orElse(yaml.getProtectedAsns()),
 				dbMaxReturnPct.orElse(yaml.getMaxReturningRatioPct()),
 				dbMaxAuthReqs.orElse(yaml.getMaxAuthenticatedRequests()),
+				dbMinReqsPerSubnet.orElse(yaml.getCarpetMinRequestsPerSubnet()),
 				dbMaxActive.orElse(yaml.getMaxActiveRules()),
 				dbTtl.orElse(yaml.getDefaultTtlMinutes()),
 				dbExtend.orElse(yaml.isAutoExtendPersistent()),
@@ -204,10 +236,33 @@ public class AutoMitigationService {
 			int maxExtensionHours,
 			String updatedBy
 	) {
+		updateSettings(enabled, dryRun, carpetMinSubnets, carpetMinRequests, carpetWindowHours,
+				protectedAsns, maxReturningRatioPct, maxAuthenticatedRequests,
+				getEffectiveSettings().carpetMinRequestsPerSubnet(), maxActiveRules, defaultTtlMinutes,
+				autoExtendPersistent, maxExtensionHours, updatedBy);
+	}
+
+	public void updateSettings(
+			boolean enabled,
+			boolean dryRun,
+			int carpetMinSubnets,
+			long carpetMinRequests,
+			int carpetWindowHours,
+			String protectedAsns,
+			double maxReturningRatioPct,
+			long maxAuthenticatedRequests,
+			long carpetMinRequestsPerSubnet,
+			int maxActiveRules,
+			int defaultTtlMinutes,
+			boolean autoExtendPersistent,
+			int maxExtensionHours,
+			String updatedBy
+	) {
 		if (!properties.getMode().isBackgroundProcessingEnabled()) {
 			throw new IllegalStateException("Auto-mitigation settings cannot be modified in " + properties.getMode() + " mode.");
 		}
 		long safeMaxAuthRequests = Math.max(0L, maxAuthenticatedRequests);
+		long safeMinReqsPerSubnet = Math.max(0L, carpetMinRequestsPerSubnet);
 		settingsRepository.setSetting(KEY_ENABLED, String.valueOf(enabled), "Auto-mitigation master switch", updatedBy);
 		settingsRepository.setSetting(KEY_DRY_RUN, String.valueOf(dryRun), "Auto-mitigation dry-run simulation mode", updatedBy);
 		settingsRepository.setSetting(KEY_CARPET_MIN_SUBNETS, String.valueOf(Math.max(1, carpetMinSubnets)), "Min subnets per ASN for carpet attack detection", updatedBy);
@@ -216,12 +271,13 @@ public class AutoMitigationService {
 		settingsRepository.setSetting(KEY_PROTECTED_ASNS, protectedAsns != null ? protectedAsns.trim() : "", "Protected ASNs exempt from auto-mitigation", updatedBy);
 		settingsRepository.setSetting(KEY_MAX_RETURNING_PCT, String.valueOf(Math.max(0.0, Math.min(100.0, maxReturningRatioPct))), "Max returning visitor ratio allowed for auto-block", updatedBy);
 		settingsRepository.setSetting(KEY_MAX_AUTHENTICATED_REQUESTS, String.valueOf(safeMaxAuthRequests), "Max authenticated requests per ASN allowed for auto-block candidate", updatedBy);
+		settingsRepository.setSetting(KEY_CARPET_MIN_REQUESTS_PER_SUBNET, String.valueOf(safeMinReqsPerSubnet), "Min requests a single subnet must produce in the lookback window to be auto-blocked", updatedBy);
 		settingsRepository.setSetting(KEY_MAX_ACTIVE_RULES, String.valueOf(Math.max(1, maxActiveRules)), "Circuit-breaker max active auto rules", updatedBy);
 		settingsRepository.setSetting(KEY_DEFAULT_TTL_MINUTES, String.valueOf(Math.max(1, defaultTtlMinutes)), "Default TTL minutes for auto rules", updatedBy);
 		settingsRepository.setSetting(KEY_AUTO_EXTEND, String.valueOf(autoExtendPersistent), "Auto-extend persistent attackers", updatedBy);
 		settingsRepository.setSetting(KEY_MAX_EXTENSION_HOURS, String.valueOf(Math.max(1, maxExtensionHours)), "Max extension hours for auto rules", updatedBy);
-		log.info("Auto-mitigation settings updated by '{}': enabled={}, dryRun={}, carpetMinSubnets={}, windowHours={}, maxAuthReqs={}, protectedAsns='{}'",
-				updatedBy, enabled, dryRun, carpetMinSubnets, carpetWindowHours, safeMaxAuthRequests, protectedAsns);
+		log.info("Auto-mitigation settings updated by '{}': enabled={}, dryRun={}, carpetMinSubnets={}, minReqsPerSubnet={}, windowHours={}, maxAuthReqs={}, protectedAsns='{}'",
+				updatedBy, enabled, dryRun, carpetMinSubnets, safeMinReqsPerSubnet, carpetWindowHours, safeMaxAuthRequests, protectedAsns);
 	}
 
 	public void resetToDefaults(String updatedBy) {
@@ -236,6 +292,7 @@ public class AutoMitigationService {
 		settingsRepository.deleteSetting(KEY_PROTECTED_ASNS);
 		settingsRepository.deleteSetting(KEY_MAX_RETURNING_PCT);
 		settingsRepository.deleteSetting(KEY_MAX_AUTHENTICATED_REQUESTS);
+		settingsRepository.deleteSetting(KEY_CARPET_MIN_REQUESTS_PER_SUBNET);
 		settingsRepository.deleteSetting(KEY_MAX_ACTIVE_RULES);
 		settingsRepository.deleteSetting(KEY_DEFAULT_TTL_MINUTES);
 		settingsRepository.deleteSetting(KEY_AUTO_EXTEND);
@@ -250,8 +307,35 @@ public class AutoMitigationService {
 			long totalRequests,
 			long returningRequests,
 			double returningRatioPct,
-			List<String> eligibleSubnets
-	) {}
+			List<String> eligibleSubnets,
+			Map<String, Long> eligibleSubnetRequests
+	) {
+		public CarpetAttackCandidate(
+				long asn,
+				String asOrg,
+				int activeSubnets,
+				long totalRequests,
+				long returningRequests,
+				double returningRatioPct,
+				List<String> eligibleSubnets
+		) {
+			this(asn, asOrg, activeSubnets, totalRequests, returningRequests, returningRatioPct, eligibleSubnets,
+					toZeroVolumeMap(eligibleSubnets));
+		}
+
+		private static Map<String, Long> toZeroVolumeMap(List<String> subnets) {
+			Map<String, Long> map = new LinkedHashMap<>();
+			if (subnets != null) {
+				for (String s : subnets) {
+					map.put(s, 0L);
+				}
+			}
+			return map;
+		}
+	}
+
+	/** A single subnet competing for auto-rule capacity, scored by its own request volume. */
+	private record SubnetCandidate(long asn, String subnet, long requests, int candidateRank) {}
 
 	/**
 	 * Scheduled scan running every 2 minutes across recent telemetry.
@@ -272,10 +356,7 @@ public class AutoMitigationService {
 		}
 
 		try {
-			evaluateAndEnforce(config);
-			if (config.autoExtendPersistent()) {
-				evaluateExtensions(config);
-			}
+			runEvaluationCycle(config);
 		} catch (Exception e) {
 			log.error("Error during auto-mitigation evaluation: {}", e.getMessage(), e);
 		} finally {
@@ -284,12 +365,35 @@ public class AutoMitigationService {
 	}
 
 	/**
+	 * Runs one full autonomous cycle (candidate enforcement plus persistent-attacker extensions)
+	 * and pushes the resulting rule set to the fleet with a single coalesced sync.
+	 */
+	public List<CarpetAttackCandidate> runEvaluationCycle(EffectiveAutoSettings config) {
+		return mitigationService.callWithDeferredFleetSync(() -> {
+			List<CarpetAttackCandidate> candidates = evaluateAndEnforce(config);
+			if (config.autoExtendPersistent()) {
+				evaluateExtensions(config);
+			}
+			return candidates;
+		});
+	}
+
+	/**
 	 * Evaluates active carpet attack candidates and enforces auto-blocks or dry-run audit entries.
+	 * <p>
+	 * Capacity is allocated by priority: all eligible subnets of all candidate ASNs compete globally and the
+	 * subnets with the highest own request volume are blocked first. When the circuit-breaker cap is reached,
+	 * autonomous rules that have not blocked a single request since activation (observation phase elapsed)
+	 * are released to make room for stronger candidates.
 	 */
 	public List<CarpetAttackCandidate> evaluateAndEnforce(EffectiveAutoSettings config) {
 		if (!properties.getMode().isBackgroundProcessingEnabled()) {
 			throw new IllegalStateException("Autonomous mitigation evaluation is disabled in " + properties.getMode() + " mode.");
 		}
+		return mitigationService.callWithDeferredFleetSync(() -> doEvaluateAndEnforce(config));
+	}
+
+	private List<CarpetAttackCandidate> doEvaluateAndEnforce(EffectiveAutoSettings config) {
 		Instant now = Instant.now();
 		List<CarpetAttackCandidate> candidates = findCarpetAttackCandidates(config, config.carpetWindowHours());
 
@@ -298,13 +402,20 @@ public class AutoMitigationService {
 		}
 
 		List<MitigationRule> activeRules = mitigationService.getActiveRules();
+		Set<String> activeCidrs = new HashSet<>();
+		for (MitigationRule r : activeRules) {
+			activeCidrs.add(r.cidr().toLowerCase(Locale.ROOT));
+		}
 		long currentAutoCount = activeRules.stream()
 				.filter(r -> MitigationRule.SOURCE_AUTO_CARPET.equalsIgnoreCase(r.source())
 						|| MitigationRule.SOURCE_AUTO_RULE.equalsIgnoreCase(r.source()))
 				.count();
 
 		Set<Long> protectedAsns = config.getProtectedAsnSet();
+		Map<Long, CarpetAttackCandidate> candidatesByAsn = new LinkedHashMap<>();
+		List<SubnetCandidate> pending = new ArrayList<>();
 
+		int rank = 0;
 		for (CarpetAttackCandidate c : candidates) {
 			if (protectedAsns.contains(c.asn())) {
 				log.info("[AUTO-SKIP] ASN {} ({}) is on the protected ASNs list. Skipping autonomous block.", c.asn(), c.asOrg());
@@ -314,31 +425,59 @@ public class AutoMitigationService {
 						0, "AUTO_ENGINE");
 				continue;
 			}
-
-			if (currentAutoCount >= config.maxActiveRules()) {
-				log.warn("Auto-mitigation circuit breaker reached ({} >= {}). Skipping ASN {} ({} subnets)",
-						currentAutoCount, config.maxActiveRules(), c.asn(), c.activeSubnets());
-				mitigationService.recordAudit(null, "ASN-" + c.asn(), "AUTO_CIRCUIT_BREAKER",
-						"Circuit breaker limit of " + config.maxActiveRules() + " active auto rules reached. Skipped ASN " + c.asn() + " (" + c.activeSubnets() + " subnets).",
-						0, "AUTO_ENGINE");
-				if (notificationService != null) {
-					notificationService.sendCircuitBreakerAlert(currentAutoCount, config.maxActiveRules(), c.asn(), c.activeSubnets());
+			candidatesByAsn.put(c.asn(), c);
+			for (Map.Entry<String, Long> e : c.eligibleSubnetRequests().entrySet()) {
+				// Subnets that already have an active rule keep their timers and are never re-created
+				if (!activeCidrs.contains(e.getKey().toLowerCase(Locale.ROOT))) {
+					pending.add(new SubnetCandidate(c.asn(), e.getKey(), e.getValue() != null ? e.getValue() : 0L, rank));
 				}
-				break;
 			}
+			rank++;
+		}
 
-			// Filter out subnets that already have an active mitigation rule
-			List<String> newSubnetsToBlock = c.eligibleSubnets().stream()
-					.filter(sub -> activeRules.stream().noneMatch(ar -> ar.cidr().equalsIgnoreCase(sub)))
-					.toList();
+		if (pending.isEmpty()) {
+			return candidates;
+		}
 
-			if (newSubnetsToBlock.isEmpty()) {
+		// Priority: highest per-subnet volume first, ties keep the ASN order (largest ASN volume first)
+		pending.sort(Comparator.comparingLong(SubnetCandidate::requests).reversed()
+				.thenComparingInt(SubnetCandidate::candidateRank));
+
+		long freeCapacity = Math.max(0L, config.maxActiveRules() - currentAutoCount);
+		int released = 0;
+		if (pending.size() > freeCapacity) {
+			int needed = (int) Math.min(Integer.MAX_VALUE, pending.size() - freeCapacity);
+			if (config.dryRun()) {
+				released = mitigationService.countUnusedAutoRules(needed);
+				if (released > 0) {
+					log.info("[DRY-RUN] Would release {} unused autonomous rule(s) to free capacity for higher-priority subnets", released);
+				}
+			} else {
+				released = mitigationService.releaseUnusedAutoRules(needed,
+						"Released to free capacity for higher-priority carpet attack subnets (no blocked hits since activation)",
+						"AUTO_ENGINE");
+			}
+		}
+
+		int allowed = (int) Math.min(pending.size(), freeCapacity + released);
+		List<SubnetCandidate> selected = pending.subList(0, allowed);
+		List<SubnetCandidate> skipped = pending.subList(allowed, pending.size());
+
+		// Group selected subnets per ASN (preserving priority order inside each batch)
+		Map<Long, List<String>> selectedByAsn = new LinkedHashMap<>();
+		for (Long asn : candidatesByAsn.keySet()) {
+			selectedByAsn.put(asn, new ArrayList<>());
+		}
+		for (SubnetCandidate s : selected) {
+			selectedByAsn.get(s.asn()).add(s.subnet());
+		}
+
+		for (Map.Entry<Long, List<String>> entry : selectedByAsn.entrySet()) {
+			List<String> targetSubnets = entry.getValue();
+			if (targetSubnets.isEmpty()) {
 				continue;
 			}
-
-			// Respect circuit breaker limit for the batch size
-			int allowedToBlock = (int) Math.min(newSubnetsToBlock.size(), config.maxActiveRules() - currentAutoCount);
-			List<String> targetSubnets = newSubnetsToBlock.subList(0, allowedToBlock);
+			CarpetAttackCandidate c = candidatesByAsn.get(entry.getKey());
 			String batchId = "AUTO-ASN-" + c.asn() + "-" + (now.toEpochMilli() / 1000L);
 			String reason = "Carpet attack from ASN " + c.asn() + " (" + (c.asOrg() != null ? c.asOrg() : "Unknown")
 					+ "): " + c.activeSubnets() + " subnets, " + c.totalRequests() + " reqs, returning ratio "
@@ -357,7 +496,7 @@ public class AutoMitigationService {
 			} else {
 				log.warn("[AUTO-BLOCK] Blocking {} subnets for ASN {} (Batch: {}, TTL: {}m). Reason: {}",
 						targetSubnets.size(), c.asn(), batchId, config.defaultTtlMinutes(), reason);
-				List<MitigationRule> created = mitigationService.createBatchBlocks(
+				mitigationService.createBatchBlocks(
 						targetSubnets,
 						config.defaultTtlMinutes(),
 						reason,
@@ -365,10 +504,29 @@ public class AutoMitigationService {
 						batchId,
 						"AUTO_ENGINE"
 				);
-				currentAutoCount += created.size();
 				if (notificationService != null) {
 					notificationService.sendAutoBlockAlert(c.asn(), c.asOrg(), targetSubnets, batchId, config.defaultTtlMinutes(), reason);
 				}
+			}
+		}
+
+		if (!skipped.isEmpty()) {
+			Set<Long> skippedAsns = new LinkedHashSet<>();
+			for (SubnetCandidate s : skipped) {
+				skippedAsns.add(s.asn());
+			}
+			long firstSkippedAsn = skippedAsns.iterator().next();
+			long strongestSkipped = skipped.getFirst().requests();
+			log.warn("Auto-mitigation circuit breaker reached (cap {}). Skipped {} lower-priority subnet(s) across ASN(s) {} (max {} reqs/subnet); released {} unused rule(s).",
+					config.maxActiveRules(), skipped.size(), skippedAsns, strongestSkipped, released);
+			mitigationService.recordAudit(null, "ASN-" + firstSkippedAsn, "AUTO_CIRCUIT_BREAKER",
+					"Circuit breaker limit of " + config.maxActiveRules() + " active auto rules reached. Skipped "
+							+ skipped.size() + " lower-priority subnet(s) across ASN(s) " + skippedAsns
+							+ " (strongest skipped subnet: " + strongestSkipped + " reqs); released " + released
+							+ " unused rule(s) to make room.",
+					0, "AUTO_ENGINE");
+			if (notificationService != null) {
+				notificationService.sendCircuitBreakerAlert(currentAutoCount, config.maxActiveRules(), firstSkippedAsn, skipped.size());
 			}
 		}
 
@@ -414,12 +572,14 @@ public class AutoMitigationService {
 			double returningPct = totalReq > 0 ? (returningReq * 100.0 / totalReq) : 0.0;
 
 			if (returningPct <= config.maxReturningRatioPct()) {
-				// Query individual candidate subnets that strictly have 0 authenticated requests
-				// and returning ratio <= maxReturningRatioPct
-				List<String> eligibleSubnets = findEligibleSubnetsForAsn(asn, safeHours, config.maxReturningRatioPct());
-				if (eligibleSubnets.size() >= config.carpetMinSubnets()) {
+				// Individual subnets must strictly have 0 authenticated requests, a returning ratio
+				// <= maxReturningRatioPct and at least carpetMinRequestsPerSubnet own requests
+				Map<String, Long> eligible = findEligibleSubnetsForAsn(asn, safeHours,
+						config.maxReturningRatioPct(), config.carpetMinRequestsPerSubnet());
+				if (eligible.size() >= config.carpetMinSubnets()) {
 					candidates.add(new CarpetAttackCandidate(
-							asn, asOrg, activeSubnets, totalReq, returningReq, returningPct, eligibleSubnets
+							asn, asOrg, activeSubnets, totalReq, returningReq, returningPct,
+							new ArrayList<>(eligible.keySet()), eligible
 					));
 				}
 			}
@@ -428,7 +588,10 @@ public class AutoMitigationService {
 		return candidates;
 	}
 
-	private List<String> findEligibleSubnetsForAsn(long asn, int hours, double maxReturningPct) {
+	/**
+	 * @return Eligible subnets of the ASN mapped to their request volume in the window, highest volume first
+	 */
+	private Map<String, Long> findEligibleSubnetsForAsn(long asn, int hours, double maxReturningPct, long minRequestsPerSubnet) {
 		Instant cutoff = Instant.now().minus(Duration.ofHours(hours));
 		String sql = """
 				SELECT
@@ -442,10 +605,11 @@ public class AutoMitigationService {
 				  AND (client_type IS NULL OR client_type NOT IN ('SEARCH_ENGINE', 'AI_CRAWLER', 'PRIVATE_NETWORK', 'INTERNAL_NETWORK'))
 				GROUP BY subnet_group
 				HAVING SUM(authenticated_requests) = 0
+				   AND SUM(total_requests) >= ?
 				ORDER BY sub_total DESC
 				""";
 
-		List<String> result = new ArrayList<>();
+		Map<String, Long> result = new LinkedHashMap<>();
 		jdbcTemplate.query(sql, rs -> {
 			String sub = rs.getString("subnet_group");
 			long total = rs.getLong("sub_total");
@@ -456,10 +620,10 @@ public class AutoMitigationService {
 			if (subReturnPct <= maxReturningPct && sub != null && !sub.isBlank()) {
 				MitigationService.PreflightCheckResult pre = mitigationService.evaluatePreflight(List.of(sub));
 				if (pre.safeToProceedWithoutOverride()) {
-					result.add(sub);
+					result.put(sub, total);
 				}
 			}
-		}, java.sql.Timestamp.from(cutoff), asn);
+		}, java.sql.Timestamp.from(cutoff), asn, Math.max(0L, minRequestsPerSubnet));
 
 		return result;
 	}
@@ -489,6 +653,10 @@ public class AutoMitigationService {
 		if (!properties.getMode().isBackgroundProcessingEnabled()) {
 			throw new IllegalStateException("Autonomous rule extension is disabled in " + properties.getMode() + " mode.");
 		}
+		return mitigationService.callWithDeferredFleetSync(() -> doEvaluateExtensions(config));
+	}
+
+	private int doEvaluateExtensions(EffectiveAutoSettings config) {
 		Instant now = Instant.now();
 		mitigationService.refreshDeterrenceMetrics();
 		List<MitigationRule> activeRules = mitigationService.getActiveRules();
@@ -561,6 +729,12 @@ public class AutoMitigationService {
 				""";
 
 		List<MitigationRule> activeRules = mitigationService.getActiveRules();
+		Set<Long> activelyMitigatedAsns = new HashSet<>();
+		for (MitigationRule r : activeRules) {
+			if (r.asn() != null) {
+				activelyMitigatedAsns.add(r.asn());
+			}
+		}
 		Set<Long> protectedAsns = config.getProtectedAsnSet();
 		List<CarpetRadarEntry> entries = new ArrayList<>();
 
@@ -577,7 +751,7 @@ public class AutoMitigationService {
 			returningPct = Math.round(returningPct * 10.0) / 10.0;
 
 			boolean isProtected = protectedAsns.contains(asn);
-			boolean hasActiveRule = activeRules.stream().anyMatch(r -> r.reason() != null && r.reason().contains("ASN " + asn));
+			boolean hasActiveRule = activelyMitigatedAsns.contains(asn);
 
 			List<String> topSubnets = findTopSubnetsForAsn(asn, safeHours, 5);
 
@@ -605,17 +779,21 @@ public class AutoMitigationService {
 				icon = "👥";
 			} else if (activeSubnets >= config.carpetMinSubnets() && totalReq >= config.carpetMinRequests()) {
 				if (returningPct <= config.maxReturningRatioPct()) {
-					List<String> eligibleSubnets = findEligibleSubnetsForAsn(asn, safeHours, config.maxReturningRatioPct());
-					if (eligibleSubnets.size() < config.carpetMinSubnets()) {
+					int eligibleCount = findEligibleSubnetsForAsn(asn, safeHours, config.maxReturningRatioPct(),
+							config.carpetMinRequestsPerSubnet()).size();
+					if (eligibleCount < config.carpetMinSubnets()) {
 						status = "BELOW_SUBNET_THRESHOLD";
-						statusReason = "Below threshold: " + eligibleSubnets.size() + " / " + config.carpetMinSubnets() + " eligible unauthenticated subnets";
+						statusReason = "Below threshold: " + eligibleCount + " / " + config.carpetMinSubnets()
+								+ " eligible subnets (unauthenticated"
+								+ (config.carpetMinRequestsPerSubnet() > 0 ? ", >= " + config.carpetMinRequestsPerSubnet() + " reqs each" : "")
+								+ ")";
 						badgeClass = "badge-secondary";
 						icon = "ℹ️";
 					} else {
 						status = "QUALIFIED";
 						statusReason = config.dryRun()
-								? "QUALIFIED (Dry-Run): Meets all criteria! Would autonomously block " + eligibleSubnets.size() + " unauthenticated subnets."
-								: "QUALIFIED (Live): Meets all criteria! Eligible for autonomous blocking (" + eligibleSubnets.size() + " unauthenticated subnets).";
+								? "QUALIFIED (Dry-Run): Meets all criteria! Would autonomously block " + eligibleCount + " unauthenticated subnets."
+								: "QUALIFIED (Live): Meets all criteria! Eligible for autonomous blocking (" + eligibleCount + " unauthenticated subnets).";
 						badgeClass = "badge-danger";
 						icon = "🚨";
 					}

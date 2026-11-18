@@ -10,6 +10,7 @@ import org.flywaydb.core.Flyway;
 import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.model.MitigationAuditEntry;
 import org.henbru.antidos.collector.model.MitigationRule;
+import org.henbru.antidos.collector.model.MonitoredValve;
 import org.henbru.antidos.collector.poller.ValveStatusClient;
 import org.henbru.antidos.collector.storage.MitigationRuleRepository;
 import org.henbru.antidos.collector.storage.MonitoredValveRepository;
@@ -96,8 +97,15 @@ class AutoMitigationServiceTest {
 		assertTrue(s1.getProtectedAsnSet().contains(8075L));
 		assertEquals(5.0, s1.getMaxReturningRatioPct(), 0.001);
 		assertEquals(0L, s1.getMaxAuthenticatedRequests());
+		assertEquals(20L, s1.getCarpetMinRequestsPerSubnet(), "YAML default for min requests per subnet");
 		assertEquals(50, s1.getMaxActiveRules());
 		assertFalse(s1.isHasDatabaseOverrides());
+
+		// 1b. New per-subnet threshold is persisted and reset like all other overrides
+		autoMitigationService.updateSettings(true, false, 3, 5000L, 2, "8075", 5.0, 0L, 35L, 50, 60, false, 24, "OPERATOR-CAROL");
+		assertEquals(35L, autoMitigationService.getEffectiveSettings().getCarpetMinRequestsPerSubnet());
+		autoMitigationService.resetToDefaults("OPERATOR-CAROL");
+		assertEquals(20L, autoMitigationService.getEffectiveSettings().getCarpetMinRequestsPerSubnet());
 
 		// 2. Update settings via database overrides
 		autoMitigationService.updateSettings(true, false, 5, 10000L, 3, "8075,16509", 2.5, 25L, 30, 90, true, 48, "OPERATOR-ALICE");
@@ -531,6 +539,182 @@ class AutoMitigationServiceTest {
 		assertTrue(blockedCidrs.contains("198.51.102.0/24"));
 		assertTrue(blockedCidrs.contains("198.51.103.0/24"));
 		assertFalse(blockedCidrs.contains("198.51.104.0/24"), "Authenticated subnet must NEVER be auto-blocked");
+	}
+
+	@Test
+	void testMinRequestsPerSubnetFiltersLowVolumeRotatingSubnets() {
+		Instant now = Instant.now();
+		// ASN 64800: 3 heavy subnets plus 50 rotating proxy subnets with only 5 requests each
+		for (int i = 1; i <= 3; i++) {
+			insertSubnetRollup("198.51.10" + i + ".0/24", 64800L, "Proxy Botnet ISP", 1000, 10, 0, now.minus(Duration.ofMinutes(10)));
+		}
+		for (int i = 0; i < 50; i++) {
+			insertSubnetRollup("203.0." + (100 + i) + ".0/24", 64800L, "Proxy Botnet ISP", 5, 0, 0, now.minus(Duration.ofMinutes(10)));
+		}
+
+		AutoMitigationService.EffectiveAutoSettings noFilter = new AutoMitigationService.EffectiveAutoSettings(
+				true, false, 3, 3000L, 2, "8075", 5.0, 0L, 0L, 5000, 60, false, 24, false);
+		assertEquals(53, autoMitigationService.findCarpetAttackCandidates(noFilter, 2).getFirst().eligibleSubnets().size());
+
+		AutoMitigationService.EffectiveAutoSettings withFilter = new AutoMitigationService.EffectiveAutoSettings(
+				true, false, 3, 3000L, 2, "8075", 5.0, 0L, 20L, 5000, 60, false, 24, false);
+		List<AutoMitigationService.CarpetAttackCandidate> candidates = autoMitigationService.findCarpetAttackCandidates(withFilter, 2);
+		assertEquals(1, candidates.size());
+		assertEquals(3, candidates.getFirst().eligibleSubnets().size(), "Only subnets with >= 20 own requests are eligible");
+		assertEquals(1000L, candidates.getFirst().eligibleSubnetRequests().get("198.51.101.0/24"));
+
+		autoMitigationService.evaluateAndEnforce(withFilter);
+		assertEquals(3, mitigationService.getActiveRules().size());
+	}
+
+	@Test
+	void testPriorityAllocatesCapacityToStrongestSubnetsAcrossAsns() {
+		Instant now = Instant.now();
+		// ASN 64700: larger aggregate volume but weak per subnet (10 x 800 = 8,000)
+		for (int i = 0; i < 10; i++) {
+			insertSubnetRollup("198.51.2" + i + ".0/24", 64700L, "Wide Weak Network", 800, 5, 0, now.minus(Duration.ofMinutes(10)));
+		}
+		// ASN 64701: smaller aggregate volume but strong per subnet (3 x 2,500 = 7,500)
+		for (int i = 0; i < 3; i++) {
+			insertSubnetRollup("203.0.12" + i + ".0/24", 64701L, "Concentrated Scraper", 2500, 5, 0, now.minus(Duration.ofMinutes(10)));
+		}
+
+		AutoMitigationService.EffectiveAutoSettings config = new AutoMitigationService.EffectiveAutoSettings(
+				true, false, 3, 5000L, 2, "8075", 5.0, 0L, 0L, 3, 60, false, 24, false);
+		autoMitigationService.evaluateAndEnforce(config);
+
+		List<MitigationRule> active = mitigationService.getActiveRules();
+		assertEquals(3, active.size(), "Cap of 3 rules must be respected");
+		assertTrue(active.stream().allMatch(r -> Long.valueOf(64701L).equals(r.asn())),
+				"Capacity must go to the strongest subnets, not to the ASN with the largest aggregate volume");
+		assertTrue(mitigationService.getRecentAuditEntries(20).stream()
+				.anyMatch(a -> "AUTO_CIRCUIT_BREAKER".equals(a.getAction()) && a.getDetails().contains("Skipped 10")));
+	}
+
+	@Test
+	void testUnusedAutoRulesAreReleasedWhenCapIsReached() {
+		Instant now = Instant.now();
+		MitigationRule unused1 = mitigationService.createOrUpdateBlock("203.0.113.0/24", 60, "Old carpet", MitigationRule.SOURCE_AUTO_CARPET, "B1", "AUTO_ENGINE");
+		MitigationRule unused2 = mitigationService.createOrUpdateBlock("203.0.114.0/24", 60, "Old carpet", MitigationRule.SOURCE_AUTO_CARPET, "B1", "AUTO_ENGINE");
+		MitigationRule effective = mitigationService.createOrUpdateBlock("203.0.115.0/24", 60, "Old carpet", MitigationRule.SOURCE_AUTO_CARPET, "B1", "AUTO_ENGINE");
+		MitigationRule manual = mitigationService.createOrUpdateBlock("203.0.116.0/24", 60, "Manual block", MitigationRule.SOURCE_MANUAL, "B2", "ADMIN");
+
+		// All rules are past their observation phase; only one has ever blocked traffic
+		jdbcTemplate.update("UPDATE mitigation_rules SET created_at = ?", Timestamp.from(now.minus(Duration.ofMinutes(30))));
+		jdbcTemplate.update("UPDATE mitigation_rules SET total_blocked_hits = 42, last_hit_at = ?, deterrence_state = ? WHERE id = ?",
+				Timestamp.from(now.minus(Duration.ofMinutes(1))), MitigationRule.DETERRENCE_PERSISTENT, effective.id());
+
+		// Candidate ASN with 3 strong subnets while the auto cap (3) is already full
+		insertSubnetRollup("198.51.101.0/24", 64600L, "New Attacker", 2500, 5, 0, now.minus(Duration.ofMinutes(10)));
+		insertSubnetRollup("198.51.102.0/24", 64600L, "New Attacker", 2000, 5, 0, now.minus(Duration.ofMinutes(10)));
+		insertSubnetRollup("198.51.103.0/24", 64600L, "New Attacker", 1500, 5, 0, now.minus(Duration.ofMinutes(10)));
+
+		AutoMitigationService.EffectiveAutoSettings config = new AutoMitigationService.EffectiveAutoSettings(
+				true, false, 3, 5000L, 2, "8075", 5.0, 0L, 0L, 3, 60, false, 24, false);
+		autoMitigationService.evaluateAndEnforce(config);
+
+		assertEquals(MitigationRule.STATUS_REVOKED, ruleRepository.findById(unused1.id()).orElseThrow().status());
+		assertEquals(MitigationRule.STATUS_REVOKED, ruleRepository.findById(unused2.id()).orElseThrow().status());
+		assertEquals(MitigationRule.STATUS_ACTIVE, ruleRepository.findById(effective.id()).orElseThrow().status(),
+				"Rules that blocked traffic must never be released early");
+		assertEquals(MitigationRule.STATUS_ACTIVE, ruleRepository.findById(manual.id()).orElseThrow().status(),
+				"Manual rules must never be released by the auto engine");
+
+		List<String> newCidrs = mitigationService.getActiveRules().stream()
+				.filter(r -> Long.valueOf(64600L).equals(r.asn())).map(MitigationRule::cidr).toList();
+		assertEquals(List.of("198.51.101.0/24", "198.51.102.0/24").stream().sorted().toList(), newCidrs.stream().sorted().toList(),
+				"The two strongest subnets take the released capacity");
+
+		List<MitigationAuditEntry> audits = mitigationService.getRecentAuditEntries(30);
+		assertTrue(audits.stream().anyMatch(a -> "AUTO_RELEASE_UNUSED".equals(a.getAction())));
+		assertTrue(audits.stream().anyMatch(a -> "AUTO_CIRCUIT_BREAKER".equals(a.getAction())));
+	}
+
+	@Test
+	void testFreshRulesAreNotReleasedDuringObservationPhase() {
+		Instant now = Instant.now();
+		for (int i = 0; i < 3; i++) {
+			mitigationService.createOrUpdateBlock("203.0.11" + i + ".0/24", 60, "Fresh carpet", MitigationRule.SOURCE_AUTO_CARPET, "B1", "AUTO_ENGINE");
+		}
+		for (int i = 1; i <= 3; i++) {
+			insertSubnetRollup("198.51.10" + i + ".0/24", 64601L, "Another Attacker", 2000, 5, 0, now.minus(Duration.ofMinutes(10)));
+		}
+		AutoMitigationService.EffectiveAutoSettings config = new AutoMitigationService.EffectiveAutoSettings(
+				true, false, 3, 5000L, 2, "8075", 5.0, 0L, 0L, 3, 60, false, 24, false);
+		autoMitigationService.evaluateAndEnforce(config);
+
+		List<MitigationRule> active = mitigationService.getActiveRules();
+		assertEquals(3, active.size());
+		assertTrue(active.stream().noneMatch(r -> Long.valueOf(64601L).equals(r.asn())));
+	}
+
+	@Test
+	void testReactivatedRuleStartsFreshLifecycle() {
+		MitigationRule first = mitigationService.createOrUpdateBlock("203.0.113.0/24", 60, "First", MitigationRule.SOURCE_AUTO_CARPET, "B1", "AUTO_ENGINE");
+		Instant old = Instant.now().minus(Duration.ofDays(3));
+		jdbcTemplate.update("UPDATE mitigation_rules SET status = 'EXPIRED', created_at = ?, expires_at = ?, total_blocked_hits = 99, last_hit_at = ? WHERE id = ?",
+				Timestamp.from(old), Timestamp.from(old.plus(Duration.ofHours(1))), Timestamp.from(old), first.id());
+
+		MitigationRule again = mitigationService.createOrUpdateBlock("203.0.113.0/24", 60, "Again", MitigationRule.SOURCE_AUTO_CARPET, "B2", "AUTO_ENGINE");
+		assertEquals(first.id(), again.id());
+		assertTrue(again.createdAt().isAfter(Instant.now().minus(Duration.ofMinutes(1))), "Activation time must be reset");
+		assertEquals(0L, again.totalBlockedHits());
+		assertEquals(null, again.lastHitAt());
+
+		// Extending an active rule keeps its lifecycle
+		jdbcTemplate.update("UPDATE mitigation_rules SET total_blocked_hits = 7 WHERE id = ?", again.id());
+		MitigationRule extended = mitigationService.createOrUpdateBlock("203.0.113.0/24", 60, "Extend", MitigationRule.SOURCE_AUTO_CARPET, "B3", "AUTO_ENGINE");
+		assertEquals(7L, extended.totalBlockedHits());
+	}
+
+	@Test
+	void testCompactValveLabelsAreShortAndSafe() {
+		Instant exp = Instant.now().plus(Duration.ofMinutes(30));
+		MitigationRule auto = new MitigationRule(1L, "198.51.100.0/24", 4, 24, "ALL", MitigationRule.STATUS_ACTIVE,
+				MitigationRule.SOURCE_AUTO_CARPET, "B", "Carpet attack from ASN 7922 (Comcast Cable Communications, LLC): 6692 subnets, 16433 reqs",
+				7922L, "Comcast", Instant.now(), Instant.now(), exp, null, null, 0L, 0, null, MitigationRule.DETERRENCE_OBSERVING);
+		MitigationRule manual = new MitigationRule(2L, "203.0.113.0/24", 4, 24, "ALL", MitigationRule.STATUS_ACTIVE,
+				MitigationRule.SOURCE_MANUAL, null, "Scraper; see ticket|42\nsecond line and a very long explanation that goes on and on beyond limits",
+				null, null, Instant.now(), Instant.now(), exp, null, null, 0L, 0, null, MitigationRule.DETERRENCE_OBSERVING);
+
+		assertEquals("AUTO_CARPET AS7922", MitigationService.compactValveLabel(auto));
+		String manualLabel = MitigationService.compactValveLabel(manual);
+		assertTrue(manualLabel.length() <= 64);
+		assertFalse(manualLabel.contains(";"), "Valve splits block lines on ';'");
+		assertFalse(manualLabel.contains("|"));
+		assertFalse(manualLabel.contains("\n"));
+
+		String payload = MitigationService.buildBlocksPayload(List.of(auto, manual));
+		assertEquals(2, payload.split("[\\r\\n;]+").length, "Payload must parse into exactly one line per rule on the Valve");
+	}
+
+	@Test
+	void testDeferredFleetSyncCoalescesPushes() {
+		Instant now = Instant.now();
+		valveRepository.upsert(new MonitoredValve(
+				"SRV-SYNC", "MITIGATION", "Mitigation valve", 1, "BLOCKING", false, false, 429,
+				100, 60, 5, 0.8f, 32, 64, 1000, 1000, null, null, null, null,
+				"/antidos-status", "127.0.0.1", now, 1));
+		valveRepository.updateDynamicMitigationStats("SRV-SYNC", "MITIGATION", true, "/antidos-status", 0, 0L, 0L);
+
+		long before = countAudits("FLEET_SYNC");
+		mitigationService.createOrUpdateBlock("203.0.113.0/24", 60, "A", MitigationRule.SOURCE_MANUAL, null, "ADMIN");
+		mitigationService.createOrUpdateBlock("203.0.114.0/24", 60, "B", MitigationRule.SOURCE_MANUAL, null, "ADMIN");
+		assertEquals(before + 2, countAudits("FLEET_SYNC"), "Without deferral every change pushes the full rule set");
+
+		long mid = countAudits("FLEET_SYNC");
+		mitigationService.runWithDeferredFleetSync(() -> {
+			mitigationService.createOrUpdateBlock("203.0.115.0/24", 60, "C", MitigationRule.SOURCE_MANUAL, null, "ADMIN");
+			mitigationService.createOrUpdateBlock("203.0.116.0/24", 60, "D", MitigationRule.SOURCE_MANUAL, null, "ADMIN");
+			mitigationService.runWithDeferredFleetSync(() ->
+					mitigationService.createOrUpdateBlock("203.0.117.0/24", 60, "E", MitigationRule.SOURCE_MANUAL, null, "ADMIN"));
+		});
+		assertEquals(mid + 1, countAudits("FLEET_SYNC"), "Deferred scope must push exactly once");
+	}
+
+	private long countAudits(String action) {
+		Long c = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM mitigation_audit_log WHERE action = ?", Long.class, action);
+		return c != null ? c : 0L;
 	}
 
 	private void insertSubnetRollup(

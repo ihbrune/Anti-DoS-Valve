@@ -71,6 +71,17 @@ public class MitigationService {
 
 	private final ConcurrentHashMap<String, ValveSyncState> valveSyncStates = new ConcurrentHashMap<>();
 
+	/** Per-thread scope that coalesces multiple fleet sync requests into a single push. */
+	private static final class DeferredSyncState {
+		int depth;
+		boolean pending;
+	}
+
+	private final ThreadLocal<DeferredSyncState> deferredFleetSync = new ThreadLocal<>();
+
+	/** Observation phase after activation during which a rule is never considered unused. */
+	public static final long OBSERVATION_WINDOW_SECONDS = 600L;
+
 	private final CollectorProperties properties;
 	private final MitigationRuleRepository ruleRepository;
 	private final MonitoredValveRepository valveRepository;
@@ -591,6 +602,12 @@ public class MitigationService {
 		String safeReason = (reason != null && !reason.isBlank()) ? reason.trim() : "Manual dynamic CIDR mitigation";
 		String safeSource = (source != null && !source.isBlank()) ? source.trim() : MitigationRule.SOURCE_MANUAL;
 
+		// A rule row is reused when the same CIDR is blocked again. If the previous incarnation is no longer
+		// active, start a fresh lifecycle: reset activation time and hit statistics so that deterrence tracking,
+		// the max-extension cap and unused-rule eviction are not skewed by stale history.
+		boolean continuesActiveRule = existingOpt.isPresent() && existingOpt.get().isCurrentlyActive(now);
+		Optional<MitigationRule> carried = continuesActiveRule ? existingOpt : Optional.empty();
+
 		MitigationRule rule = new MitigationRule(
 				existingOpt.map(MitigationRule::id).orElse(null),
 				norm.canonicalCidr(),
@@ -603,14 +620,14 @@ public class MitigationService {
 				safeReason,
 				asn != null ? asn : existingOpt.map(MitigationRule::asn).orElse(null),
 				asnOrg != null ? asnOrg : existingOpt.map(MitigationRule::asnOrganization).orElse(null),
-				existingOpt.map(MitigationRule::createdAt).orElse(now),
+				carried.map(MitigationRule::createdAt).orElse(now),
 				now,
 				expiresAt,
 				null,
 				null,
-				existingOpt.map(MitigationRule::totalBlockedHits).orElse(0L),
-				existingOpt.map(MitigationRule::peakDistinctIps).orElse(0),
-				existingOpt.map(MitigationRule::lastHitAt).orElse(null),
+				carried.map(MitigationRule::totalBlockedHits).orElse(0L),
+				carried.map(MitigationRule::peakDistinctIps).orElse(0),
+				carried.map(MitigationRule::lastHitAt).orElse(null),
 				MitigationRule.DETERRENCE_OBSERVING
 		);
 
@@ -983,6 +1000,12 @@ public class MitigationService {
 	 */
 	public FleetSyncResult syncFleetMitigations() {
 		requireWriteMode("Fleet mitigation synchronization");
+		DeferredSyncState deferred = deferredFleetSync.get();
+		if (deferred != null && deferred.depth > 0) {
+			// Coalesce: the outermost deferred scope performs a single sync with the final rule set.
+			deferred.pending = true;
+			return new FleetSyncResult(0, 0, 0, 0L, List.of());
+		}
 		Instant now = Instant.now();
 		ruleRepository.expireElapsedRules(now);
 		List<MitigationRule> activeRules = ruleRepository.findActiveRules(now);
@@ -1250,21 +1273,46 @@ public class MitigationService {
 		return endpoint.getToken();
 	}
 
-	private static String buildBlocksPayload(List<MitigationRule> activeRules) {
+	private static final int MAX_VALVE_LABEL_LENGTH = 64;
+
+	/**
+	 * Builds the {@code cidr|expiresAtMillis|label} payload pushed to the Valves.
+	 * <p>
+	 * The full rule reason stays in the Collector database. Valves only receive a compact, sanitized label
+	 * because the payload is re-sent on every fleet sync and echoed back in every status poll. The label must
+	 * never contain {@code |}, line breaks or {@code ;} (the Valve splits block lines on {@code ;}).
+	 */
+	static String buildBlocksPayload(List<MitigationRule> activeRules) {
 		if (activeRules == null || activeRules.isEmpty()) {
 			return "";
 		}
 		StringBuilder sb = new StringBuilder(activeRules.size() * 48);
 		for (MitigationRule r : activeRules) {
-			String cleanReason = r.reason() != null ? r.reason().replace('|', '/').replace('\n', ' ').replace('\r', ' ') : "Dynamic Mitigation";
 			sb.append(r.cidr())
 					.append('|')
 					.append(r.expiresAt().toEpochMilli())
 					.append('|')
-					.append(cleanReason)
+					.append(compactValveLabel(r))
 					.append('\n');
 		}
 		return sb.toString();
+	}
+
+	static String compactValveLabel(MitigationRule r) {
+		String source = (r.source() != null && !r.source().isBlank()) ? r.source().trim() : MitigationRule.SOURCE_MANUAL;
+		boolean autoRule = MitigationRule.SOURCE_AUTO_CARPET.equalsIgnoreCase(source)
+				|| MitigationRule.SOURCE_AUTO_RULE.equalsIgnoreCase(source);
+		String label;
+		if (autoRule && r.asn() != null) {
+			label = source + " AS" + r.asn();
+		} else {
+			label = (r.reason() != null && !r.reason().isBlank()) ? r.reason().trim() : "Dynamic Mitigation";
+		}
+		label = label.replace('|', '/').replace('\n', ' ').replace('\r', ' ').replace(';', ',');
+		if (label.length() > MAX_VALVE_LABEL_LENGTH) {
+			label = label.substring(0, MAX_VALVE_LABEL_LENGTH - 3).trim() + "...";
+		}
+		return label;
 	}
 
 	// =========================================================================
@@ -1368,6 +1416,100 @@ public class MitigationService {
 			ruleRepository.expireElapsedRules(now);
 		}
 		return ruleRepository.findActiveRules(now);
+	}
+
+	// =========================================================================
+	// Coalesced Fleet Synchronization
+	// =========================================================================
+
+	/**
+	 * Executes the given action while coalescing all fleet sync requests issued on the current thread.
+	 * Exactly one {@code replace} push with the final rule set is performed when the outermost scope ends
+	 * (and only if at least one sync was requested). Scopes may be nested.
+	 */
+	public <T> T callWithDeferredFleetSync(java.util.function.Supplier<T> action) {
+		DeferredSyncState state = deferredFleetSync.get();
+		if (state == null) {
+			state = new DeferredSyncState();
+			deferredFleetSync.set(state);
+		}
+		state.depth++;
+		try {
+			return action.get();
+		} finally {
+			state.depth--;
+			if (state.depth == 0) {
+				deferredFleetSync.remove();
+				if (state.pending) {
+					try {
+						syncFleetMitigations();
+					} catch (RuntimeException e) {
+						log.warn("Coalesced fleet mitigation sync failed: {}", e.getMessage());
+					}
+				}
+			}
+		}
+	}
+
+	public void runWithDeferredFleetSync(Runnable action) {
+		callWithDeferredFleetSync(() -> {
+			action.run();
+			return null;
+		});
+	}
+
+	// =========================================================================
+	// Capacity Management: Releasing Unused Autonomous Rules
+	// =========================================================================
+
+	/**
+	 * Counts active autonomous rules that never blocked a request after their observation phase.
+	 */
+	public int countUnusedAutoRules(int limit) {
+		if (limit <= 0) {
+			return 0;
+		}
+		Instant now = Instant.now();
+		return ruleRepository.findUnusedAutoRules(now, now.minusSeconds(OBSERVATION_WINDOW_SECONDS), limit).size();
+	}
+
+	/**
+	 * Releases up to {@code maxToRelease} active autonomous rules that have not blocked a single request since
+	 * their activation (observation phase elapsed, oldest first) to make room for higher-priority candidates.
+	 * The regular TTL remains the only lifetime of a rule; this release only happens under capacity pressure.
+	 *
+	 * @return Number of released rules
+	 */
+	public int releaseUnusedAutoRules(int maxToRelease, String reason, String actor) {
+		requireWriteMode("Releasing unused mitigation rules");
+		if (maxToRelease <= 0) {
+			return 0;
+		}
+		Instant now = Instant.now();
+		List<MitigationRule> victims = ruleRepository.findUnusedAutoRules(
+				now, now.minusSeconds(OBSERVATION_WINDOW_SECONDS), maxToRelease);
+		if (victims.isEmpty()) {
+			return 0;
+		}
+		String safeReason = (reason != null && !reason.isBlank()) ? reason.trim()
+				: "Released unused rule to free capacity for higher-priority subnets";
+		int released = ruleRepository.revokeRulesByIds(victims.stream().map(MitigationRule::id).toList(), now, safeReason);
+		if (released > 0) {
+			ruleRepository.insertAuditEntry(new MitigationAuditEntry(
+					null,
+					victims.getFirst().id(),
+					released + " unused rules (" + victims.getFirst().cidr() + "...)",
+					null,
+					"AUTO_RELEASE_UNUSED",
+					actor != null ? actor : "AUTO_ENGINE",
+					0,
+					safeReason + " [" + released + " rules without blocked hits]",
+					now
+			));
+			log.info("Released {} unused autonomous rule(s) to free capacity (oldest: {})", released, victims.getFirst().cidr());
+			syncFleetMitigations();
+		}
+		return released;
 	}
 
 	public Optional<MitigationRule> getRuleById(long ruleId) {

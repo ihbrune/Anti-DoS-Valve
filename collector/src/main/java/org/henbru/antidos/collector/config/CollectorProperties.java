@@ -490,6 +490,12 @@ public class CollectorProperties {
 		private String protectedAsns = "8075,16509,14618,15169,13335";
 		private double maxReturningRatioPct = 5.0;
 		private long maxAuthenticatedRequests = 0L;
+		/**
+		 * Minimum requests a single subnet must have produced within the lookback window to be eligible
+		 * for an autonomous block. Filters out rotating residential proxy subnets that only send a handful
+		 * of requests before moving on (blocking them after the fact has no effect). 0 disables the filter.
+		 */
+		private long carpetMinRequestsPerSubnet = 20L;
 		private int maxActiveRules = 100;
 		private int defaultTtlMinutes = 60;
 		private boolean autoExtendPersistent = true;
@@ -512,6 +518,8 @@ public class CollectorProperties {
 		public void setMaxReturningRatioPct(double maxReturningRatioPct) { this.maxReturningRatioPct = Math.max(0.0, Math.min(100.0, maxReturningRatioPct)); }
 		public long getMaxAuthenticatedRequests() { return maxAuthenticatedRequests; }
 		public void setMaxAuthenticatedRequests(long maxAuthenticatedRequests) { this.maxAuthenticatedRequests = Math.max(0L, maxAuthenticatedRequests); }
+		public long getCarpetMinRequestsPerSubnet() { return carpetMinRequestsPerSubnet; }
+		public void setCarpetMinRequestsPerSubnet(long carpetMinRequestsPerSubnet) { this.carpetMinRequestsPerSubnet = Math.max(0L, carpetMinRequestsPerSubnet); }
 		public int getMaxActiveRules() { return maxActiveRules; }
 		public void setMaxActiveRules(int maxActiveRules) { this.maxActiveRules = Math.max(1, maxActiveRules); }
 		public int getDefaultTtlMinutes() { return defaultTtlMinutes; }

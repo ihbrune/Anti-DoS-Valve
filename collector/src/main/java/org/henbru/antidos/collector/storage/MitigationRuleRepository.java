@@ -80,6 +80,10 @@ public class MitigationRuleRepository {
 				    expires_at = EXCLUDED.expires_at,
 				    revoked_at = EXCLUDED.revoked_at,
 				    revoked_reason = EXCLUDED.revoked_reason,
+				    created_at = EXCLUDED.created_at,
+				    total_blocked_hits = EXCLUDED.total_blocked_hits,
+				    peak_distinct_ips = EXCLUDED.peak_distinct_ips,
+				    last_hit_at = EXCLUDED.last_hit_at,
 				    deterrence_state = EXCLUDED.deterrence_state
 				""";
 
@@ -149,6 +153,51 @@ public class MitigationRuleRepository {
 		return StorageRetryUtil.executeWithRetry("MitigationRuleRepository.expireElapsedRules", () -> jdbcTemplate.update(
 				"UPDATE mitigation_rules SET status = 'EXPIRED', updated_at = ? WHERE status = 'ACTIVE' AND expires_at <= ?",
 				Timestamp.from(now), Timestamp.from(now)));
+	}
+
+	/**
+	 * Finds active autonomous rules that have never blocked a single request since activation and whose
+	 * observation phase has elapsed. These are the safest candidates to release early when the auto-rule
+	 * capacity is exhausted. Oldest rules are returned first.
+	 */
+	public List<MitigationRule> findUnusedAutoRules(Instant now, Instant activatedBefore, int limit) {
+		return jdbcTemplate.query("""
+				SELECT * FROM mitigation_rules
+				WHERE status = 'ACTIVE'
+				  AND expires_at > ?
+				  AND source IN ('AUTO_CARPET', 'AUTO_RULE')
+				  AND COALESCE(total_blocked_hits, 0) = 0
+				  AND last_hit_at IS NULL
+				  AND created_at <= ?
+				  AND (deterrence_state IS NULL OR deterrence_state <> 'PERSISTENT')
+				ORDER BY created_at ASC, id ASC
+				LIMIT ?
+				""", RULE_MAPPER, Timestamp.from(now), Timestamp.from(activatedBefore), Math.max(1, limit));
+	}
+
+	/**
+	 * Revokes the given rules in bulk (chunked to respect SQLite's bound-parameter limit).
+	 */
+	public int revokeRulesByIds(List<Long> ids, Instant now, String reason) {
+		if (ids == null || ids.isEmpty()) {
+			return 0;
+		}
+		int total = 0;
+		final int chunkSize = 500;
+		for (int start = 0; start < ids.size(); start += chunkSize) {
+			List<Long> chunk = ids.subList(start, Math.min(ids.size(), start + chunkSize));
+			String placeholders = String.join(",", java.util.Collections.nCopies(chunk.size(), "?"));
+			List<Object> params = new java.util.ArrayList<>(chunk.size() + 3);
+			params.add(Timestamp.from(now));
+			params.add(reason);
+			params.add(Timestamp.from(now));
+			params.addAll(chunk);
+			String sql = "UPDATE mitigation_rules SET status = 'REVOKED', revoked_at = ?, revoked_reason = ?, updated_at = ? "
+					+ "WHERE status = 'ACTIVE' AND id IN (" + placeholders + ")";
+			total += StorageRetryUtil.executeWithRetry("MitigationRuleRepository.revokeRulesByIds",
+					() -> jdbcTemplate.update(sql, params.toArray()));
+		}
+		return total;
 	}
 
 	public int revokeAllActive(Instant now, String reason) {
