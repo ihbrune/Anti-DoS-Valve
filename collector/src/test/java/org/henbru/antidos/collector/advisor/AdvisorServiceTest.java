@@ -267,4 +267,33 @@ class AdvisorServiceTest {
 		assertTrue(sampFinding.explanation().contains("activeSampleThreshold' is set to 0"));
 		assertTrue(sampFinding.suggestedConfigXml().contains("activeSampleThreshold=\"50\""));
 	}
+
+	@Test
+	void testUndersizedSlotBufferDetection() {
+		Instant now = Instant.now();
+
+		// Configure a valve with numberOfSlots = 1 (undersized ring buffer)
+		MonitoredValve valve = new MonitoredValve(
+				"test-server-01", "STATUS-AND-MITIGATION", "Dynamic Mitigation Valve", 1, "BLOCKING", false, false,
+				429, 30, 30, 1, 0f, 32, 128, 1000, 1000,
+				null, null, null, null, null, null, "auto",
+				false, null, false, null, null, null, 900, 50000, "ALL", 0,
+				now, 1, true
+		);
+		monitoredValveRepository.upsert(valve);
+
+		AdvisorReport report = advisorService.generateReport(24, List.of("test-server-01"), List.of("STATUS-AND-MITIGATION"));
+		assertNotNull(report);
+
+		AdvisorFinding slotFinding = report.findings().stream()
+				.filter(f -> f.category() == AdvisorCategory.SLOT_BUFFER_TUNING)
+				.findFirst()
+				.orElseThrow();
+
+		assertEquals(AdvisorSeverity.WARNING, slotFinding.severity());
+		assertEquals("STATUS-AND-MITIGATION", slotFinding.valveName());
+		assertTrue(slotFinding.title().contains("numberOfSlots=1"));
+		assertTrue(slotFinding.explanation().contains("fewer than 3 slots"));
+		assertTrue(slotFinding.suggestedConfigXml().contains("numberOfSlots=\"10\""));
+	}
 }

@@ -1409,6 +1409,100 @@ class DatabaseMigrationAndRepositoryTest {
 			jdbcTemplate.update("DELETE FROM client_subnet_rollups WHERE server_id = 'SCATTER-NODE'");
 		}
 	}
+
+	@Test
+	void testFleet24hRequestBlockedAndMarkedSummaries() {
+		Instant now = Instant.now().plus(30, ChronoUnit.DAYS);
+		Instant since1h = now.minus(1, ChronoUnit.HOURS);
+
+		jdbcTemplate.update("DELETE FROM client_events WHERE server_id IN ('DEDUP-SRV-1', 'DEDUP-SRV-2')");
+		jdbcTemplate.update("DELETE FROM slot_snapshots WHERE server_id IN ('DEDUP-SRV-1', 'DEDUP-SRV-2')");
+		jdbcTemplate.update("DELETE FROM monitored_valves WHERE server_id IN ('DEDUP-SRV-1', 'DEDUP-SRV-2')");
+		try {
+			// Configure pipeline valves for two servers, including one pure upstream dynamic-mitigation valve
+			monitoredValveRepository.upsert(new org.henbru.antidos.collector.model.MonitoredValve(
+					"DEDUP-SRV-1", "STATUS-AND-MITIGATION", "Dynamic Mitigation", 1,
+					"BLOCKING", false, false, 429, 30, 30, 10, 0f, 32, 128, 1000, 1000,
+					null, null, null, false, null, "/antidos-status", "127.0.0.1", "auto",
+					false, "_adv", false, "OFF", null, null, 900, 50000, "ALL", 0,
+					true, "/antidos-mitigate", 0, 0L, 0L, 1, 16, 32, 86400, 5000,
+					now, 1, true
+			));
+			monitoredValveRepository.upsert(new org.henbru.antidos.collector.model.MonitoredValve(
+					"DEDUP-SRV-1", "SUBNET-MONITORING", "Subnet Monitor", 2,
+					"MARKING", false, false, 429, 5000, 120, 30, 0f, 24, 64, 5000, 5000,
+					".*", null, null, false, null, "/antidos-status", "127.0.0.1", "auto",
+					false, "_adv", false, "OFF", null, null, 900, 50000, "ALL", 0,
+					false, null, 0, 0L, 0L, 1, 16, 32, 86400, 5000,
+					now, 2, true
+			));
+			monitoredValveRepository.upsert(new org.henbru.antidos.collector.model.MonitoredValve(
+					"DEDUP-SRV-1", "FUER-ALLE", "App Limiter", 3,
+					"BLOCKING", false, false, 429, 100, 10, 20, 0f, 32, 128, 1000, 1000,
+					".*/blog/.*", null, null, false, null, "/antidos-status", "127.0.0.1", "auto",
+					false, "_adv", false, "OFF", null, null, 900, 50000, "ALL", 0,
+					false, null, 0, 0L, 0L, 1, 16, 32, 86400, 5000,
+					now, 3, true
+			));
+
+			// Server 1 snapshots: pure mitigation (150), subnet monitoring (1000), downstream limiter (400 -> must NOT double-count)
+			slotSnapshotRepository.upsert(new SlotSnapshot(
+					null, "DEDUP-SRV-1", "STATUS-AND-MITIGATION", 10L,
+					now.minusSeconds(60), now, 150L, 0, 2, 0, true, now
+			));
+			slotSnapshotRepository.upsert(new SlotSnapshot(
+					null, "DEDUP-SRV-1", "SUBNET-MONITORING", 10L,
+					now.minusSeconds(60), now, 1000L, 20, 0, 0, true, now
+			));
+			slotSnapshotRepository.upsert(new SlotSnapshot(
+					null, "DEDUP-SRV-1", "FUER-ALLE", 10L,
+					now.minusSeconds(60), now, 400L, 10, 1, 1, true, now
+			));
+
+			// Server 2 snapshots: subnet monitoring (600), downstream limiter (250 -> must NOT double-count)
+			slotSnapshotRepository.upsert(new SlotSnapshot(
+					null, "DEDUP-SRV-2", "SUBNET-MONITORING", 10L,
+					now.minusSeconds(60), now, 600L, 12, 0, 0, true, now
+			));
+			slotSnapshotRepository.upsert(new SlotSnapshot(
+					null, "DEDUP-SRV-2", "FUER-EXTERNE", 10L,
+					now.minusSeconds(60), now, 250L, 5, 0, 0, true, now
+			));
+
+			// Server 1 expected: 1000 + 150 = 1150; Server 2 expected: 600 -> Total = 1750 (vs naive 2400)
+			assertEquals(1750L, slotSnapshotRepository.sumRequestsSince(since1h));
+
+			// Before client_events exist, fallback returns counter sums (2+1 = 3 blocked, 1 marked)
+			assertEquals(3L, slotSnapshotRepository.sumBlockedRequestsSince(since1h));
+			assertEquals(1L, slotSnapshotRepository.sumMarkedRequestsSince(since1h));
+
+			// Insert actual client_events: BLOCKED = 45 + 80 = 125 requests; MARKED = 37 requests
+			clientEventRepository.batchUpsert(List.of(
+					new ClientEvent(
+							null, "DEDUP-SRV-1", "STATUS-AND-MITIGATION", 10L,
+							now.minusSeconds(30), "198.51.100.0/24",
+							45, 0, true, ClientEvent.STATUS_BLOCKED, true, now
+					),
+					new ClientEvent(
+							null, "DEDUP-SRV-1", "FUER-ALLE", 10L,
+							now.minusSeconds(30), "203.0.113.5",
+							80, 0, true, ClientEvent.STATUS_BLOCKED, true, now
+					),
+					new ClientEvent(
+							null, "DEDUP-SRV-1", "FUER-ALLE", 10L,
+							now.minusSeconds(30), "192.0.2.15",
+							37, 0, true, ClientEvent.STATUS_MARKED, true, now
+					)
+			));
+
+			assertEquals(125L, slotSnapshotRepository.sumBlockedRequestsSince(since1h));
+			assertEquals(37L, slotSnapshotRepository.sumMarkedRequestsSince(since1h));
+		} finally {
+			jdbcTemplate.update("DELETE FROM client_events WHERE server_id IN ('DEDUP-SRV-1', 'DEDUP-SRV-2')");
+			jdbcTemplate.update("DELETE FROM slot_snapshots WHERE server_id IN ('DEDUP-SRV-1', 'DEDUP-SRV-2')");
+			jdbcTemplate.update("DELETE FROM monitored_valves WHERE server_id IN ('DEDUP-SRV-1', 'DEDUP-SRV-2')");
+		}
+	}
 }
 
 

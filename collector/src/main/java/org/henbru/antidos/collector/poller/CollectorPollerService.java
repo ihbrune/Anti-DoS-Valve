@@ -430,8 +430,10 @@ public class CollectorPollerService {
 
 		// 2. Poll the finalized previous slot (normal flow)
 		// Completed slots are immutable; only fetch if this finalized slot has not been ingested yet and catch-up did not fail
+		boolean previousFetched = false;
 		if (!catchUpFailed && lastCompletedKey > 0 && (latestCompletedKey.isEmpty() || latestCompletedKey.get() < lastCompletedKey)) {
 			SlotIngestResult r = fetchAndStoreSlot(endpoint, valveName, "previous", true, pollTime, isMarkingOrSim);
+			previousFetched = r.slotsCount() > 0;
 			slots += r.slotsCount();
 			events += r.eventsCount();
 			blockedEvents += r.blockedEventsCount();
@@ -445,8 +447,10 @@ public class CollectorPollerService {
 			}
 		}
 
-		// 3. Optional: Poll intermediate snapshot of current in-progress slot
-		if (!catchUpFailed && endpoint.isPollIntermediateSlots()) {
+		// 3. Poll intermediate snapshot of current in-progress slot if configured,
+		// or as fallback when a single-slot ring buffer (numberOfSlots == 1) already evicted the previous slot
+		boolean singleSlotFallback = summary.numberOfSlots() == 1 && !previousFetched;
+		if (!catchUpFailed && (endpoint.isPollIntermediateSlots() || singleSlotFallback)) {
 			SlotIngestResult r = fetchAndStoreSlot(endpoint, valveName, "current", false, pollTime, isMarkingOrSim);
 			slots += r.slotsCount();
 			events += r.eventsCount();

@@ -41,6 +41,9 @@ class DashboardControllerTest {
 	@Autowired
 	private org.henbru.antidos.collector.storage.SubnetProfileRepository subnetProfileRepository;
 
+	@Autowired
+	private org.henbru.antidos.collector.storage.SubnetRollupRepository subnetRollupRepository;
+
 	@Test
 	void testIndexPageLoads() throws Exception {
 		mockMvc.perform(get("/"))
@@ -621,6 +624,21 @@ class DashboardControllerTest {
 
 	@Test
 	void testAnalyticsApiEndpoints() throws Exception {
+		java.time.Instant now = java.time.Instant.now();
+		subnetRollupRepository.batchUpsert(List.of(new org.henbru.antidos.collector.model.ClientSubnetRollup(
+				null,
+				now.minus(1, java.time.temporal.ChronoUnit.HOURS),
+				now,
+				60,
+				"Demo-Server",
+				"SUBNET-MONITORING",
+				"198.51.100.0/24",
+				500L, 450L, 50L, 0L, 12, 2, 1, 60, 1,
+				24940L, "Hetzner Online GmbH", "DE",
+				org.henbru.antidos.collector.model.ClientType.DATACENTER,
+				now, 0L, 100L, 0L, 100L
+		)));
+
 		mockMvc.perform(get("/api/v1/analytics/overview").param("hours", "24"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.timeline").isArray())

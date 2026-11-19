@@ -11,7 +11,8 @@ public enum AdvisorCategory {
 	DATACENTER_OFFLOAD("Datacenter Scraping Offload", "Massive cloud and bot scraping waves mitigated by Valve; edge offload candidate"),
 	STEALTH_CARPET_ATTACK("Stealth Carpet Attack", "Distributed multi-subnet traffic waves evading local thresholds with low or zero blocks"),
 	CHAMELEON_BOT("Chameleon Scraper / Bot", "Rotated user-agent fingerprints from single IP or subnet with zero authenticated or returning sessions"),
-	SAMPLING_TUNING("Forensic Sampling Recommendation", "Valves handling subnet-aggregated traffic without forensic active request sampling");
+	SAMPLING_TUNING("Forensic Sampling Recommendation", "Valves handling subnet-aggregated traffic without forensic active request sampling"),
+	SLOT_BUFFER_TUNING("Slot Ring Buffer Sizing", "Valves with undersized slot ring buffers causing telemetry loss between polls");
 
 	private final String label;
 	private final String description;

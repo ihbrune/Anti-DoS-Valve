@@ -842,6 +842,52 @@ public class AdvisorService {
 						null
 				));
 			}
+
+			// Undersized ring buffers (< 3 slots) risk overwriting finalized slots before Collector can poll slot=previous
+			if (v.numberOfSlots() > 0 && v.numberOfSlots() < 3) {
+				String id = "slots-" + sanitizeId(v.serverId() + "-" + v.valveName());
+				String title = String.format("Undersized Slot Ring Buffer (numberOfSlots=%d) on '%s' (%s)",
+						v.numberOfSlots(), v.valveName(), v.serverId());
+				String explanation = String.format(
+						"Valve '%s' on node '%s' is configured with numberOfSlots=\"%d\" (slotLength=%ds). " +
+						"With fewer than 3 slots in the in-memory ring buffer, finalized slots are immediately overwritten as soon as new requests arrive in the next interval—often before the Collector poller can fetch slot=previous. " +
+						"This leads to missing slot snapshots and under-reported blocked requests and deterrence hit counts.",
+						v.valveName(), v.serverId(), v.numberOfSlots(), v.slotLength());
+
+				String recommendation = String.format(
+						"Increase 'numberOfSlots' to at least 10 on valve '%s' in server.xml so finalized slots stay buffered in memory across polling and catch-up cycles.",
+						v.valveName());
+
+				String suggestedXml = String.format("""
+						<!-- Increase slot ring buffer depth on Valve '%s' in server.xml: -->
+						<Valve className="org.henbru.antidos.AntiDoSValve"
+						       monitorName="%s"
+						       numberOfSlots="10" />""",
+						v.valveName(), v.valveName());
+
+				findings.add(new AdvisorFinding(
+						id,
+						AdvisorCategory.SLOT_BUFFER_TUNING,
+						AdvisorSeverity.WARNING,
+						title,
+						v.serverId(),
+						v.valveName(),
+						"numberOfSlots=" + v.numberOfSlots() + " (" + v.slotLength() + "s)",
+						"Valve Configuration",
+						ClientType.UNKNOWN,
+						0,
+						0,
+						0.0,
+						0,
+						v.allowedRequestsPerSlot(),
+						v.slotLength(),
+						v.alwaysAllowedIPs(),
+						explanation,
+						recommendation,
+						suggestedXml,
+						null
+				));
+			}
 		}
 	}
 

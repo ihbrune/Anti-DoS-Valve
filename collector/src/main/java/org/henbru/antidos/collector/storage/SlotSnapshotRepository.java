@@ -167,24 +167,60 @@ public class SlotSnapshotRepository {
 	}
 
 	public long sumRequestsSince(Instant since) {
-		Long sum = jdbcTemplate.queryForObject(
-				"SELECT COALESCE(SUM(total_requests), 0) FROM slot_snapshots WHERE start_time >= ?",
-				Long.class, Timestamp.from(since));
+		String sql = """
+				WITH per_valve AS (
+				    SELECT
+				        s.server_id,
+				        s.valve_name,
+				        SUM(s.total_requests) AS valve_requests,
+				        CASE
+				            WHEN EXISTS (
+				                SELECT 1 FROM monitored_valves mv
+				                WHERE mv.server_id = s.server_id
+				                  AND mv.valve_name = s.valve_name
+				                  AND mv.dynamic_mitigation_enabled = TRUE
+				                  AND (mv.relevant_paths IS NULL OR TRIM(mv.relevant_paths) = '')
+				            ) THEN 1
+				            ELSE 0
+				        END AS is_pure_mitigation
+				    FROM slot_snapshots s
+				    WHERE s.start_time >= ?
+				    GROUP BY s.server_id, s.valve_name
+				),
+				per_server AS (
+				    SELECT
+				        server_id,
+				        COALESCE(MAX(CASE WHEN is_pure_mitigation = 0 THEN valve_requests END), 0)
+				        + COALESCE(SUM(CASE WHEN is_pure_mitigation = 1 THEN valve_requests ELSE 0 END), 0) AS server_requests
+				    FROM per_valve
+				    GROUP BY server_id
+				)
+				SELECT COALESCE(SUM(server_requests), 0) FROM per_server
+				""";
+		Long sum = jdbcTemplate.queryForObject(sql, Long.class, Timestamp.from(since));
 		return sum != null ? sum : 0L;
 	}
 
 	public long sumBlockedRequestsSince(Instant since) {
-		Long sum = jdbcTemplate.queryForObject(
+		Timestamp ts = Timestamp.from(since);
+		Long eventSum = jdbcTemplate.queryForObject(
+				"SELECT COALESCE(SUM(request_count), 0) FROM client_events WHERE status = 'BLOCKED' AND slot_time >= ?",
+				Long.class, ts);
+		Long counterSum = jdbcTemplate.queryForObject(
 				"SELECT COALESCE(SUM(blocked_counters), 0) FROM slot_snapshots WHERE start_time >= ?",
-				Long.class, Timestamp.from(since));
-		return sum != null ? sum : 0L;
+				Long.class, ts);
+		return Math.max(eventSum != null ? eventSum : 0L, counterSum != null ? counterSum : 0L);
 	}
 
 	public long sumMarkedRequestsSince(Instant since) {
-		Long sum = jdbcTemplate.queryForObject(
+		Timestamp ts = Timestamp.from(since);
+		Long eventSum = jdbcTemplate.queryForObject(
+				"SELECT COALESCE(SUM(request_count), 0) FROM client_events WHERE status = 'MARKED' AND slot_time >= ?",
+				Long.class, ts);
+		Long counterSum = jdbcTemplate.queryForObject(
 				"SELECT COALESCE(SUM(marked_counters), 0) FROM slot_snapshots WHERE start_time >= ?",
-				Long.class, Timestamp.from(since));
-		return sum != null ? sum : 0L;
+				Long.class, ts);
+		return Math.max(eventSum != null ? eventSum : 0L, counterSum != null ? counterSum : 0L);
 	}
 
 	public int countDistinctValves() {
