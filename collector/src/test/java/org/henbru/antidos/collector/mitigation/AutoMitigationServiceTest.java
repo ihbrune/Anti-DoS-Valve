@@ -604,13 +604,13 @@ class AutoMitigationServiceTest {
 		jdbcTemplate.update("UPDATE mitigation_rules SET total_blocked_hits = 42, last_hit_at = ?, deterrence_state = ? WHERE id = ?",
 				Timestamp.from(now.minus(Duration.ofMinutes(1))), MitigationRule.DETERRENCE_PERSISTENT, effective.id());
 
-		// Candidate ASN with 3 strong subnets while the auto cap (3) is already full
+		// Candidate ASN with 3 strong subnets while total active rules (3 auto + 1 manual = 4) already fill the cap (4)
 		insertSubnetRollup("198.51.101.0/24", 64600L, "New Attacker", 2500, 5, 0, now.minus(Duration.ofMinutes(10)));
 		insertSubnetRollup("198.51.102.0/24", 64600L, "New Attacker", 2000, 5, 0, now.minus(Duration.ofMinutes(10)));
 		insertSubnetRollup("198.51.103.0/24", 64600L, "New Attacker", 1500, 5, 0, now.minus(Duration.ofMinutes(10)));
 
 		AutoMitigationService.EffectiveAutoSettings config = new AutoMitigationService.EffectiveAutoSettings(
-				true, false, 3, 5000L, 2, "8075", 5.0, 0L, 0L, 3, 60, false, 24, false);
+				true, false, 3, 5000L, 2, "8075", 5.0, 0L, 0L, 4, 60, false, 24, false);
 		autoMitigationService.evaluateAndEnforce(config);
 
 		assertEquals(MitigationRule.STATUS_REVOKED, ruleRepository.findById(unused1.id()).orElseThrow().status());
@@ -753,6 +753,133 @@ class AutoMitigationServiceTest {
 		assertNotNull(autoMitigationService.getCachedCarpetRadar(1));
 		autoMitigationService.invalidateRadarCache();
 		assertEquals(null, autoMitigationService.getCachedCarpetRadar(1));
+	}
+
+	@Test
+	void testCircuitBreakerCountsManualAndAsnBatchRulesAndPreventsOverCapCreation() {
+		Instant now = Instant.now();
+		// 2 MANUAL + 2 ASN_BATCH + 1 unused AUTO_CARPET = 5 active rules while cap is 3
+		MitigationRule manual1 = mitigationService.createOrUpdateBlock("203.0.110.0/24", 60, "Manual 1", MitigationRule.SOURCE_MANUAL, null, "ADMIN");
+		MitigationRule manual2 = mitigationService.createOrUpdateBlock("203.0.111.0/24", 60, "Manual 2", MitigationRule.SOURCE_MANUAL, null, "ADMIN");
+		MitigationRule asnBatch1 = mitigationService.createOrUpdateBlock("203.0.112.0/24", 60, "ASN Batch 1", MitigationRule.SOURCE_ASN_BATCH, "ASN-64500", "ADMIN");
+		MitigationRule asnBatch2 = mitigationService.createOrUpdateBlock("203.0.113.0/24", 60, "ASN Batch 2", MitigationRule.SOURCE_ASN_BATCH, "ASN-64500", "ADMIN");
+		MitigationRule unusedAuto = mitigationService.createOrUpdateBlock("203.0.114.0/24", 60, "Old auto", MitigationRule.SOURCE_AUTO_CARPET, "AUTO-OLD", "AUTO_ENGINE");
+
+		jdbcTemplate.update("UPDATE mitigation_rules SET created_at = ?", Timestamp.from(now.minus(Duration.ofMinutes(30))));
+
+		// New carpet attack candidate ASN 64602 with 3 strong subnets
+		for (int i = 1; i <= 3; i++) {
+			insertSubnetRollup("198.51.15" + i + ".0/24", 64602L, "Carpet Attacker", 3000, 5, 0, now.minus(Duration.ofMinutes(10)));
+		}
+
+		AutoMitigationService.EffectiveAutoSettings config = new AutoMitigationService.EffectiveAutoSettings(
+				true, false, 3, 5000L, 2, "8075", 5.0, 0L, 0L, 3, 60, false, 24, false);
+		autoMitigationService.evaluateAndEnforce(config);
+
+		List<MitigationRule> active = mitigationService.getActiveRules();
+		assertEquals(4, active.size(), "Excess unused auto rule must be released while non-auto rules remain untouched and no new auto rules are added");
+		assertTrue(active.stream().noneMatch(r -> Long.valueOf(64602L).equals(r.asn())),
+				"Candidate ASN subnets must all be skipped by circuit breaker");
+		assertEquals(MitigationRule.STATUS_ACTIVE, ruleRepository.findById(manual1.id()).orElseThrow().status());
+		assertEquals(MitigationRule.STATUS_ACTIVE, ruleRepository.findById(manual2.id()).orElseThrow().status());
+		assertEquals(MitigationRule.STATUS_ACTIVE, ruleRepository.findById(asnBatch1.id()).orElseThrow().status());
+		assertEquals(MitigationRule.STATUS_ACTIVE, ruleRepository.findById(asnBatch2.id()).orElseThrow().status());
+		assertEquals(MitigationRule.STATUS_REVOKED, ruleRepository.findById(unusedAuto.id()).orElseThrow().status(),
+				"Excess unused autonomous rule above cap must be automatically released");
+
+		List<MitigationAuditEntry> audits = mitigationService.getRecentAuditEntries(20);
+		assertTrue(audits.stream().anyMatch(a -> "AUTO_CIRCUIT_BREAKER".equals(a.getAction())
+				&& a.getDetails().contains("4 manual/other")
+				&& a.getDetails().contains("Skipped 3")));
+		assertTrue(audits.stream().anyMatch(a -> "AUTO_RELEASE_UNUSED".equals(a.getAction())));
+	}
+
+	@Test
+	void testExcessUnusedAutoRulesAreReleasedEvenWithoutCandidates() {
+		Instant now = Instant.now();
+		MitigationRule unusedAuto1 = mitigationService.createOrUpdateBlock("203.0.120.0/24", 60, "Old auto 1", MitigationRule.SOURCE_AUTO_CARPET, "AUTO-1", "AUTO_ENGINE");
+		MitigationRule unusedAuto2 = mitigationService.createOrUpdateBlock("203.0.121.0/24", 60, "Old auto 2", MitigationRule.SOURCE_AUTO_CARPET, "AUTO-1", "AUTO_ENGINE");
+		MitigationRule manual1 = mitigationService.createOrUpdateBlock("203.0.122.0/24", 60, "Manual 1", MitigationRule.SOURCE_MANUAL, null, "ADMIN");
+		jdbcTemplate.update("UPDATE mitigation_rules SET created_at = ?", Timestamp.from(now.minus(Duration.ofMinutes(30))));
+
+		// Lower cap to 2 with no carpet candidates in telemetry -> 1 unused auto rule above cap must be released
+		AutoMitigationService.EffectiveAutoSettings config = new AutoMitigationService.EffectiveAutoSettings(
+				true, false, 3, 5000L, 2, "8075", 5.0, 0L, 0L, 2, 60, false, 24, false);
+		autoMitigationService.evaluateAndEnforce(config);
+
+		assertEquals(2, mitigationService.getActiveRules().size());
+		assertEquals(MitigationRule.STATUS_ACTIVE, ruleRepository.findById(manual1.id()).orElseThrow().status());
+		long activeAutoCount = mitigationService.getActiveRules().stream()
+				.filter(r -> MitigationRule.SOURCE_AUTO_CARPET.equals(r.source()))
+				.count();
+		assertEquals(1L, activeAutoCount);
+		assertTrue(ruleRepository.findById(unusedAuto1.id()).orElseThrow().status().equals(MitigationRule.STATUS_REVOKED)
+				|| ruleRepository.findById(unusedAuto2.id()).orElseThrow().status().equals(MitigationRule.STATUS_REVOKED));
+	}
+
+	@Test
+	void testPruneActiveRulesToCapOptimalEvictionOrder() {
+		Instant now = Instant.now();
+		MitigationRule unusedAuto = mitigationService.createOrUpdateBlock("198.51.10.0/24", 60, "Unused auto", MitigationRule.SOURCE_AUTO_CARPET, "B1", "AUTO_ENGINE");
+		MitigationRule unusedManual = mitigationService.createOrUpdateBlock("198.51.11.0/24", 60, "Unused manual", MitigationRule.SOURCE_MANUAL, null, "ADMIN");
+		MitigationRule deterredAuto = mitigationService.createOrUpdateBlock("198.51.12.0/24", 60, "Deterred auto", MitigationRule.SOURCE_AUTO_CARPET, "B1", "AUTO_ENGINE");
+		MitigationRule deterredAsnBatch = mitigationService.createOrUpdateBlock("198.51.13.0/24", 60, "Deterred batch", MitigationRule.SOURCE_ASN_BATCH, "ASN-64501", "ADMIN");
+		MitigationRule observingAuto = mitigationService.createOrUpdateBlock("198.51.14.0/24", 60, "Observing auto", MitigationRule.SOURCE_AUTO_CARPET, "B2", "AUTO_ENGINE");
+		MitigationRule persistentWeakAuto = mitigationService.createOrUpdateBlock("198.51.15.0/24", 60, "Persistent weak auto", MitigationRule.SOURCE_AUTO_CARPET, "B2", "AUTO_ENGINE");
+		MitigationRule persistentStrongAuto = mitigationService.createOrUpdateBlock("198.51.16.0/24", 60, "Persistent strong auto", MitigationRule.SOURCE_AUTO_CARPET, "B2", "AUTO_ENGINE");
+		MitigationRule persistentManual = mitigationService.createOrUpdateBlock("198.51.17.0/24", 60, "Persistent manual", MitigationRule.SOURCE_MANUAL, null, "ADMIN");
+
+		// Age rules appropriately so deterrence states remain deterministic after refreshDeterrenceMetrics()
+		jdbcTemplate.update("UPDATE mitigation_rules SET created_at = ? WHERE id IN (?, ?, ?, ?, ?, ?)",
+				Timestamp.from(now.minus(Duration.ofMinutes(30))),
+				unusedAuto.id(), unusedManual.id(), persistentWeakAuto.id(), persistentStrongAuto.id(), persistentManual.id(), observingAuto.id());
+		jdbcTemplate.update("UPDATE mitigation_rules SET created_at = ? WHERE id = ?",
+				Timestamp.from(now.minus(Duration.ofMinutes(2))), observingAuto.id());
+		jdbcTemplate.update("UPDATE mitigation_rules SET created_at = ?, total_blocked_hits = 50, last_hit_at = ?, deterrence_state = ? WHERE id = ?",
+				Timestamp.from(now.minus(Duration.ofMinutes(40))), Timestamp.from(now.minus(Duration.ofMinutes(20))), MitigationRule.DETERRENCE_DETERRED, deterredAuto.id());
+		jdbcTemplate.update("UPDATE mitigation_rules SET created_at = ?, total_blocked_hits = 200, last_hit_at = ?, deterrence_state = ? WHERE id = ?",
+				Timestamp.from(now.minus(Duration.ofMinutes(40))), Timestamp.from(now.minus(Duration.ofMinutes(15))), MitigationRule.DETERRENCE_DETERRED, deterredAsnBatch.id());
+		jdbcTemplate.update("UPDATE mitigation_rules SET total_blocked_hits = 100, last_hit_at = ?, deterrence_state = ? WHERE id = ?",
+				Timestamp.from(now.minus(Duration.ofMinutes(1))), MitigationRule.DETERRENCE_PERSISTENT, persistentWeakAuto.id());
+		jdbcTemplate.update("UPDATE mitigation_rules SET total_blocked_hits = 5000, last_hit_at = ?, deterrence_state = ? WHERE id = ?",
+				Timestamp.from(now.minus(Duration.ofMinutes(1))), MitigationRule.DETERRENCE_PERSISTENT, persistentStrongAuto.id());
+		jdbcTemplate.update("UPDATE mitigation_rules SET total_blocked_hits = 100, last_hit_at = ?, deterrence_state = ? WHERE id = ?",
+				Timestamp.from(now.minus(Duration.ofMinutes(1))), MitigationRule.DETERRENCE_PERSISTENT, persistentManual.id());
+
+		// 1. Prune 8 active rules down to cap 3 via controller endpoint
+		MitigationController controller = new MitigationController(mitigationService, autoMitigationService, properties);
+		ExtendedModelMap model = new ExtendedModelMap();
+		String view = controller.pruneRulesToCap(3, model);
+		assertEquals("fragments/mitigation-content :: mitigationDashboard", view);
+		String feedback = (String) model.getAttribute("feedbackSuccess");
+		assertNotNull(feedback);
+		assertTrue(feedback.contains("8 down to 3"));
+		assertTrue(feedback.contains("2 unused, 2 deterred, 1 observing, 0 persistent"));
+
+		List<MitigationRule> remaining3 = mitigationService.getActiveRules();
+		assertEquals(3, remaining3.size());
+		assertEquals(MitigationRule.STATUS_REVOKED, ruleRepository.findById(unusedAuto.id()).orElseThrow().status());
+		assertEquals(MitigationRule.STATUS_REVOKED, ruleRepository.findById(unusedManual.id()).orElseThrow().status());
+		assertEquals(MitigationRule.STATUS_REVOKED, ruleRepository.findById(deterredAuto.id()).orElseThrow().status());
+		assertEquals(MitigationRule.STATUS_REVOKED, ruleRepository.findById(deterredAsnBatch.id()).orElseThrow().status());
+		assertEquals(MitigationRule.STATUS_REVOKED, ruleRepository.findById(observingAuto.id()).orElseThrow().status());
+		assertEquals(MitigationRule.STATUS_ACTIVE, ruleRepository.findById(persistentWeakAuto.id()).orElseThrow().status());
+		assertEquals(MitigationRule.STATUS_ACTIVE, ruleRepository.findById(persistentStrongAuto.id()).orElseThrow().status());
+		assertEquals(MitigationRule.STATUS_ACTIVE, ruleRepository.findById(persistentManual.id()).orElseThrow().status());
+
+		// 2. Prune further from 3 down to 2: AUTO_CARPET (100 hits) must be evicted before MANUAL (100 hits) and AUTO_CARPET (5000 hits)
+		MitigationService.PruneToCapResult step2 = mitigationService.pruneActiveRulesToCap(2, "ADMIN");
+		assertEquals(3, step2.beforeCount());
+		assertEquals(2, step2.afterCount());
+		assertEquals(1, step2.revokedCount());
+		assertEquals(1, step2.revokedPersistentCount());
+		assertEquals(MitigationRule.STATUS_REVOKED, ruleRepository.findById(persistentWeakAuto.id()).orElseThrow().status());
+		assertEquals(MitigationRule.STATUS_ACTIVE, ruleRepository.findById(persistentStrongAuto.id()).orElseThrow().status());
+		assertEquals(MitigationRule.STATUS_ACTIVE, ruleRepository.findById(persistentManual.id()).orElseThrow().status());
+
+		List<MitigationAuditEntry> audits = mitigationService.getRecentAuditEntries(20);
+		assertTrue(audits.stream().anyMatch(a -> "PRUNE_TO_CAP".equals(a.getAction())
+				&& a.getDetails().contains("2 unused, 2 deterred, 1 observing, 0 persistent")));
 	}
 
 	private long countAudits(String action) {

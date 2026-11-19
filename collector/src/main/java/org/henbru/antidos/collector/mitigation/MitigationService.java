@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -1609,6 +1610,122 @@ public class MitigationService {
 			syncFleetMitigations();
 		}
 		return released;
+	}
+
+	public record PruneToCapResult(
+			int beforeCount,
+			int afterCount,
+			int targetCap,
+			int revokedCount,
+			int revokedUnusedCount,
+			int revokedDeterredCount,
+			int revokedObservingCount,
+			int revokedPersistentCount
+	) {}
+
+	/**
+	 * Immediately trims all active mitigation rules down to {@code targetCap} using an optimal eviction
+	 * cascade (0-hit unused past observation window, then deterred, then observing, and finally lowest-hit
+	 * persistent attackers; autonomous rules before ASN_BATCH/other before MANUAL within each tier).
+	 */
+	public PruneToCapResult pruneActiveRulesToCap(int targetCap, String actor) {
+		requireWriteMode("Pruning active mitigation rules to cap");
+		int safeCap = Math.max(0, targetCap);
+		refreshDeterrenceMetrics();
+		Instant now = Instant.now();
+		List<MitigationRule> activeRules = new ArrayList<>(ruleRepository.findActiveRules(now));
+		int beforeCount = activeRules.size();
+		if (beforeCount <= safeCap) {
+			return new PruneToCapResult(beforeCount, beforeCount, safeCap, 0, 0, 0, 0, 0);
+		}
+
+		activeRules.sort(evictionOrderComparator(now));
+		List<MitigationRule> victims = activeRules.subList(0, beforeCount - safeCap);
+
+		int unusedCount = 0;
+		int deterredCount = 0;
+		int observingCount = 0;
+		int persistentCount = 0;
+		for (MitigationRule v : victims) {
+			switch (evictionActivityTier(v, now)) {
+				case 0 -> unusedCount++;
+				case 1 -> deterredCount++;
+				case 2, 3 -> observingCount++;
+				default -> persistentCount++;
+			}
+		}
+
+		String reason = "Pruned to circuit breaker cap of " + safeCap + " active rules (optimal eviction priority)";
+		int revoked = ruleRepository.revokeRulesByIds(victims.stream().map(MitigationRule::id).toList(), now, reason);
+		if (revoked > 0) {
+			ruleRepository.insertAuditEntry(new MitigationAuditEntry(
+					null,
+					victims.getFirst().id(),
+					revoked + " excess rules (" + victims.getFirst().cidr() + "...)",
+					null,
+					"PRUNE_TO_CAP",
+					actor != null ? actor : "ADMIN",
+					0,
+					"Trimmed active rules from " + beforeCount + " to cap " + (beforeCount - revoked)
+							+ " (revoked " + revoked + ": " + unusedCount + " unused, " + deterredCount
+							+ " deterred, " + observingCount + " observing, " + persistentCount + " persistent).",
+					now
+			));
+			log.info("Pruned {} excess active mitigation rule(s) from {} to {} (cap {}): {} unused, {} deterred, {} observing, {} persistent",
+					revoked, beforeCount, beforeCount - revoked, safeCap, unusedCount, deterredCount, observingCount, persistentCount);
+			syncFleetMitigations();
+		}
+		return new PruneToCapResult(
+				beforeCount,
+				beforeCount - revoked,
+				safeCap,
+				revoked,
+				unusedCount,
+				deterredCount,
+				observingCount,
+				persistentCount
+		);
+	}
+
+	static int evictionActivityTier(MitigationRule r, Instant now) {
+		if (MitigationRule.DETERRENCE_PERSISTENT.equalsIgnoreCase(r.deterrenceState())) {
+			return 4;
+		}
+		if (r.totalBlockedHits() <= 0
+				&& (MitigationRule.DETERRENCE_DETERRED.equalsIgnoreCase(r.deterrenceState())
+						|| (r.createdAt() != null && !r.createdAt().isAfter(now.minusSeconds(OBSERVATION_WINDOW_SECONDS))))) {
+			return 0;
+		}
+		if (MitigationRule.DETERRENCE_DETERRED.equalsIgnoreCase(r.deterrenceState()) && r.totalBlockedHits() > 0) {
+			return 1;
+		}
+		if (r.totalBlockedHits() <= 0) {
+			return 2;
+		}
+		return 3;
+	}
+
+	static int evictionSourceTier(MitigationRule r) {
+		String source = r.source();
+		if (MitigationRule.SOURCE_AUTO_CARPET.equalsIgnoreCase(source)
+				|| MitigationRule.SOURCE_AUTO_RULE.equalsIgnoreCase(source)) {
+			return 0;
+		}
+		if (MitigationRule.SOURCE_MANUAL.equalsIgnoreCase(source)) {
+			return 2;
+		}
+		return 1;
+	}
+
+	static Comparator<MitigationRule> evictionOrderComparator(Instant now) {
+		return Comparator
+				.comparingInt((MitigationRule r) -> evictionActivityTier(r, now))
+				.thenComparingInt(MitigationService::evictionSourceTier)
+				.thenComparingLong(MitigationRule::totalBlockedHits)
+				.thenComparingInt(MitigationRule::peakDistinctIps)
+				.thenComparing(MitigationRule::lastHitAt, Comparator.nullsFirst(Comparator.naturalOrder()))
+				.thenComparing(MitigationRule::expiresAt, Comparator.nullsFirst(Comparator.naturalOrder()))
+				.thenComparing(MitigationRule::id, Comparator.nullsFirst(Comparator.naturalOrder()));
 	}
 
 	public Optional<MitigationRule> getRuleById(long ruleId) {

@@ -228,12 +228,28 @@
                             <span>&#x1F50D;</span> Evaluate Now
                         </button>
 
+                        <!-- Trim Excess Active Rules to Cap -->
+                        <button type="button" class="btn btn-warning"
+                            th:if="${activeRules != null and autoSettings != null and activeRules.size() > autoSettings.maxActiveRules}"
+                            hx-post="/mitigation/prune-to-cap" hx-target="#mitigation-dashboard-container"
+                            hx-swap="outerHTML show:top"
+                            th:attr="hx-confirm='TRIM TO CAP: Revoke ' + (${activeRules.size() - autoSettings.maxActiveRules}) + ' lowest-priority rule(s) to reduce active rules from ' + ${activeRules.size()} + ' down to the Circuit Breaker Cap of ' + ${autoSettings.maxActiveRules} + '? (Eviction order: 0-hit unused -> deterred -> observing -> lowest-hit persistent; AUTO before MANUAL)'"
+                            th:disabled="${viewerMode}"
+                            style="font-size: 12px; padding: 6px 14px; display: inline-flex; align-items: center; gap: 6px;"
+                            title="Optimally trim excess active rules down to the Circuit Breaker Cap (evicts 0-hit unused and deterred rules first, preserving persistent attackers and manual rules)">
+                            <span>&#x2702;&#xFE0F;</span>
+                            <span
+                                th:text="'Trim to Cap (' + ${autoSettings.maxActiveRules} + ', -' + (${activeRules.size() - autoSettings.maxActiveRules}) + ')'">Trim
+                                to Cap</span>
+                        </button>
+
                         <!-- Open Radar Tab Shortcut -->
                         <button type="button" class="btn btn-outline" hx-get="/fragments/mitigation-content?tab=radar"
                             hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top"
                             hx-push-url="/mitigation?tab=radar" style="font-size: 12px; padding: 6px 14px;"
                             title="Open Autonomous Carpet Attack Radar tab">
-                            <span>&#x1F4E1;</span> Open Radar<span th:if="${carpetRadar != null}" th:text="' (' + ${carpetRadar.size()} + ')'"></span>
+                            <span>&#x1F4E1;</span> Open Radar<span th:if="${carpetRadar != null}"
+                                th:text="' (' + ${carpetRadar.size()} + ')'"></span>
                         </button>
                     </div>
                 </div>
@@ -248,7 +264,8 @@
                                 th:text="${#numbers.formatInteger(autoSettings.carpetMinRequests, 1, 'COMMA')}">5,000</span>
                             reqs &bull; &ge;<span
                                 th:text="${#numbers.formatInteger(autoSettings.carpetMinRequestsPerSubnet, 1, 'COMMA')}">20</span>
-                            reqs/subnet &bull; Max Returning: <span th:text="${autoSettings.maxReturningRatioPct}">5.0</span>%
+                            reqs/subnet &bull; Max Returning: <span
+                                th:text="${autoSettings.maxReturningRatioPct}">5.0</span>%
                             &bull; Max Auth: &le;<span
                                 th:text="${#numbers.formatInteger(autoSettings.maxAuthenticatedRequests, 1, 'COMMA')}">0</span>
                             &bull; Cap: <span th:text="${autoSettings.maxActiveRules}">50</span> rules)
@@ -718,90 +735,105 @@
                         </div>
                     </div>
                     <div th:if="${activeRules != null and !activeRules.isEmpty()}">
-                        <button type="button" class="btn btn-danger" hx-post="/mitigation/flush"
-                            hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:top"
-                            hx-confirm="EMERGENCY FLUSH: Are you sure you want to revoke ALL active dynamic CIDR blocks immediately and flush them from all Tomcat Valves across the entire fleet?"
-                            th:disabled="${viewerMode}"
-                            style="font-size: 12px; padding: 6px 14px; display: inline-flex; align-items: center; gap: 6px;"
-                            title="Immediately revoke all dynamic blocks and clear in-memory registries on all Valves">
-                            <span>&#x1F6A8;</span> Emergency Flush (Revoke All)
-                        </button>
+                        <div th:if="${activeRules != null and !activeRules.isEmpty()}"
+                            style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-warning"
+                                th:if="${autoSettings != null and activeRules.size() > autoSettings.maxActiveRules}"
+                                hx-post="/mitigation/prune-to-cap" hx-target="#mitigation-dashboard-container"
+                                hx-swap="outerHTML show:top"
+                                th:attr="hx-confirm='TRIM TO CAP: Revoke ' + (${activeRules.size() - autoSettings.maxActiveRules}) + ' lowest-priority rule(s) to reduce active rules from ' + ${activeRules.size()} + ' down to the Circuit Breaker Cap of ' + ${autoSettings.maxActiveRules} + '? (Eviction order: 0-hit unused -> deterred -> observing -> lowest-hit persistent; AUTO before MANUAL)'"
+                                th:disabled="${viewerMode}"
+                                style="font-size: 12px; padding: 6px 14px; display: inline-flex; align-items: center; gap: 6px;"
+                                title="Optimally trim excess active rules down to the Circuit Breaker Cap (evicts 0-hit unused and deterred rules first, preserving persistent attackers and manual rules)">
+                                <span>&#x2702;&#xFE0F;</span>
+                                <span
+                                    th:text="'Trim to Cap (' + ${autoSettings.maxActiveRules} + ', -' + (${activeRules.size() - autoSettings.maxActiveRules}) + ')'">Trim
+                                    to Cap</span>
+                            </button>
+                            <button type="button" class="btn btn-danger" hx-post="/mitigation/flush"
+                                hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:top"
+                                hx-confirm="EMERGENCY FLUSH: Are you sure you want to revoke ALL active dynamic CIDR blocks immediately and flush them from all Tomcat Valves across the entire fleet?"
+                                th:disabled="${viewerMode}"
+                                style="font-size: 12px; padding: 6px 14px; display: inline-flex; align-items: center; gap: 6px;"
+                                title="Immediately revoke all dynamic blocks and clear in-memory registries on all Valves">
+                                <span>&#x1F6A8;</span> Emergency Flush (Revoke All)
+                            </button>
+                        </div>
                     </div>
-                </div>
 
-                <!-- Find-as-you-type Search & Quick Filter Pills Bar -->
-                <div th:if="${activeRules != null and !activeRules.isEmpty()}"
-                    style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; padding: 12px 14px; background: rgba(0,0,0,0.18); border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-                    <div style="position: relative; flex: 1; min-width: 260px;">
-                        <span
-                            style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 13px; color: var(--text-muted);">&#x1F50D;</span>
-                        <input type="text" id="active-rules-search" class="input-control"
-                            placeholder="Find-as-you-type: Filter by CIDR, ASN, Organization, Reason or Batch..."
-                            style="padding-left: 32px; padding-right: 28px; font-size: 12px; height: 34px;"
-                            oninput="filterActiveRules()" />
-                        <button type="button" id="active-rules-clear-btn" onclick="clearActiveRulesSearch()"
-                            style="display: none; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 15px; line-height: 1;"
-                            title="Clear search">&times;</button>
+                    <!-- Find-as-you-type Search & Quick Filter Pills Bar -->
+                    <div th:if="${activeRules != null and !activeRules.isEmpty()}"
+                        style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; padding: 12px 14px; background: rgba(0,0,0,0.18); border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                        <div style="position: relative; flex: 1; min-width: 260px;">
+                            <span
+                                style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 13px; color: var(--text-muted);">&#x1F50D;</span>
+                            <input type="text" id="active-rules-search" class="input-control"
+                                placeholder="Find-as-you-type: Filter by CIDR, ASN, Organization, Reason or Batch..."
+                                style="padding-left: 32px; padding-right: 28px; font-size: 12px; height: 34px;"
+                                oninput="filterActiveRules()" />
+                            <button type="button" id="active-rules-clear-btn" onclick="clearActiveRulesSearch()"
+                                style="display: none; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 15px; line-height: 1;"
+                                title="Clear search">&times;</button>
+                        </div>
+                        <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                            <span
+                                style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-right: 2px;">Filters:</span>
+                            <button type="button" class="btn btn-sm active-filter-pill active" data-filter="all"
+                                onclick="setActiveFilter('all', this)">
+                                All (<span th:text="${activeRules.size()}">0</span>)
+                            </button>
+                            <button type="button" class="btn btn-sm active-filter-pill" data-filter="persistent"
+                                onclick="setActiveFilter('persistent', this)">
+                                &#x1F525; Still Attacking (<span th:text="${persistentCount}">0</span>)
+                            </button>
+                            <button type="button" class="btn btn-sm active-filter-pill" data-filter="traffic"
+                                onclick="setActiveFilter('traffic', this)">
+                                &#x26A1; Blocked Traffic &gt; 0
+                            </button>
+                            <button type="button" class="btn btn-sm active-filter-pill" data-filter="deterred"
+                                onclick="setActiveFilter('deterred', this)">
+                                &#x2705; Deterred (<span th:text="${deterredCount}">0</span>)
+                            </button>
+                            <button type="button" class="btn btn-sm active-filter-pill" data-filter="observing"
+                                onclick="setActiveFilter('observing', this)">
+                                &#x1F441; Observing
+                            </button>
+                        </div>
                     </div>
-                    <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
-                        <span
-                            style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-right: 2px;">Filters:</span>
-                        <button type="button" class="btn btn-sm active-filter-pill active" data-filter="all"
-                            onclick="setActiveFilter('all', this)">
-                            All (<span th:text="${activeRules.size()}">0</span>)
-                        </button>
-                        <button type="button" class="btn btn-sm active-filter-pill" data-filter="persistent"
-                            onclick="setActiveFilter('persistent', this)">
-                            &#x1F525; Still Attacking (<span th:text="${persistentCount}">0</span>)
-                        </button>
-                        <button type="button" class="btn btn-sm active-filter-pill" data-filter="traffic"
-                            onclick="setActiveFilter('traffic', this)">
-                            &#x26A1; Blocked Traffic &gt; 0
-                        </button>
-                        <button type="button" class="btn btn-sm active-filter-pill" data-filter="deterred"
-                            onclick="setActiveFilter('deterred', this)">
-                            &#x2705; Deterred (<span th:text="${deterredCount}">0</span>)
-                        </button>
-                        <button type="button" class="btn btn-sm active-filter-pill" data-filter="observing"
-                            onclick="setActiveFilter('observing', this)">
-                            &#x1F441; Observing
-                        </button>
+
+                    <div th:if="${activeRules == null or activeRules.isEmpty()}"
+                        style="text-align: center; padding: 36px 20px; color: var(--text-muted); font-size: 13px;">
+                        No dynamic CIDR blocks are currently active. All Valves are operating on their standard
+                        rate-limiting rules.
                     </div>
-                </div>
 
-                <div th:if="${activeRules == null or activeRules.isEmpty()}"
-                    style="text-align: center; padding: 36px 20px; color: var(--text-muted); font-size: 13px;">
-                    No dynamic CIDR blocks are currently active. All Valves are operating on their standard
-                    rate-limiting rules.
-                </div>
-
-                <div th:if="${activeRules != null and !activeRules.isEmpty()}" style="overflow-x: auto;">
-                    <table id="active-rules-table" class="data-table" style="width: 100%; font-size: 12.5px;"
-                        data-sort-col="hits" data-sort-asc="false">
-                        <thead>
-                            <tr>
-                                <th onclick="sortActiveRules('cidr')" style="cursor: pointer;"
-                                    title="Click to sort by CIDR">
-                                    CIDR Subnet &#x21C5;
-                                </th>
-                                <th>ASN / Organization</th>
-                                <th>Source &amp; Batch</th>
-                                <th>Reason</th>
-                                <th onclick="sortActiveRules('ttl')" style="cursor: pointer;"
-                                    title="Click to sort by Remaining TTL">
-                                    Remaining TTL &#x21C5;
-                                </th>
-                                <th onclick="sortActiveRules('hits')" style="cursor: pointer; text-align: right;"
-                                    title="Click to sort by Blocked Hits">
-                                    Blocked Hits &#x21C5;
-                                </th>
-                                <th style="text-align: right;">Peak IPs</th>
-                                <th>Deterrence Status</th>
-                                <th style="text-align: right;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr th:each="r : ${activeRules}" class="active-rule-row" th:attr="data-cidr=${r.cidr},
+                    <div th:if="${activeRules != null and !activeRules.isEmpty()}" style="overflow-x: auto;">
+                        <table id="active-rules-table" class="data-table" style="width: 100%; font-size: 12.5px;"
+                            data-sort-col="hits" data-sort-asc="false">
+                            <thead>
+                                <tr>
+                                    <th onclick="sortActiveRules('cidr')" style="cursor: pointer;"
+                                        title="Click to sort by CIDR">
+                                        CIDR Subnet &#x21C5;
+                                    </th>
+                                    <th>ASN / Organization</th>
+                                    <th>Source &amp; Batch</th>
+                                    <th>Reason</th>
+                                    <th onclick="sortActiveRules('ttl')" style="cursor: pointer;"
+                                        title="Click to sort by Remaining TTL">
+                                        Remaining TTL &#x21C5;
+                                    </th>
+                                    <th onclick="sortActiveRules('hits')" style="cursor: pointer; text-align: right;"
+                                        title="Click to sort by Blocked Hits">
+                                        Blocked Hits &#x21C5;
+                                    </th>
+                                    <th style="text-align: right;">Peak IPs</th>
+                                    <th>Deterrence Status</th>
+                                    <th style="text-align: right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:each="r : ${activeRules}" class="active-rule-row" th:attr="data-cidr=${r.cidr},
                                  data-asn=${r.asn != null ? r.asn : ''},
                                  data-org=${r.asnOrganization != null ? r.asnOrganization : ''},
                                  data-reason=${r.reason != null ? r.reason : ''},
@@ -809,145 +841,80 @@
                                  data-hits=${r.totalBlockedHits},
                                  data-ttl-sec=${r.remainingSeconds(now)},
                                  data-deterrence=${r.deterrenceState}">
-                                <td style="font-family: ui-monospace, monospace; font-weight: 700;">
-                                    <a th:href="@{/offenders(clientQuery=${r.cidr},groupBy='SUBNET')}"
-                                        style="color: var(--color-primary); text-decoration: none;"
-                                        title="Inspect subnet traffic in Top Offenders"
-                                        th:text="${r.cidr}">198.51.100.0/24</a>
-                                </td>
-                                <td>
-                                    <a th:if="${r.asn != null and r.asn > 0}"
-                                        th:href="@{/offenders(asn=${r.asn},groupBy='ASN')}"
-                                        style="color: var(--color-primary); text-decoration: none;"
-                                        title="Inspect Autonomous System in Top Offenders"
-                                        th:text="'ASN ' + ${r.asn} + ' (' + (${r.asnOrganization != null} ? ${r.asnOrganization} : 'Unknown') + ')'">ASN
-                                        64496</a>
-                                    <span th:if="${r.asn == null or r.asn <= 0}"
-                                        style="color: var(--text-muted);">&mdash;</span>
-                                </td>
-                                <td>
-                                    <span class="badge badge-secondary" th:text="${r.source}">MANUAL</span>
-                                    <div th:if="${r.batchId != null}"
-                                        style="font-size: 10.5px; color: var(--text-muted); font-family: ui-monospace, monospace; margin-top: 2px;"
-                                        th:text="${r.batchId}">ASN-64496</div>
-                                </td>
-                                <td th:text="${r.reason}">Carpet attack</td>
-                                <td style="font-family: ui-monospace, monospace;">
-                                    <span
-                                        th:text="${(r.remainingSeconds(now) / 60)} + 'm ' + (${r.remainingSeconds(now) % 60}) + 's'">59m
-                                        12s</span>
-                                </td>
-                                <td style="text-align: right; font-weight: 700; color: var(--color-danger);"
-                                    th:text="${#numbers.formatInteger(r.totalBlockedHits, 1, 'COMMA')}">0</td>
-                                <td style="text-align: right;" th:text="${r.peakDistinctIps}">0</td>
-                                <td>
-                                    <span th:if="${r.deterrenceState == 'PERSISTENT'}" class="badge badge-danger"
-                                        title="Attacker continues sending requests into the dynamic block within the last 10 minutes. Consider extending TTL.">
-                                        &#x1F525; PERSISTENT (Still Attacking)
-                                    </span>
-                                    <span th:if="${r.deterrenceState == 'DETERRED'}" class="badge badge-success"
-                                        title="No blocked hits observed for at least 10 minutes. Attacker has stopped or rotated away.">
-                                        &#x2705; DETERRED (Quiet &ge;10m)
-                                    </span>
-                                    <span
-                                        th:if="${r.deterrenceState != 'PERSISTENT' and r.deterrenceState != 'DETERRED'}"
-                                        class="badge badge-info"
-                                        title="Rule was recently created; observing whether attacker persists or stops.">
-                                        &#x1F441; OBSERVING
-                                    </span>
-                                </td>
-                                <td style="text-align: right; white-space: nowrap;">
-                                    <button type="button" class="btn" style="padding: 3px 8px; font-size: 11px;"
-                                        th:attr="hx-post=@{/mitigation/{id}/extend(id=${r.id},additionalMinutes=60,tab='active')}"
-                                        hx-target="#mitigation-dashboard-container" hx-swap="outerHTML"
-                                        th:disabled="${viewerMode}" title="Extend TTL by +60 minutes">
-                                        +1h
-                                    </button>
-                                    <button type="button" class="btn" style="padding: 3px 8px; font-size: 11px;"
-                                        th:attr="hx-post=@{/mitigation/{id}/extend(id=${r.id},additionalMinutes=360,tab='active')}"
-                                        hx-target="#mitigation-dashboard-container" hx-swap="outerHTML"
-                                        th:disabled="${viewerMode}" title="Extend TTL by +6 hours">
-                                        +6h
-                                    </button>
-                                    <button type="button" class="btn btn-danger"
-                                        style="padding: 3px 8px; font-size: 11px;"
-                                        th:attr="hx-post=@{/mitigation/{id}/revoke(id=${r.id},tab='active')}"
-                                        hx-target="#mitigation-dashboard-container" hx-swap="outerHTML"
-                                        th:disabled="${viewerMode}"
-                                        title="Immediately lift this CIDR block across all Valves">
-                                        Revoke
-                                    </button>
-                                </td>
-                            </tr>
-                            <tr id="active-rules-no-matches" style="display: none;">
-                                <td colspan="9"
-                                    style="text-align: center; padding: 24px 16px; color: var(--text-muted); font-size: 13px;">
-                                    No active mitigation rules match your search or filter criteria.
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Bottom Teaser Grid: Historical Rules + Audit Log -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 20px;">
-
-                <!-- Recently Expired / Revoked Rules Teaser -->
-                <div class="sys-card" style="padding: 18px; margin: 0;">
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
-                        <div
-                            style="font-size: 14px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
-                            <span>&#x1F552;</span> Recently Expired &amp; Revoked
-                        </div>
-                        <button type="button" class="btn btn-sm" style="font-size: 11px; padding: 3px 10px;"
-                            hx-get="/fragments/mitigation-content?tab=history"
-                            hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top"
-                            hx-push-url="/mitigation?tab=history">
-                            Open History Explorer (<span th:text="${totalHistoricalCount}">0</span>) &rarr;
-                        </button>
-                    </div>
-                    <div th:if="${teaserHistoricalRules == null or teaserHistoricalRules.isEmpty()}"
-                        style="color: var(--text-muted); font-size: 12.5px; padding: 16px 0;">
-                        No expired or revoked mitigation rules recorded yet.
-                    </div>
-                    <div th:if="${teaserHistoricalRules != null and !teaserHistoricalRules.isEmpty()}"
-                        style="overflow-x: auto;">
-                        <table class="data-table" style="width: 100%; font-size: 12px;">
-                            <thead>
-                                <tr>
-                                    <th>CIDR</th>
-                                    <th>Status</th>
-                                    <th style="text-align: right;">Blocked Hits</th>
-                                    <th>Deterrence</th>
-                                    <th style="text-align: right;">Re-Activate</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr th:each="h : ${teaserHistoricalRules}">
-                                    <td style="font-family: ui-monospace, monospace; font-weight: 600;">
-                                        <a th:href="@{/offenders(clientQuery=${h.cidr},groupBy='SUBNET')}"
+                                    <td style="font-family: ui-monospace, monospace; font-weight: 700;">
+                                        <a th:href="@{/offenders(clientQuery=${r.cidr},groupBy='SUBNET')}"
                                             style="color: var(--color-primary); text-decoration: none;"
                                             title="Inspect subnet traffic in Top Offenders"
-                                            th:text="${h.cidr}">198.51.100.0/24</a>
+                                            th:text="${r.cidr}">198.51.100.0/24</a>
                                     </td>
                                     <td>
-                                        <span th:if="${h.status == 'REVOKED'}"
-                                            class="badge badge-warning">REVOKED</span>
-                                        <span th:if="${h.status != 'REVOKED'}" class="badge badge-secondary"
-                                            th:text="${h.status}">EXPIRED</span>
+                                        <a th:if="${r.asn != null and r.asn > 0}"
+                                            th:href="@{/offenders(asn=${r.asn},groupBy='ASN')}"
+                                            style="color: var(--color-primary); text-decoration: none;"
+                                            title="Inspect Autonomous System in Top Offenders"
+                                            th:text="'ASN ' + ${r.asn} + ' (' + (${r.asnOrganization != null} ? ${r.asnOrganization} : 'Unknown') + ')'">ASN
+                                            64496</a>
+                                        <span th:if="${r.asn == null or r.asn <= 0}"
+                                            style="color: var(--text-muted);">&mdash;</span>
                                     </td>
-                                    <td style="text-align: right;"
-                                        th:text="${#numbers.formatInteger(h.totalBlockedHits, 1, 'COMMA')}">0</td>
-                                    <td th:text="${h.deterrenceState}">DETERRED</td>
-                                    <td style="text-align: right;">
-                                        <button type="button" class="btn" style="padding: 2px 8px; font-size: 11px;"
-                                            th:attr="hx-post=@{/mitigation/{id}/extend(id=${h.id},additionalMinutes=60,tab='active')}"
+                                    <td>
+                                        <span class="badge badge-secondary" th:text="${r.source}">MANUAL</span>
+                                        <div th:if="${r.batchId != null}"
+                                            style="font-size: 10.5px; color: var(--text-muted); font-family: ui-monospace, monospace; margin-top: 2px;"
+                                            th:text="${r.batchId}">ASN-64496</div>
+                                    </td>
+                                    <td th:text="${r.reason}">Carpet attack</td>
+                                    <td style="font-family: ui-monospace, monospace;">
+                                        <span
+                                            th:text="${(r.remainingSeconds(now) / 60)} + 'm ' + (${r.remainingSeconds(now) % 60}) + 's'">59m
+                                            12s</span>
+                                    </td>
+                                    <td style="text-align: right; font-weight: 700; color: var(--color-danger);"
+                                        th:text="${#numbers.formatInteger(r.totalBlockedHits, 1, 'COMMA')}">0</td>
+                                    <td style="text-align: right;" th:text="${r.peakDistinctIps}">0</td>
+                                    <td>
+                                        <span th:if="${r.deterrenceState == 'PERSISTENT'}" class="badge badge-danger"
+                                            title="Attacker continues sending requests into the dynamic block within the last 10 minutes. Consider extending TTL.">
+                                            &#x1F525; PERSISTENT (Still Attacking)
+                                        </span>
+                                        <span th:if="${r.deterrenceState == 'DETERRED'}" class="badge badge-success"
+                                            title="No blocked hits observed for at least 10 minutes. Attacker has stopped or rotated away.">
+                                            &#x2705; DETERRED (Quiet &ge;10m)
+                                        </span>
+                                        <span
+                                            th:if="${r.deterrenceState != 'PERSISTENT' and r.deterrenceState != 'DETERRED'}"
+                                            class="badge badge-info"
+                                            title="Rule was recently created; observing whether attacker persists or stops.">
+                                            &#x1F441; OBSERVING
+                                        </span>
+                                    </td>
+                                    <td style="text-align: right; white-space: nowrap;">
+                                        <button type="button" class="btn" style="padding: 3px 8px; font-size: 11px;"
+                                            th:attr="hx-post=@{/mitigation/{id}/extend(id=${r.id},additionalMinutes=60,tab='active')}"
                                             hx-target="#mitigation-dashboard-container" hx-swap="outerHTML"
-                                            th:disabled="${viewerMode}" title="Re-activate this rule for 60 minutes">
-                                            Re-Block 1h
+                                            th:disabled="${viewerMode}" title="Extend TTL by +60 minutes">
+                                            +1h
                                         </button>
+                                        <button type="button" class="btn" style="padding: 3px 8px; font-size: 11px;"
+                                            th:attr="hx-post=@{/mitigation/{id}/extend(id=${r.id},additionalMinutes=360,tab='active')}"
+                                            hx-target="#mitigation-dashboard-container" hx-swap="outerHTML"
+                                            th:disabled="${viewerMode}" title="Extend TTL by +6 hours">
+                                            +6h
+                                        </button>
+                                        <button type="button" class="btn btn-danger"
+                                            style="padding: 3px 8px; font-size: 11px;"
+                                            th:attr="hx-post=@{/mitigation/{id}/revoke(id=${r.id},tab='active')}"
+                                            hx-target="#mitigation-dashboard-container" hx-swap="outerHTML"
+                                            th:disabled="${viewerMode}"
+                                            title="Immediately lift this CIDR block across all Valves">
+                                            Revoke
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr id="active-rules-no-matches" style="display: none;">
+                                    <td colspan="9"
+                                        style="text-align: center; padding: 24px 16px; color: var(--text-muted); font-size: 13px;">
+                                        No active mitigation rules match your search or filter criteria.
                                     </td>
                                 </tr>
                             </tbody>
@@ -955,57 +922,641 @@
                     </div>
                 </div>
 
-                <!-- Mitigation Audit Log Teaser -->
-                <div class="sys-card" style="padding: 18px; margin: 0;">
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                <!-- Bottom Teaser Grid: Historical Rules + Audit Log -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 20px;">
+
+                    <!-- Recently Expired / Revoked Rules Teaser -->
+                    <div class="sys-card" style="padding: 18px; margin: 0;">
                         <div
-                            style="font-size: 14px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
-                            <span>&#x1F4DC;</span> Mitigation Audit Trail
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                            <div
+                                style="font-size: 14px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                                <span>&#x1F552;</span> Recently Expired &amp; Revoked
+                            </div>
+                            <button type="button" class="btn btn-sm" style="font-size: 11px; padding: 3px 10px;"
+                                hx-get="/fragments/mitigation-content?tab=history"
+                                hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top"
+                                hx-push-url="/mitigation?tab=history">
+                                Open History Explorer (<span th:text="${totalHistoricalCount}">0</span>) &rarr;
+                            </button>
                         </div>
-                        <button type="button" class="btn btn-sm" style="font-size: 11px; padding: 3px 10px;"
-                            hx-get="/fragments/mitigation-content?tab=audit" hx-target="#mitigation-dashboard-container"
-                            hx-swap="outerHTML show:window:top" hx-push-url="/mitigation?tab=audit">
-                            Open Full Audit Trail (<span th:text="${totalAuditCount}">0</span>) &rarr;
-                        </button>
+                        <div th:if="${teaserHistoricalRules == null or teaserHistoricalRules.isEmpty()}"
+                            style="color: var(--text-muted); font-size: 12.5px; padding: 16px 0;">
+                            No expired or revoked mitigation rules recorded yet.
+                        </div>
+                        <div th:if="${teaserHistoricalRules != null and !teaserHistoricalRules.isEmpty()}"
+                            style="overflow-x: auto;">
+                            <table class="data-table" style="width: 100%; font-size: 12px;">
+                                <thead>
+                                    <tr>
+                                        <th>CIDR</th>
+                                        <th>Status</th>
+                                        <th style="text-align: right;">Blocked Hits</th>
+                                        <th>Deterrence</th>
+                                        <th style="text-align: right;">Re-Activate</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr th:each="h : ${teaserHistoricalRules}">
+                                        <td style="font-family: ui-monospace, monospace; font-weight: 600;">
+                                            <a th:href="@{/offenders(clientQuery=${h.cidr},groupBy='SUBNET')}"
+                                                style="color: var(--color-primary); text-decoration: none;"
+                                                title="Inspect subnet traffic in Top Offenders"
+                                                th:text="${h.cidr}">198.51.100.0/24</a>
+                                        </td>
+                                        <td>
+                                            <span th:if="${h.status == 'REVOKED'}"
+                                                class="badge badge-warning">REVOKED</span>
+                                            <span th:if="${h.status != 'REVOKED'}" class="badge badge-secondary"
+                                                th:text="${h.status}">EXPIRED</span>
+                                        </td>
+                                        <td style="text-align: right;"
+                                            th:text="${#numbers.formatInteger(h.totalBlockedHits, 1, 'COMMA')}">0</td>
+                                        <td th:text="${h.deterrenceState}">DETERRED</td>
+                                        <td style="text-align: right;">
+                                            <button type="button" class="btn" style="padding: 2px 8px; font-size: 11px;"
+                                                th:attr="hx-post=@{/mitigation/{id}/extend(id=${h.id},additionalMinutes=60,tab='active')}"
+                                                hx-target="#mitigation-dashboard-container" hx-swap="outerHTML"
+                                                th:disabled="${viewerMode}"
+                                                title="Re-activate this rule for 60 minutes">
+                                                Re-Block 1h
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                    <div th:if="${teaserAuditEntries == null or teaserAuditEntries.isEmpty()}"
-                        style="color: var(--text-muted); font-size: 12.5px; padding: 16px 0;">
-                        No mitigation audit events recorded yet.
+
+                    <!-- Mitigation Audit Log Teaser -->
+                    <div class="sys-card" style="padding: 18px; margin: 0;">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                            <div
+                                style="font-size: 14px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                                <span>&#x1F4DC;</span> Mitigation Audit Trail
+                            </div>
+                            <button type="button" class="btn btn-sm" style="font-size: 11px; padding: 3px 10px;"
+                                hx-get="/fragments/mitigation-content?tab=audit"
+                                hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top"
+                                hx-push-url="/mitigation?tab=audit">
+                                Open Full Audit Trail (<span th:text="${totalAuditCount}">0</span>) &rarr;
+                            </button>
+                        </div>
+                        <div th:if="${teaserAuditEntries == null or teaserAuditEntries.isEmpty()}"
+                            style="color: var(--text-muted); font-size: 12.5px; padding: 16px 0;">
+                            No mitigation audit events recorded yet.
+                        </div>
+                        <div th:if="${teaserAuditEntries != null and !teaserAuditEntries.isEmpty()}"
+                            style="overflow-x: auto;">
+                            <table class="data-table" style="width: 100%; font-size: 12px;">
+                                <thead>
+                                    <tr>
+                                        <th>Timestamp</th>
+                                        <th>Action</th>
+                                        <th>Target</th>
+                                        <th>Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr th:each="a : ${teaserAuditEntries}">
+                                        <td style="font-family: ui-monospace, monospace; white-space: nowrap; font-size: 11px; color: var(--text-muted);"
+                                            th:text="${a.formattedCreatedAt()}">2026-11-08 10:00</td>
+                                        <td>
+                                            <span th:if="${a.action == 'CREATE' or a.action == 'AUTO_BLOCK'}"
+                                                class="badge badge-danger" th:text="${a.action}">CREATE</span>
+                                            <span th:if="${a.action == 'EXTEND' or a.action == 'AUTO_EXTEND'}"
+                                                class="badge badge-warning" th:text="${a.action}">EXTEND</span>
+                                            <span th:if="${a.action == 'REVOKE' or a.action == 'BATCH_REVOKE'}" <span
+                                                th:if="${a.action == 'REVOKE' or a.action == 'BATCH_REVOKE' or a.action == 'PRUNE_TO_CAP'}"
+                                                class="badge badge-info" th:text="${a.action}">REVOKE</span>
+                                            <span
+                                                th:if="${a.action == 'AUTO_WOULD_BLOCK' or a.action == 'AUTO_WOULD_EXTEND'}"
+                                                class="badge badge-purple">SIMULATION</span>
+                                            <span
+                                                th:if="${a.action == 'SYNC_CIRCUIT_BREAKER' or a.action == 'AUTO_CIRCUIT_BREAKER'}"
+                                                class="badge badge-danger" th:text="${a.action}">CIRCUIT BREAKER</span>
+                                            <span th:if="${a.action == 'FLEET_SYNC' or a.action == 'SYNC_RECOVERED'}"
+                                                class="badge badge-success" th:text="${a.action}">FLEET SYNC</span>
+                                            <span
+                                                th:if="${a.action != 'CREATE' and a.action != 'AUTO_BLOCK' and a.action != 'EXTEND' and a.action != 'AUTO_EXTEND' and a.action != 'REVOKE' and a.action != 'BATCH_REVOKE' and a.action != 'AUTO_WOULD_BLOCK' and a.action != 'AUTO_WOULD_EXTEND' and a.action != 'SYNC_CIRCUIT_BREAKER' and a.action != 'AUTO_CIRCUIT_BREAKER' and a.action != 'FLEET_SYNC' and a.action != 'SYNC_RECOVERED'}"
+                                                th:if="${a.action != 'CREATE' and a.action != 'AUTO_BLOCK' and a.action != 'EXTEND' and a.action != 'AUTO_EXTEND' and a.action != 'REVOKE' and a.action != 'BATCH_REVOKE' and a.action != 'PRUNE_TO_CAP' and a.action != 'AUTO_WOULD_BLOCK' and a.action != 'AUTO_WOULD_EXTEND' and a.action != 'SYNC_CIRCUIT_BREAKER' and a.action != 'AUTO_CIRCUIT_BREAKER' and a.action != 'FLEET_SYNC' and a.action != 'SYNC_RECOVERED'}"
+                                                class="badge badge-secondary" th:text="${a.action}">ACTION</span>
+                                        </td>
+                                        <td style="font-family: ui-monospace, monospace; font-weight: 600;">
+                                            <a th:if="${a.cidr != null and a.cidr.startsWith('ASN-') and a.getAsn() != null}"
+                                                th:href="@{/offenders(asn=${a.getAsn()},groupBy='ASN')}"
+                                                class="badge badge-info" style="text-decoration: none;"
+                                                title="Inspect ASN in Top Offenders" th:text="${a.cidr}">ASN-64496</a>
+                                            <span th:if="${a.cidr == 'ALL'}" class="badge badge-danger">FLEET
+                                                WIDE</span>
+                                            <a th:if="${a.cidr != null and a.cidr != 'ALL' and !a.cidr.startsWith('ASN-') and a.cidr.contains('/')}"
+                                                th:href="@{/offenders(clientQuery=${a.cidr},groupBy='SUBNET')}"
+                                                style="color: var(--color-primary); text-decoration: none;"
+                                                title="Inspect subnet traffic in Top Offenders"
+                                                th:text="${a.cidr}">198.51.100.0/24</a>
+                                            <span
+                                                th:if="${a.cidr != null and a.cidr != 'ALL' and !a.cidr.startsWith('ASN-') and !a.cidr.contains('/')}"
+                                                th:text="${a.cidr}">Batch target</span>
+                                            <div th:if="${a.getAsn() != null and (a.cidr == null or !a.cidr.startsWith('ASN-'))}"
+                                                style="margin-top: 2px;">
+                                                <a th:href="@{/offenders(asn=${a.getAsn()},groupBy='ASN')}"
+                                                    class="badge badge-secondary"
+                                                    style="text-decoration: none; font-size: 10px; color: var(--color-primary);"
+                                                    title="Inspect ASN in Top Offenders">
+                                                    <span th:text="'ASN ' + ${a.getAsn()}">&#x1F3E2; ASN 64496</span>
+                                                    &#x2197;
+                                                </a>
+                                            </div>
+                                        </td>
+                                        <td style="color: var(--text-secondary); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+                                            th:text="${a.details}" th:title="${a.details}">Details</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                    <div th:if="${teaserAuditEntries != null and !teaserAuditEntries.isEmpty()}"
-                        style="overflow-x: auto;">
-                        <table class="data-table" style="width: 100%; font-size: 12px;">
-                            <thead>
+                </div>
+
+            </div> <!-- end activeTab == 'active' -->
+
+            <!-- TAB 2: Autonomous Carpet Attack Radar -->
+            <div th:if="${activeTab == 'radar'}">
+                <div th:fragment="carpetRadarSection" id="carpet-radar-container" class="sys-card"
+                    style="padding: 18px; margin-bottom: 24px;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; flex-wrap: wrap; gap: 12px;">
+                        <div>
+                            <div
+                                style="font-size: 15px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                                <span>&#x1F4E1;</span> Autonomous Carpet Attack Radar &amp; Guardrails Inspector
+                                <span class="badge badge-secondary" style="font-size: 11px;"
+                                    th:text="'Evaluation Window: Last ' + ${autoSettings.carpetWindowHours} + 'h'">Evaluation
+                                    Window: Last 1h</span>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 3px;">
+                                Real-time telemetry scan across active Autonomous Systems (ASNs), showing carpet attack
+                                metrics and safety guardrail evaluation results.
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button type="button" class="btn" hx-get="/mitigation/radar"
+                                hx-target="#carpet-radar-container" hx-swap="outerHTML"
+                                title="Re-scan recent telemetry for carpet attack candidates">
+                                <span>&#x21BB;</span> Refresh Radar
+                            </button>
+                        </div>
+                    </div>
+
+                    <div th:if="${#lists.isEmpty(carpetRadar)}" class="empty-state"
+                        style="padding: 24px; text-align: center; color: var(--text-muted); background: rgba(0,0,0,0.1); border-radius: var(--radius-sm);">
+                        No high-volume or multi-subnet ASN traffic waves detected in the current evaluation window
+                        (<span th:text="${autoSettings.carpetWindowHours}">1</span>h).
+                    </div>
+
+                    <div th:unless="${#lists.isEmpty(carpetRadar)}" class="table-responsive"
+                        style="border: 1px solid var(--border-color); border-radius: var(--radius-sm); max-height: 480px; overflow-y: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 12.5px;">
+                            <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 2;">
                                 <tr>
-                                    <th>Timestamp</th>
-                                    <th>Action</th>
-                                    <th>Target</th>
-                                    <th>Details</th>
+                                    <th style="padding: 8px 12px; text-align: left;">Autonomous System (ASN)</th>
+                                    <th style="padding: 8px 12px; text-align: right;">Total Requests</th>
+                                    <th style="padding: 8px 12px; text-align: right;">Active Subnets</th>
+                                    <th style="padding: 8px 12px; text-align: right;">Returning Visitors (Cookie)</th>
+                                    <th style="padding: 8px 12px; text-align: right;">Auth Requests</th>
+                                    <th style="padding: 8px 12px; text-align: left;">Auto-Mitigation Evaluation</th>
+                                    <th style="padding: 8px 12px; text-align: right;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr th:each="a : ${teaserAuditEntries}">
+                                <tr th:each="entry : ${carpetRadar}" style="border-top: 1px solid var(--border-color);">
+                                    <td style="padding: 8px 12px;">
+                                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                            <a th:href="@{/events(asn=${entry.asn})}" class="ip-mono badge badge-info"
+                                                style="text-decoration: underline; color: inherit; font-weight: 600;"
+                                                th:text="'AS' + ${entry.asn}">AS3257</a>
+                                            <button type="button" class="btn"
+                                                style="padding: 1px 5px; font-size: 10px; cursor: pointer;"
+                                                th:hx-get="@{/analytics/asn-drilldown(asn=${entry.asn})}"
+                                                hx-target="#asn-drilldown-modal-container"
+                                                title="Hourly ASN Timeline &amp; Forensics">&#x1F4CA;</button>
+                                            <span style="font-weight: 600; color: var(--text-primary);"
+                                                th:text="${entry.asOrg}">GTT Communications</span>
+                                            <span th:if="${entry.countryCode != null}" class="badge badge-secondary"
+                                                style="font-size: 10px;" th:text="${entry.countryCode}">US</span>
+                                        </div>
+                                        <div th:unless="${#lists.isEmpty(entry.topSubnets)}"
+                                            style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                                            Top subnets: <span th:each="sub, iterStat : ${entry.topSubnets}"
+                                                th:text="${sub} + (${!iterStat.last} ? ', ' : '')"
+                                                style="font-family: monospace;">74.0.157.0/24</span>
+                                        </div>
+                                    </td>
+                                    <td style="padding: 8px 12px; text-align: right; font-weight: 700;">
+                                        <span
+                                            th:text="${#numbers.formatInteger(entry.totalRequests, 1, 'POINT')}">56,463</span>
+                                        <div style="font-size: 10.5px; font-weight: normal; color: var(--text-muted);"
+                                            th:text="'(req threshold: &ge;' + ${#numbers.formatInteger(autoSettings.carpetMinRequests, 1, 'POINT')} + ')'">
+                                            (&ge;3,000)</div>
+                                    </td>
+                                    <td style="padding: 8px 12px; text-align: right;">
+                                        <strong th:text="${entry.activeSubnets}">195</strong>
+                                        <div style="font-size: 10.5px; color: var(--text-muted);"
+                                            th:text="'(subnet req: &ge;' + ${autoSettings.carpetMinSubnets} + ')'">
+                                            (&ge;3)
+                                        </div>
+                                    </td>
+                                    <td style="padding: 8px 12px; text-align: right;">
+                                        <span class="badge" style="padding: 2px 7px; font-size: 11px;"
+                                            th:classappend="${entry.returningRatioPct <= autoSettings.maxReturningRatioPct ? 'badge-danger' : 'badge-warning'}"
+                                            th:title="${#numbers.formatInteger(entry.returningRequests, 1, 'POINT')} + ' of ' + ${#numbers.formatInteger(entry.totalRequests, 1, 'POINT')} + ' requests carried a visitor cookie'">
+                                            &#x1F36A; <span
+                                                th:text="${#numbers.formatDecimal(entry.returningRatioPct, 1, 1)} + '%'">24.0%</span>
+                                        </span>
+                                        <div style="font-size: 10.5px; color: var(--text-muted); margin-top: 2px;"
+                                            th:text="'(limit: &le;' + ${autoSettings.maxReturningRatioPct} + '%)'">
+                                            (&le;5.0%)</div>
+                                    </td>
+                                    <td style="padding: 8px 12px; text-align: right;">
+                                        <span th:if="${entry.authenticatedRequests > 0}" class="badge"
+                                            th:classappend="${entry.authenticatedRequests <= autoSettings.maxAuthenticatedRequests ? 'badge-danger' : 'badge-info'}"
+                                            th:text="${#numbers.formatInteger(entry.authenticatedRequests, 1, 'POINT')}">22,018</span>
+                                        <span th:if="${entry.authenticatedRequests == 0}"
+                                            style="color: var(--color-success); font-weight: 600;">0 &#x2714;</span>
+                                        <div style="font-size: 10.5px; color: var(--text-muted); margin-top: 2px;"
+                                            th:text="'(limit: &le;' + ${#numbers.formatInteger(autoSettings.maxAuthenticatedRequests, 1, 'POINT')} + ')'">
+                                            (&le;0)</div>
+                                    </td>
+                                    <td style="padding: 8px 12px;">
+                                        <span class="badge" th:classappend="${entry.badgeClass}"
+                                            style="padding: 3px 8px; font-size: 11px; font-weight: 600;">
+                                            <span th:text="${entry.icon}">🚨</span> <span
+                                                th:text="${entry.status}">QUALIFIED</span>
+                                        </span>
+                                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 3px; max-width: 340px; line-height: 1.3;"
+                                            th:text="${entry.statusReason}">Returning ratio 24.0% exceeds safety
+                                            guardrail
+                                            limit (5.0%)</div>
+                                    </td>
+                                    <td style="padding: 8px 12px; text-align: right;">
+                                        <div
+                                            style="display: flex; gap: 4px; justify-content: flex-end; align-items: center;">
+                                            <button type="button" class="btn" style="padding: 2px 7px; font-size: 11px;"
+                                                th:hx-get="@{/analytics/asn-drilldown(asn=${entry.asn})}"
+                                                hx-target="#asn-drilldown-modal-container"
+                                                title="Inspect hourly progression">
+                                                <span>&#x1F4CA;</span> Timeline
+                                            </button>
+                                            <a th:href="@{/mitigation(asn=${entry.asn})}" class="btn btn-warning"
+                                                style="padding: 2px 7px; font-size: 11px;"
+                                                title="Pre-fill manual ASN batch mitigation">
+                                                <span>&#x1F6E1;&#xFE0F;</span> Block ASN
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: Historical Rules Explorer -->
+            <div th:if="${activeTab == 'history'}">
+                <div class="sys-card" style="padding: 20px; margin-bottom: 24px;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+                        <div>
+                            <div
+                                style="font-size: 15px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                                <span>&#x1F552;</span> Historical Mitigation Rules Explorer
+                                <span class="badge badge-secondary" th:text="${historyTotalCount}">0</span>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
+                                Forensic archive of expired and revoked dynamic CIDR blocks across the fleet
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Search & Filter Form -->
+                    <form id="history-filter-form" hx-get="/fragments/mitigation-content"
+                        hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top"
+                        style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 18px; padding: 12px 14px; background: rgba(0,0,0,0.18); border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                        <input type="hidden" name="tab" value="history" />
+                        <input type="hidden" name="historyPage" value="1" />
+
+                        <div style="flex: 1; min-width: 240px;">
+                            <input type="text" name="historySearch" class="input-control" th:value="${historySearch}"
+                                placeholder="Filter by CIDR, ASN, Organization, Reason or Batch..."
+                                style="height: 34px; font-size: 12px;" />
+                        </div>
+                        <div>
+                            <select name="historyStatus" class="input-control"
+                                style="height: 34px; font-size: 12px; width: auto;">
+                                <option value="ALL" th:selected="${historyStatus == 'ALL'}">All Statuses</option>
+                                <option value="EXPIRED" th:selected="${historyStatus == 'EXPIRED'}">Expired</option>
+                                <option value="REVOKED" th:selected="${historyStatus == 'REVOKED'}">Revoked</option>
+                            </select>
+                        </div>
+                        <div>
+                            <select name="historyLimit" class="input-control"
+                                style="height: 34px; font-size: 12px; width: auto;">
+                                <option value="25" th:selected="${historyLimit == 25}">25 / page</option>
+                                <option value="50" th:selected="${historyLimit == 50}">50 / page</option>
+                                <option value="100" th:selected="${historyLimit == 100}">100 / page</option>
+                                <option value="250" th:selected="${historyLimit == 250}">250 / page</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary"
+                            style="height: 34px; font-size: 12px; padding: 0 14px;">
+                            <span>&#x1F50D;</span> Search
+                        </button>
+                        <button type="button" class="btn" style="height: 34px; font-size: 12px; padding: 0 12px;"
+                            hx-get="/fragments/mitigation-content?tab=history&historyStatus=ALL&historyLimit=50&historyPage=1"
+                            hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top">
+                            Reset
+                        </button>
+                    </form>
+
+                    <div th:if="${historicalRules == null or historicalRules.isEmpty()}"
+                        style="text-align: center; padding: 36px 20px; color: var(--text-muted); font-size: 13px;">
+                        No historical rules found matching your filter criteria.
+                    </div>
+
+                    <div th:if="${historicalRules != null and !historicalRules.isEmpty()}" style="overflow-x: auto;">
+                        <table class="data-table" style="width: 100%; font-size: 12px;">
+                            <thead>
+                                <tr>
+                                    <th>CIDR Subnet</th>
+                                    <th>ASN / Organization</th>
+                                    <th>Source &amp; Batch</th>
+                                    <th>Reason</th>
+                                    <th>Status</th>
+                                    <th style="text-align: right;">Blocked Hits</th>
+                                    <th style="text-align: right;">Peak IPs</th>
+                                    <th>Final Deterrence</th>
+                                    <th>Timestamps</th>
+                                    <th style="text-align: right;">Re-Activate</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:each="h : ${historicalRules}">
+                                    <td style="font-family: ui-monospace, monospace; font-weight: 700;">
+                                        <a th:href="@{/offenders(clientQuery=${h.cidr},groupBy='SUBNET')}"
+                                            style="color: var(--color-primary); text-decoration: none;"
+                                            title="Inspect subnet traffic in Top Offenders"
+                                            th:text="${h.cidr}">198.51.100.0/24</a>
+                                    </td>
+                                    <td>
+                                        <a th:if="${h.asn != null and h.asn > 0}"
+                                            th:href="@{/offenders(asn=${h.asn},groupBy='ASN')}"
+                                            style="color: var(--color-primary); text-decoration: none;"
+                                            title="Inspect Autonomous System in Top Offenders"
+                                            th:text="'ASN ' + ${h.asn} + ' (' + (${h.asnOrganization != null} ? ${h.asnOrganization} : 'Unknown') + ')'">ASN
+                                            64496</a>
+                                        <span th:if="${h.asn == null or h.asn <= 0}"
+                                            style="color: var(--text-muted);">&mdash;</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-secondary" th:text="${h.source}">MANUAL</span>
+                                        <div th:if="${h.batchId != null}"
+                                            style="font-size: 10px; color: var(--text-muted); font-family: ui-monospace, monospace; margin-top: 2px;"
+                                            th:text="${h.batchId}">ASN-64496</div>
+                                    </td>
+                                    <td th:text="${h.reason}">Carpet attack</td>
+                                    <td>
+                                        <span th:if="${h.status == 'REVOKED'}" class="badge badge-warning"
+                                            title="Revoked manually or via flush">REVOKED</span>
+                                        <span th:if="${h.status != 'REVOKED'}" class="badge badge-secondary"
+                                            th:text="${h.status}">EXPIRED</span>
+                                        <div th:if="${h.revokedReason != null}"
+                                            style="font-size: 10px; color: var(--text-muted); margin-top: 2px;"
+                                            th:text="${h.revokedReason}">Admin action</div>
+                                    </td>
+                                    <td style="text-align: right; font-weight: 700;"
+                                        th:text="${#numbers.formatInteger(h.totalBlockedHits, 1, 'COMMA')}">0</td>
+                                    <td style="text-align: right;" th:text="${h.peakDistinctIps}">0</td>
+                                    <td>
+                                        <span th:if="${h.deterrenceState == 'DETERRED'}"
+                                            class="badge badge-success">&#x2705; DETERRED</span>
+                                        <span th:if="${h.deterrenceState == 'PERSISTENT'}"
+                                            class="badge badge-danger">&#x1F525; PERSISTENT</span>
+                                        <span
+                                            th:if="${h.deterrenceState != 'DETERRED' and h.deterrenceState != 'PERSISTENT'}"
+                                            class="badge badge-info" th:text="${h.deterrenceState}">OBSERVING</span>
+                                    </td>
+                                    <td
+                                        style="font-size: 11px; color: var(--text-muted); font-family: ui-monospace, monospace; white-space: nowrap;">
+                                        <div
+                                            th:text="'Created: ' + ${#temporals.format(h.createdAt(), 'yyyy-MM-dd HH:mm')}">
+                                            2026-11-08 10:00</div>
+                                        <div th:if="${h.revokedAt() != null}"
+                                            th:text="'Revoked: ' + ${#temporals.format(h.revokedAt(), 'yyyy-MM-dd HH:mm')}">
+                                            2026-11-08 11:00</div>
+                                        <div th:if="${h.revokedAt() == null and h.expiresAt() != null}"
+                                            th:text="'Expired: ' + ${#temporals.format(h.expiresAt(), 'yyyy-MM-dd HH:mm')}">
+                                            2026-11-08 11:00</div>
+                                    </td>
+                                    <td style="text-align: right; white-space: nowrap;">
+                                        <button type="button" class="btn" style="padding: 3px 8px; font-size: 11px;"
+                                            th:attr="hx-post=@{/mitigation/{id}/extend(id=${h.id},additionalMinutes=60,tab='history')}"
+                                            hx-target="#mitigation-dashboard-container" hx-swap="outerHTML"
+                                            th:disabled="${viewerMode}"
+                                            title="Re-activate this rule across all Valves for 60 minutes">
+                                            Re-Block 1h
+                                        </button>
+                                        <button type="button" class="btn" style="padding: 3px 8px; font-size: 11px;"
+                                            th:attr="hx-post=@{/mitigation/{id}/extend(id=${h.id},additionalMinutes=360,tab='history')}"
+                                            hx-target="#mitigation-dashboard-container" hx-swap="outerHTML"
+                                            th:disabled="${viewerMode}"
+                                            title="Re-activate this rule across all Valves for 6 hours">
+                                            +6h
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- History Pagination Controls -->
+                    <div th:if="${historyTotalCount > 0}"
+                        style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-color); flex-wrap: wrap; gap: 10px;">
+                        <div style="font-size: 12px; color: var(--text-muted);">
+                            Showing <span th:text="${historicalRules.size()}">50</span> of <strong
+                                th:text="${#numbers.formatInteger(historyTotalCount, 1, 'COMMA')}">120</strong>
+                            historical
+                            rules
+                            (Page <span th:text="${historyPage}">1</span> of <span
+                                th:text="${historyTotalPages}">3</span>)
+                        </div>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <button type="button" class="btn" style="padding: 4px 10px; font-size: 11px;"
+                                th:disabled="${!historyHasPrev}"
+                                th:attr="hx-get=@{/fragments/mitigation-content(tab='history',historySearch=${historySearch},historyStatus=${historyStatus},historyLimit=${historyLimit},historyPage=1)}"
+                                hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top">
+                                &laquo; First
+                            </button>
+                            <button type="button" class="btn" style="padding: 4px 10px; font-size: 11px;"
+                                th:disabled="${!historyHasPrev}"
+                                th:attr="hx-get=@{/fragments/mitigation-content(tab='history',historySearch=${historySearch},historyStatus=${historyStatus},historyLimit=${historyLimit},historyPage=${historyPage - 1})}"
+                                hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top">
+                                &lsaquo; Prev
+                            </button>
+                            <span style="font-size: 12px; font-weight: 600; padding: 0 6px;"
+                                th:text="${historyPage} + ' / ' + ${historyTotalPages}">1 / 3</span>
+                            <button type="button" class="btn" style="padding: 4px 10px; font-size: 11px;"
+                                th:disabled="${!historyHasNext}"
+                                th:attr="hx-get=@{/fragments/mitigation-content(tab='history',historySearch=${historySearch},historyStatus=${historyStatus},historyLimit=${historyLimit},historyPage=${historyPage + 1})}"
+                                hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top">
+                                Next &rsaquo;
+                            </button>
+                            <button type="button" class="btn" style="padding: 4px 10px; font-size: 11px;"
+                                th:disabled="${!historyHasNext}"
+                                th:attr="hx-get=@{/fragments/mitigation-content(tab='history',historySearch=${historySearch},historyStatus=${historyStatus},historyLimit=${historyLimit},historyPage=${historyTotalPages})}"
+                                hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top">
+                                Last &raquo;
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: Mitigation Audit Trail -->
+            <div th:if="${activeTab == 'audit'}">
+                <div class="sys-card" style="padding: 20px; margin-bottom: 24px;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+                        <div>
+                            <div
+                                style="font-size: 15px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                                <span>&#x1F4DC;</span> Mitigation Audit Trail &amp; Lifecycle Events
+                                <span class="badge badge-secondary" th:text="${auditTotalCount}">0</span>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
+                                Chronological forensics of autonomous and manual block, extension, simulation, and
+                                revocation events
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Search & Filter Form -->
+                    <form id="audit-filter-form" hx-get="/fragments/mitigation-content"
+                        hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top"
+                        style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 18px; padding: 12px 14px; background: rgba(0,0,0,0.18); border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                        <input type="hidden" name="tab" value="audit" />
+                        <input type="hidden" name="auditPage" value="1" />
+
+                        <div style="flex: 1; min-width: 240px;">
+                            <input type="text" name="auditSearch" class="input-control" th:value="${auditSearch}"
+                                placeholder="Filter by CIDR, Batch, Actor or Details..."
+                                style="height: 34px; font-size: 12px;" />
+                        </div>
+                        <div>
+                            <select name="auditAction" class="input-control"
+                                style="height: 34px; font-size: 12px; width: auto;">
+                                <option value="ALL" th:selected="${auditAction == 'ALL'}">All Actions</option>
+                                <option value="AUTO_BLOCK" th:selected="${auditAction == 'AUTO_BLOCK'}">AUTO_BLOCK
+                                </option>
+                                <option value="DRY_RUN_SIMULATION"
+                                    th:selected="${auditAction == 'DRY_RUN_SIMULATION' or auditAction == 'SIMULATION'}">
+                                    DRY_RUN_SIMULATION</option>
+                                <option value="CREATE" th:selected="${auditAction == 'CREATE'}">CREATE</option>
+                                <option value="EXTEND" th:selected="${auditAction == 'EXTEND'}">EXTEND</option>
+                                <option value="AUTO_EXTEND" th:selected="${auditAction == 'AUTO_EXTEND'}">AUTO_EXTEND
+                                </option>
+                                <option value="REVOKE" th:selected="${auditAction == 'REVOKE'}">REVOKE</option>
+                                <option value="BATCH_REVOKE" th:selected="${auditAction == 'BATCH_REVOKE'}">BATCH_REVOKE
+                                </option>
+                                <option value="PRUNE_TO_CAP" th:selected="${auditAction == 'PRUNE_TO_CAP'}">PRUNE_TO_CAP
+                                </option>
+                                <option value="EMERGENCY_FLUSH" th:selected="${auditAction == 'EMERGENCY_FLUSH'}">
+                                    EMERGENCY_FLUSH</option>
+                                <option value="SYNC_CIRCUIT_BREAKER"
+                                    th:selected="${auditAction == 'SYNC_CIRCUIT_BREAKER'}">
+                                    SYNC_CIRCUIT_BREAKER</option>
+                                <option value="FLEET_SYNC" th:selected="${auditAction == 'FLEET_SYNC'}">FLEET_SYNC
+                                </option>
+                            </select>
+                        </div>
+                        <div>
+                            <select name="auditActor" class="input-control"
+                                style="height: 34px; font-size: 12px; width: auto;">
+                                <option value="ALL" th:selected="${auditActor == 'ALL'}">All Actors</option>
+                                <option value="AUTO_ENGINE" th:selected="${auditActor == 'AUTO_ENGINE'}">AUTO_ENGINE
+                                </option>
+                                <option value="ADMIN" th:selected="${auditActor == 'ADMIN'}">ADMIN</option>
+                                <option value="AUTO_POLLER" th:selected="${auditActor == 'AUTO_POLLER'}">AUTO_POLLER
+                                </option>
+                            </select>
+                        </div>
+                        <div>
+                            <select name="auditLimit" class="input-control"
+                                style="height: 34px; font-size: 12px; width: auto;">
+                                <option value="25" th:selected="${auditLimit == 25}">25 / page</option>
+                                <option value="50" th:selected="${auditLimit == 50}">50 / page</option>
+                                <option value="100" th:selected="${auditLimit == 100}">100 / page</option>
+                                <option value="250" th:selected="${auditLimit == 250}">250 / page</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary"
+                            style="height: 34px; font-size: 12px; padding: 0 14px;">
+                            <span>&#x1F50D;</span> Search
+                        </button>
+                        <button type="button" class="btn" style="height: 34px; font-size: 12px; padding: 0 12px;"
+                            hx-get="/fragments/mitigation-content?tab=audit&auditAction=ALL&auditActor=ALL&auditLimit=50&auditPage=1"
+                            hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top">
+                            Reset
+                        </button>
+                    </form>
+
+                    <div th:if="${auditEntries == null or auditEntries.isEmpty()}"
+                        style="text-align: center; padding: 36px 20px; color: var(--text-muted); font-size: 13px;">
+                        No audit events recorded matching your filter criteria.
+                    </div>
+
+                    <div th:if="${auditEntries != null and !auditEntries.isEmpty()}" style="overflow-x: auto;">
+                        <table class="data-table" style="width: 100%; font-size: 12px;">
+                            <thead>
+                                <tr>
+                                    <th style="min-width: 140px;">Timestamp</th>
+                                    <th style="width: 110px;">Action</th>
+                                    <th style="width: 120px;">Actor</th>
+                                    <th style="min-width: 150px;">Target CIDR / Batch</th>
+                                    <th style="width: 80px;">TTL</th>
+                                    <th>Details &amp; Forensic Log</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:each="a : ${auditEntries}">
                                     <td style="font-family: ui-monospace, monospace; white-space: nowrap; font-size: 11px; color: var(--text-muted);"
-                                        th:text="${a.formattedCreatedAt()}">2026-11-08 10:00</td>
+                                        th:text="${a.formattedCreatedAt()}">2026-11-08 10:00:00</td>
                                     <td>
                                         <span th:if="${a.action == 'CREATE' or a.action == 'AUTO_BLOCK'}"
                                             class="badge badge-danger" th:text="${a.action}">CREATE</span>
                                         <span th:if="${a.action == 'EXTEND' or a.action == 'AUTO_EXTEND'}"
                                             class="badge badge-warning" th:text="${a.action}">EXTEND</span>
-                                        <span th:if="${a.action == 'REVOKE' or a.action == 'BATCH_REVOKE'}"
+                                        <span th:if="${a.action == 'REVOKE' or a.action == 'BATCH_REVOKE'}" <span
+                                            th:if="${a.action == 'REVOKE' or a.action == 'BATCH_REVOKE' or a.action == 'PRUNE_TO_CAP'}"
                                             class="badge badge-info" th:text="${a.action}">REVOKE</span>
                                         <span
                                             th:if="${a.action == 'AUTO_WOULD_BLOCK' or a.action == 'AUTO_WOULD_EXTEND'}"
-                                            class="badge badge-purple">SIMULATION</span>
+                                            class="badge badge-purple" th:text="${a.action}">SIMULATION</span>
                                         <span
-                                            th:if="${a.action == 'SYNC_CIRCUIT_BREAKER' or a.action == 'AUTO_CIRCUIT_BREAKER'}"
-                                            class="badge badge-danger" th:text="${a.action}">CIRCUIT BREAKER</span>
+                                            th:if="${a.action == 'AUTO_CIRCUIT_BREAKER' or a.action == 'SYNC_CIRCUIT_BREAKER'}"
+                                            class="badge badge-danger" th:text="${a.action}">CIRCUIT_BREAKER</span>
                                         <span th:if="${a.action == 'FLEET_SYNC' or a.action == 'SYNC_RECOVERED'}"
-                                            class="badge badge-success" th:text="${a.action}">FLEET SYNC</span>
+                                            class="badge badge-success" th:text="${a.action}">FLEET_SYNC</span>
+                                        <span th:if="${a.action == 'EMERGENCY_FLUSH'}" class="badge badge-danger"
+                                            th:text="${a.action}">EMERGENCY_FLUSH</span>
                                         <span
-                                            th:if="${a.action != 'CREATE' and a.action != 'AUTO_BLOCK' and a.action != 'EXTEND' and a.action != 'AUTO_EXTEND' and a.action != 'REVOKE' and a.action != 'BATCH_REVOKE' and a.action != 'AUTO_WOULD_BLOCK' and a.action != 'AUTO_WOULD_EXTEND' and a.action != 'SYNC_CIRCUIT_BREAKER' and a.action != 'AUTO_CIRCUIT_BREAKER' and a.action != 'FLEET_SYNC' and a.action != 'SYNC_RECOVERED'}"
+                                            th:if="${a.action != 'CREATE' and a.action != 'AUTO_BLOCK' and a.action != 'EXTEND' and a.action != 'AUTO_EXTEND' and a.action != 'REVOKE' and a.action != 'BATCH_REVOKE' and a.action != 'AUTO_WOULD_BLOCK' and a.action != 'AUTO_WOULD_EXTEND' and a.action != 'AUTO_CIRCUIT_BREAKER' and a.action != 'SYNC_CIRCUIT_BREAKER' and a.action != 'FLEET_SYNC' and a.action != 'SYNC_RECOVERED' and a.action != 'EMERGENCY_FLUSH'}"
+                                            th:if="${a.action != 'CREATE' and a.action != 'AUTO_BLOCK' and a.action != 'EXTEND' and a.action != 'AUTO_EXTEND' and a.action != 'REVOKE' and a.action != 'BATCH_REVOKE' and a.action != 'PRUNE_TO_CAP' and a.action != 'AUTO_WOULD_BLOCK' and a.action != 'AUTO_WOULD_EXTEND' and a.action != 'AUTO_CIRCUIT_BREAKER' and a.action != 'SYNC_CIRCUIT_BREAKER' and a.action != 'FLEET_SYNC' and a.action != 'SYNC_RECOVERED' and a.action != 'EMERGENCY_FLUSH'}"
                                             class="badge badge-secondary" th:text="${a.action}">ACTION</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-secondary"
+                                            style="font-family: ui-monospace, monospace; font-size: 10.5px;"
+                                            th:text="${a.actor}">ADMIN</span>
                                     </td>
                                     <td style="font-family: ui-monospace, monospace; font-weight: 600;">
                                         <a th:if="${a.cidr != null and a.cidr.startsWith('ASN-') and a.getAsn() != null}"
@@ -1020,9 +1571,9 @@
                                             th:text="${a.cidr}">198.51.100.0/24</a>
                                         <span
                                             th:if="${a.cidr != null and a.cidr != 'ALL' and !a.cidr.startsWith('ASN-') and !a.cidr.contains('/')}"
-                                            th:text="${a.cidr}">Batch target</span>
+                                            th:text="${a.cidr}">Batch summary</span>
                                         <div th:if="${a.getAsn() != null and (a.cidr == null or !a.cidr.startsWith('ASN-'))}"
-                                            style="margin-top: 2px;">
+                                            style="margin-top: 3px;">
                                             <a th:href="@{/offenders(asn=${a.getAsn()},groupBy='ASN')}"
                                                 class="badge badge-secondary"
                                                 style="text-decoration: none; font-size: 10px; color: var(--color-primary);"
@@ -1031,785 +1582,290 @@
                                                 &#x2197;
                                             </a>
                                         </div>
+                                        <div th:if="${a.batchId != null}"
+                                            style="font-size: 10.5px; color: var(--text-muted); margin-top: 2px;"
+                                            th:text="${a.batchId}">Batch</div>
                                     </td>
-                                    <td style="color: var(--text-secondary); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
-                                        th:text="${a.details}" th:title="${a.details}">Details</td>
+                                    <td style="font-family: ui-monospace, monospace; font-size: 11px;">
+                                        <span th:if="${a.ttlSeconds != null and a.ttlSeconds > 0}"
+                                            th:text="${a.ttlSeconds / 60} + 'm'">60m</span>
+                                        <span th:unless="${a.ttlSeconds != null and a.ttlSeconds > 0}"
+                                            style="color: var(--text-muted);">&mdash;</span>
+                                    </td>
+                                    <td style="color: var(--text-secondary); line-height: 1.4;" th:text="${a.details}">
+                                        Details</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
+
+                    <!-- Audit Pagination Controls -->
+                    <div th:if="${auditTotalCount > 0}"
+                        style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-color); flex-wrap: wrap; gap: 10px;">
+                        <div style="font-size: 12px; color: var(--text-muted);">
+                            Showing <span th:text="${auditEntries.size()}">50</span> of <strong
+                                th:text="${#numbers.formatInteger(auditTotalCount, 1, 'COMMA')}">120</strong> audit
+                            events
+                            (Page <span th:text="${auditPage}">1</span> of <span th:text="${auditTotalPages}">3</span>)
+                        </div>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <button type="button" class="btn" style="padding: 4px 10px; font-size: 11px;"
+                                th:disabled="${!auditHasPrev}"
+                                th:attr="hx-get=@{/fragments/mitigation-content(tab='audit',auditSearch=${auditSearch},auditAction=${auditAction},auditActor=${auditActor},auditLimit=${auditLimit},auditPage=1)}"
+                                hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top">
+                                &laquo; First
+                            </button>
+                            <button type="button" class="btn" style="padding: 4px 10px; font-size: 11px;"
+                                th:disabled="${!auditHasPrev}"
+                                th:attr="hx-get=@{/fragments/mitigation-content(tab='audit',auditSearch=${auditSearch},auditAction=${auditAction},auditActor=${auditActor},auditLimit=${auditLimit},auditPage=${auditPage - 1})}"
+                                hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top">
+                                &lsaquo; Prev
+                            </button>
+                            <span style="font-size: 12px; font-weight: 600; padding: 0 6px;"
+                                th:text="${auditPage} + ' / ' + ${auditTotalPages}">1 / 3</span>
+                            <button type="button" class="btn" style="padding: 4px 10px; font-size: 11px;"
+                                th:disabled="${!auditHasNext}"
+                                th:attr="hx-get=@{/fragments/mitigation-content(tab='audit',auditSearch=${auditSearch},auditAction=${auditAction},auditActor=${auditActor},auditLimit=${auditLimit},auditPage=${auditPage + 1})}"
+                                hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top">
+                                Next &rsaquo;
+                            </button>
+                            <button type="button" class="btn" style="padding: 4px 10px; font-size: 11px;"
+                                th:disabled="${!auditHasNext}"
+                                th:attr="hx-get=@{/fragments/mitigation-content(tab='audit',auditSearch=${auditSearch},auditAction=${auditAction},auditActor=${auditActor},auditLimit=${auditLimit},auditPage=${auditTotalPages})}"
+                                hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top">
+                                Last &raquo;
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-        </div> <!-- end activeTab == 'active' -->
+            <!-- Client-side Interactive Filter & Sorting Scripts -->
+            <script>
+                (function () {
+                    window.setActiveFilter = function (filter, btn) {
+                        document.querySelectorAll('.active-filter-pill').forEach(function (el) {
+                            el.classList.remove('active');
+                        });
+                        if (btn) {
+                            btn.classList.add('active');
+                        }
+                        window.currentActiveRuleFilter = filter;
+                        filterActiveRules();
+                    };
 
-        <!-- TAB 2: Autonomous Carpet Attack Radar -->
-        <div th:if="${activeTab == 'radar'}">
-            <div th:fragment="carpetRadarSection" id="carpet-radar-container" class="sys-card"
-                style="padding: 18px; margin-bottom: 24px;">
-                <div
-                    style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; flex-wrap: wrap; gap: 12px;">
-                    <div>
-                        <div
-                            style="font-size: 15px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
-                            <span>&#x1F4E1;</span> Autonomous Carpet Attack Radar &amp; Guardrails Inspector
-                            <span class="badge badge-secondary" style="font-size: 11px;"
-                                th:text="'Evaluation Window: Last ' + ${autoSettings.carpetWindowHours} + 'h'">Evaluation
-                                Window: Last 1h</span>
-                        </div>
-                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 3px;">
-                            Real-time telemetry scan across active Autonomous Systems (ASNs), showing carpet attack
-                            metrics and safety guardrail evaluation results.
-                        </div>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <button type="button" class="btn" hx-get="/mitigation/radar" hx-target="#carpet-radar-container"
-                            hx-swap="outerHTML" title="Re-scan recent telemetry for carpet attack candidates">
-                            <span>&#x21BB;</span> Refresh Radar
-                        </button>
-                    </div>
-                </div>
+                    window.filterActiveRules = function () {
+                        var searchInput = document.getElementById('active-rules-search');
+                        var query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+                        var clearBtn = document.getElementById('active-rules-clear-btn');
+                        if (clearBtn) {
+                            clearBtn.style.display = query ? 'inline-block' : 'none';
+                        }
 
-                <div th:if="${#lists.isEmpty(carpetRadar)}" class="empty-state"
-                    style="padding: 24px; text-align: center; color: var(--text-muted); background: rgba(0,0,0,0.1); border-radius: var(--radius-sm);">
-                    No high-volume or multi-subnet ASN traffic waves detected in the current evaluation window (<span
-                        th:text="${autoSettings.carpetWindowHours}">1</span>h).
-                </div>
+                        var filter = window.currentActiveRuleFilter || 'all';
+                        var rows = document.querySelectorAll('#active-rules-table tbody tr.active-rule-row');
+                        var visibleCount = 0;
 
-                <div th:unless="${#lists.isEmpty(carpetRadar)}" class="table-responsive"
-                    style="border: 1px solid var(--border-color); border-radius: var(--radius-sm); max-height: 480px; overflow-y: auto;">
-                    <table style="width: 100%; border-collapse: collapse; font-size: 12.5px;">
-                        <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 2;">
-                            <tr>
-                                <th style="padding: 8px 12px; text-align: left;">Autonomous System (ASN)</th>
-                                <th style="padding: 8px 12px; text-align: right;">Total Requests</th>
-                                <th style="padding: 8px 12px; text-align: right;">Active Subnets</th>
-                                <th style="padding: 8px 12px; text-align: right;">Returning Visitors (Cookie)</th>
-                                <th style="padding: 8px 12px; text-align: right;">Auth Requests</th>
-                                <th style="padding: 8px 12px; text-align: left;">Auto-Mitigation Evaluation</th>
-                                <th style="padding: 8px 12px; text-align: right;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr th:each="entry : ${carpetRadar}" style="border-top: 1px solid var(--border-color);">
-                                <td style="padding: 8px 12px;">
-                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                        <a th:href="@{/events(asn=${entry.asn})}" class="ip-mono badge badge-info"
-                                            style="text-decoration: underline; color: inherit; font-weight: 600;"
-                                            th:text="'AS' + ${entry.asn}">AS3257</a>
-                                        <button type="button" class="btn"
-                                            style="padding: 1px 5px; font-size: 10px; cursor: pointer;"
-                                            th:hx-get="@{/analytics/asn-drilldown(asn=${entry.asn})}"
-                                            hx-target="#asn-drilldown-modal-container"
-                                            title="Hourly ASN Timeline &amp; Forensics">&#x1F4CA;</button>
-                                        <span style="font-weight: 600; color: var(--text-primary);"
-                                            th:text="${entry.asOrg}">GTT Communications</span>
-                                        <span th:if="${entry.countryCode != null}" class="badge badge-secondary"
-                                            style="font-size: 10px;" th:text="${entry.countryCode}">US</span>
-                                    </div>
-                                    <div th:unless="${#lists.isEmpty(entry.topSubnets)}"
-                                        style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-                                        Top subnets: <span th:each="sub, iterStat : ${entry.topSubnets}"
-                                            th:text="${sub} + (${!iterStat.last} ? ', ' : '')"
-                                            style="font-family: monospace;">74.0.157.0/24</span>
-                                    </div>
-                                </td>
-                                <td style="padding: 8px 12px; text-align: right; font-weight: 700;">
-                                    <span
-                                        th:text="${#numbers.formatInteger(entry.totalRequests, 1, 'POINT')}">56,463</span>
-                                    <div style="font-size: 10.5px; font-weight: normal; color: var(--text-muted);"
-                                        th:text="'(req threshold: &ge;' + ${#numbers.formatInteger(autoSettings.carpetMinRequests, 1, 'POINT')} + ')'">
-                                        (&ge;3,000)</div>
-                                </td>
-                                <td style="padding: 8px 12px; text-align: right;">
-                                    <strong th:text="${entry.activeSubnets}">195</strong>
-                                    <div style="font-size: 10.5px; color: var(--text-muted);"
-                                        th:text="'(subnet req: &ge;' + ${autoSettings.carpetMinSubnets} + ')'">(&ge;3)
-                                    </div>
-                                </td>
-                                <td style="padding: 8px 12px; text-align: right;">
-                                    <span class="badge" style="padding: 2px 7px; font-size: 11px;"
-                                        th:classappend="${entry.returningRatioPct <= autoSettings.maxReturningRatioPct ? 'badge-danger' : 'badge-warning'}"
-                                        th:title="${#numbers.formatInteger(entry.returningRequests, 1, 'POINT')} + ' of ' + ${#numbers.formatInteger(entry.totalRequests, 1, 'POINT')} + ' requests carried a visitor cookie'">
-                                        &#x1F36A; <span
-                                            th:text="${#numbers.formatDecimal(entry.returningRatioPct, 1, 1)} + '%'">24.0%</span>
-                                    </span>
-                                    <div style="font-size: 10.5px; color: var(--text-muted); margin-top: 2px;"
-                                        th:text="'(limit: &le;' + ${autoSettings.maxReturningRatioPct} + '%)'">
-                                        (&le;5.0%)</div>
-                                </td>
-                                <td style="padding: 8px 12px; text-align: right;">
-                                    <span th:if="${entry.authenticatedRequests > 0}" class="badge"
-                                        th:classappend="${entry.authenticatedRequests <= autoSettings.maxAuthenticatedRequests ? 'badge-danger' : 'badge-info'}"
-                                        th:text="${#numbers.formatInteger(entry.authenticatedRequests, 1, 'POINT')}">22,018</span>
-                                    <span th:if="${entry.authenticatedRequests == 0}"
-                                        style="color: var(--color-success); font-weight: 600;">0 &#x2714;</span>
-                                    <div style="font-size: 10.5px; color: var(--text-muted); margin-top: 2px;"
-                                        th:text="'(limit: &le;' + ${#numbers.formatInteger(autoSettings.maxAuthenticatedRequests, 1, 'POINT')} + ')'">
-                                        (&le;0)</div>
-                                </td>
-                                <td style="padding: 8px 12px;">
-                                    <span class="badge" th:classappend="${entry.badgeClass}"
-                                        style="padding: 3px 8px; font-size: 11px; font-weight: 600;">
-                                        <span th:text="${entry.icon}">🚨</span> <span
-                                            th:text="${entry.status}">QUALIFIED</span>
-                                    </span>
-                                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 3px; max-width: 340px; line-height: 1.3;"
-                                        th:text="${entry.statusReason}">Returning ratio 24.0% exceeds safety guardrail
-                                        limit (5.0%)</div>
-                                </td>
-                                <td style="padding: 8px 12px; text-align: right;">
-                                    <div
-                                        style="display: flex; gap: 4px; justify-content: flex-end; align-items: center;">
-                                        <button type="button" class="btn" style="padding: 2px 7px; font-size: 11px;"
-                                            th:hx-get="@{/analytics/asn-drilldown(asn=${entry.asn})}"
-                                            hx-target="#asn-drilldown-modal-container"
-                                            title="Inspect hourly progression">
-                                            <span>&#x1F4CA;</span> Timeline
-                                        </button>
-                                        <a th:href="@{/mitigation(asn=${entry.asn})}" class="btn btn-warning"
-                                            style="padding: 2px 7px; font-size: 11px;"
-                                            title="Pre-fill manual ASN batch mitigation">
-                                            <span>&#x1F6E1;&#xFE0F;</span> Block ASN
-                                        </a>
-                                    </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                        rows.forEach(function (row) {
+                            var cidr = row.getAttribute('data-cidr') || '';
+                            var asn = row.getAttribute('data-asn') || '';
+                            var org = row.getAttribute('data-org') || '';
+                            var reason = row.getAttribute('data-reason') || '';
+                            var batch = row.getAttribute('data-batch') || '';
+                            var hits = parseInt(row.getAttribute('data-hits') || '0', 10);
+                            var deterrence = row.getAttribute('data-deterrence') || '';
+
+                            var matchesPill = true;
+                            if (filter === 'persistent') {
+                                matchesPill = (deterrence === 'PERSISTENT');
+                            } else if (filter === 'traffic') {
+                                matchesPill = (hits > 0);
+                            } else if (filter === 'deterred') {
+                                matchesPill = (deterrence === 'DETERRED');
+                            } else if (filter === 'observing') {
+                                matchesPill = (deterrence !== 'PERSISTENT' && deterrence !== 'DETERRED');
+                            }
+
+                            var matchesQuery = true;
+                            if (query) {
+                                var haystack = (cidr + ' ' + asn + ' ' + org + ' ' + reason + ' ' + batch).toLowerCase();
+                                matchesQuery = haystack.indexOf(query) !== -1;
+                            }
+
+                            if (matchesPill && matchesQuery) {
+                                row.style.display = '';
+                                visibleCount++;
+                            } else {
+                                row.style.display = 'none';
+                            }
+                        });
+
+                        var countBadge = document.getElementById('active-rules-visible-count');
+                        if (countBadge) {
+                            countBadge.textContent = visibleCount;
+                        }
+
+                        var noMatchesRow = document.getElementById('active-rules-no-matches');
+                        if (noMatchesRow) {
+                            noMatchesRow.style.display = (visibleCount === 0 && rows.length > 0) ? '' : 'none';
+                        }
+                    };
+
+                    window.clearActiveRulesSearch = function () {
+                        var searchInput = document.getElementById('active-rules-search');
+                        if (searchInput) {
+                            searchInput.value = '';
+                        }
+                        filterActiveRules();
+                    };
+
+                    window.sortActiveRules = function (column) {
+                        var table = document.getElementById('active-rules-table');
+                        if (!table) return;
+                        var tbody = table.querySelector('tbody');
+                        var rows = Array.from(tbody.querySelectorAll('tr.active-rule-row'));
+                        var currentSort = table.getAttribute('data-sort-col');
+                        var currentAsc = table.getAttribute('data-sort-asc') === 'true';
+
+                        var asc = (currentSort === column) ? !currentAsc : (column === 'cidr');
+                        table.setAttribute('data-sort-col', column);
+                        table.setAttribute('data-sort-asc', asc ? 'true' : 'false');
+
+                        rows.sort(function (a, b) {
+                            var valA, valB;
+                            if (column === 'hits') {
+                                valA = parseInt(a.getAttribute('data-hits') || '0', 10);
+                                valB = parseInt(b.getAttribute('data-hits') || '0', 10);
+                                return asc ? (valA - valB) : (valB - valA);
+                            } else if (column === 'ttl') {
+                                valA = parseInt(a.getAttribute('data-ttl-sec') || '0', 10);
+                                valB = parseInt(b.getAttribute('data-ttl-sec') || '0', 10);
+                                return asc ? (valA - valB) : (valB - valA);
+                            } else if (column === 'cidr') {
+                                valA = a.getAttribute('data-cidr') || '';
+                                valB = b.getAttribute('data-cidr') || '';
+                                return asc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                            }
+                            return 0;
+                        });
+
+                        rows.forEach(function (r) { tbody.appendChild(r); });
+                        var noMatchesRow = document.getElementById('active-rules-no-matches');
+                        if (noMatchesRow) {
+                            tbody.appendChild(noMatchesRow);
+                        }
+                    };
+                })();
+            </script>
         </div>
 
-        <!-- TAB 2: Historical Rules Explorer -->
-        <div th:if="${activeTab == 'history'}">
-            <div class="sys-card" style="padding: 20px; margin-bottom: 24px;">
-                <div
-                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
-                    <div>
-                        <div
-                            style="font-size: 15px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
-                            <span>&#x1F552;</span> Historical Mitigation Rules Explorer
-                            <span class="badge badge-secondary" th:text="${historyTotalCount}">0</span>
+        <!-- Fragment: Pre-Flight Safety Check Box -->
+        <div th:fragment="preflightBox" id="preflight-check-box">
+            <div th:if="${preflightResult != null}"
+                style="padding: 10px 12px; border-radius: var(--radius-sm); font-size: 12px; margin-bottom: 8px;"
+                th:styleappend="${!preflightResult.invalidInputs.isEmpty() or preflightResult.hasCriticalWarnings() ? 'background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.4);' : (preflightResult.validCidrs.isEmpty() ? 'background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4);' : 'background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.4);')}">
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;"
+                    th:if="${preflightCheckedAt != null}">
+                    <span
+                        style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary);">
+                        Pre-Flight Safety Check Result
+                    </span>
+                    <span class="badge badge-secondary" style="font-size: 10px; font-family: ui-monospace, monospace;"
+                        th:text="'Checked at ' + ${preflightCheckedAt}">Checked at 12:00:00</span>
+                </div>
+
+                <div th:if="${preflightResult.invalidInputs.isEmpty() and preflightResult.validCidrs.isEmpty()}"
+                    style="color: var(--color-warning); font-weight: 600;">
+                    &#x26A0;&#xFE0F; Please enter at least one IP address or CIDR subnet above (e.g.
+                    <code>198.51.100.0/24</code>) to run the pre-flight safety check.
+                </div>
+
+                <div th:if="${!preflightResult.invalidInputs.isEmpty()}"
+                    style="color: var(--color-danger); font-weight: 700; margin-bottom: 4px;">
+                    <div th:each="err : ${preflightResult.invalidInputs}" th:text="'&#x274C; ' + ${err}">Invalid CIDR
+                    </div>
+                </div>
+
+                <div th:if="${!preflightResult.validCidrs.isEmpty()}">
+                    <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">
+                        Normalized Target(s): <code
+                            th:text="${#strings.listJoin(preflightResult.validCidrs, ', ')}">198.51.100.0/24</code>
+                        &bull; 24h Traffic: <span
+                            th:text="${#numbers.formatInteger(preflightResult.totalObservedRequests24h, 1, 'COMMA')} + ' reqs'">0
+                            reqs</span>
+                        (<span
+                            th:text="${#numbers.formatInteger(preflightResult.totalAuthenticatedRequests24h, 1, 'COMMA')} + ' authenticated'">0
+                            authenticated</span>)
+                    </div>
+
+                    <div th:if="${preflightResult.warnings.isEmpty()}"
+                        style="color: var(--color-success); font-weight: 600;">
+                        &#x2705; Pre-Flight Safety Check Passed: 0 authenticated users, no search engine crawlers,
+                        public
+                        routable prefix.
+                    </div>
+
+                    <div th:if="${!preflightResult.warnings.isEmpty()}" style="margin-top: 6px;">
+                        <div th:each="w : ${preflightResult.warnings}"
+                            th:styleappend="${w.severity == 'WARNING' ? 'color: var(--color-warning);' : 'color: var(--color-danger);'}"
+                            style="font-weight: 600; margin-bottom: 4px;">
+                            <span
+                                th:text="${w.severity == 'WARNING' ? '&#x26A0;&#xFE0F;' : '&#x274C;'}">&#x26A0;&#xFE0F;</span>
+                            <span th:text="${w.cidr} + ': ' + ${w.message}">Warning</span>
                         </div>
-                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
-                            Forensic archive of expired and revoked dynamic CIDR blocks across the fleet
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Search & Filter Form -->
-                <form id="history-filter-form" hx-get="/fragments/mitigation-content"
-                    hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top"
-                    style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 18px; padding: 12px 14px; background: rgba(0,0,0,0.18); border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-                    <input type="hidden" name="tab" value="history" />
-                    <input type="hidden" name="historyPage" value="1" />
-
-                    <div style="flex: 1; min-width: 240px;">
-                        <input type="text" name="historySearch" class="input-control" th:value="${historySearch}"
-                            placeholder="Filter by CIDR, ASN, Organization, Reason or Batch..."
-                            style="height: 34px; font-size: 12px;" />
-                    </div>
-                    <div>
-                        <select name="historyStatus" class="input-control"
-                            style="height: 34px; font-size: 12px; width: auto;">
-                            <option value="ALL" th:selected="${historyStatus == 'ALL'}">All Statuses</option>
-                            <option value="EXPIRED" th:selected="${historyStatus == 'EXPIRED'}">Expired</option>
-                            <option value="REVOKED" th:selected="${historyStatus == 'REVOKED'}">Revoked</option>
-                        </select>
-                    </div>
-                    <div>
-                        <select name="historyLimit" class="input-control"
-                            style="height: 34px; font-size: 12px; width: auto;">
-                            <option value="25" th:selected="${historyLimit == 25}">25 / page</option>
-                            <option value="50" th:selected="${historyLimit == 50}">50 / page</option>
-                            <option value="100" th:selected="${historyLimit == 100}">100 / page</option>
-                            <option value="250" th:selected="${historyLimit == 250}">250 / page</option>
-                        </select>
-                    </div>
-                    <button type="submit" class="btn btn-primary"
-                        style="height: 34px; font-size: 12px; padding: 0 14px;">
-                        <span>&#x1F50D;</span> Search
-                    </button>
-                    <button type="button" class="btn" style="height: 34px; font-size: 12px; padding: 0 12px;"
-                        hx-get="/fragments/mitigation-content?tab=history&historyStatus=ALL&historyLimit=50&historyPage=1"
-                        hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top">
-                        Reset
-                    </button>
-                </form>
-
-                <div th:if="${historicalRules == null or historicalRules.isEmpty()}"
-                    style="text-align: center; padding: 36px 20px; color: var(--text-muted); font-size: 13px;">
-                    No historical rules found matching your filter criteria.
-                </div>
-
-                <div th:if="${historicalRules != null and !historicalRules.isEmpty()}" style="overflow-x: auto;">
-                    <table class="data-table" style="width: 100%; font-size: 12px;">
-                        <thead>
-                            <tr>
-                                <th>CIDR Subnet</th>
-                                <th>ASN / Organization</th>
-                                <th>Source &amp; Batch</th>
-                                <th>Reason</th>
-                                <th>Status</th>
-                                <th style="text-align: right;">Blocked Hits</th>
-                                <th style="text-align: right;">Peak IPs</th>
-                                <th>Final Deterrence</th>
-                                <th>Timestamps</th>
-                                <th style="text-align: right;">Re-Activate</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr th:each="h : ${historicalRules}">
-                                <td style="font-family: ui-monospace, monospace; font-weight: 700;">
-                                    <a th:href="@{/offenders(clientQuery=${h.cidr},groupBy='SUBNET')}"
-                                        style="color: var(--color-primary); text-decoration: none;"
-                                        title="Inspect subnet traffic in Top Offenders"
-                                        th:text="${h.cidr}">198.51.100.0/24</a>
-                                </td>
-                                <td>
-                                    <a th:if="${h.asn != null and h.asn > 0}"
-                                        th:href="@{/offenders(asn=${h.asn},groupBy='ASN')}"
-                                        style="color: var(--color-primary); text-decoration: none;"
-                                        title="Inspect Autonomous System in Top Offenders"
-                                        th:text="'ASN ' + ${h.asn} + ' (' + (${h.asnOrganization != null} ? ${h.asnOrganization} : 'Unknown') + ')'">ASN
-                                        64496</a>
-                                    <span th:if="${h.asn == null or h.asn <= 0}"
-                                        style="color: var(--text-muted);">&mdash;</span>
-                                </td>
-                                <td>
-                                    <span class="badge badge-secondary" th:text="${h.source}">MANUAL</span>
-                                    <div th:if="${h.batchId != null}"
-                                        style="font-size: 10px; color: var(--text-muted); font-family: ui-monospace, monospace; margin-top: 2px;"
-                                        th:text="${h.batchId}">ASN-64496</div>
-                                </td>
-                                <td th:text="${h.reason}">Carpet attack</td>
-                                <td>
-                                    <span th:if="${h.status == 'REVOKED'}" class="badge badge-warning"
-                                        title="Revoked manually or via flush">REVOKED</span>
-                                    <span th:if="${h.status != 'REVOKED'}" class="badge badge-secondary"
-                                        th:text="${h.status}">EXPIRED</span>
-                                    <div th:if="${h.revokedReason != null}"
-                                        style="font-size: 10px; color: var(--text-muted); margin-top: 2px;"
-                                        th:text="${h.revokedReason}">Admin action</div>
-                                </td>
-                                <td style="text-align: right; font-weight: 700;"
-                                    th:text="${#numbers.formatInteger(h.totalBlockedHits, 1, 'COMMA')}">0</td>
-                                <td style="text-align: right;" th:text="${h.peakDistinctIps}">0</td>
-                                <td>
-                                    <span th:if="${h.deterrenceState == 'DETERRED'}"
-                                        class="badge badge-success">&#x2705; DETERRED</span>
-                                    <span th:if="${h.deterrenceState == 'PERSISTENT'}"
-                                        class="badge badge-danger">&#x1F525; PERSISTENT</span>
-                                    <span
-                                        th:if="${h.deterrenceState != 'DETERRED' and h.deterrenceState != 'PERSISTENT'}"
-                                        class="badge badge-info" th:text="${h.deterrenceState}">OBSERVING</span>
-                                </td>
-                                <td
-                                    style="font-size: 11px; color: var(--text-muted); font-family: ui-monospace, monospace; white-space: nowrap;">
-                                    <div
-                                        th:text="'Created: ' + ${#temporals.format(h.createdAt(), 'yyyy-MM-dd HH:mm')}">
-                                        2026-11-08 10:00</div>
-                                    <div th:if="${h.revokedAt() != null}"
-                                        th:text="'Revoked: ' + ${#temporals.format(h.revokedAt(), 'yyyy-MM-dd HH:mm')}">
-                                        2026-11-08 11:00</div>
-                                    <div th:if="${h.revokedAt() == null and h.expiresAt() != null}"
-                                        th:text="'Expired: ' + ${#temporals.format(h.expiresAt(), 'yyyy-MM-dd HH:mm')}">
-                                        2026-11-08 11:00</div>
-                                </td>
-                                <td style="text-align: right; white-space: nowrap;">
-                                    <button type="button" class="btn" style="padding: 3px 8px; font-size: 11px;"
-                                        th:attr="hx-post=@{/mitigation/{id}/extend(id=${h.id},additionalMinutes=60,tab='history')}"
-                                        hx-target="#mitigation-dashboard-container" hx-swap="outerHTML"
-                                        th:disabled="${viewerMode}"
-                                        title="Re-activate this rule across all Valves for 60 minutes">
-                                        Re-Block 1h
-                                    </button>
-                                    <button type="button" class="btn" style="padding: 3px 8px; font-size: 11px;"
-                                        th:attr="hx-post=@{/mitigation/{id}/extend(id=${h.id},additionalMinutes=360,tab='history')}"
-                                        hx-target="#mitigation-dashboard-container" hx-swap="outerHTML"
-                                        th:disabled="${viewerMode}"
-                                        title="Re-activate this rule across all Valves for 6 hours">
-                                        +6h
-                                    </button>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- History Pagination Controls -->
-                <div th:if="${historyTotalCount > 0}"
-                    style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-color); flex-wrap: wrap; gap: 10px;">
-                    <div style="font-size: 12px; color: var(--text-muted);">
-                        Showing <span th:text="${historicalRules.size()}">50</span> of <strong
-                            th:text="${#numbers.formatInteger(historyTotalCount, 1, 'COMMA')}">120</strong> historical
-                        rules
-                        (Page <span th:text="${historyPage}">1</span> of <span th:text="${historyTotalPages}">3</span>)
-                    </div>
-                    <div style="display: flex; gap: 6px; align-items: center;">
-                        <button type="button" class="btn" style="padding: 4px 10px; font-size: 11px;"
-                            th:disabled="${!historyHasPrev}"
-                            th:attr="hx-get=@{/fragments/mitigation-content(tab='history',historySearch=${historySearch},historyStatus=${historyStatus},historyLimit=${historyLimit},historyPage=1)}"
-                            hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top">
-                            &laquo; First
-                        </button>
-                        <button type="button" class="btn" style="padding: 4px 10px; font-size: 11px;"
-                            th:disabled="${!historyHasPrev}"
-                            th:attr="hx-get=@{/fragments/mitigation-content(tab='history',historySearch=${historySearch},historyStatus=${historyStatus},historyLimit=${historyLimit},historyPage=${historyPage - 1})}"
-                            hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top">
-                            &lsaquo; Prev
-                        </button>
-                        <span style="font-size: 12px; font-weight: 600; padding: 0 6px;"
-                            th:text="${historyPage} + ' / ' + ${historyTotalPages}">1 / 3</span>
-                        <button type="button" class="btn" style="padding: 4px 10px; font-size: 11px;"
-                            th:disabled="${!historyHasNext}"
-                            th:attr="hx-get=@{/fragments/mitigation-content(tab='history',historySearch=${historySearch},historyStatus=${historyStatus},historyLimit=${historyLimit},historyPage=${historyPage + 1})}"
-                            hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top">
-                            Next &rsaquo;
-                        </button>
-                        <button type="button" class="btn" style="padding: 4px 10px; font-size: 11px;"
-                            th:disabled="${!historyHasNext}"
-                            th:attr="hx-get=@{/fragments/mitigation-content(tab='history',historySearch=${historySearch},historyStatus=${historyStatus},historyLimit=${historyLimit},historyPage=${historyTotalPages})}"
-                            hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top">
-                            Last &raquo;
-                        </button>
+                        <label th:if="${preflightResult.hasCriticalWarnings()}"
+                            style="display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; font-weight: 700; color: var(--text-primary); cursor: pointer;">
+                            <input type="checkbox" name="confirmOverride" value="true">
+                            <span>Override Pre-Flight Safety Warning (I understand the collateral damage risk)</span>
+                        </label>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- TAB 3: Mitigation Audit Trail -->
-        <div th:if="${activeTab == 'audit'}">
-            <div class="sys-card" style="padding: 20px; margin-bottom: 24px;">
-                <div
-                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
-                    <div>
-                        <div
-                            style="font-size: 15px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
-                            <span>&#x1F4DC;</span> Mitigation Audit Trail &amp; Lifecycle Events
-                            <span class="badge badge-secondary" th:text="${auditTotalCount}">0</span>
-                        </div>
-                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
-                            Chronological forensics of autonomous and manual block, extension, simulation, and
-                            revocation events
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Search & Filter Form -->
-                <form id="audit-filter-form" hx-get="/fragments/mitigation-content"
-                    hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top"
-                    style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 18px; padding: 12px 14px; background: rgba(0,0,0,0.18); border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-                    <input type="hidden" name="tab" value="audit" />
-                    <input type="hidden" name="auditPage" value="1" />
-
-                    <div style="flex: 1; min-width: 240px;">
-                        <input type="text" name="auditSearch" class="input-control" th:value="${auditSearch}"
-                            placeholder="Filter by CIDR, Batch, Actor or Details..."
-                            style="height: 34px; font-size: 12px;" />
-                    </div>
-                    <div>
-                        <select name="auditAction" class="input-control"
-                            style="height: 34px; font-size: 12px; width: auto;">
-                            <option value="ALL" th:selected="${auditAction == 'ALL'}">All Actions</option>
-                            <option value="AUTO_BLOCK" th:selected="${auditAction == 'AUTO_BLOCK'}">AUTO_BLOCK</option>
-                            <option value="DRY_RUN_SIMULATION"
-                                th:selected="${auditAction == 'DRY_RUN_SIMULATION' or auditAction == 'SIMULATION'}">
-                                DRY_RUN_SIMULATION</option>
-                            <option value="CREATE" th:selected="${auditAction == 'CREATE'}">CREATE</option>
-                            <option value="EXTEND" th:selected="${auditAction == 'EXTEND'}">EXTEND</option>
-                            <option value="AUTO_EXTEND" th:selected="${auditAction == 'AUTO_EXTEND'}">AUTO_EXTEND
-                            </option>
-                            <option value="REVOKE" th:selected="${auditAction == 'REVOKE'}">REVOKE</option>
-                            <option value="BATCH_REVOKE" th:selected="${auditAction == 'BATCH_REVOKE'}">BATCH_REVOKE
-                            </option>
-                            <option value="EMERGENCY_FLUSH" th:selected="${auditAction == 'EMERGENCY_FLUSH'}">
-                                EMERGENCY_FLUSH</option>
-                            <option value="SYNC_CIRCUIT_BREAKER" th:selected="${auditAction == 'SYNC_CIRCUIT_BREAKER'}">
-                                SYNC_CIRCUIT_BREAKER</option>
-                            <option value="FLEET_SYNC" th:selected="${auditAction == 'FLEET_SYNC'}">FLEET_SYNC</option>
-                        </select>
-                    </div>
-                    <div>
-                        <select name="auditActor" class="input-control"
-                            style="height: 34px; font-size: 12px; width: auto;">
-                            <option value="ALL" th:selected="${auditActor == 'ALL'}">All Actors</option>
-                            <option value="AUTO_ENGINE" th:selected="${auditActor == 'AUTO_ENGINE'}">AUTO_ENGINE
-                            </option>
-                            <option value="ADMIN" th:selected="${auditActor == 'ADMIN'}">ADMIN</option>
-                            <option value="AUTO_POLLER" th:selected="${auditActor == 'AUTO_POLLER'}">AUTO_POLLER
-                            </option>
-                        </select>
-                    </div>
-                    <div>
-                        <select name="auditLimit" class="input-control"
-                            style="height: 34px; font-size: 12px; width: auto;">
-                            <option value="25" th:selected="${auditLimit == 25}">25 / page</option>
-                            <option value="50" th:selected="${auditLimit == 50}">50 / page</option>
-                            <option value="100" th:selected="${auditLimit == 100}">100 / page</option>
-                            <option value="250" th:selected="${auditLimit == 250}">250 / page</option>
-                        </select>
-                    </div>
-                    <button type="submit" class="btn btn-primary"
-                        style="height: 34px; font-size: 12px; padding: 0 14px;">
-                        <span>&#x1F50D;</span> Search
-                    </button>
-                    <button type="button" class="btn" style="height: 34px; font-size: 12px; padding: 0 12px;"
-                        hx-get="/fragments/mitigation-content?tab=audit&auditAction=ALL&auditActor=ALL&auditLimit=50&auditPage=1"
-                        hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top">
-                        Reset
-                    </button>
-                </form>
-
-                <div th:if="${auditEntries == null or auditEntries.isEmpty()}"
-                    style="text-align: center; padding: 36px 20px; color: var(--text-muted); font-size: 13px;">
-                    No audit events recorded matching your filter criteria.
-                </div>
-
-                <div th:if="${auditEntries != null and !auditEntries.isEmpty()}" style="overflow-x: auto;">
-                    <table class="data-table" style="width: 100%; font-size: 12px;">
-                        <thead>
-                            <tr>
-                                <th style="min-width: 140px;">Timestamp</th>
-                                <th style="width: 110px;">Action</th>
-                                <th style="width: 120px;">Actor</th>
-                                <th style="min-width: 150px;">Target CIDR / Batch</th>
-                                <th style="width: 80px;">TTL</th>
-                                <th>Details &amp; Forensic Log</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr th:each="a : ${auditEntries}">
-                                <td style="font-family: ui-monospace, monospace; white-space: nowrap; font-size: 11px; color: var(--text-muted);"
-                                    th:text="${a.formattedCreatedAt()}">2026-11-08 10:00:00</td>
-                                <td>
-                                    <span th:if="${a.action == 'CREATE' or a.action == 'AUTO_BLOCK'}"
-                                        class="badge badge-danger" th:text="${a.action}">CREATE</span>
-                                    <span th:if="${a.action == 'EXTEND' or a.action == 'AUTO_EXTEND'}"
-                                        class="badge badge-warning" th:text="${a.action}">EXTEND</span>
-                                    <span th:if="${a.action == 'REVOKE' or a.action == 'BATCH_REVOKE'}"
-                                        class="badge badge-info" th:text="${a.action}">REVOKE</span>
-                                    <span th:if="${a.action == 'AUTO_WOULD_BLOCK' or a.action == 'AUTO_WOULD_EXTEND'}"
-                                        class="badge badge-purple" th:text="${a.action}">SIMULATION</span>
-                                    <span
-                                        th:if="${a.action == 'AUTO_CIRCUIT_BREAKER' or a.action == 'SYNC_CIRCUIT_BREAKER'}"
-                                        class="badge badge-danger" th:text="${a.action}">CIRCUIT_BREAKER</span>
-                                    <span th:if="${a.action == 'FLEET_SYNC' or a.action == 'SYNC_RECOVERED'}"
-                                        class="badge badge-success" th:text="${a.action}">FLEET_SYNC</span>
-                                    <span th:if="${a.action == 'EMERGENCY_FLUSH'}" class="badge badge-danger"
-                                        th:text="${a.action}">EMERGENCY_FLUSH</span>
-                                    <span
-                                        th:if="${a.action != 'CREATE' and a.action != 'AUTO_BLOCK' and a.action != 'EXTEND' and a.action != 'AUTO_EXTEND' and a.action != 'REVOKE' and a.action != 'BATCH_REVOKE' and a.action != 'AUTO_WOULD_BLOCK' and a.action != 'AUTO_WOULD_EXTEND' and a.action != 'AUTO_CIRCUIT_BREAKER' and a.action != 'SYNC_CIRCUIT_BREAKER' and a.action != 'FLEET_SYNC' and a.action != 'SYNC_RECOVERED' and a.action != 'EMERGENCY_FLUSH'}"
-                                        class="badge badge-secondary" th:text="${a.action}">ACTION</span>
-                                </td>
-                                <td>
-                                    <span class="badge badge-secondary"
-                                        style="font-family: ui-monospace, monospace; font-size: 10.5px;"
-                                        th:text="${a.actor}">ADMIN</span>
-                                </td>
-                                <td style="font-family: ui-monospace, monospace; font-weight: 600;">
-                                    <a th:if="${a.cidr != null and a.cidr.startsWith('ASN-') and a.getAsn() != null}"
-                                        th:href="@{/offenders(asn=${a.getAsn()},groupBy='ASN')}"
-                                        class="badge badge-info" style="text-decoration: none;"
-                                        title="Inspect ASN in Top Offenders" th:text="${a.cidr}">ASN-64496</a>
-                                    <span th:if="${a.cidr == 'ALL'}" class="badge badge-danger">FLEET WIDE</span>
-                                    <a th:if="${a.cidr != null and a.cidr != 'ALL' and !a.cidr.startsWith('ASN-') and a.cidr.contains('/')}"
-                                        th:href="@{/offenders(clientQuery=${a.cidr},groupBy='SUBNET')}"
-                                        style="color: var(--color-primary); text-decoration: none;"
-                                        title="Inspect subnet traffic in Top Offenders"
-                                        th:text="${a.cidr}">198.51.100.0/24</a>
-                                    <span
-                                        th:if="${a.cidr != null and a.cidr != 'ALL' and !a.cidr.startsWith('ASN-') and !a.cidr.contains('/')}"
-                                        th:text="${a.cidr}">Batch summary</span>
-                                    <div th:if="${a.getAsn() != null and (a.cidr == null or !a.cidr.startsWith('ASN-'))}"
-                                        style="margin-top: 3px;">
-                                        <a th:href="@{/offenders(asn=${a.getAsn()},groupBy='ASN')}"
-                                            class="badge badge-secondary"
-                                            style="text-decoration: none; font-size: 10px; color: var(--color-primary);"
-                                            title="Inspect ASN in Top Offenders">
-                                            <span th:text="'ASN ' + ${a.getAsn()}">&#x1F3E2; ASN 64496</span> &#x2197;
-                                        </a>
-                                    </div>
-                                    <div th:if="${a.batchId != null}"
-                                        style="font-size: 10.5px; color: var(--text-muted); margin-top: 2px;"
-                                        th:text="${a.batchId}">Batch</div>
-                                </td>
-                                <td style="font-family: ui-monospace, monospace; font-size: 11px;">
-                                    <span th:if="${a.ttlSeconds != null and a.ttlSeconds > 0}"
-                                        th:text="${a.ttlSeconds / 60} + 'm'">60m</span>
-                                    <span th:unless="${a.ttlSeconds != null and a.ttlSeconds > 0}"
-                                        style="color: var(--text-muted);">&mdash;</span>
-                                </td>
-                                <td style="color: var(--text-secondary); line-height: 1.4;" th:text="${a.details}">
-                                    Details</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Audit Pagination Controls -->
-                <div th:if="${auditTotalCount > 0}"
-                    style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-color); flex-wrap: wrap; gap: 10px;">
-                    <div style="font-size: 12px; color: var(--text-muted);">
-                        Showing <span th:text="${auditEntries.size()}">50</span> of <strong
-                            th:text="${#numbers.formatInteger(auditTotalCount, 1, 'COMMA')}">120</strong> audit events
-                        (Page <span th:text="${auditPage}">1</span> of <span th:text="${auditTotalPages}">3</span>)
-                    </div>
-                    <div style="display: flex; gap: 6px; align-items: center;">
-                        <button type="button" class="btn" style="padding: 4px 10px; font-size: 11px;"
-                            th:disabled="${!auditHasPrev}"
-                            th:attr="hx-get=@{/fragments/mitigation-content(tab='audit',auditSearch=${auditSearch},auditAction=${auditAction},auditActor=${auditActor},auditLimit=${auditLimit},auditPage=1)}"
-                            hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top">
-                            &laquo; First
-                        </button>
-                        <button type="button" class="btn" style="padding: 4px 10px; font-size: 11px;"
-                            th:disabled="${!auditHasPrev}"
-                            th:attr="hx-get=@{/fragments/mitigation-content(tab='audit',auditSearch=${auditSearch},auditAction=${auditAction},auditActor=${auditActor},auditLimit=${auditLimit},auditPage=${auditPage - 1})}"
-                            hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top">
-                            &lsaquo; Prev
-                        </button>
-                        <span style="font-size: 12px; font-weight: 600; padding: 0 6px;"
-                            th:text="${auditPage} + ' / ' + ${auditTotalPages}">1 / 3</span>
-                        <button type="button" class="btn" style="padding: 4px 10px; font-size: 11px;"
-                            th:disabled="${!auditHasNext}"
-                            th:attr="hx-get=@{/fragments/mitigation-content(tab='audit',auditSearch=${auditSearch},auditAction=${auditAction},auditActor=${auditActor},auditLimit=${auditLimit},auditPage=${auditPage + 1})}"
-                            hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top">
-                            Next &rsaquo;
-                        </button>
-                        <button type="button" class="btn" style="padding: 4px 10px; font-size: 11px;"
-                            th:disabled="${!auditHasNext}"
-                            th:attr="hx-get=@{/fragments/mitigation-content(tab='audit',auditSearch=${auditSearch},auditAction=${auditAction},auditActor=${auditActor},auditLimit=${auditLimit},auditPage=${auditTotalPages})}"
-                            hx-target="#mitigation-dashboard-container" hx-swap="outerHTML show:window:top">
-                            Last &raquo;
-                        </button>
-                    </div>
-                </div>
+        <!-- Fragment: ASN Batch Preview Box -->
+        <div th:fragment="asnPreviewBox" id="asn-preview-box">
+            <div th:if="${asnPreviewError != null}"
+                style="padding: 10px 12px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: var(--radius-sm); font-size: 12px; margin-bottom: 8px; color: var(--color-warning); font-weight: 600;">
+                &#x26A0;&#xFE0F; <span th:text="${asnPreviewError}">Please enter a valid ASN number.</span>
             </div>
-        </div>
-
-        <!-- Client-side Interactive Filter & Sorting Scripts -->
-        <script>
-            (function () {
-                window.setActiveFilter = function (filter, btn) {
-                    document.querySelectorAll('.active-filter-pill').forEach(function (el) {
-                        el.classList.remove('active');
-                    });
-                    if (btn) {
-                        btn.classList.add('active');
-                    }
-                    window.currentActiveRuleFilter = filter;
-                    filterActiveRules();
-                };
-
-                window.filterActiveRules = function () {
-                    var searchInput = document.getElementById('active-rules-search');
-                    var query = searchInput ? searchInput.value.trim().toLowerCase() : '';
-                    var clearBtn = document.getElementById('active-rules-clear-btn');
-                    if (clearBtn) {
-                        clearBtn.style.display = query ? 'inline-block' : 'none';
-                    }
-
-                    var filter = window.currentActiveRuleFilter || 'all';
-                    var rows = document.querySelectorAll('#active-rules-table tbody tr.active-rule-row');
-                    var visibleCount = 0;
-
-                    rows.forEach(function (row) {
-                        var cidr = row.getAttribute('data-cidr') || '';
-                        var asn = row.getAttribute('data-asn') || '';
-                        var org = row.getAttribute('data-org') || '';
-                        var reason = row.getAttribute('data-reason') || '';
-                        var batch = row.getAttribute('data-batch') || '';
-                        var hits = parseInt(row.getAttribute('data-hits') || '0', 10);
-                        var deterrence = row.getAttribute('data-deterrence') || '';
-
-                        var matchesPill = true;
-                        if (filter === 'persistent') {
-                            matchesPill = (deterrence === 'PERSISTENT');
-                        } else if (filter === 'traffic') {
-                            matchesPill = (hits > 0);
-                        } else if (filter === 'deterred') {
-                            matchesPill = (deterrence === 'DETERRED');
-                        } else if (filter === 'observing') {
-                            matchesPill = (deterrence !== 'PERSISTENT' && deterrence !== 'DETERRED');
-                        }
-
-                        var matchesQuery = true;
-                        if (query) {
-                            var haystack = (cidr + ' ' + asn + ' ' + org + ' ' + reason + ' ' + batch).toLowerCase();
-                            matchesQuery = haystack.indexOf(query) !== -1;
-                        }
-
-                        if (matchesPill && matchesQuery) {
-                            row.style.display = '';
-                            visibleCount++;
-                        } else {
-                            row.style.display = 'none';
-                        }
-                    });
-
-                    var countBadge = document.getElementById('active-rules-visible-count');
-                    if (countBadge) {
-                        countBadge.textContent = visibleCount;
-                    }
-
-                    var noMatchesRow = document.getElementById('active-rules-no-matches');
-                    if (noMatchesRow) {
-                        noMatchesRow.style.display = (visibleCount === 0 && rows.length > 0) ? '' : 'none';
-                    }
-                };
-
-                window.clearActiveRulesSearch = function () {
-                    var searchInput = document.getElementById('active-rules-search');
-                    if (searchInput) {
-                        searchInput.value = '';
-                    }
-                    filterActiveRules();
-                };
-
-                window.sortActiveRules = function (column) {
-                    var table = document.getElementById('active-rules-table');
-                    if (!table) return;
-                    var tbody = table.querySelector('tbody');
-                    var rows = Array.from(tbody.querySelectorAll('tr.active-rule-row'));
-                    var currentSort = table.getAttribute('data-sort-col');
-                    var currentAsc = table.getAttribute('data-sort-asc') === 'true';
-
-                    var asc = (currentSort === column) ? !currentAsc : (column === 'cidr');
-                    table.setAttribute('data-sort-col', column);
-                    table.setAttribute('data-sort-asc', asc ? 'true' : 'false');
-
-                    rows.sort(function (a, b) {
-                        var valA, valB;
-                        if (column === 'hits') {
-                            valA = parseInt(a.getAttribute('data-hits') || '0', 10);
-                            valB = parseInt(b.getAttribute('data-hits') || '0', 10);
-                            return asc ? (valA - valB) : (valB - valA);
-                        } else if (column === 'ttl') {
-                            valA = parseInt(a.getAttribute('data-ttl-sec') || '0', 10);
-                            valB = parseInt(b.getAttribute('data-ttl-sec') || '0', 10);
-                            return asc ? (valA - valB) : (valB - valA);
-                        } else if (column === 'cidr') {
-                            valA = a.getAttribute('data-cidr') || '';
-                            valB = b.getAttribute('data-cidr') || '';
-                            return asc ? valA.localeCompare(valB) : valB.localeCompare(valA);
-                        }
-                        return 0;
-                    });
-
-                    rows.forEach(function (r) { tbody.appendChild(r); });
-                    var noMatchesRow = document.getElementById('active-rules-no-matches');
-                    if (noMatchesRow) {
-                        tbody.appendChild(noMatchesRow);
-                    }
-                };
-            })();
-        </script>
-    </div>
-
-    <!-- Fragment: Pre-Flight Safety Check Box -->
-    <div th:fragment="preflightBox" id="preflight-check-box">
-        <div th:if="${preflightResult != null}"
-            style="padding: 10px 12px; border-radius: var(--radius-sm); font-size: 12px; margin-bottom: 8px;"
-            th:styleappend="${!preflightResult.invalidInputs.isEmpty() or preflightResult.hasCriticalWarnings() ? 'background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.4);' : (preflightResult.validCidrs.isEmpty() ? 'background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4);' : 'background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.4);')}">
-
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;"
-                th:if="${preflightCheckedAt != null}">
-                <span
-                    style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary);">
-                    Pre-Flight Safety Check Result
-                </span>
-                <span class="badge badge-secondary" style="font-size: 10px; font-family: ui-monospace, monospace;"
-                    th:text="'Checked at ' + ${preflightCheckedAt}">Checked at 12:00:00</span>
-            </div>
-
-            <div th:if="${preflightResult.invalidInputs.isEmpty() and preflightResult.validCidrs.isEmpty()}"
-                style="color: var(--color-warning); font-weight: 600;">
-                &#x26A0;&#xFE0F; Please enter at least one IP address or CIDR subnet above (e.g.
-                <code>198.51.100.0/24</code>) to run the pre-flight safety check.
-            </div>
-
-            <div th:if="${!preflightResult.invalidInputs.isEmpty()}"
-                style="color: var(--color-danger); font-weight: 700; margin-bottom: 4px;">
-                <div th:each="err : ${preflightResult.invalidInputs}" th:text="'&#x274C; ' + ${err}">Invalid CIDR</div>
-            </div>
-
-            <div th:if="${!preflightResult.validCidrs.isEmpty()}">
+            <div th:if="${asnPreview != null}"
+                style="padding: 10px 12px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: var(--radius-sm); font-size: 12px; margin-bottom: 8px;">
                 <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">
-                    Normalized Target(s): <code
-                        th:text="${#strings.listJoin(preflightResult.validCidrs, ', ')}">198.51.100.0/24</code>
-                    &bull; 24h Traffic: <span
-                        th:text="${#numbers.formatInteger(preflightResult.totalObservedRequests24h, 1, 'COMMA')} + ' reqs'">0
-                        reqs</span>
+                    ASN <span th:text="${asnPreview.asn}">64496</span> (<span
+                        th:text="${asnPreview.asnOrganization}">Example Hosting Corp.</span>) &mdash;
+                    <span th:text="${asnPreview.candidates.size()} + ' eligible unauthenticated subnet(s)'">12
+                        subnets</span>
                     (<span
-                        th:text="${#numbers.formatInteger(preflightResult.totalAuthenticatedRequests24h, 1, 'COMMA')} + ' authenticated'">0
-                        authenticated</span>)
+                        th:text="${#numbers.formatInteger(asnPreview.totalCandidateRequests, 1, 'COMMA')} + ' reqs in last ' + ${asnPreview.hours} + 'h'">0
+                        reqs</span>)
                 </div>
-
-                <div th:if="${preflightResult.warnings.isEmpty()}"
-                    style="color: var(--color-success); font-weight: 600;">
-                    &#x2705; Pre-Flight Safety Check Passed: 0 authenticated users, no search engine crawlers, public
-                    routable prefix.
+                <div th:if="${asnPreview.skippedAuthenticatedSubnets > 0}"
+                    style="color: var(--color-success); font-size: 11.5px; margin-bottom: 6px;">
+                    &#x1F6E1;&#xFE0F; Automatically excluded <strong
+                        th:text="${asnPreview.skippedAuthenticatedSubnets}">1</strong> subnet(s) containing
+                    authenticated
+                    user sessions.
                 </div>
-
-                <div th:if="${!preflightResult.warnings.isEmpty()}" style="margin-top: 6px;">
-                    <div th:each="w : ${preflightResult.warnings}"
-                        th:styleappend="${w.severity == 'WARNING' ? 'color: var(--color-warning);' : 'color: var(--color-danger);'}"
-                        style="font-weight: 600; margin-bottom: 4px;">
-                        <span
-                            th:text="${w.severity == 'WARNING' ? '&#x26A0;&#xFE0F;' : '&#x274C;'}">&#x26A0;&#xFE0F;</span>
-                        <span th:text="${w.cidr} + ': ' + ${w.message}">Warning</span>
-                    </div>
-                    <label th:if="${preflightResult.hasCriticalWarnings()}"
-                        style="display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; font-weight: 700; color: var(--text-primary); cursor: pointer;">
-                        <input type="checkbox" name="confirmOverride" value="true">
-                        <span>Override Pre-Flight Safety Warning (I understand the collateral damage risk)</span>
-                    </label>
+                <div th:if="${asnPreview.candidates.isEmpty()}"
+                    style="color: var(--text-secondary); font-size: 11.5px; margin-top: 4px;">
+                    No active unauthenticated subnets found for ASN <span th:text="${asnPreview.asn}">64496</span> in
+                    the
+                    last <span th:text="${asnPreview.hours}">24</span>h.
+                </div>
+                <div th:if="${!asnPreview.candidates.isEmpty()}"
+                    style="display: flex; gap: 6px; flex-wrap: wrap; max-height: 95px; overflow-y: auto; margin-top: 6px;">
+                    <span th:each="c : ${asnPreview.candidates}" class="badge"
+                        th:classappend="${c.anonOnlyScope ? 'badge-warning' : 'badge-secondary'}"
+                        style="font-family: ui-monospace, monospace; font-size: 11px;"
+                        th:title="${c.anonOnlyScope ? 'Traffic originated from UNAUTHENTICATED_ONLY valve (authenticated users bypass that valve)' : 'Traffic carried 0 authenticated requests'}"
+                        th:text="${c.subnetCidr} + ' (' + ${#numbers.formatInteger(c.totalRequests, 1, 'COMMA')} + ')' + (${c.anonOnlyScope ? ' [ANON]' : ''})">
+                        198.51.100.0/24 (1,200)
+                    </span>
                 </div>
             </div>
         </div>
-    </div>
-
-    <!-- Fragment: ASN Batch Preview Box -->
-    <div th:fragment="asnPreviewBox" id="asn-preview-box">
-        <div th:if="${asnPreviewError != null}"
-            style="padding: 10px 12px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: var(--radius-sm); font-size: 12px; margin-bottom: 8px; color: var(--color-warning); font-weight: 600;">
-            &#x26A0;&#xFE0F; <span th:text="${asnPreviewError}">Please enter a valid ASN number.</span>
-        </div>
-        <div th:if="${asnPreview != null}"
-            style="padding: 10px 12px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: var(--radius-sm); font-size: 12px; margin-bottom: 8px;">
-            <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">
-                ASN <span th:text="${asnPreview.asn}">64496</span> (<span
-                    th:text="${asnPreview.asnOrganization}">Example Hosting Corp.</span>) &mdash;
-                <span th:text="${asnPreview.candidates.size()} + ' eligible unauthenticated subnet(s)'">12
-                    subnets</span>
-                (<span
-                    th:text="${#numbers.formatInteger(asnPreview.totalCandidateRequests, 1, 'COMMA')} + ' reqs in last ' + ${asnPreview.hours} + 'h'">0
-                    reqs</span>)
-            </div>
-            <div th:if="${asnPreview.skippedAuthenticatedSubnets > 0}"
-                style="color: var(--color-success); font-size: 11.5px; margin-bottom: 6px;">
-                &#x1F6E1;&#xFE0F; Automatically excluded <strong
-                    th:text="${asnPreview.skippedAuthenticatedSubnets}">1</strong> subnet(s) containing authenticated
-                user sessions.
-            </div>
-            <div th:if="${asnPreview.candidates.isEmpty()}"
-                style="color: var(--text-secondary); font-size: 11.5px; margin-top: 4px;">
-                No active unauthenticated subnets found for ASN <span th:text="${asnPreview.asn}">64496</span> in the
-                last <span th:text="${asnPreview.hours}">24</span>h.
-            </div>
-            <div th:if="${!asnPreview.candidates.isEmpty()}"
-                style="display: flex; gap: 6px; flex-wrap: wrap; max-height: 95px; overflow-y: auto; margin-top: 6px;">
-                <span th:each="c : ${asnPreview.candidates}" class="badge"
-                    th:classappend="${c.anonOnlyScope ? 'badge-warning' : 'badge-secondary'}"
-                    style="font-family: ui-monospace, monospace; font-size: 11px;"
-                    th:title="${c.anonOnlyScope ? 'Traffic originated from UNAUTHENTICATED_ONLY valve (authenticated users bypass that valve)' : 'Traffic carried 0 authenticated requests'}"
-                    th:text="${c.subnetCidr} + ' (' + ${#numbers.formatInteger(c.totalRequests, 1, 'COMMA')} + ')' + (${c.anonOnlyScope ? ' [ANON]' : ''})">
-                    198.51.100.0/24 (1,200)
-                </span>
-            </div>
-        </div>
-    </div>
 
 </body>
 

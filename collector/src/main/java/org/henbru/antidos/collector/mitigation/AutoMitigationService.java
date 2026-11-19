@@ -402,21 +402,25 @@ public class AutoMitigationService {
 
 	private List<CarpetAttackCandidate> doEvaluateAndEnforce(EffectiveAutoSettings config) {
 		Instant now = Instant.now();
-		List<CarpetAttackCandidate> candidates = findCarpetAttackCandidates(config, config.carpetWindowHours());
-
-		if (candidates.isEmpty()) {
-			return List.of();
-		}
-
 		List<MitigationRule> activeRules = mitigationService.getActiveRules();
 		Set<String> activeCidrs = new HashSet<>();
 		for (MitigationRule r : activeRules) {
 			activeCidrs.add(r.cidr().toLowerCase(Locale.ROOT));
 		}
+		long totalActiveCount = activeRules.size();
 		long currentAutoCount = activeRules.stream()
 				.filter(r -> MitigationRule.SOURCE_AUTO_CARPET.equalsIgnoreCase(r.source())
 						|| MitigationRule.SOURCE_AUTO_RULE.equalsIgnoreCase(r.source()))
 				.count();
+		long nonAutoCount = totalActiveCount - currentAutoCount;
+		long maxAllowedAutoRules = Math.max(0L, config.maxActiveRules() - nonAutoCount);
+
+		List<CarpetAttackCandidate> candidates = findCarpetAttackCandidates(config, config.carpetWindowHours());
+
+		if (candidates.isEmpty()) {
+			releaseExcessUnusedAutoRulesIfNeeded(config, currentAutoCount, maxAllowedAutoRules);
+			return List.of();
+		}
 
 		Set<Long> protectedAsns = config.getProtectedAsnSet();
 		Map<Long, CarpetAttackCandidate> candidatesByAsn = new LinkedHashMap<>();
@@ -443,6 +447,7 @@ public class AutoMitigationService {
 		}
 
 		if (pending.isEmpty()) {
+			releaseExcessUnusedAutoRulesIfNeeded(config, currentAutoCount, maxAllowedAutoRules);
 			return candidates;
 		}
 
@@ -450,23 +455,22 @@ public class AutoMitigationService {
 		pending.sort(Comparator.comparingLong(SubnetCandidate::requests).reversed()
 				.thenComparingInt(SubnetCandidate::candidateRank));
 
-		long freeCapacity = Math.max(0L, config.maxActiveRules() - currentAutoCount);
+		long freeCapacity = Math.max(0L, maxAllowedAutoRules - currentAutoCount);
 		int released = 0;
-		if (pending.size() > freeCapacity) {
-			int needed = (int) Math.min(Integer.MAX_VALUE, pending.size() - freeCapacity);
-			if (config.dryRun()) {
-				released = mitigationService.countUnusedAutoRules(needed);
-				if (released > 0) {
-					log.info("[DRY-RUN] Would release {} unused autonomous rule(s) to free capacity for higher-priority subnets", released);
-				}
-			} else {
-				released = mitigationService.releaseUnusedAutoRules(needed,
-						"Released to free capacity for higher-priority carpet attack subnets (no blocked hits since activation)",
-						"AUTO_ENGINE");
-			}
+		if ((pending.size() > freeCapacity || currentAutoCount > maxAllowedAutoRules) && currentAutoCount > 0) {
+			long deficit = (currentAutoCount - maxAllowedAutoRules)
+					+ (maxAllowedAutoRules > 0 ? pending.size() : 0L);
+			int needed = (int) Math.min(currentAutoCount, Math.max(0L, deficit));
+			released = releaseUnusedAutoRulesForCapacity(
+					config,
+					needed,
+					"Released to free capacity for higher-priority carpet attack subnets (no blocked hits since activation)",
+					"[DRY-RUN] Would release {} unused autonomous rule(s) to free capacity for higher-priority subnets");
 		}
 
-		int allowed = (int) Math.min(pending.size(), freeCapacity + released);
+		long remainingAutoAfterRelease = Math.max(0L, currentAutoCount - released);
+		long availableCapacity = Math.max(0L, maxAllowedAutoRules - remainingAutoAfterRelease);
+		int allowed = (int) Math.min(pending.size(), availableCapacity);
 		List<SubnetCandidate> selected = pending.subList(0, allowed);
 		List<SubnetCandidate> skipped = pending.subList(allowed, pending.size());
 
@@ -524,16 +528,20 @@ public class AutoMitigationService {
 			}
 			long firstSkippedAsn = skippedAsns.iterator().next();
 			long strongestSkipped = skipped.getFirst().requests();
-			log.warn("Auto-mitigation circuit breaker reached (cap {}). Skipped {} lower-priority subnet(s) across ASN(s) {} (max {} reqs/subnet); released {} unused rule(s).",
-					config.maxActiveRules(), skipped.size(), skippedAsns, strongestSkipped, released);
+			long effectiveAutoCount = remainingAutoAfterRelease + selected.size();
+			long effectiveActiveCount = nonAutoCount + effectiveAutoCount;
+			log.warn("Auto-mitigation circuit breaker reached ({}/{} active rules: {} auto, {} manual/other). Skipped {} lower-priority subnet(s) across ASN(s) {} (max {} reqs/subnet); released {} unused rule(s).",
+					effectiveActiveCount, config.maxActiveRules(), effectiveAutoCount, nonAutoCount,
+					skipped.size(), skippedAsns, strongestSkipped, released);
 			mitigationService.recordAudit(null, "ASN-" + firstSkippedAsn, "AUTO_CIRCUIT_BREAKER",
-					"Circuit breaker limit of " + config.maxActiveRules() + " active auto rules reached. Skipped "
-							+ skipped.size() + " lower-priority subnet(s) across ASN(s) " + skippedAsns
-							+ " (strongest skipped subnet: " + strongestSkipped + " reqs); released " + released
-							+ " unused rule(s) to make room.",
+					"Circuit breaker limit of " + config.maxActiveRules() + " active rules reached ("
+							+ effectiveActiveCount + " active: " + effectiveAutoCount + " auto, " + nonAutoCount
+							+ " manual/other). Skipped " + skipped.size() + " lower-priority subnet(s) across ASN(s) "
+							+ skippedAsns + " (strongest skipped subnet: " + strongestSkipped + " reqs); released "
+							+ released + " unused rule(s) to make room.",
 					0, "AUTO_ENGINE");
 			if (notificationService != null) {
-				notificationService.sendCircuitBreakerAlert(currentAutoCount, config.maxActiveRules(), firstSkippedAsn, skipped.size());
+				notificationService.sendCircuitBreakerAlert(effectiveActiveCount, config.maxActiveRules(), firstSkippedAsn, skipped.size());
 			}
 		}
 
@@ -542,6 +550,34 @@ public class AutoMitigationService {
 		}
 
 		return candidates;
+	}
+
+	private int releaseExcessUnusedAutoRulesIfNeeded(EffectiveAutoSettings config, long currentAutoCount, long maxAllowedAutoRules) {
+		long excessAuto = currentAutoCount - maxAllowedAutoRules;
+		if (excessAuto <= 0 || currentAutoCount <= 0) {
+			return 0;
+		}
+		int needed = (int) Math.min(currentAutoCount, excessAuto);
+		return releaseUnusedAutoRulesForCapacity(
+				config,
+				needed,
+				"Released excess unused autonomous rule above circuit breaker cap (no blocked hits since activation)",
+				"[DRY-RUN] Would release {} excess unused autonomous rule(s) above circuit breaker cap");
+	}
+
+	private int releaseUnusedAutoRulesForCapacity(EffectiveAutoSettings config, int needed, String releaseReason, String dryRunLogMessage) {
+		if (needed <= 0) {
+			return 0;
+		}
+		mitigationService.refreshDeterrenceMetrics();
+		if (config.dryRun()) {
+			int released = mitigationService.countUnusedAutoRules(needed);
+			if (released > 0) {
+				log.info(dryRunLogMessage, released);
+			}
+			return released;
+		}
+		return mitigationService.releaseUnusedAutoRules(needed, releaseReason, "AUTO_ENGINE");
 	}
 
 	/**

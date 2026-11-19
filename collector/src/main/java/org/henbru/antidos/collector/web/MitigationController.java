@@ -323,6 +323,43 @@ public class MitigationController {
 		return "fragments/mitigation-content :: mitigationDashboard";
 	}
 
+	@PostMapping("/mitigation/prune-to-cap")
+	public String pruneRulesToCap(
+			@RequestParam(value = "targetCap", required = false) Integer targetCap,
+			HttpServletResponse response,
+			Model model) {
+		if (rejectViewerMutation(response, model, "Pruning mitigation rules to cap")) {
+			return "fragments/mitigation-content :: mitigationDashboard";
+		}
+		try {
+			int effectiveCap = (targetCap != null && targetCap > 0)
+					? targetCap
+					: autoMitigationService.getEffectiveSettings().maxActiveRules();
+			String actor = CollectorAuthContext.getEffectiveActor(properties.getMode().isOperator() ? "OPERATOR" : "ADMIN");
+			MitigationService.PruneToCapResult res = mitigationService.pruneActiveRulesToCap(effectiveCap, actor);
+			if (res.revokedCount() == 0) {
+				populateMitigationModel(model,
+						"Active rules (" + res.beforeCount() + ") are already within the configured cap of " + res.targetCap() + ".",
+						null);
+			} else {
+				populateMitigationModel(model,
+						"Trimmed active rules from " + res.beforeCount() + " down to " + res.afterCount()
+								+ " (cap: " + res.targetCap() + "). Revoked " + res.revokedCount()
+								+ " lowest-priority rule(s): " + res.revokedUnusedCount() + " unused, "
+								+ res.revokedDeterredCount() + " deterred, " + res.revokedObservingCount()
+								+ " observing, " + res.revokedPersistentCount() + " persistent — and synchronized to fleet.",
+						null);
+			}
+		} catch (Exception e) {
+			populateMitigationModel(model, null, "Failed to prune active rules to cap: " + e.getMessage());
+		}
+		return "fragments/mitigation-content :: mitigationDashboard";
+	}
+
+	public String pruneRulesToCap(Integer targetCap, Model model) {
+		return pruneRulesToCap(targetCap, null, model);
+	}
+
 	@PostMapping("/mitigation/sync")
 	public String syncFleet(HttpServletResponse response, Model model) {
 		if (rejectNonAdminMutation(response, model, "Fleet mitigation synchronization")) {
