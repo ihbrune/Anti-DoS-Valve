@@ -584,6 +584,12 @@ public class CollectorPollerService {
 			// uncached entities are enriched asynchronously by BackgroundEnrichmentWorker.
 			if (details.topActiveClients() != null && !details.topActiveClients().isEmpty()) {
 				for (ValveDetailsDto.ActiveClientDto c : details.topActiveClients()) {
+					if (activeMinCountParam != null && activeMinCountParam > 1) {
+						int effectiveCount = c.count() + Math.max(0, c.retained());
+						if (effectiveCount < activeMinCountParam) {
+							continue;
+						}
+					}
 					Long entityId = null;
 					if (entityResolver != null) {
 						entityId = entityResolver.getCached(c.key())

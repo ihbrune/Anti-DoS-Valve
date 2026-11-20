@@ -142,6 +142,10 @@ class CollectorPollerServiceTest {
 		ValveDetailsDto.ActiveClientDto activeClient2 = new ValveDetailsDto.ActiveClientDto(
 				"192.0.2.0/24", 15, 0, 15, 100, 15
 		);
+		// Sub-threshold active client (count = 1 < activeMinCount = 10) must be filtered out on ingest
+		ValveDetailsDto.ActiveClientDto subThresholdClient = new ValveDetailsDto.ActiveClientDto(
+				"198.18.0.0/24", 1, 0, 1, 100, 1
+		);
 		ValveDetailsDto details = new ValveDetailsDto(
 				"2026-10-17T10:00:00Z",
 				null,
@@ -151,12 +155,12 @@ class CollectorPollerServiceTest {
 				null,
 				null,
 				List.of(blockedClient),
-				2,
+				3,
 				"1000",
 				null,
 				null,
 				10,
-				List.of(activeClient1, activeClient2),
+				List.of(activeClient1, activeClient2, subThresholdClient),
 				null
 		);
 		when(statusClient.fetchSlotDetails(any(), eq("SUBNET_VALVE"), eq("previous"), eq("all"), eq("all"), eq("1000"), isNull(), isNull(), eq(10))).thenReturn(details);
@@ -170,6 +174,8 @@ class CollectorPollerServiceTest {
 		assertEquals(1, log.blockedEventsIngested());
 		assertEquals(2, log.activeEventsIngested());
 		assertTrue(log.details().contains("3 event(s) (1 blocked, 2 active)"));
+		assertTrue(clientEventRepository.findRecentEvents("SUBNET-TEST-NODE", "198.18.0.0/24", 5).isEmpty(),
+				"Sub-threshold active client below activeMinCount=10 must not be stored");
 	}
 
 	@Test

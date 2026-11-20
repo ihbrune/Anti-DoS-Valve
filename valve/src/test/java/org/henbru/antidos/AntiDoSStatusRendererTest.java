@@ -519,6 +519,12 @@ class AntiDoSStatusRendererTest {
 		assertTrue(jsonMinCount2.contains("\"activeMinCount\": 2"));
 		assertTrue(jsonMinCount2.contains("\"10.20.0.2\""));
 		assertFalse(jsonMinCount2.contains("\"10.20.0.1\""));
+
+		// 5. Poll with activeMinCount=2 and NO sinceActiveOrder (standard Collector polling): 10.20.0.1 must STILL be excluded
+		String jsonMinCountNoCursor = renderer.buildStatusJsonDetails("RENDERER_TEST", "current", null, null, null, null, 2);
+		assertTrue(jsonMinCountNoCursor.contains("\"activeMinCount\": 2"));
+		assertTrue(jsonMinCountNoCursor.contains("\"10.20.0.2\""));
+		assertFalse(jsonMinCountNoCursor.contains("\"10.20.0.1\""));
 	}
 
 	@Test

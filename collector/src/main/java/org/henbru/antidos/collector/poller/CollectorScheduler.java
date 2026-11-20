@@ -29,6 +29,9 @@ public class CollectorScheduler {
 	private final org.henbru.antidos.collector.report.DailyReportService dailyReportService;
 	private final org.henbru.antidos.collector.system.DatabaseMaintenanceService databaseMaintenanceService;
 	private final CollectorProperties properties;
+	private final org.henbru.antidos.collector.storage.MitigationRuleRepository mitigationRuleRepository;
+	private final org.henbru.antidos.collector.storage.SubnetProfileRepository subnetProfileRepository;
+	private final org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService;
 
 	public CollectorScheduler(
 			CollectorPollerService pollerService,
@@ -41,6 +44,26 @@ public class CollectorScheduler {
 			org.henbru.antidos.collector.report.DailyReportService dailyReportService,
 			@org.springframework.beans.factory.annotation.Autowired(required = false) org.henbru.antidos.collector.system.DatabaseMaintenanceService databaseMaintenanceService,
 			CollectorProperties properties) {
+		this(pollerService, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
+				crawlerSyncService, networkEntityRepository, entityResolver, dailyReportService,
+				databaseMaintenanceService, properties, null, null, null);
+	}
+
+	@org.springframework.beans.factory.annotation.Autowired
+	public CollectorScheduler(
+			CollectorPollerService pollerService,
+			SlotSnapshotRepository slotSnapshotRepository,
+			ClientEventRepository clientEventRepository,
+			org.henbru.antidos.collector.storage.PollEventLogRepository pollEventLogRepository,
+			org.henbru.antidos.collector.enrichment.CrawlerSyncService crawlerSyncService,
+			org.henbru.antidos.collector.storage.NetworkEntityRepository networkEntityRepository,
+			org.henbru.antidos.collector.enrichment.EntityResolver entityResolver,
+			org.henbru.antidos.collector.report.DailyReportService dailyReportService,
+			@org.springframework.beans.factory.annotation.Autowired(required = false) org.henbru.antidos.collector.system.DatabaseMaintenanceService databaseMaintenanceService,
+			CollectorProperties properties,
+			@org.springframework.beans.factory.annotation.Autowired(required = false) org.henbru.antidos.collector.storage.MitigationRuleRepository mitigationRuleRepository,
+			@org.springframework.beans.factory.annotation.Autowired(required = false) org.henbru.antidos.collector.storage.SubnetProfileRepository subnetProfileRepository,
+			@org.springframework.beans.factory.annotation.Autowired(required = false) org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService) {
 		this.pollerService = pollerService;
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
@@ -51,6 +74,9 @@ public class CollectorScheduler {
 		this.dailyReportService = dailyReportService;
 		this.databaseMaintenanceService = databaseMaintenanceService;
 		this.properties = properties;
+		this.mitigationRuleRepository = mitigationRuleRepository;
+		this.subnetProfileRepository = subnetProfileRepository;
+		this.rollupAggregationService = rollupAggregationService;
 	}
 
 	@jakarta.annotation.PostConstruct
@@ -100,8 +126,26 @@ public class CollectorScheduler {
 			int deletedEntities,
 			int expiredEntities,
 			boolean vacuumExecuted,
-			long durationMs
-	) {}
+			long durationMs,
+			int deletedMitigationRules,
+			int deletedMitigationAudits,
+			int deletedProfiles
+	) {
+		public RetentionCleanupResult(
+				Instant executedAt,
+				int deletedSlots,
+				int deletedEvents,
+				int deletedActiveEvents,
+				int deletedLogs,
+				int deletedEntities,
+				int expiredEntities,
+				boolean vacuumExecuted,
+				long durationMs
+		) {
+			this(executedAt, deletedSlots, deletedEvents, deletedActiveEvents, deletedLogs,
+					deletedEntities, expiredEntities, vacuumExecuted, durationMs, 0, 0, 0);
+		}
+	}
 
 	private volatile RetentionCleanupResult lastRetentionResult;
 
@@ -183,6 +227,26 @@ public class CollectorScheduler {
 			entityResolver.clearCache();
 		}
 
+		// Clean up old subnet rollups prior to VACUUM so freed pages are immediately reclaimed
+		if (rollupAggregationService != null) {
+			rollupAggregationService.cleanupOldRollups();
+		}
+
+		// Clean up stale / low-activity subnet profiles aligned with rollup retention settings
+		int deletedProfiles = 0;
+		if (subnetProfileRepository != null) {
+			int rollupDays = properties.getRollupRetentionDays() > 0 ? properties.getRollupRetentionDays() : days;
+			Instant rollupCutoff = Instant.now().minus(rollupDays, ChronoUnit.DAYS);
+			int lowActivityDays = properties.getLowActivityRollupRetentionDays() > 0 ? properties.getLowActivityRollupRetentionDays() : 7;
+			Instant lowActivityCutoff = Instant.now().minus(lowActivityDays, ChronoUnit.DAYS);
+			long lowActivityMax = properties.getLowActivityRollupMaxRequests() >= 0 ? properties.getLowActivityRollupMaxRequests() : 5L;
+			deletedProfiles = subnetProfileRepository.deleteStaleProfiles(rollupCutoff, lowActivityCutoff, lowActivityMax);
+		}
+
+		// Clean up expired/revoked mitigation rules and old audit log entries
+		int deletedMitigationRules = mitigationRuleRepository != null ? mitigationRuleRepository.deleteHistoricalRulesOlderThan(cutoff) : 0;
+		int deletedMitigationAudits = mitigationRuleRepository != null ? mitigationRuleRepository.deleteAuditEntriesOlderThan(cutoff) : 0;
+
 		// Perform automatic database storage compaction (VACUUM) for SQLite if freelist threshold is exceeded
 		boolean vacuumExecuted = false;
 		if (properties.isAutoVacuumEnabled() && databaseMaintenanceService != null) {
@@ -195,12 +259,15 @@ public class CollectorScheduler {
 
 		long durationMs = System.currentTimeMillis() - start;
 		RetentionCleanupResult result = new RetentionCleanupResult(
-				Instant.now(), deletedSlots, totalDeletedEvents, deletedActiveEvents, deletedLogs, deletedEntities, expiredEntities, vacuumExecuted, durationMs
+				Instant.now(), deletedSlots, totalDeletedEvents, deletedActiveEvents, deletedLogs,
+				deletedEntities, expiredEntities, vacuumExecuted, durationMs,
+				deletedMitigationRules, deletedMitigationAudits, deletedProfiles
 		);
 		this.lastRetentionResult = result;
 
-		log.info("Retention cleanup completed in {}ms: purged {} slot snapshots, {} client events ({} active, {} security), {} poll logs, {} orphan entities, expired {} stale entities, vacuum: {}",
-				durationMs, deletedSlots, totalDeletedEvents, deletedActiveEvents, deletedSecurityEvents, deletedLogs, deletedEntities, expiredEntities, vacuumExecuted);
+		log.info("Retention cleanup completed in {}ms: purged {} slot snapshots, {} client events ({} active, {} security), {} poll logs, {} orphan entities, {} stale profiles, {} mitigation rules, {} audit logs, expired {} stale entities, vacuum: {}",
+				durationMs, deletedSlots, totalDeletedEvents, deletedActiveEvents, deletedSecurityEvents, deletedLogs,
+				deletedEntities, deletedProfiles, deletedMitigationRules, deletedMitigationAudits, expiredEntities, vacuumExecuted);
 		return result;
 	}
 

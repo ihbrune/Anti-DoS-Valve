@@ -5,11 +5,18 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.model.ClientEvent;
+import org.henbru.antidos.collector.model.ClientType;
+import org.henbru.antidos.collector.model.MitigationAuditEntry;
+import org.henbru.antidos.collector.model.MitigationRule;
+import org.henbru.antidos.collector.model.SubnetProfile;
 import org.henbru.antidos.collector.poller.CollectorScheduler;
 import org.henbru.antidos.collector.storage.ClientEventRepository;
+import org.henbru.antidos.collector.storage.MitigationRuleRepository;
+import org.henbru.antidos.collector.storage.SubnetProfileRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -27,6 +34,15 @@ class DatabaseMaintenanceServiceTest {
 
 	@Autowired
 	private CollectorScheduler collectorScheduler;
+
+	@Autowired
+	private MitigationRuleRepository mitigationRuleRepository;
+
+	@Autowired
+	private SubnetProfileRepository subnetProfileRepository;
+
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
 
 	@Test
 	void testSqliteDetectionAndFreelistDiagnostics() {
@@ -100,5 +116,94 @@ class DatabaseMaintenanceServiceTest {
 		CollectorScheduler.RetentionCleanupResult cleanupResult = collectorScheduler.runRetentionCleanup();
 		assertNotNull(cleanupResult);
 		assertTrue(cleanupResult.deletedEvents() >= 1, "Full retention should have pruned the 40d-old blocked event");
+	}
+
+	@Test
+	void testMitigationAndProfileRetentionCleanup() {
+		Instant now = Instant.now();
+		Instant fortyDaysAgo = now.minus(40, ChronoUnit.DAYS);
+		Instant tenDaysAgo = now.minus(10, ChronoUnit.DAYS);
+		Instant twoDaysAgo = now.minus(2, ChronoUnit.DAYS);
+
+		try {
+			// 1. Old EXPIRED rule (40d ago -> must be deleted)
+			mitigationRuleRepository.upsertRule(new MitigationRule(
+					null, "198.51.100.0/24", 4, 24, "ALL",
+					MitigationRule.STATUS_EXPIRED, MitigationRule.SOURCE_AUTO_CARPET, "OLD-BATCH", "Old expired rule",
+					64496L, "Test AS", fortyDaysAgo, fortyDaysAgo, fortyDaysAgo.plusSeconds(3600),
+					null, null, 0L, 0, null, MitigationRule.DETERRENCE_OBSERVING
+			));
+
+			// 2. Old REVOKED rule (40d ago -> must be deleted)
+			mitigationRuleRepository.upsertRule(new MitigationRule(
+					null, "203.0.113.0/24", 4, 24, "ALL",
+					MitigationRule.STATUS_REVOKED, MitigationRule.SOURCE_MANUAL, "OLD-REVOKED", "Old revoked rule",
+					64496L, "Test AS", fortyDaysAgo, fortyDaysAgo, fortyDaysAgo.plusSeconds(3600),
+					fortyDaysAgo, "Admin revoked", 5L, 1, fortyDaysAgo, MitigationRule.DETERRENCE_DETERRED
+			));
+
+			// 3. Old ACTIVE rule updated 40d ago with future expires_at -> must NEVER be deleted
+			mitigationRuleRepository.upsertRule(new MitigationRule(
+					null, "192.0.2.0/24", 4, 24, "ALL",
+					MitigationRule.STATUS_ACTIVE, MitigationRule.SOURCE_MANUAL, "STILL-ACTIVE", "Active permanent rule",
+					64496L, "Test AS", fortyDaysAgo, fortyDaysAgo, now.plus(30, ChronoUnit.DAYS),
+					null, null, 100L, 5, now, MitigationRule.DETERRENCE_PERSISTENT
+			));
+
+			// 4. Recent EXPIRED rule (2d ago -> must be retained)
+			mitigationRuleRepository.upsertRule(new MitigationRule(
+					null, "198.18.0.0/24", 4, 24, "ALL",
+					MitigationRule.STATUS_EXPIRED, MitigationRule.SOURCE_AUTO_CARPET, "RECENT-BATCH", "Recent expired rule",
+					64496L, "Test AS", twoDaysAgo, twoDaysAgo, twoDaysAgo.plusSeconds(3600),
+					null, null, 0L, 0, null, MitigationRule.DETERRENCE_OBSERVING
+			));
+
+			// 5. Audit log entries: 1 old (40d -> delete), 1 recent (2d -> keep)
+			mitigationRuleRepository.insertAuditEntry(new MitigationAuditEntry(
+					null, null, "198.51.100.0/24", "OLD-RET-AUDIT", "AUTO_BLOCK", "AUTO_ENGINE",
+					3600, "Old retention test audit", fortyDaysAgo
+			));
+			mitigationRuleRepository.insertAuditEntry(new MitigationAuditEntry(
+					null, null, "198.18.0.0/24", "NEW-RET-AUDIT", "AUTO_BLOCK", "AUTO_ENGINE",
+					3600, "Recent retention test audit", twoDaysAgo
+			));
+
+			// 6. Subnet profiles: low-activity 10d old (delete), high-volume 10d old (keep), 2d old (keep)
+			subnetProfileRepository.batchUpsert(List.of(
+					new SubnetProfile("198.51.10.0/24", tenDaysAgo.minusSeconds(3600), tenDaysAgo, 0,
+							2L, 2L, 0L, 0L, 0.2, 1, 2L, 0L, 0, 0, 0L, 0L, 0.0,
+							64496L, "Low Vol AS", "DE", ClientType.UNKNOWN, tenDaysAgo, 0L, 0L, 0L, 0L),
+					new SubnetProfile("198.51.20.0/24", tenDaysAgo.minusSeconds(3600), tenDaysAgo, 0,
+							500L, 500L, 0L, 0L, 50.0, 5, 500L, 0L, 0, 0, 0L, 0L, 0.0,
+							64496L, "High Vol AS", "DE", ClientType.DATACENTER, tenDaysAgo, 0L, 0L, 0L, 0L),
+					new SubnetProfile("198.51.30.0/24", twoDaysAgo.minusSeconds(3600), twoDaysAgo, 0,
+							1L, 1L, 0L, 0L, 0.1, 1, 1L, 0L, 0, 0, 0L, 0L, 0.0,
+							64496L, "Recent Low AS", "DE", ClientType.UNKNOWN, twoDaysAgo, 0L, 0L, 0L, 0L)
+			));
+
+			CollectorScheduler.RetentionCleanupResult result = collectorScheduler.runRetentionCleanup();
+			assertNotNull(result);
+			assertTrue(result.deletedMitigationRules() >= 2, "Expected old EXPIRED and REVOKED rules to be pruned");
+			assertTrue(result.deletedMitigationAudits() >= 1, "Expected old audit entry to be pruned");
+			assertTrue(result.deletedProfiles() >= 1, "Expected 10d-old low-activity subnet profile to be pruned");
+
+			assertTrue(mitigationRuleRepository.findByCidrAndScope("198.51.100.0/24", "ALL").isEmpty());
+			assertTrue(mitigationRuleRepository.findByCidrAndScope("203.0.113.0/24", "ALL").isEmpty());
+			assertTrue(mitigationRuleRepository.findByCidrAndScope("192.0.2.0/24", "ALL").isPresent(), "ACTIVE rule must survive");
+			assertTrue(mitigationRuleRepository.findByCidrAndScope("198.18.0.0/24", "ALL").isPresent(), "Recent EXPIRED rule must survive");
+
+			assertEquals(0L, jdbcTemplate.queryForObject(
+					"SELECT COUNT(*) FROM mitigation_audit_log WHERE batch_id = 'OLD-RET-AUDIT'", Long.class));
+			assertEquals(1L, jdbcTemplate.queryForObject(
+					"SELECT COUNT(*) FROM mitigation_audit_log WHERE batch_id = 'NEW-RET-AUDIT'", Long.class));
+
+			assertTrue(subnetProfileRepository.findBySubnetGroup("198.51.10.0/24").isEmpty());
+			assertTrue(subnetProfileRepository.findBySubnetGroup("198.51.20.0/24").isPresent());
+			assertTrue(subnetProfileRepository.findBySubnetGroup("198.51.30.0/24").isPresent());
+		} finally {
+			jdbcTemplate.update("DELETE FROM mitigation_audit_log WHERE batch_id IN ('OLD-RET-AUDIT', 'NEW-RET-AUDIT')");
+			jdbcTemplate.update("DELETE FROM mitigation_rules WHERE cidr IN ('198.51.100.0/24', '203.0.113.0/24', '192.0.2.0/24', '198.18.0.0/24')");
+			jdbcTemplate.update("DELETE FROM subnet_profiles WHERE subnet_group IN ('198.51.10.0/24', '198.51.20.0/24', '198.51.30.0/24')");
+		}
 	}
 }

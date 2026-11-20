@@ -471,4 +471,31 @@ public class MitigationRuleRepository {
 		Long count = jdbcTemplate.queryForObject(sql.toString(), Long.class, params.toArray());
 		return count != null ? count : 0L;
 	}
+
+	/**
+	 * Deletes expired and revoked mitigation rules whose last update timestamp precedes the retention cutoff.
+	 * Active rules are never pruned.
+	 */
+	public int deleteHistoricalRulesOlderThan(Instant cutoff) {
+		if (cutoff == null) {
+			return 0;
+		}
+		return StorageRetryUtil.executeWithRetry("MitigationRuleRepository.deleteHistoricalRulesOlderThan", () ->
+				jdbcTemplate.update(
+						"DELETE FROM mitigation_rules WHERE status IN ('EXPIRED', 'REVOKED') AND updated_at < ?",
+						Timestamp.from(cutoff)));
+	}
+
+	/**
+	 * Deletes mitigation audit log entries created before the retention cutoff.
+	 */
+	public int deleteAuditEntriesOlderThan(Instant cutoff) {
+		if (cutoff == null) {
+			return 0;
+		}
+		return StorageRetryUtil.executeWithRetry("MitigationRuleRepository.deleteAuditEntriesOlderThan", () ->
+				jdbcTemplate.update(
+						"DELETE FROM mitigation_audit_log WHERE created_at < ?",
+						Timestamp.from(cutoff)));
+	}
 }

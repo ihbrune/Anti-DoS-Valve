@@ -511,4 +511,26 @@ public class SubnetProfileRepository {
 		Timestamp ts = jdbcTemplate.queryForObject(sql, Timestamp.class);
 		return ts != null ? Optional.of(ts.toInstant()) : Optional.empty();
 	}
+
+	/**
+	 * Purges stale subnet profiles whose rollups have expired out of the configured retention window,
+	 * as well as low-activity benign profiles older than the tiered low-activity retention cutoff.
+	 */
+	public int deleteStaleProfiles(Instant retentionCutoff, Instant lowActivityCutoff, long lowActivityMaxRequests) {
+		if (retentionCutoff == null || lowActivityCutoff == null) {
+			return 0;
+		}
+		String sql = """
+				DELETE FROM subnet_profiles
+				WHERE last_seen_at < ?
+				   OR (last_seen_at < ?
+				       AND total_blocked_requests = 0
+				       AND COALESCE(total_marked_requests, 0) = 0
+				       AND total_lifetime_requests <= ?)
+				""";
+		return jdbcTemplate.update(sql,
+				Timestamp.from(retentionCutoff),
+				Timestamp.from(lowActivityCutoff),
+				lowActivityMaxRequests);
+	}
 }

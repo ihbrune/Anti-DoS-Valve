@@ -196,6 +196,10 @@ public class AntiDoSStatusRenderer {
 	 * min-heap, while simultaneously computing the maximum accessOrder seen.
 	 */
 	static FilteredEntries extractTopEntriesWithMax(Map<String, AntiDoSCounter> map, int limit, boolean locked) {
+		return extractTopEntriesWithMax(map, limit, null, locked);
+	}
+
+	static FilteredEntries extractTopEntriesWithMax(Map<String, AntiDoSCounter> map, int limit, Integer minCount, boolean locked) {
 		if (map == null || map.isEmpty()) {
 			return new FilteredEntries(Collections.emptyList(), 0L);
 		}
@@ -211,6 +215,9 @@ public class AntiDoSStatusRenderer {
 			return new FilteredEntries(Collections.emptyList(), maxOrder);
 		}
 
+		boolean filterByMinCount = minCount != null && minCount > 0;
+		int minThreshold = filterByMinCount ? minCount : 0;
+
 		if (limit == Integer.MAX_VALUE || limit >= map.size()) {
 			List<CounterEntry> list = new ArrayList<>(map.size());
 			for (Map.Entry<String, AntiDoSCounter> entry : map.entrySet()) {
@@ -222,9 +229,13 @@ public class AntiDoSStatusRenderer {
 				int count = c.getCount();
 				int rawRetained = c.getRetainedCounts();
 				int retained = rawRetained > 0 ? rawRetained : 0;
+				int effective = count + retained;
+				if (filterByMinCount && effective < minThreshold) {
+					continue;
+				}
 				int distinct = c.hasCardinalityTracker() ? c.getDistinctClients() : -1;
 				int distinctUas = c.hasUserAgentTracker() ? c.getDistinctUserAgents() : -1;
-				list.add(new CounterEntry(entry.getKey(), count, retained, count + retained, locked, distinct, distinctUas,
+				list.add(new CounterEntry(entry.getKey(), count, retained, effective, locked, distinct, distinctUas,
 						c.getReturningCount(), c.getAuthenticatedCount(), c.getUaMismatchCount(), c.getSample()));
 			}
 			Collections.sort(list);
@@ -243,6 +254,9 @@ public class AntiDoSStatusRenderer {
 			int rawRetained = c.getRetainedCounts();
 			int retained = rawRetained > 0 ? rawRetained : 0;
 			int effective = count + retained;
+			if (filterByMinCount && effective < minThreshold) {
+				continue;
+			}
 			int distinct = c.hasCardinalityTracker() ? c.getDistinctClients() : -1;
 			int distinctUas = c.hasUserAgentTracker() ? c.getDistinctUserAgents() : -1;
 
@@ -2084,7 +2098,7 @@ public class AntiDoSStatusRenderer {
 		} else if (sinceActiveOrder != null) {
 			activeEntries = extractFilteredEntries(selectedSlot.getActiveCounters(), sinceActiveOrder, activeMinCount, false);
 		} else if (effActiveLimit > 0) {
-			activeEntries = extractTopEntriesWithMax(selectedSlot.getActiveCounters(), effActiveLimit, false);
+			activeEntries = extractTopEntriesWithMax(selectedSlot.getActiveCounters(), effActiveLimit, activeMinCount, false);
 		} else {
 			activeEntries = extractTopEntriesWithMax(selectedSlot.getActiveCounters(), 0, false);
 		}
