@@ -643,4 +643,38 @@ class MitigationServiceTest {
 		mitigationService.refreshDeterrenceMetrics();
 		assertEquals(settledPersistentUpdatedAt, ruleRepository.findById(persistent.id()).orElseThrow().updatedAt());
 	}
+
+	@Test
+	void testSyncCircuitBreakerRaceConditionAvoidance() {
+		Instant now = Instant.now();
+		// Rule expiring in 2 seconds (< MIN_SYNC_REMAINING_TTL of 5s)
+		MitigationRule expiringSoon = ruleRepository.upsertRule(new MitigationRule(
+				null, "203.0.113.0/24", 4, 24, "ALL", MitigationRule.STATUS_ACTIVE,
+				MitigationRule.SOURCE_MANUAL, null, "Expiring soon", null, null,
+				now, now, now.plusSeconds(2), null, null, 0L, 0, null,
+				MitigationRule.DETERRENCE_OBSERVING
+		));
+
+		// Stable rule expiring in 120 seconds
+		MitigationRule stableRule = ruleRepository.upsertRule(new MitigationRule(
+				null, "198.51.100.0/24", 4, 24, "ALL", MitigationRule.STATUS_ACTIVE,
+				MitigationRule.SOURCE_MANUAL, null, "Stable active rule", null, null,
+				now, now, now.plusSeconds(120), null, null, 0L, 0, null,
+				MitigationRule.DETERRENCE_OBSERVING
+		));
+
+		// Database findActiveRules still includes the expiring rule for UI/analytics
+		List<MitigationRule> activeInDb = ruleRepository.findActiveRules(now);
+		assertTrue(activeInDb.stream().anyMatch(r -> r.cidr().equals(expiringSoon.cidr())));
+		assertTrue(activeInDb.stream().anyMatch(r -> r.cidr().equals(stableRule.cidr())));
+
+		// But getActiveRulesForSync and getExpectedRevision safely exclude rules with remaining TTL < 5s
+		List<MitigationRule> syncRules = mitigationService.getActiveRulesForSync(now);
+		assertEquals(1, syncRules.size());
+		assertEquals("198.51.100.0/24", syncRules.getFirst().cidr());
+
+		long expectedRevision = mitigationService.getExpectedRevision(now);
+		long stableRevision = MitigationService.computeRevisionForCidrs(List.of("198.51.100.0/24"));
+		assertEquals(stableRevision, expectedRevision, "Expected revision must only account for rules with >= 5s TTL");
+	}
 }

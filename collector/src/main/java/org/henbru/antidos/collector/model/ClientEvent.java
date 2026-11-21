@@ -1366,6 +1366,45 @@ public record ClientEvent(
 		);
 	}
 
+	public ClientEvent withUaMismatchCount(Integer count) {
+		return new ClientEvent(
+				id,
+				serverId,
+				valveName,
+				slotKey,
+				slotTime,
+				clientKey,
+				ipVersion,
+				cidrPrefix,
+				ipV4Start,
+				ipV4End,
+				ipV6Start,
+				ipV6End,
+				subnetGroup,
+				requestCount,
+				retainedCount,
+				locked,
+				status,
+				completed,
+				lastUpdatedAt,
+				asn,
+				asOrg,
+				countryCode,
+				clientType,
+				enrichmentStatus,
+				entityId,
+				distinctClients,
+				distinctUserAgents,
+				returningCount,
+				authenticatedCount,
+				count,
+				sampleMethod,
+				sampleUri,
+				sampleUserAgent,
+				sampleAuthenticated
+		);
+	}
+
 	public ClientEvent withEnrichment(IpEnrichmentResult result) {
 		return new ClientEvent(
 				id,

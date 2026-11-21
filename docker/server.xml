@@ -116,6 +116,7 @@
                          simulationMode="true"
                          visitorCookieEnabled="true"
                          visitorCookieName="_adv"
+                         visitorCookieMinAgeSeconds="10"
                          visitorCookieEnforceUserAgent="false"
                          authTrackingMode="COOKIE"
                          authCookieName="AUTH_COOKIE"

@@ -594,7 +594,8 @@ public class AutoMitigationService {
 				    COUNT(DISTINCT subnet_group) AS active_subnets,
 				    SUM(total_requests) AS total_requests,
 				    SUM(returning_requests) AS total_returning,
-				    SUM(authenticated_requests) AS total_authenticated
+				    SUM(authenticated_requests) AS total_authenticated,
+				    SUM(COALESCE(ua_mismatch_requests, 0)) AS total_ua_mismatch
 				FROM client_subnet_rollups
 				WHERE bucket_start >= ?
 				  AND asn IS NOT NULL
@@ -616,7 +617,9 @@ public class AutoMitigationService {
 			int activeSubnets = rs.getInt("active_subnets");
 			long totalReq = rs.getLong("total_requests");
 			long returningReq = rs.getLong("total_returning");
-			double returningPct = totalReq > 0 ? (returningReq * 100.0 / totalReq) : 0.0;
+			long uaMismatchReq = rs.getLong("total_ua_mismatch");
+			long genuineReturning = Math.max(0L, returningReq - uaMismatchReq);
+			double returningPct = totalReq > 0 ? (genuineReturning * 100.0 / totalReq) : 0.0;
 
 			if (returningPct <= config.maxReturningRatioPct()) {
 				// Individual subnets must strictly have 0 authenticated requests, a returning ratio
@@ -653,6 +656,7 @@ public class AutoMitigationService {
 				    subnet_group,
 				    SUM(CASE WHEN bucket_start >= ? THEN total_requests ELSE 0 END) AS sub_total,
 				    SUM(CASE WHEN bucket_start >= ? THEN returning_requests ELSE 0 END) AS sub_returning,
+				    SUM(CASE WHEN bucket_start >= ? THEN COALESCE(ua_mismatch_requests, 0) ELSE 0 END) AS sub_ua_mismatch,
 				    SUM(authenticated_requests) AS sub_auth_24h,
 				    MAX(CASE WHEN client_type IN ('SEARCH_ENGINE', 'AI_CRAWLER', 'PRIVATE_NETWORK', 'INTERNAL_NETWORK') THEN 1 ELSE 0 END) AS is_excluded
 				FROM client_subnet_rollups
@@ -672,7 +676,9 @@ public class AutoMitigationService {
 			String sub = rs.getString("subnet_group");
 			long total = rs.getLong("sub_total");
 			long returning = rs.getLong("sub_returning");
-			double subReturnPct = total > 0 ? (returning * 100.0 / total) : 0.0;
+			long uaMismatch = rs.getLong("sub_ua_mismatch");
+			long genuineReturning = Math.max(0L, returning - uaMismatch);
+			double subReturnPct = total > 0 ? (genuineReturning * 100.0 / total) : 0.0;
 
 			if (subReturnPct <= maxReturningPct && sub != null && !sub.isBlank()) {
 				try {
@@ -683,7 +689,7 @@ public class AutoMitigationService {
 				} catch (IllegalArgumentException ignored) {
 				}
 			}
-		}, winTs, winTs, asn, safetyTs, winTs, Math.max(1L, minRequestsPerSubnet));
+		}, winTs, winTs, winTs, asn, safetyTs, winTs, Math.max(1L, minRequestsPerSubnet));
 
 		return result;
 	}
@@ -795,7 +801,8 @@ public class AutoMitigationService {
 				    COUNT(DISTINCT subnet_group) AS active_subnets,
 				    SUM(total_requests) AS total_requests,
 				    SUM(returning_requests) AS total_returning,
-				    SUM(authenticated_requests) AS total_authenticated
+				    SUM(authenticated_requests) AS total_authenticated,
+				    SUM(COALESCE(ua_mismatch_requests, 0)) AS total_ua_mismatch
 				FROM client_subnet_rollups
 				WHERE bucket_start >= ?
 				  AND asn IS NOT NULL
@@ -826,7 +833,9 @@ public class AutoMitigationService {
 			long totalReq = rs.getLong("total_requests");
 			long returningReq = rs.getLong("total_returning");
 			long authReq = rs.getLong("total_authenticated");
-			double returningPct = totalReq > 0 ? (returningReq * 100.0 / totalReq) : 0.0;
+			long uaMismatchReq = rs.getLong("total_ua_mismatch");
+			long genuineReturning = Math.max(0L, returningReq - uaMismatchReq);
+			double returningPct = totalReq > 0 ? (genuineReturning * 100.0 / totalReq) : 0.0;
 			returningPct = Math.round(returningPct * 10.0) / 10.0;
 
 			boolean isProtected = protectedAsns.contains(asn);
@@ -878,8 +887,9 @@ public class AutoMitigationService {
 					}
 				} else {
 					status = "SUPPRESSED_RETURNING_RATIO";
+					String mismatchSuffix = uaMismatchReq > 0 ? " (" + String.format("%,d", uaMismatchReq) + " UA mismatches discounted)" : "";
 					statusReason = "Suppressed: Returning visitor ratio (" + String.format("%.1f%%", returningPct)
-							+ ") exceeds safety limit (" + String.format("%.1f%%", config.maxReturningRatioPct()) + ")";
+							+ ") exceeds safety limit (" + String.format("%.1f%%", config.maxReturningRatioPct()) + ")" + mismatchSuffix;
 					badgeClass = "badge-warning";
 					icon = "🟡";
 				}
@@ -904,6 +914,7 @@ public class AutoMitigationService {
 					returningReq,
 					returningPct,
 					authReq,
+					uaMismatchReq,
 					isProtected,
 					hasActiveRule,
 					status,

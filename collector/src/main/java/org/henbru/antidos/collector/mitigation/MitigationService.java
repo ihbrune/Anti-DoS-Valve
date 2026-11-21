@@ -350,11 +350,17 @@ public class MitigationService {
 		return rev == 0L ? 1L : rev;
 	}
 
-	public long getExpectedRevision(Instant now) {
+	public static final Duration MIN_SYNC_REMAINING_TTL = Duration.ofSeconds(5);
+
+	public List<MitigationRule> getActiveRulesForSync(Instant now) {
 		if (!properties.isViewerMode()) {
 			ruleRepository.expireElapsedRules(now);
 		}
-		List<MitigationRule> active = ruleRepository.findActiveRules(now);
+		return ruleRepository.findActiveRules(now.plus(MIN_SYNC_REMAINING_TTL));
+	}
+
+	public long getExpectedRevision(Instant now) {
+		List<MitigationRule> active = getActiveRulesForSync(now);
 		if (active.isEmpty()) {
 			return 0L;
 		}
@@ -1043,8 +1049,7 @@ public class MitigationService {
 			return new FleetSyncResult(0, 0, 0, 0L, List.of());
 		}
 		Instant now = Instant.now();
-		ruleRepository.expireElapsedRules(now);
-		List<MitigationRule> activeRules = ruleRepository.findActiveRules(now);
+		List<MitigationRule> activeRules = getActiveRulesForSync(now);
 		String blocksPayload = buildBlocksPayload(activeRules);
 		long expectedRevision = computeRevisionForCidrs(activeRules.stream().map(MitigationRule::cidr).toList());
 
@@ -1189,7 +1194,7 @@ public class MitigationService {
 			return;
 		}
 
-		List<MitigationRule> activeRules = ruleRepository.findActiveRules(now);
+		List<MitigationRule> activeRules = getActiveRulesForSync(now);
 		String blocksPayload = buildBlocksPayload(activeRules);
 		String targetUrl = resolveMitigationUrl(endpoint, valveSummary.mitigationUri());
 		String token = resolveMitigationToken(endpoint);

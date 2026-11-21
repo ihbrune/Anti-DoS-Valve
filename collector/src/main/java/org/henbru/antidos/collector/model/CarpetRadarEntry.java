@@ -14,6 +14,7 @@ public record CarpetRadarEntry(
 		long returningRequests,
 		double returningRatioPct,
 		long authenticatedRequests,
+		long uaMismatchRequests,
 		boolean isProtectedAsn,
 		boolean hasActiveRules,
 		String status,
@@ -22,6 +23,28 @@ public record CarpetRadarEntry(
 		String icon,
 		List<String> topSubnets
 ) {
+	public CarpetRadarEntry(
+			long asn,
+			String asOrg,
+			String countryCode,
+			int activeSubnets,
+			long totalRequests,
+			long returningRequests,
+			double returningRatioPct,
+			long authenticatedRequests,
+			boolean isProtectedAsn,
+			boolean hasActiveRules,
+			String status,
+			String statusReason,
+			String badgeClass,
+			String icon,
+			List<String> topSubnets
+	) {
+		this(asn, asOrg, countryCode, activeSubnets, totalRequests, returningRequests,
+				returningRatioPct, authenticatedRequests, 0L, isProtectedAsn, hasActiveRules,
+				status, statusReason, badgeClass, icon, topSubnets);
+	}
+
 	public boolean isQualified() {
 		return "QUALIFIED".equals(status);
 	}

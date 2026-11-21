@@ -1169,13 +1169,19 @@
                                     <td style="padding: 8px 12px; text-align: right;">
                                         <span class="badge" style="padding: 2px 7px; font-size: 11px;"
                                             th:classappend="${entry.returningRatioPct <= autoSettings.maxReturningRatioPct ? 'badge-danger' : 'badge-warning'}"
-                                            th:title="${#numbers.formatInteger(entry.returningRequests, 1, 'POINT')} + ' of ' + ${#numbers.formatInteger(entry.totalRequests, 1, 'POINT')} + ' requests carried a visitor cookie'">
+                                            th:title="${#numbers.formatInteger(entry.returningRequests, 1, 'POINT')} + ' of ' + ${#numbers.formatInteger(entry.totalRequests, 1, 'POINT')} + ' requests carried a visitor cookie' + (${entry.uaMismatchRequests > 0} ? ' (' + ${#numbers.formatInteger(entry.uaMismatchRequests, 1, 'POINT')} + ' with mismatched UA discounted)' : '')">
                                             &#x1F36A; <span
                                                 th:text="${#numbers.formatDecimal(entry.returningRatioPct, 1, 1)} + '%'">24.0%</span>
                                         </span>
                                         <div style="font-size: 10.5px; color: var(--text-muted); margin-top: 2px;"
                                             th:text="'(limit: &le;' + ${autoSettings.maxReturningRatioPct} + '%)'">
                                             (&le;5.0%)</div>
+                                        <div th:if="${entry.uaMismatchRequests > 0}" style="margin-top: 3px;">
+                                            <span class="badge badge-warning" style="font-size: 10px; padding: 1px 5px;"
+                                                th:title="${#numbers.formatInteger(entry.uaMismatchRequests, 1, 'POINT')} + ' requests carried a visitor cookie with a mismatched User-Agent (discounted from returning visitor calculation)'">
+                                                &#x26A0;&#xFE0F; <span th:text="${#numbers.formatInteger(entry.uaMismatchRequests, 1, 'POINT')}">1,234</span> UA
+                                            </span>
+                                        </div>
                                     </td>
                                     <td style="padding: 8px 12px; text-align: right;">
                                         <span th:if="${entry.authenticatedRequests > 0}" class="badge"

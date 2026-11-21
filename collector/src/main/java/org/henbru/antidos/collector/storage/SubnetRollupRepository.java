@@ -87,6 +87,12 @@ public class SubnetRollupRepository {
 		} catch (SQLException ignored) {
 		}
 
+		long uaMismatchRequests = 0L;
+		try {
+			uaMismatchRequests = rs.getLong("ua_mismatch_requests");
+		} catch (SQLException ignored) {
+		}
+
 		return new ClientSubnetRollup(
 				rs.getLong("id"),
 				rs.getTimestamp("bucket_start").toInstant(),
@@ -112,7 +118,8 @@ public class SubnetRollupRepository {
 				returningRequests,
 				returningTrackedRequests,
 				authenticatedRequests,
-				authenticatedTrackedRequests
+				authenticatedTrackedRequests,
+				uaMismatchRequests
 		);
 	};
 
@@ -128,8 +135,9 @@ public class SubnetRollupRepository {
 				    distinct_user_agents, min_requests_per_client, max_requests_per_client, slots_active_count,
 				    asn, as_org, country_code, client_type,
 				    returning_requests, returning_tracked_requests,
-				    authenticated_requests, authenticated_tracked_requests
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				    authenticated_requests, authenticated_tracked_requests,
+				    ua_mismatch_requests
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (bucket_start, server_id, valve_name, subnet_group) DO UPDATE SET
 				    bucket_end = EXCLUDED.bucket_end,
 				    bucket_minutes = EXCLUDED.bucket_minutes,
@@ -149,7 +157,8 @@ public class SubnetRollupRepository {
 				    returning_requests = EXCLUDED.returning_requests,
 				    returning_tracked_requests = EXCLUDED.returning_tracked_requests,
 				    authenticated_requests = EXCLUDED.authenticated_requests,
-				    authenticated_tracked_requests = EXCLUDED.authenticated_tracked_requests
+				    authenticated_tracked_requests = EXCLUDED.authenticated_tracked_requests,
+				    ua_mismatch_requests = EXCLUDED.ua_mismatch_requests
 				""";
 
 		jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
@@ -184,6 +193,7 @@ public class SubnetRollupRepository {
 				ps.setLong(21, r.returningTrackedRequests());
 				ps.setLong(22, r.authenticatedRequests());
 				ps.setLong(23, r.authenticatedTrackedRequests());
+				ps.setLong(24, r.uaMismatchRequests());
 			}
 
 			@Override

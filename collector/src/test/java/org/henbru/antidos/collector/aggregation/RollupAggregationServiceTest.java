@@ -171,19 +171,21 @@ class RollupAggregationServiceTest {
 		Instant bucketEnd = now.minus(1, ChronoUnit.HOURS);
 		Instant slotTime = bucketStart.plus(15, ChronoUnit.MINUTES);
 
-		// Client 1 in Subnet A: 10 requests, 8 returning, 2 auth
+		// Client 1 in Subnet A: 10 requests, 8 returning, 2 auth, 5 UA mismatches
 		ClientEvent e1 = new ClientEvent(
 				null, "Node-1", "Limiter", 1001L, slotTime, "198.51.100.10",
 				10, 0, false, ClientEvent.STATUS_ACTIVE, true, slotTime,
 				1, 8, 2
-		).withEnrichment(new org.henbru.antidos.collector.model.IpEnrichmentResult(13335L, "Cloudflare", "US", ClientType.RESIDENTIAL));
+		).withEnrichment(new org.henbru.antidos.collector.model.IpEnrichmentResult(13335L, "Cloudflare", "US", ClientType.RESIDENTIAL))
+		.withUaMismatchCount(5);
 
-		// Client 2 in Subnet A: 20 requests, 15 returning, 6 auth
+		// Client 2 in Subnet A: 20 requests, 15 returning, 6 auth, 7 UA mismatches
 		ClientEvent e2 = new ClientEvent(
 				null, "Node-1", "Limiter", 1001L, slotTime, "198.51.100.11",
 				20, 0, false, ClientEvent.STATUS_ACTIVE, true, slotTime,
 				1, 15, 6
-		).withEnrichment(new org.henbru.antidos.collector.model.IpEnrichmentResult(13335L, "Cloudflare", "US", ClientType.RESIDENTIAL));
+		).withEnrichment(new org.henbru.antidos.collector.model.IpEnrichmentResult(13335L, "Cloudflare", "US", ClientType.RESIDENTIAL))
+		.withUaMismatchCount(7);
 
 		// Client 3 in Subnet A: 30 requests, UNTRACKED cookies (null)
 		ClientEvent e3 = new ClientEvent(
@@ -215,5 +217,8 @@ class RollupAggregationServiceTest {
 		assertEquals(30L, r.authenticatedTrackedRequests());
 		assertTrue(r.isAuthenticatedTracked());
 		assertEquals(26.67, r.authenticatedRatio(), 0.01);
+
+		// UA Mismatch: 5 + 7 = 12 mismatches aggregated
+		assertEquals(12L, r.uaMismatchRequests());
 	}
 }

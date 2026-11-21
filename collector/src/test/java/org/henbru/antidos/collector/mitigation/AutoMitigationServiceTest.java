@@ -896,15 +896,28 @@ class AutoMitigationServiceTest {
 			long authReqs,
 			Instant bucketTime
 	) {
+		insertSubnetRollupWithUaMismatch(subnetGroup, asn, asOrg, totalReqs, returningReqs, authReqs, 0L, bucketTime);
+	}
+
+	private void insertSubnetRollupWithUaMismatch(
+			String subnetGroup,
+			long asn,
+			String asOrg,
+			long totalReqs,
+			long returningReqs,
+			long authReqs,
+			long uaMismatchReqs,
+			Instant bucketTime
+	) {
 		jdbcTemplate.update("""
 				INSERT INTO client_subnet_rollups (
 				    bucket_start, bucket_end, bucket_minutes, server_id, valve_name, subnet_group,
 				    asn, as_org, country_code, client_type, total_requests, active_requests,
 				    blocked_requests, marked_requests, distinct_clients, min_requests_per_client,
 				    max_requests_per_client, returning_requests,
-				    returning_tracked_requests, authenticated_requests
+				    returning_tracked_requests, authenticated_requests, ua_mismatch_requests
 				) VALUES (?, ?, 60, 'Srv01', 'PRIMARY', ?, ?, ?, 'US',
-				          'HOSTING_PROVIDER', ?, ?, 0, 0, 25, 10, 150, ?, ?, ?)
+				          'HOSTING_PROVIDER', ?, ?, 0, 0, 25, 10, 150, ?, ?, ?, ?)
 				""",
 				Timestamp.from(bucketTime),
 				Timestamp.from(bucketTime.plus(Duration.ofMinutes(15))),
@@ -915,7 +928,50 @@ class AutoMitigationServiceTest {
 				totalReqs,
 				returningReqs,
 				totalReqs,
-				authReqs
+				authReqs,
+				uaMismatchReqs
 		);
+	}
+
+	@Test
+	void testUaMismatchDiscountingEnablesCarpetMitigationAndRadarDetection() {
+		Instant now = Instant.now();
+		long testAsn = 65432L;
+
+		// ASN 65432: 3 subnets, 2000 requests each = 6000 total requests.
+		// Apparent returning requests: 700 per subnet (35.0%), which normally exceeds maxReturningRatioPct (5.0%).
+		// BUT 680 of those 700 returning requests had User-Agent mismatches (forged/reused bot cookies).
+		// Genuine returning: 700 - 680 = 20 per subnet (1.0%), which safely satisfies maxReturningRatioPct <= 5.0%!
+		insertSubnetRollupWithUaMismatch("198.51.200.0/24", testAsn, "Reused Cookie Botnet", 2000, 700, 0, 680, now.minus(Duration.ofMinutes(10)));
+		insertSubnetRollupWithUaMismatch("198.51.201.0/24", testAsn, "Reused Cookie Botnet", 2000, 700, 0, 680, now.minus(Duration.ofMinutes(10)));
+		insertSubnetRollupWithUaMismatch("198.51.202.0/24", testAsn, "Reused Cookie Botnet", 2000, 700, 0, 680, now.minus(Duration.ofMinutes(10)));
+
+		AutoMitigationService.EffectiveAutoSettings config = autoMitigationService.getEffectiveSettings();
+
+		// 1. Candidate Detection: ASN 65432 must be detected as candidate because discounted returningPct = 1.0% <= 5.0%
+		List<AutoMitigationService.CarpetAttackCandidate> candidates = autoMitigationService.findCarpetAttackCandidates(config, 1);
+		AutoMitigationService.CarpetAttackCandidate candidate = candidates.stream()
+				.filter(c -> c.asn() == testAsn)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("ASN 65432 must be detected as candidate after discounting UA mismatches"));
+
+		assertEquals(3, candidate.activeSubnets());
+		assertEquals(6000L, candidate.totalRequests());
+		assertEquals(2100L, candidate.returningRequests());
+		assertEquals(1.0, candidate.returningRatioPct(), 0.05, "Returning ratio must discount 2,040 UA mismatches");
+		assertEquals(3, candidate.eligibleSubnets().size());
+
+		// 2. Carpet Radar: Must evaluate to QUALIFIED (not SUPPRESSED_RETURNING_RATIO!)
+		List<org.henbru.antidos.collector.model.CarpetRadarEntry> radar = autoMitigationService.getCarpetRadar(1);
+		org.henbru.antidos.collector.model.CarpetRadarEntry entry = radar.stream()
+				.filter(e -> e.asn() == testAsn)
+				.findFirst()
+				.orElseThrow();
+
+		assertEquals("QUALIFIED", entry.status());
+		assertTrue(entry.isQualified());
+		assertFalse(entry.isSuppressed());
+		assertEquals(2040L, entry.uaMismatchRequests(), "Radar entry must expose total UA mismatch requests");
+		assertEquals(1.0, entry.returningRatioPct(), 0.05);
 	}
 }

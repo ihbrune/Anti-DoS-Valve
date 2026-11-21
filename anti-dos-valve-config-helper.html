@@ -1818,6 +1818,17 @@
                     placeholder="900 (Default: 900s / 15m)">
                 </div>
 
+                <!-- 23b. visitorCookieMinAgeSeconds -->
+                <div class="field-group visitor-cookie-field-group">
+                  <div class="field-header">
+                    <label for="visitorCookieMinAgeSeconds" class="field-label">visitorCookieMinAgeSeconds</label>
+                    <span class="badge badge-optional">Optional</span>
+                  </div>
+                  <div class="field-desc">Minimum age in seconds before a first-contact visitor cookie is recognized as a returning visitor (prevents single-page asset-scraping bots from appearing as returning users). Set to 0 to disable. Default: <code>10</code>.</div>
+                  <input type="number" id="visitorCookieMinAgeSeconds" name="visitorCookieMinAgeSeconds" min="0" step="1"
+                    placeholder="10 (Default: 10s)">
+                </div>
+
                 <!-- 24. visitorCookieRefreshRatio -->
                 <div class="field-group visitor-cookie-field-group">
                   <div class="field-header">
@@ -2769,6 +2780,7 @@
       { key: 'visitorCookieName', isRequired: false, defaultVal: '_adv' },
       { key: 'visitorCookieSecret', isRequired: false, defaultVal: '' },
       { key: 'visitorCookieTtlSeconds', isRequired: false, defaultVal: 900 },
+      { key: 'visitorCookieMinAgeSeconds', isRequired: false, defaultVal: 10 },
       { key: 'visitorCookieRefreshRatio', isRequired: false, defaultVal: 0.5 },
       { key: 'visitorCookieSubnetMaskV4', isRequired: false, defaultVal: 24 },
       { key: 'visitorCookieSubnetMaskV6', isRequired: false, defaultVal: 64 },

@@ -90,7 +90,8 @@ public class RollupAggregationService {
 				    COALESCE(SUM(returning_count), 0) AS returning_requests,
 				    COALESCE(SUM(CASE WHEN returning_count IS NOT NULL THEN request_count ELSE 0 END), 0) AS returning_tracked_requests,
 				    COALESCE(SUM(authenticated_count), 0) AS authenticated_requests,
-				    COALESCE(SUM(CASE WHEN authenticated_count IS NOT NULL THEN request_count ELSE 0 END), 0) AS authenticated_tracked_requests
+				    COALESCE(SUM(CASE WHEN authenticated_count IS NOT NULL THEN request_count ELSE 0 END), 0) AS authenticated_tracked_requests,
+				    COALESCE(SUM(ua_mismatch_count), 0) AS ua_mismatch_requests
 				FROM client_events
 				WHERE slot_time >= ? AND slot_time < ? AND subnet_group IS NOT NULL AND subnet_group != ''
 				GROUP BY server_id, valve_name, subnet_group
@@ -108,6 +109,7 @@ public class RollupAggregationService {
 					long returningTrackedRequests = rs.getLong("returning_tracked_requests");
 					long authenticatedRequests = rs.getLong("authenticated_requests");
 					long authenticatedTrackedRequests = rs.getLong("authenticated_tracked_requests");
+					long uaMismatchRequests = rs.getLong("ua_mismatch_requests");
 
 					return new ClientSubnetRollup(
 							null,
@@ -130,10 +132,12 @@ public class RollupAggregationService {
 							rs.getString("as_org"),
 							rs.getString("country_code"),
 							clientType,
+							Instant.now(),
 							returningRequests,
 							returningTrackedRequests,
 							authenticatedRequests,
-							authenticatedTrackedRequests
+							authenticatedTrackedRequests,
+							uaMismatchRequests
 					);
 				},
 				Timestamp.from(bucketStart),

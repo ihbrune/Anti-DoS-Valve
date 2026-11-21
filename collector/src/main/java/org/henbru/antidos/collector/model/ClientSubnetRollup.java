@@ -31,8 +31,66 @@ public record ClientSubnetRollup(
 		long returningRequests,
 		long returningTrackedRequests,
 		long authenticatedRequests,
-		long authenticatedTrackedRequests
+		long authenticatedTrackedRequests,
+		long uaMismatchRequests
 ) {
+
+	public ClientSubnetRollup(
+			Long id,
+			Instant bucketStart,
+			Instant bucketEnd,
+			int bucketMinutes,
+			String serverId,
+			String valveName,
+			String subnetGroup,
+			long totalRequests,
+			long activeRequests,
+			long blockedRequests,
+			long markedRequests,
+			int distinctClients,
+			int distinctUserAgents,
+			int minRequestsPerClient,
+			int maxRequestsPerClient,
+			int slotsActiveCount,
+			Long asn,
+			String asOrg,
+			String countryCode,
+			ClientType clientType,
+			Instant createdAt,
+			long returningRequests,
+			long returningTrackedRequests,
+			long authenticatedRequests,
+			long authenticatedTrackedRequests
+	) {
+		this(
+				id,
+				bucketStart,
+				bucketEnd,
+				bucketMinutes,
+				serverId,
+				valveName,
+				subnetGroup,
+				totalRequests,
+				activeRequests,
+				blockedRequests,
+				markedRequests,
+				distinctClients,
+				distinctUserAgents,
+				minRequestsPerClient,
+				maxRequestsPerClient,
+				slotsActiveCount,
+				asn,
+				asOrg,
+				countryCode,
+				clientType,
+				createdAt,
+				returningRequests,
+				returningTrackedRequests,
+				authenticatedRequests,
+				authenticatedTrackedRequests,
+				0L
+		);
+	}
 
 	public ClientSubnetRollup(
 			Long id,

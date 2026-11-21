@@ -2018,6 +2018,11 @@ class AntiDoSValveTest {
 		assertEquals("/app", valve.getVisitorCookiePath());
 		assertEquals("Strict", valve.getVisitorCookieSameSite());
 		assertEquals("true", valve.getVisitorCookieSecure());
+		assertEquals(10, valve.getVisitorCookieMinAgeSeconds());
+
+		valve.setVisitorCookieMinAgeSeconds(30);
+		assertEquals(30, valve.getVisitorCookieMinAgeSeconds());
+		assertThrows(IllegalArgumentException.class, () -> valve.setVisitorCookieMinAgeSeconds(-1));
 
 		valve.setVisitorCookieDomain("example.com");
 		assertEquals("example.com", valve.getVisitorCookieDomain());
@@ -2069,6 +2074,7 @@ class AntiDoSValveTest {
 		AntiDoSValve valve = new AntiDoSValve();
 		setValidAntiDoSMonitorconfiguration(valve, "COOKIE_VISIT_TEST");
 		valve.setVisitorCookieEnabled(true);
+		valve.setVisitorCookieMinAgeSeconds(0);
 		valve.setVisitorCookieSecret("test-secret-shared-between-nodes-12345");
 		valve.setVisitorCookieTtlSeconds(900);
 		valve.setRelevantPaths("/.*");
@@ -2164,6 +2170,7 @@ class AntiDoSValveTest {
 		AntiDoSValve upstreamValve = new AntiDoSValve();
 		setValidAntiDoSMonitorconfiguration(upstreamValve, "UPSTREAM_HOST_VALVE");
 		upstreamValve.setVisitorCookieEnabled(true);
+		upstreamValve.setVisitorCookieMinAgeSeconds(0);
 		upstreamValve.setVisitorCookieSecret("upstream-secret-99999");
 		upstreamValve.setVisitorCookieSubnetMaskV4(24);
 		upstreamValve.setVisitorCookieSubnetMaskV6(64);
@@ -2243,6 +2250,7 @@ class AntiDoSValveTest {
 		valve.setContainer(new org.apache.catalina.core.StandardEngine());
 		setValidAntiDoSMonitorconfiguration(valve, "UA_TRACKING_VALVE");
 		valve.setVisitorCookieEnabled(true);
+		valve.setVisitorCookieMinAgeSeconds(0);
 		valve.setVisitorCookieSecret("ua-tracking-test-secret");
 		valve.setRelevantPaths("/.*");
 		valve.setVisitorCookieEnforceUserAgent(false); // passive tracking mode
@@ -2316,6 +2324,79 @@ class AntiDoSValveTest {
 			assertEquals(3, counter.getCount());
 			assertEquals(1, counter.getReturningCount(), "Returning count must NOT increase when enforced");
 			assertEquals(2, counter.getUaMismatchCount(), "uaMismatchCount must be incremented even in enforce mode");
+		} finally {
+			valve.stop();
+		}
+	}
+
+	@Test
+	void testVisitorCookieMinAgeGating() throws Exception {
+		java.util.concurrent.atomic.AtomicLong simTime = new java.util.concurrent.atomic.AtomicLong(1_700_000_000_000L);
+		AntiDoSValve valve = new AntiDoSValve() {
+			@Override
+			protected long getTimeInMillis() {
+				return simTime.get();
+			}
+		};
+		valve.setContainer(new org.apache.catalina.core.StandardEngine());
+		setValidAntiDoSMonitorconfiguration(valve, "MIN_AGE_TEST_VALVE");
+		valve.setVisitorCookieEnabled(true);
+		valve.setVisitorCookieSecret("min-age-test-secret-12345");
+		valve.setVisitorCookieTtlSeconds(900);
+		valve.setVisitorCookieMinAgeSeconds(10); // 10 seconds age threshold
+		valve.setRelevantPaths("/.*");
+		valve.start();
+
+		try {
+			String clientIp = "192.168.1.150";
+
+			// 1. Initial request (T0) -> receives cookie with counter=1
+			TestRequest req1 = new TestRequest("/index.html", clientIp);
+			TestResponse resp1 = new TestResponse();
+			valve.invoke(req1, resp1);
+
+			assertEquals(Boolean.FALSE, req1.getAttribute(AntiDoSValve.RETURNING_VISITOR_ATTRIBUTE_NAME));
+			assertEquals(Boolean.TRUE, req1.getAttribute(AntiDoSValve.FIRST_CONTACT_ATTRIBUTE_NAME));
+			assertFalse(resp1.getSetCookies().isEmpty());
+			String cookieVal = resp1.getSetCookies().get(0).substring(5, resp1.getSetCookies().get(0).indexOf(';'));
+
+			AntiDoSMonitor monitor = valve.provideMonitor();
+			AntiDoSCounter counter = monitor.getSlotByKey(monitor.getCurrentSlotKey()).getCounter(clientIp);
+			assertNotNull(counter);
+			assertEquals(1, counter.getCount());
+			assertEquals(0, counter.getReturningCount());
+
+			// 2. Immediate subrequest after 2 seconds (e.g. asset scraping bot)
+			simTime.addAndGet(2000L); // T0 + 2s < 10s
+			TestRequest req2 = new TestRequest("/app.js", clientIp);
+			req2.setCookies(new Cookie[]{new Cookie("_adv", cookieVal)});
+			TestResponse resp2 = new TestResponse();
+			valve.invoke(req2, resp2);
+
+			AntiDoSVisitorContext ctx2 = (AntiDoSVisitorContext) req2.getAttribute(AntiDoSValve.VISITOR_CONTEXT_ATTRIBUTE_NAME);
+			assertNotNull(ctx2);
+			assertFalse(ctx2.valid(), "Token younger than 10s must NOT grant returning-visitor reputation yet");
+			assertEquals(1, ctx2.counter(), "Visitor counter is still 1");
+			assertEquals(Boolean.FALSE, req2.getAttribute(AntiDoSValve.RETURNING_VISITOR_ATTRIBUTE_NAME));
+			assertEquals(Boolean.TRUE, req2.getAttribute(AntiDoSValve.FIRST_CONTACT_ATTRIBUTE_NAME));
+			assertEquals(2, counter.getCount());
+			assertEquals(0, counter.getReturningCount(), "Returning count must remain 0 for rapid subrequests < 10s");
+
+			// 3. Subsequent request after 11 seconds (genuine human user navigating after reading page)
+			simTime.addAndGet(9000L); // T0 + 11s >= 10s
+			TestRequest req3 = new TestRequest("/detail.html", clientIp);
+			req3.setCookies(new Cookie[]{new Cookie("_adv", cookieVal)});
+			TestResponse resp3 = new TestResponse();
+			valve.invoke(req3, resp3);
+
+			AntiDoSVisitorContext ctx3 = (AntiDoSVisitorContext) req3.getAttribute(AntiDoSValve.VISITOR_CONTEXT_ATTRIBUTE_NAME);
+			assertNotNull(ctx3);
+			assertTrue(ctx3.valid(), "Token aged >= 10s must grant returning-visitor reputation");
+			assertEquals(1, ctx3.counter());
+			assertEquals(Boolean.TRUE, req3.getAttribute(AntiDoSValve.RETURNING_VISITOR_ATTRIBUTE_NAME));
+			assertEquals(Boolean.FALSE, req3.getAttribute(AntiDoSValve.FIRST_CONTACT_ATTRIBUTE_NAME));
+			assertEquals(3, counter.getCount());
+			assertEquals(1, counter.getReturningCount(), "Returning count must increment once age threshold elapsed");
 		} finally {
 			valve.stop();
 		}

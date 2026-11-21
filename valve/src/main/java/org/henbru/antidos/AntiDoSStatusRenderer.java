@@ -1179,7 +1179,7 @@ public class AntiDoSStatusRenderer {
 		String visitorCookieStatus;
 		if (target.isVisitorCookieEnabled()) {
 			visitorCookieStatus = "Enabled (name: <code>" + escapeHtml(target.getVisitorCookieName()) + "</code>, TTL: <strong>"
-					+ target.getVisitorCookieTtlSeconds() + "s</strong>, masks: /" + target.getVisitorCookieSubnetMaskV4()
+					+ target.getVisitorCookieTtlSeconds() + "s</strong>, min-age: <strong>" + target.getVisitorCookieMinAgeSeconds() + "s</strong>, masks: /" + target.getVisitorCookieSubnetMaskV4()
 					+ " v4, /" + target.getVisitorCookieSubnetMaskV6() + " v6"
 					+ (target.getVisitorCookieDomain() != null ? ", domain: <code>" + escapeHtml(target.getVisitorCookieDomain()) + "</code>" : "")
 					+ ", UA: <code>" + (target.isVisitorCookieEnforceUserAgent() ? "enforce" : "track-only") + "</code>)";
@@ -1188,6 +1188,7 @@ public class AntiDoSStatusRenderer {
 			String upstreamName = upstream != null ? escapeHtml(upstream.getMonitorName()) : "upstream";
 			visitorCookieStatus = "Inherited from <strong>" + upstreamName + "</strong> (name: <code>"
 					+ escapeHtml(target.getEffectiveVisitorCookieName()) + "</code>"
+					+ ", min-age: <strong>" + target.getEffectiveVisitorCookieMinAgeSeconds() + "s</strong>"
 					+ (target.getEffectiveVisitorCookieDomain() != null ? ", domain: <code>" + escapeHtml(target.getEffectiveVisitorCookieDomain()) + "</code>" : "")
 					+ ", UA: <code>" + (target.isEffectiveVisitorCookieEnforceUserAgent() ? "enforce" : "track-only") + "</code>)";
 		} else {
@@ -1774,6 +1775,7 @@ public class AntiDoSStatusRenderer {
 					.append("      \"visitorCookieName\": \"").append(escapeJson(v.getEffectiveVisitorCookieName())).append("\",\n")
 					.append("      \"visitorCookieDomain\": ").append(v.getEffectiveVisitorCookieDomain() != null ? "\"" + escapeJson(v.getEffectiveVisitorCookieDomain()) + "\"" : "null").append(",\n")
 					.append("      \"visitorCookieEnforceUserAgent\": ").append(v.isEffectiveVisitorCookieEnforceUserAgent()).append(",\n")
+					.append("      \"visitorCookieMinAgeSeconds\": ").append(v.getEffectiveVisitorCookieMinAgeSeconds()).append(",\n")
 					.append("      \"authTrackingEnabled\": ").append(v.isAuthTrackingActive()).append(",\n")
 					.append("      \"authTrackingInherited\": ").append(!v.isAuthTrackingEnabled() && v.isAuthTrackingActive()).append(",\n")
 					.append("      \"authTrackingMode\": \"").append(escapeJson(v.getEffectiveAuthTrackingMode())).append("\",\n")
@@ -1911,6 +1913,7 @@ public class AntiDoSStatusRenderer {
 				.append("    \"visitorCookieName\": \"").append(escapeJson(target.getEffectiveVisitorCookieName())).append("\",\n")
 				.append("    \"visitorCookieDomain\": ").append(target.getEffectiveVisitorCookieDomain() != null ? "\"" + escapeJson(target.getEffectiveVisitorCookieDomain()) + "\"" : "null").append(",\n")
 				.append("    \"visitorCookieEnforceUserAgent\": ").append(target.isEffectiveVisitorCookieEnforceUserAgent()).append(",\n")
+				.append("    \"visitorCookieMinAgeSeconds\": ").append(target.getEffectiveVisitorCookieMinAgeSeconds()).append(",\n")
 				.append("    \"authTrackingEnabled\": ").append(target.isAuthTrackingActive()).append(",\n")
 				.append("    \"authTrackingInherited\": ").append(!target.isAuthTrackingEnabled() && target.isAuthTrackingActive()).append(",\n")
 				.append("    \"authTrackingMode\": \"").append(escapeJson(target.getEffectiveAuthTrackingMode())).append("\",\n")

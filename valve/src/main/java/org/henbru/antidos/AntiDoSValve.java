@@ -294,6 +294,7 @@ public class AntiDoSValve extends ValveBase {
 	private volatile String visitorCookieSecure = "auto";
 	private volatile String visitorCookieDomain = null;
 	private volatile boolean visitorCookieEnforceUserAgent = false;
+	private volatile int visitorCookieMinAgeSeconds = 10;
 	private volatile AntiDoSVisitorTokenService visitorTokenService = null;
 
 	private static final AntiDoSAuthSessionCache sharedAuthSessionCache = new AntiDoSAuthSessionCache();
@@ -1171,6 +1172,31 @@ public class AntiDoSValve extends ValveBase {
 	public void setVisitorCookieEnforceUserAgent(String visitorCookieEnforceUserAgent) {
 		if (visitorCookieEnforceUserAgent != null) {
 			this.visitorCookieEnforceUserAgent = Boolean.parseBoolean(visitorCookieEnforceUserAgent.trim());
+		}
+	}
+
+	public int getVisitorCookieMinAgeSeconds() {
+		return visitorCookieMinAgeSeconds;
+	}
+
+	public int getEffectiveVisitorCookieMinAgeSeconds() {
+		if (this.visitorCookieEnabled) {
+			return this.visitorCookieMinAgeSeconds;
+		}
+		AntiDoSValve upstream = getInheritedVisitorCookieValve();
+		return upstream != null ? upstream.getVisitorCookieMinAgeSeconds() : this.visitorCookieMinAgeSeconds;
+	}
+
+	public void setVisitorCookieMinAgeSeconds(int visitorCookieMinAgeSeconds) {
+		if (visitorCookieMinAgeSeconds < 0) {
+			throw new IllegalArgumentException("visitorCookieMinAgeSeconds must be non-negative: " + visitorCookieMinAgeSeconds);
+		}
+		this.visitorCookieMinAgeSeconds = visitorCookieMinAgeSeconds;
+	}
+
+	public void setVisitorCookieMinAgeSeconds(String visitorCookieMinAgeSeconds) {
+		if (visitorCookieMinAgeSeconds != null && !visitorCookieMinAgeSeconds.trim().isEmpty()) {
+			setVisitorCookieMinAgeSeconds(Integer.parseInt(visitorCookieMinAgeSeconds.trim()));
 		}
 	}
 
@@ -2164,11 +2190,11 @@ public class AntiDoSValve extends ValveBase {
 				TokenData tokenData = visitorTokenService.validateToken(cookieVal, clientSubnetBytes, currentUaHash,
 						visitorCookieEnforceUserAgent, now);
 				if (tokenData.isValid()) {
-					isReturningVisitor = true;
+					long fullTtl = (long) visitorCookieTtlSeconds * 1000L;
+					isReturningVisitor = tokenData.isMinAgeElapsed(fullTtl, visitorCookieMinAgeSeconds, now);
 					visitorCounter = tokenData.counter();
 					uaMismatch = tokenData.uaMismatch();
 					long remainingTtl = tokenData.expiresAtMillis() - now;
-					long fullTtl = (long) visitorCookieTtlSeconds * 1000L;
 					if (remainingTtl < (long) (fullTtl * visitorCookieRefreshRatio)) {
 						issueNewCookie = true;
 					}
@@ -3132,6 +3158,9 @@ public class AntiDoSValve extends ValveBase {
 		if (visitorCookieEnabled) {
 			if (visitorCookieTtlSeconds <= 0) {
 				throw new LifecycleException(name4logging + ".visitorCookieTtlSeconds must be positive: " + visitorCookieTtlSeconds);
+			}
+			if (visitorCookieMinAgeSeconds < 0) {
+				throw new LifecycleException(name4logging + ".visitorCookieMinAgeSeconds must be non-negative: " + visitorCookieMinAgeSeconds);
 			}
 			if (visitorCookieRefreshRatio <= 0.0f || visitorCookieRefreshRatio >= 1.0f) {
 				throw new LifecycleException(name4logging + ".visitorCookieRefreshRatio must be between 0.0 and 1.0: " + visitorCookieRefreshRatio);

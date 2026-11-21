@@ -110,6 +110,25 @@ public final class AntiDoSVisitorTokenService {
 		public static TokenData uaMismatch(int counter, long expiresAtMillis) {
 			return new TokenData(Status.UA_MISMATCH, counter, expiresAtMillis, true);
 		}
+
+		/**
+		 * Checks whether this token satisfies the configured minimum age threshold.
+		 * Refreshed tokens (visit counter &gt; 1) or tokens with minAgeSeconds &lt;= 0
+		 * immediately pass. First-contact tokens (counter &lt;= 1) must have existed
+		 * for at least {@code minAgeSeconds} based on their expiration timestamp.
+		 *
+		 * @param fullTtlMillis Configured full token TTL in milliseconds
+		 * @param minAgeSeconds Minimum age threshold in seconds (&lt;= 0 to disable)
+		 * @param nowMillis     Current timestamp in milliseconds
+		 * @return true if the token is considered old enough to grant returning-visitor reputation
+		 */
+		public boolean isMinAgeElapsed(long fullTtlMillis, int minAgeSeconds, long nowMillis) {
+			if (minAgeSeconds <= 0 || counter > 1) {
+				return true;
+			}
+			long cookieAgeMillis = nowMillis - (expiresAtMillis - fullTtlMillis);
+			return cookieAgeMillis >= (long) minAgeSeconds * 1000L;
+		}
 	}
 
 	public AntiDoSVisitorTokenService(SecretKey secretKey) {
