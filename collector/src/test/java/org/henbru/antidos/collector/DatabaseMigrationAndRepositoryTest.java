@@ -695,12 +695,22 @@ class DatabaseMigrationAndRepositoryTest {
 		assertEquals("198.51.100.51", blockedHits.getFirst().clientKey());
 		assertEquals(ClientEvent.STATUS_BLOCKED, blockedHits.getFirst().status());
 
-		// 2. Filter by status: ACTIVE
+		// 2. Filter by status: ACTIVE, ALLOWED, and UNBLOCKED
 		List<ClientEvent> activeHits = clientEventRepository.findRecentEventsFiltered(
 				List.of("RET-SRV"), null, null, null, null, null, null, "ACTIVE", 50, 0
 		);
 		assertEquals(2, activeHits.size());
 		assertTrue(activeHits.stream().allMatch(e -> ClientEvent.STATUS_ACTIVE.equals(e.status())));
+
+		List<ClientEvent> allowedHits = clientEventRepository.findRecentEventsFiltered(
+				List.of("RET-SRV"), null, null, null, null, null, null, "ALLOWED", 50, 0
+		);
+		assertEquals(2, allowedHits.size());
+
+		List<ClientEvent> unblockedHits = clientEventRepository.findRecentEventsFiltered(
+				List.of("RET-SRV"), null, null, null, null, null, null, "UNBLOCKED", 50, 0
+		);
+		assertEquals(2, unblockedHits.size());
 
 		// 3. Status-specific retention cleanup: Delete ACTIVE events older than 2 days
 		int deletedActive = clientEventRepository.deleteOlderThan(now.minus(2, ChronoUnit.DAYS), ClientEvent.STATUS_ACTIVE);

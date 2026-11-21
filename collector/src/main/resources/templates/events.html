@@ -279,13 +279,14 @@
                             <span>&#x1F3F7;&#xFE0F; Marked / Simulation</span>
                         </label>
                         <label class="pill-label">
-                            <input type="radio" name="status" value="ACTIVE" th:checked="${selectedStatus == 'ACTIVE'}">
-                            <span>&#x1F535; Active (Monitored)</span>
+                            <input type="radio" name="status" value="ACTIVE"
+                                th:checked="${selectedStatus == 'ACTIVE' or selectedStatus == 'ALLOWED' or selectedStatus == 'UNBLOCKED'}">
+                            <span>&#x1F535; Allowed (Unblocked)</span>
                         </label>
                     </div>
                     <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-                        Filter by hard HTTP 429 blocks, soft-marked / simulated incidents, active clients, or all
-                        traffic.
+                        Filter by hard HTTP 429 blocks, soft-marked / simulated incidents, allowed unblocked traffic within limits, or all
+                        events.
                     </div>
                 </div>
             </div>

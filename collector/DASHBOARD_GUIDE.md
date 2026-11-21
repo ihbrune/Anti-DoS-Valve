@@ -638,7 +638,7 @@ Accessible via `/events`. Provides deep-dive, granular search across every recor
   * `⚠️ All Incidents`: Combines both hard HTTP 429 blocks and soft marking / simulation events.
   * `🛑 Blocked (429)`: Filters strictly to clients that received an HTTP 429 Too Many Requests response.
   * `🏷️ Marked / Simulation`: Filters to clients evaluated above thresholds on marking valves (e.g. email harvester protection) or valves running in simulation mode.
-  * `🔵 Active (Monitored)`: Shows active clients transmitting traffic within configured rate limits.
+  * `🔵 Allowed (Unblocked)` (`ACTIVE` / `ALLOWED`): Filters strictly to allowed client traffic within rate limits (captured via active sampling telemetry). Essential for identifying stealth scrapers, unblocked crawler swarms, or traffic that stays just below blocking thresholds without triggering HTTP 429.
 * **ASN Filter:** Filter directly by ASN number or provider name (e.g., `AS13335` or `Cloudflare`).
 * **Interactive Network Notes:** Look for verdict badges (🟢/🔵/🟡/🔴/⚪) or click `+📝` on any ASN or Subnet to inspect previous findings or log new notes directly from the incident log.
 

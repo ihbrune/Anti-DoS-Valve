@@ -733,8 +733,8 @@
                     <div class="section-title" style="margin-bottom: 0;">
                         <span th:if="${selectedStatus == 'BLOCKED'}">&#x1F6A8; Blocked Client Incidents on this Server</span>
                         <span th:if="${selectedStatus == 'MARKED'}">&#x1F3F7;&#xFE0F; Marked / Simulation Events on this Server</span>
-                        <span th:if="${selectedStatus == 'ACTIVE'}">&#x1F539; Active Monitored Clients on this Server</span>
-                        <span th:if="${selectedStatus != 'BLOCKED' and selectedStatus != 'MARKED' and selectedStatus != 'ACTIVE'}">&#x26A1; Client Traffic &amp; Incidents on this Server</span>
+                        <span th:if="${selectedStatus == 'ACTIVE' or selectedStatus == 'ALLOWED' or selectedStatus == 'UNBLOCKED'}">&#x1F535; Allowed Client Traffic on this Server</span>
+                        <span th:if="${selectedStatus != 'BLOCKED' and selectedStatus != 'MARKED' and selectedStatus != 'ACTIVE' and selectedStatus != 'ALLOWED' and selectedStatus != 'UNBLOCKED'}">&#x26A1; Client Traffic &amp; Incidents on this Server</span>
                     </div>
                     <div class="filter-btn-group">
                         <a th:href="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status='ALL')} : @{'/server/' + ${serverId}(status='ALL')}"
@@ -742,7 +742,7 @@
                             hx-select="#server-events-section" hx-target="#server-events-section" hx-swap="outerHTML"
                             hx-push-url="true" class="filter-btn"
                             th:classappend="${selectedStatus == 'ALL' or selectedStatus == '' or selectedStatus == null ? 'active' : ''}"
-                            title="Show all recorded client events (Blocked, Marked &amp; Active)">
+                            title="Show all recorded client events (Blocked, Marked &amp; Allowed)">
                             All Traffic
                         </a>
                         <a th:href="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status='BLOCKED')} : @{'/server/' + ${serverId}(status='BLOCKED')}"
@@ -765,9 +765,9 @@
                             th:hx-get="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status='ACTIVE')} : @{'/server/' + ${serverId}(status='ACTIVE')}"
                             hx-select="#server-events-section" hx-target="#server-events-section" hx-swap="outerHTML"
                             hx-push-url="true" class="filter-btn"
-                            th:classappend="${selectedStatus == 'ACTIVE' ? 'active' : ''}"
-                            title="Show only active monitored clients within rate limits">
-                            &#x1F539; Active Monitored
+                            th:classappend="${selectedStatus == 'ACTIVE' or selectedStatus == 'ALLOWED' or selectedStatus == 'UNBLOCKED' ? 'active' : ''}"
+                            title="Show only allowed clients within rate limits (unblocked / active sampling)">
+                            &#x1F535; Allowed (Unblocked)
                         </a>
                     </div>
                 </div>
@@ -782,8 +782,8 @@
                     <div th:if="${#lists.isEmpty(recentEvents)}" class="empty-state">
                         <p th:if="${selectedStatus == 'BLOCKED'}">No blocked clients recorded on this node.</p>
                         <p th:if="${selectedStatus == 'MARKED'}">No marked or simulated incidents recorded on this node.</p>
-                        <p th:if="${selectedStatus == 'ACTIVE'}">No active monitored clients recorded on this node.</p>
-                        <p th:if="${selectedStatus != 'BLOCKED' and selectedStatus != 'MARKED' and selectedStatus != 'ACTIVE'}">No client traffic
+                        <p th:if="${selectedStatus == 'ACTIVE' or selectedStatus == 'ALLOWED' or selectedStatus == 'UNBLOCKED'}">No allowed client events recorded on this node.</p>
+                        <p th:if="${selectedStatus != 'BLOCKED' and selectedStatus != 'MARKED' and selectedStatus != 'ACTIVE' and selectedStatus != 'ALLOWED' and selectedStatus != 'UNBLOCKED'}">No client traffic
                             events recorded on this node.</p>
                     </div>
                     <table th:unless="${#lists.isEmpty(recentEvents)}">
@@ -923,8 +923,8 @@
                                             th:classappend="${event.status == 'ACTIVE' ? 'count-active' : (event.status == 'MARKED' ? 'count-marked' : 'count-blocked')}"
                                             th:text="${#numbers.formatInteger(event.totalEffectiveCount, 1, 'POINT')}">20</strong>
                                         <span th:if="${event.status == 'ACTIVE'}" class="badge badge-info badge-status"
-                                            title="Monitored active client within rate limits">
-                                            <span class="status-dot status-dot-active"></span>Active
+                                            title="Allowed client request within rate limits (captured via active sampling telemetry)">
+                                            <span class="status-dot status-dot-active"></span>Allowed
                                         </span>
                                         <span th:if="${event.status == 'MARKED'}" class="badge badge-purple badge-status"
                                             title="Rate-limit exceeded in Marking/Simulation Mode - Monitored/Tagged without HTTP 429 block">

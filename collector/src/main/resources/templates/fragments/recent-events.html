@@ -154,8 +154,8 @@
                                 th:classappend="${event.status == 'ACTIVE' ? 'count-active' : (event.status == 'MARKED' ? 'count-marked' : 'count-blocked')}"
                                 th:text="${#numbers.formatInteger(event.totalEffectiveCount, 1, 'POINT')}">145</strong>
                             <span th:if="${event.status == 'ACTIVE'}" class="badge badge-info badge-status"
-                                title="Monitored active client within rate limits">
-                                <span class="status-dot status-dot-active"></span>Active
+                                title="Allowed client request within rate limits (captured via active sampling telemetry)">
+                                <span class="status-dot status-dot-active"></span>Allowed
                             </span>
                             <span th:if="${event.status == 'MARKED'}" class="badge badge-purple badge-status"
                                 title="Rate-limit exceeded in Marking/Simulation Mode - Monitored/Tagged without HTTP 429 block">

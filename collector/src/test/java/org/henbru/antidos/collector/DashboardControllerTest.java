@@ -319,7 +319,7 @@ class DashboardControllerTest {
 				.andExpect(content().string(containsString("Client Traffic &amp; Incidents on this Server")))
 				.andExpect(content().string(containsString("All Traffic")))
 				.andExpect(content().string(containsString("Blocked Only")))
-				.andExpect(content().string(containsString("Active Monitored")))
+				.andExpect(content().string(containsString("Allowed (Unblocked)")))
 				.andExpect(content().string(containsString("55555")))
 				.andExpect(content().string(containsString("TEST-VALVE")))
 				.andExpect(content().string(containsString("AI Bot")))
@@ -356,7 +356,7 @@ class DashboardControllerTest {
 		// ACTIVE filter
 		mockMvc.perform(get("/server/Demo-Server").param("status", "ACTIVE"))
 				.andExpect(status().isOk())
-				.andExpect(content().string(containsString("Active Monitored Clients on this Server")))
+				.andExpect(content().string(containsString("Allowed Client Traffic on this Server")))
 				.andExpect(content().string(containsString("198.51.100.99")))
 				.andExpect(content().string(containsString("count-active")))
 				.andExpect(content().string(not(containsString("count-blocked"))));

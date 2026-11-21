@@ -717,6 +717,8 @@ public class ClientEventRepository {
 			String normalizedStatus = status.trim().toUpperCase();
 			if ("BLOCKED_OR_MARKED".equals(normalizedStatus) || "INCIDENTS".equals(normalizedStatus)) {
 				sql.append("AND status IN ('BLOCKED', 'MARKED') ");
+			} else if ("ALLOWED".equals(normalizedStatus) || "UNBLOCKED".equals(normalizedStatus)) {
+				sql.append("AND status = 'ACTIVE' ");
 			} else {
 				sql.append("AND status = ? ");
 				params.add(normalizedStatus);
