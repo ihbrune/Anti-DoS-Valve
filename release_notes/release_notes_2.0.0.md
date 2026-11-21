@@ -1,8 +1,10 @@
 # Release Notes – Version 2.0.0
 
-Version 2.0.0 marks a major milestone in the evolution of the Anti-DoS-Valve ecosystem: **the graduation of the Anti-DoS Collector from preview status to a matured, production-tested enterprise security center**, accompanied by **advanced User-Agent integrity enforcement in the Valve** and comprehensive **Role-Based Access Control (RBAC)**.
+Version 2.0.0 marks a major milestone in the evolution of the Anti-DoS-Valve ecosystem: **the graduation of the Anti-DoS Collector from preview status to a production-tested enterprise security center**, accompanied by **advanced User-Agent integrity enforcement in the Valve**, comprehensive **Role-Based Access Control (RBAC)**, and **intelligent capacity management for autonomous fleet defense**.
 
-With Version 2.0.0, the Collector supports flexible multi-topology operational modes (`FULL`, `HEADLESS`, `OPERATOR`, `VIEWER`), interactive web login protection with fine-grained API security, autonomous defense with carpet-bombing radar, and deep forensic correlation across Autonomous Systems and client fingerprints.
+With Version 2.0.0, the Collector supports flexible multi-topology operational modes (`FULL`, `HEADLESS`, `OPERATOR`, `VIEWER`), interactive web login protection with fine-grained API security, autonomous defense with carpet-bombing radar and priority-based capacity budgeting, and deep forensic correlation across Autonomous Systems and client fingerprints.
+
+DISCLAIMER: The collector is the result of a complete AI-driven development. Its complex architecture and advanced features are already in use with in a medium sized production environment with very positive feedback. However, the collector is still in active development and new features are being added regularly. Bugs are likely and should be reported. Feedback is always welcome. 
 
 ---
 
@@ -54,11 +56,29 @@ The Collector can now be deployed in four specialized operational modes to accom
 
 ---
 
+### 🤖 Autonomous Defense & Carpet Radar Enhancements *(Collector)*
+The autonomous mitigation engine has been substantially upgraded with smarter capacity budgeting, eviction heuristics, and performance caching:
+
+- **Minimum Requests per Subnet (`carpetMinRequestsPerSubnet`, default `20`):**
+  - Subnets are only auto-blocked if they generated at least `N` requests during the lookback window.
+  - Shields rule capacity from low-density residential proxy scraper swarms that rotate across thousands of subnets with only 1–2 requests, focusing defense on high-impact attackers.
+- **Priority-Based Capacity Allocation & Dynamic Eviction:**
+  - When nearing configured capacity limits (`maxActiveRules`), subnets with the highest own request volume are prioritized for available slots.
+  - **Releasing Inactive Rules Under Pressure (`AUTO_RELEASE_UNUSED`):** Automatically evicts older autonomous rules that blocked zero requests during their initial 10-minute observation window to free capacity for active high-volume attackers. Rules that actively blocked traffic or were created by human operators are never evicted early.
+- **Coalesced Fleet Synchronization & Compact Labels:**
+  - All block additions, releases, and TTL extensions in an evaluation cycle are synchronized to Tomcat Valves in a single batched atomic `replace` payload.
+  - Valves receive compact labels (e.g. `AUTO_CARPET AS7922`) instead of verbose reason strings, keeping both synchronization payloads and `/antidos-status` JSON responses lean.
+- **Radar In-Memory Caching & Performance Indexes (Flyway V33):**
+  - In-memory calculation caching for Carpet Attack Radar metrics prevents repeated heavy database aggregations.
+  - New database indexes on `mitigation_rules` and subnet rollups accelerate scheduled evaluation cycles.
+
+---
+
 ### 🕵️ User-Agent Forensics, Bot Profiling & Browser Lag Engine *(Collector)*
 Expanding upon initial bot categorizations, Version 2.0.0 introduces a deterministic multi-signal heuristic evaluation engine for client User-Agents:
 
 - **12+ Client Family Classifications:**
-  - Differentiates standard browsers, automated libraries (`Python-requests`, `curl`, `Scrapy`, `Go-http`, `Node-Fetch`), search crawlers (`Googlebot`, `Bingbot`), and AI scrapers (`LinkupBot`, `OpenAI`, `Anthropic`).
+  - Differentiates standard browsers, automated libraries (`Python-requests`, `curl`, `Scrapy`, `Go-http`, `Node-Fetch`), search crawlers (`Googlebot`, `Bingbot`), and AI scrapers (`LinkupBot`, `OpenAI`, `Anthropic`, `Perplexity`).
 - **Authoritative Browser Release Version Sync & Lag Assessment:**
   - Automatically assesses major browser versions (Chrome, Firefox, Safari, Edge) against release timelines.
   - Flags outdated, unmaintained, or spoofed legacy browser headers frequently weaponized by residential proxy scraper networks.
@@ -83,6 +103,8 @@ Version 2.0.0 hardens the Valve's visitor tracking capabilities against token th
 ### 🛡️ Valve Reliability, Security & Infrastructure Hardening *(Valve)*
 - **`alwaysAllowPrivateIPs` (Valve):**
   - Automatically exempts all private IPv4 and IPv6 ranges (RFC 1918 `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, loopback `127.0.0.0/8` and `::1`, link-local `169.254.0.0/16` and `fe80::/10`, IPv6 ULA `fc00::/7`) without requiring complex regexes.
+- **Noise Reduction in Status Top Counters:**
+  - `AntiDoSStatusRenderer` now suppresses low-count noise below `activeMinCount` when extracting top active entries (`effActiveLimit > 0`), ensuring clean status displays and minimal memory consumption.
 - **`statusConcurrencyTimeoutMs` (Valve):**
   - Protects Tomcat request threads and CPU capacity by strictly bounding concurrent status dashboard requests (`HTTP 503` fail-fast when overloaded).
 - **Dual Servlet Compatibility:**
@@ -90,13 +112,18 @@ Version 2.0.0 hardens the Valve's visitor tracking capabilities against token th
 
 ---
 
-### 📊 Advanced Reporting & Forensic Analytics *(Collector)*
+### 📊 Advanced Reporting, Advisor Diagnostics & Retention *(Collector)*
+- **Verified Search & AI Crawler Telemetry in Daily Reports:**
+  - Daily reports now provide a dedicated breakdown for verified search engines (`Googlebot`, `Bingbot`, etc.) and commercial AI crawlers (`AI_CRAWLER`), tracking total crawler volume, percentage of overall traffic, and unique IP cardinality.
+- **Advisor Diagnostics for Undersized Slot Buffers (`SLOT_BUFFER_TUNING`):**
+  - The Configuration Advisor proactively identifies Tomcat Valves configured with `numberOfSlots < 3`.
+  - Explains that shallow ring buffers overwrite finalized slots before the Collector can poll `slot=previous`, and provides ready-to-paste `server.xml` XML recommendations (`numberOfSlots="10"`).
 - **Clustered Outage & Incident Tracking:**
   - Daily reports automatically aggregate correlated rate-limiting spikes across multiple monitored nodes into unified incident clusters.
 - **Internal vs. External Threat Segregation:**
   - Segregates anomalies originating from private subnets vs. public Internet transit in daily reports and the dashboard guide.
-- **ASN & Subnet Deterrence Lifecycle:**
-  - Complete tracking of active, persistent, and deterred attacker behavior across Autonomous Systems.
+- **Automated Retention Cleanup for Stale Subnet Profiles & Mitigation Rules:**
+  - The retention scheduler now routinely purges stale `subnet_profiles`, expired dynamic mitigation rules, and old audit trail entries, ensuring optimal database performance over time.
 - **High-Density Table Navigation:**
   - Enhanced table layouts with sticky headers and responsive scrolling across audit trails, offenders, and crawler catalogs.
 
@@ -112,7 +139,8 @@ The Valve upgrade from 1.9.0 is fully backwards-compatible:
 
 ### Upgrading the Collector
 1. Replace `anti-dos-collector-1.9.0.jar` with `anti-dos-collector-2.0.0.jar`.
-2. Database schema migrations (V31 through V32) execute automatically on startup for SQLite and PostgreSQL:
+2. Database schema migrations (V31 through V33) execute automatically on startup for SQLite and PostgreSQL:
    - `V31__add_always_allow_private_ips_to_monitored_valves.sql`
    - `V32__add_ua_mismatch_to_client_events.sql`
+   - `V33__add_mitigation_and_rollup_performance_indexes.sql`
 3. If upgrading an existing installation to use authentication, configure security tokens and operational modes in `collector-config.yaml` or via command-line arguments as detailed in [`collector/SETUP_GUIDE.md`](../collector/SETUP_GUIDE.md).
