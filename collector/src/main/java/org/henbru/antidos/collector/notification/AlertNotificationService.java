@@ -329,7 +329,7 @@ public class AlertNotificationService {
 				.uri(URI.create(url))
 				.timeout(Duration.ofSeconds(6))
 				.header("Content-Type", "application/json; charset=UTF-8")
-				.header("User-Agent", "Anti-DoS-Collector/2.0.0")
+				.header("User-Agent", "Anti-DoS-Collector/2.1.0")
 				.POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8))
 				.build();
 	}

@@ -45,7 +45,7 @@ Explore the complete multi-server fleet experience in **Demo Mode** with realist
 mvn package -pl collector -DskipTests
 
 # Launch Demo Mode (pre-seeds 7 days of realistic attack waves and telemetry)
-java -jar collector/target/anti-dos-collector-2.0.0.jar demo
+java -jar collector/target/anti-dos-collector-2.1.0.jar demo
 ```
 
 Open **`http://localhost:8090`** in your browser.
@@ -134,7 +134,7 @@ flowchart LR
 ```
 
 * One process manages background polling, MMDB enrichment, daily report scheduling, autonomous defense, Valve mitigation pushes, and the full web interface.
-* **Launch:** `java -jar anti-dos-collector-2.0.0.jar` (defaults to `collector.mode=FULL`).
+* **Launch:** `java -jar anti-dos-collector-2.1.0.jar` (defaults to `collector.mode=FULL`).
 
 ---
 
@@ -175,10 +175,10 @@ flowchart TD
 * **Launch (same host sharing SQLite WAL DB):**
   ```bash
   # Process 1 (Systemd backend worker — no HTTP port)
-  java -jar anti-dos-collector-2.0.0.jar headless
+  java -jar anti-dos-collector-2.1.0.jar headless
 
   # Process 2 (SOC web cockpit on internal port)
-  java -jar anti-dos-collector-2.0.0.jar --operator=/var/lib/antidos/antidos-collector.db --server.port=8091
+  java -jar anti-dos-collector-2.1.0.jar --operator=/var/lib/antidos/antidos-collector.db --server.port=8091
   ```
 
 ---
@@ -204,7 +204,7 @@ flowchart LR
 * Opening an archive or live SQLite file in `VIEWER` mode enforces database-level read-only guarantees (`PRAGMA query_only=ON`, Hikari `readOnly=true`), skips Flyway and startup repairs, and disables every mutating web/API endpoint (`HTTP 403 Forbidden`).
 * **Launch:**
   ```bash
-  java -jar anti-dos-collector-2.0.0.jar viewer /path/to/prod-snapshot.db
+  java -jar anti-dos-collector-2.1.0.jar viewer /path/to/prod-snapshot.db
   ```
 
 ---
