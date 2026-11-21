@@ -1294,7 +1294,7 @@ class DatabaseMigrationAndRepositoryTest {
 		ClientEvent markedEvent = new ClientEvent(
 				null, "MARK-NODE", "MAIL-GUARD", 700L, bucketStart, "198.51.100.77",
 				45, 5, true, ClientEvent.STATUS_MARKED, true, bucketEnd,
-				1, 10, 0, "GET", "/pers_publ/publ/PersonDetail.jsp", "ScraperBot/1.0"
+				1, 10, 0, "GET", "/portal/member/detail.jsp", "ScraperBot/1.0"
 		);
 		clientEventRepository.batchUpsert(List.of(markedEvent));
 

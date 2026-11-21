@@ -290,7 +290,7 @@ The **Config Advisor** is an automated diagnostic engine evaluating historical t
 The **User-Agents** focus tab cross-correlates request header samples captured by Anti-DoS Valves (`sampleUserAgent` and `sampleAuthenticated`) with Autonomous Systems and rate-limiting incidents across the fleet.
 
 #### Sampling Telemetry & Confidence Detection:
-* **Active Sampling (`activeSampleThreshold`):** Valves configured with `activeSampleThreshold="20"` capture a request snapshot (HTTP method, URI, User-Agent, and authentication flag) once a non-blocked client exceeds 20 requests in the active slot window.
+* **Active Sampling (`activeSampleThreshold`):** Valves configured with `activeSampleThreshold > 0` (e.g. `2`–`5` on subnet valves, `10`–`20` on IP valves) track and expose high-fidelity request snapshots (HTTP method, URI, User-Agent, and authentication flag) once a non-blocked client or subnet counter reaches the threshold. Using **semantic priority scoring (Levels 0–3)** and pre-threshold candidate tracking, the Valve prioritizes mutating actions (`POST`/`PUT`, Level 3) and content routes (`.html`, `.jsp`, extensionless paths, documents, Level 2) over static frontend assets (`.js`, `.css`, Level 0), ensuring telemetry reflects the actual content endpoints targeted by bots and scrapers.
 * **Incident Sampling:** Blocked and marked clients always capture a request sample upon exceeding rate limits.
 * **Confidence Notice Banner:** If active sampling is disabled (`activeSampleThreshold="0"`) across connected valves or total sampled events are under 20 within the selected window, the dashboard prominently warns that telemetry is heavily biased toward blocked offenders and may underrepresent legitimate browser traffic.
 

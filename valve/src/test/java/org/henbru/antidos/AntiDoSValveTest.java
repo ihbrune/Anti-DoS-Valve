@@ -2477,6 +2477,68 @@ class AntiDoSValveTest {
 	}
 
 	@Test
+	void testActiveRequestSemanticSamplingInValve() throws Exception {
+		AntiDoSValve testValve = new AntiDoSValve();
+		setValidAntiDoSMonitorconfiguration(testValve, "SEMANTIC_SAMPLING_VALVE");
+		testValve.setAllowedRequestsPerSlot(50);
+		testValve.setNumberOfSlots(5);
+		testValve.setSlotLength(60);
+		testValve.setCollectorIntegration("true");
+		testValve.setActiveSampleThreshold(5); // active threshold = 5
+		testValve.setRelevantPaths(".*");
+		testValve.reloadMonitor();
+
+		try {
+			String clientIp = "192.168.50.10";
+
+			// Request 1: HTML content route (Priority 2)
+			TestRequest req1 = new TestRequest("/portal/course/catalog", clientIp);
+			TestResponse resp1 = new TestResponse();
+			testValve.invoke(req1, resp1);
+
+			// Request 2: CSS asset (Priority 0)
+			TestRequest req2 = new TestRequest("/static/css/layout.css", clientIp);
+			testValve.invoke(req2, new TestResponse());
+
+			// Request 3: JS asset (Priority 0)
+			TestRequest req3 = new TestRequest("/static/js/menus.js", clientIp);
+			testValve.invoke(req3, new TestResponse());
+
+			// Request 4: Another JS asset (Priority 0)
+			TestRequest req4 = new TestRequest("/static/js/bundle.js", clientIp);
+			testValve.invoke(req4, new TestResponse());
+
+			// Request 5: Another JS asset that hits threshold = 5 (Priority 0)
+			TestRequest req5 = new TestRequest("/static/js/otherAsset.js", clientIp);
+			testValve.invoke(req5, new TestResponse());
+
+			AntiDoSMonitor monitor = testValve.provideMonitor();
+			AntiDoSCounter counter = monitor.provideCurrentCounter(clientIp);
+			assertNotNull(counter);
+			assertEquals(5, counter.getCount());
+
+			// Crucial verification: The captured sample MUST be the semantic HTML content route, NOT otherAsset.js!
+			AntiDoSCounter.SampleRequest sample = counter.getSample();
+			assertNotNull(sample, "Sample must be present");
+			assertEquals("GET", sample.method());
+			assertEquals("/portal/course/catalog", sample.uri(),
+					"Semantic priority sampling must preserve the content URL instead of the 5th JS asset");
+			assertEquals(2, sample.priority());
+
+			// Request 6: Mutating POST action (Priority 3) -> Strictly higher than Priority 2, must UPGRADE sample!
+			TestRequest req6 = new TestRequest("/idp/login", clientIp);
+			req6.setMethod("POST");
+			testValve.invoke(req6, new TestResponse());
+
+			assertEquals("POST", counter.getSample().method());
+			assertEquals("/idp/login", counter.getSample().uri());
+			assertEquals(3, counter.getSample().priority());
+		} finally {
+			testValve.stop();
+		}
+	}
+
+	@Test
 	void testAuthSessionCacheParsingAndHashing() {
 		AntiDoSAuthSessionCache cache = new AntiDoSAuthSessionCache(5);
 		long now = 1_700_000_000_000L;
@@ -3179,16 +3241,24 @@ class AntiDoSValveTest {
 		AntiDoSCounter counter = valve.provideMonitor().provideCurrentCounter("198.51.100.10");
 		assertNotNull(counter);
 		assertEquals(1, counter.getCount());
-		assertNull(counter.getSample(), "Sample should not be recorded below active threshold");
+		// Candidate is tracked in counter from request 1
+		assertNotNull(counter.getSample());
+		assertEquals("GET", counter.getSample().method());
+		assertEquals("/api/data", counter.getSample().uri());
+		// Status JSON does not expose sample below activeSampleThreshold
+		AntiDoSStatusRenderer rendererBelow = new AntiDoSStatusRenderer(valve);
+		String jsonBelow = rendererBelow.buildStatusJsonDetails("ACTIVE_SAMPLE_TEST");
+		assertFalse(jsonBelow.contains("\"sampleMethod\""), "Sample should not be exposed in JSON below active threshold");
 
-		// 2nd request -> below threshold (count = 2)
-		TestRequest req2 = new TestRequest("/api/data", "198.51.100.10");
+		// 2nd request -> below threshold (count = 2) with lower priority asset
+		TestRequest req2 = new TestRequest("/api/style.css", "198.51.100.10");
 		req2.setMethod("GET");
 		req2.setHeader("User-Agent", "TestBot/1.0");
 		TestResponse resp2 = new TestResponse();
 		valve.invoke(req2, resp2);
 		assertEquals(2, counter.getCount());
-		assertNull(counter.getSample());
+		// Candidate remains higher-priority /api/data
+		assertEquals("/api/data", counter.getSample().uri());
 
 		// 3rd request -> hits threshold (count = 3)
 		TestRequest req3 = new TestRequest("/api/data?id=123", "198.51.100.10");

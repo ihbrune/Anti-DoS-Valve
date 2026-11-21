@@ -370,7 +370,36 @@ Controls whether extended telemetry (such as distinct client IP tracking in aggr
 Available since version 1.8.0 (default: `0` = disabled): Sets the per-slot request count threshold above which an active (allowed) client or subnet counter captures a sample request snapshot (HTTP method, request URI, and User-Agent) for forensic telemetry.
 
 * **Default (`activeSampleThreshold="0"`)**: Request snapshots are captured exclusively when a counter is blocked or marked (`allowed == false`).
-* **Active Sampling (`activeSampleThreshold > 0`)**: Once an active counter's combined request count reaches or exceeds this threshold, the first subsequent request captures a sample snapshot without allocating additional memory on following requests. This is especially valuable on wide subnet monitoring valves (e.g. `ipv4SubnetMask="24"` with `activeSampleThreshold="50"`) to diagnose distributed stealth scrapers or horizontal botnet carpet waves that stay below the blocking threshold.
+* **Active Sampling (`activeSampleThreshold > 0`)**: Once an active counter's combined request count reaches or exceeds this threshold, the captured sample request snapshot is exposed in `/antidos-status` JSON telemetry for ingestion by the Anti-DoS Collector.
+
+### Semantic Priority-Weighted Sampling (Levels 0–3)
+
+In standard web architectures, an initial user or scraper request to a dynamic content route (e.g. `/portal/course/catalog`) is immediately followed by a browser waterfall of 5–20 parallel subrequests fetching scripts (`.js`), stylesheets (`.css`), and web fonts. Naive request sampling (such as recording whatever request happens to trigger the threshold) almost invariably captures a mundane static JavaScript or CSS asset, completely masking the actual content page or document being targeted.
+
+To guarantee high forensic value without runtime overhead, the Valve employs a **semantic priority scoring engine** and **pre-threshold candidate tracking**:
+
+1. **Priority Scoring Hierarchy (`AntiDoSCounter.calculatePriority`)**:
+   * **Level 3 (Mutating Business Actions)**: `POST`, `PUT`, `DELETE`, `PATCH`. Captures logins, API mutations, form submissions, and authentication attempts.
+   * **Level 2 (Content Routes, Documents & APIs)**: Clean extensionless URLs (e.g. `/catalog/details`, `/idp/login`, `/api/v1/search`), dynamic server pages (`.html`, `.htm`, `.jsp`), documents (`.pdf`, `.docx`, `.xlsx`, `.csv`), and structured data (`.json`, `.xml`, `.txt`, `.zip`).
+   * **Level 1 (Media Assets)**: `.png`, `.jpg`, `.jpeg`, `.gif`, `.svg`, `.webp`.
+   * **Level 0 (Static Frontend Infrastructure)**: `.js`, `.css`, `.map`, `.woff`, `.woff2`, `.ttf`, `.ico`.
+
+2. **Pre-Threshold Candidate Tracking & Lock-Free CAS Upgrades**:
+   * When `activeSampleThreshold > 0`, the Valve starts tracking the most significant request candidate starting from **Request #1**.
+   * Incoming requests are evaluated lock-free using atomic CAS operations (`VarHandle`). A sample is upgraded **only if the incoming request has a strictly higher semantic priority** than the currently stored candidate (e.g., Level 2 content replaces Level 0 JS, or Level 3 POST replaces Level 2 GET).
+   * Subsequent lower-priority or equal-priority requests (such as static assets loaded after an HTML page) never overwrite an existing high-priority route. The entry-point URL is cleanly preserved.
+
+3. **Status JSON Exposure & Overhead**:
+   * While a client's request count remains below `activeSampleThreshold`, the candidate is maintained internally in Tomcat memory. Once the client or subnet counter meets or exceeds `activeSampleThreshold`, the sample is exposed in `/antidos-status?format=json`.
+   * Zero allocation overhead: stored as an immutable single-object reference on the counter.
+
+### Recommended Configurations for Administrators
+
+| Valve Role | Recommended `activeSampleThreshold` | Purpose |
+|---|---|---|
+| **Subnet Monitoring Valve** (`ipv4SubnetMask="24"`, `ipv6SubnetMask="64"`) | `2` to `5` | **Essential for distributed botnet defense:** Stealth carpet-bombing scrapers (e.g. residential proxies) spread traffic across thousands of subnets with only 2–4 requests per subnet. Setting `2` or `5` ensures the Collector captures the actual targeted content URLs rather than missing samples or recording generic `.js` assets. |
+| **Direct Client IP Valve** (e.g. `allowedRequestsPerSlot="50"`) | `10` to `20` | Captures forensic telemetry for active high-volume clients and scrapers before they trip the blocking threshold. |
+| **Low-Resource / Minimal Setup** | `0` (disabled) | Captures samples exclusively when clients are actively rate-limited (HTTP 429). |
 
 ## visitorCookieEnabled (optional)
 

@@ -2312,10 +2312,10 @@ public class AntiDoSValve extends ValveBase {
 				counter = monitor.provideCurrentCounter(dynEntry.getCidr());
 			}
 		}
-		if (counter != null && counter.getSample() == null) {
+		if (counter != null) {
 			String method = request.getMethod();
 			String ua = request.getHeader("User-Agent");
-			counter.recordSampleIfAbsent(method, path, ua, authenticated);
+			counter.recordSampleIfHigherPriority(method, path, ua, authenticated);
 		}
 	}
 
@@ -2333,10 +2333,10 @@ public class AntiDoSValve extends ValveBase {
 		if (counter == null && !counterName.equals(ip)) {
 			counter = monitor.provideCurrentCounter(ip);
 		}
-		if (counter != null && counter.getSample() == null && counter.getCountCombined() >= activeSampleThreshold) {
+		if (counter != null) {
 			String method = request.getMethod();
 			String ua = request.getHeader("User-Agent");
-			counter.recordSampleIfAbsent(method, path, ua, authenticated);
+			counter.recordSampleIfHigherPriority(method, path, ua, authenticated);
 		}
 	}
 

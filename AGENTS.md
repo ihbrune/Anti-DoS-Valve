@@ -58,6 +58,9 @@ This document serves as an onboarding and development guide for human developers
      * Keep [NOTICE.md](NOTICE.md) in the project root synchronized with all component versions, copyrights, and license texts.
 5. **English-Only User Interface & Documentation:**
    * All user interface text (Thymeleaf templates, HTML attributes, badges, alert banners, tooltips, buttons, modals, status labels, confirmation dialogs, and error messages) and all user-facing documentation (`DASHBOARD_GUIDE.md`, `README.md`, `SETUP_GUIDE.md`) must strictly be written in **English**, even when discussing tasks or communicating in other languages (such as German).
+6. **Neutrality & Privacy of Examples (No Real ISPs, ASNs or Application Names):**
+   * **Never name real-world internet service providers (ISPs), cloud hosters, or specific corporate ASNs** in code, comments, documentation, or unit test descriptions. Always refer to generic terms like "cloud/hosting providers", "residential proxies", or use private/reserved ASNs (RFC 6996: `64512`–`65534`).
+   * **Always use purely hypothetical, neutral example URLs and hostnames** (e.g. `/portal/course/catalog`, `/catalog/details`, `/api/v1/search`, `example.com`, RFC 2606 / RFC 6761 domains). Never use real internal endpoints, institution names, or application-specific routes.
 
 ---
 

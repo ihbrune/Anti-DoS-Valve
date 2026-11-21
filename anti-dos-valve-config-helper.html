@@ -1555,8 +1555,9 @@
               </div>
               <div class="field-desc">Request count threshold per slot above which an active (allowed) client or subnet
                 counter captures a sample request (method, URI, User-Agent) for forensic analysis.
+                Features <strong>semantic priority weighting (Levels 0–3)</strong> with pre-threshold candidate tracking, prioritizing mutating actions (POST) and content routes over static JS/CSS assets.
                 <code>0</code> (default) disables active request sampling (samples captured only on block/mark).
-                Recommended for subnet monitoring valves (e.g. <code>50</code>) to diagnose distributed stealth waves.
+                Recommended: <code>2</code>–<code>5</code> for subnet monitoring valves (captures low-frequency distributed waves), <code>10</code>–<code>20</code> for IP valves.
               </div>
               <input type="number" id="activeSampleThreshold" name="activeSampleThreshold" min="0" step="1" value="0"
                 placeholder="0 (Default: disabled)">

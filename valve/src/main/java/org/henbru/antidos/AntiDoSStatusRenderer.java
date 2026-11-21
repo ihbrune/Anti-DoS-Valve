@@ -2136,7 +2136,7 @@ public class AntiDoSStatusRenderer {
 					.append("      \"returningCount\": ").append(target.isVisitorTrackingActive() ? e.returningCount() : "null").append(",\n")
 					.append("      \"authenticatedCount\": ").append(target.isAuthTrackingActive() ? e.authenticatedCount() : "null").append(",\n")
 					.append("      \"uaMismatchCount\": ").append(target.isVisitorTrackingActive() ? e.uaMismatchCount() : "null");
-			if (e.sample() != null) {
+			if (e.sample() != null && (target.getActiveSampleThreshold() <= 0 || e.effective() >= target.getActiveSampleThreshold())) {
 				sb.append(",\n")
 						.append("      \"sampleMethod\": ").append(e.sample().method() != null ? "\"" + escapeJson(e.sample().method()) + "\"" : "null").append(",\n")
 						.append("      \"sampleUri\": ").append(e.sample().uri() != null ? "\"" + escapeJson(e.sample().uri()) + "\"" : "null").append(",\n")
