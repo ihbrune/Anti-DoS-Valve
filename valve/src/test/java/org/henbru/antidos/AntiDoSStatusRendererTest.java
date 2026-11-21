@@ -664,5 +664,35 @@ class AntiDoSStatusRendererTest {
 		// Table row check: 10.50.0.2 has returningCount = 1
 		assertTrue(htmlWithCookie.contains("<td>1</td>"));
 	}
+
+	@Test
+	void testVisitorCookieOverviewHtmlRendering() {
+		// 1. When disabled
+		valve.setVisitorCookieEnabled(false);
+		String htmlDisabled = renderer.buildStatusHtml(null);
+		assertTrue(htmlDisabled.contains("<tr><th>Visitor Cookie</th><td>Disabled</td></tr>"));
+		assertFalse(htmlDisabled.contains("COOKIE:"));
+
+		// 2. When enabled with custom settings
+		valve.setVisitorCookieEnabled(true);
+		valve.setVisitorCookieName("my_custom_cookie");
+		valve.setVisitorCookieDomain("example.com");
+		valve.setVisitorCookieTtlSeconds(1200);
+		valve.setVisitorCookieMinAgeSeconds(15);
+
+		String htmlEnabled = renderer.buildStatusHtml(null);
+		// Check top subtitle
+		assertTrue(htmlEnabled.contains("Visitor Cookie: <span class=\"badge badge-status\">&#127850; ACTIVE (<code>my_custom_cookie</code>)</span>"));
+		// Check card badge
+		assertTrue(htmlEnabled.contains("<span class=\"badge badge-status\">&#127850; COOKIE: my_custom_cookie</span>"));
+		// Check card table row
+		assertTrue(htmlEnabled.contains("<tr><th>Visitor Cookie</th><td>Enabled (name: <code>my_custom_cookie</code>, TTL: <strong>1200s</strong>, min-age: <strong>15s</strong>"));
+		assertTrue(htmlEnabled.contains("domain: <code>example.com</code>"));
+
+		// 3. Detail view should also feature both badge and row
+		String htmlDetails = renderer.buildStatusHtmlDetails("RENDERER_TEST");
+		assertTrue(htmlDetails.contains("<span class=\"badge badge-status\">&#127850; COOKIE: my_custom_cookie</span>"));
+		assertTrue(htmlDetails.contains("<tr><th>Visitor Cookie</th><td>Enabled (name: <code>my_custom_cookie</code>, TTL: <strong>1200s</strong>, min-age: <strong>15s</strong>"));
+	}
 }
 

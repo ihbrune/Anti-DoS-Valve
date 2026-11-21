@@ -537,6 +537,26 @@ public class AntiDoSStatusRenderer {
 		return valve.getTimeInMillis();
 	}
 
+	static String formatVisitorCookieHtmlStatus(AntiDoSValve v) {
+		if (v.isVisitorCookieEnabled()) {
+			return "Enabled (name: <code>" + escapeHtml(v.getVisitorCookieName()) + "</code>, TTL: <strong>"
+					+ v.getVisitorCookieTtlSeconds() + "s</strong>, min-age: <strong>" + v.getVisitorCookieMinAgeSeconds() + "s</strong>, masks: /" + v.getVisitorCookieSubnetMaskV4()
+					+ " v4, /" + v.getVisitorCookieSubnetMaskV6() + " v6"
+					+ (v.getVisitorCookieDomain() != null ? ", domain: <code>" + escapeHtml(v.getVisitorCookieDomain()) + "</code>" : "")
+					+ ", UA: <code>" + (v.isVisitorCookieEnforceUserAgent() ? "enforce" : "track-only") + "</code>)";
+		}
+		if (v.isVisitorTrackingActive()) {
+			AntiDoSValve upstream = v.getInheritedVisitorCookieValve();
+			String upstreamName = upstream != null ? escapeHtml(upstream.getMonitorName()) : "upstream";
+			return "Inherited from <strong>" + upstreamName + "</strong> (name: <code>"
+					+ escapeHtml(v.getEffectiveVisitorCookieName()) + "</code>"
+					+ ", min-age: <strong>" + v.getEffectiveVisitorCookieMinAgeSeconds() + "s</strong>"
+					+ (v.getEffectiveVisitorCookieDomain() != null ? ", domain: <code>" + escapeHtml(v.getEffectiveVisitorCookieDomain()) + "</code>" : "")
+					+ ", UA: <code>" + (v.isEffectiveVisitorCookieEnforceUserAgent() ? "enforce" : "track-only") + "</code>)";
+		}
+		return "Disabled";
+	}
+
 	static String formatAuthTrackingHtmlStatus(AntiDoSValve v) {
 		if (v.isAuthTrackingEnabled()) {
 			return "Enabled (mode: <code>" + escapeHtml(v.getAuthTrackingMode())
@@ -660,6 +680,19 @@ public class AntiDoSStatusRenderer {
 			sb.append(" &bull; Dashboard Host: <strong>").append(escapeHtml(valve.getName4logging()))
 					.append("</strong> (<code>").append(escapeHtml(valve.getStatusUri())).append("</code>)");
 		}
+		boolean anyVisitorActive = false;
+		String activeCookieName = null;
+		for (AntiDoSValve item : valves) {
+			if (item.isVisitorTrackingActive()) {
+				anyVisitorActive = true;
+				activeCookieName = item.getEffectiveVisitorCookieName();
+				break;
+			}
+		}
+		if (anyVisitorActive) {
+			sb.append(" &bull; Visitor Cookie: <span class=\"badge badge-status\">&#127850; ACTIVE (<code>")
+					.append(escapeHtml(activeCookieName)).append("</code>)</span>");
+		}
 		sb.append("</span>")
 				.append("<a class=\"btn\" href=\"").append(buildDashboardUrl(token, null, null, "json")).append("\">{ } JSON (All)</a>")
 				.append("<a class=\"btn\" href=\"").append(buildDashboardUrl(token, null, "docs", null)).append("\">&#128214; API Docs</a>")
@@ -726,6 +759,16 @@ public class AntiDoSStatusRenderer {
 				int dynActive = v.getDynamicBlockRegistry().getActiveCount(getTimeInMillis());
 				sb.append("      <span class=\"badge badge-blocking\">&#128737;&#65039; DYNAMIC MITIGATION (")
 						.append(dynActive).append(" CIDR").append(dynActive == 1 ? "" : "s").append(")</span>\n");
+			}
+			if (v.isVisitorCookieEnabled()) {
+				sb.append("      <span class=\"badge badge-status\">&#127850; COOKIE: ").append(escapeHtml(v.getVisitorCookieName())).append("</span>\n");
+			} else if (v.isVisitorTrackingActive()) {
+				sb.append("      <span class=\"badge badge-info\">&#127850; COOKIE: INHERITED</span>\n");
+			}
+			if (v.isAuthTrackingEnabled()) {
+				sb.append("      <span class=\"badge badge-status\">&#128274; AUTH: ").append(escapeHtml(v.getAuthTrackingMode())).append("</span>\n");
+			} else if (v.isAuthTrackingActive()) {
+				sb.append("      <span class=\"badge badge-info\">&#128274; AUTH: INHERITED</span>\n");
 			}
 
 			sb.append("    </div>\n")
@@ -871,9 +914,8 @@ public class AntiDoSStatusRenderer {
 					.append(v.isAuthTrackingActive() ? " &bull; Authenticated: <strong>" + totalAuthReqs + "</strong>" : "")
 					.append(")</td></tr>\n");
 
-			if (v.isAuthTrackingActive()) {
-				sb.append("    <tr><th>Auth Tracking</th><td>").append(formatAuthTrackingHtmlStatus(v)).append("</td></tr>\n");
-			}
+			sb.append("    <tr><th>Visitor Cookie</th><td>").append(formatVisitorCookieHtmlStatus(v)).append("</td></tr>\n");
+			sb.append("    <tr><th>Auth Tracking</th><td>").append(formatAuthTrackingHtmlStatus(v)).append("</td></tr>\n");
 			if (!AntiDoSValve.RELEVANT_AUTH_SCOPE_ALL.equals(v.getRelevantAuthScope())) {
 				sb.append("    <tr><th>Relevant Auth Scope</th><td><span class=\"badge badge-yellow\">").append(escapeHtml(v.getRelevantAuthScope())).append("</span></td></tr>\n");
 			}
@@ -1034,6 +1076,16 @@ public class AntiDoSStatusRenderer {
 			sb.append("      <span class=\"badge badge-blocking\">&#128737;&#65039; DYNAMIC MITIGATION (")
 					.append(dynActive).append(" CIDR").append(dynActive == 1 ? "" : "s").append(")</span>\n");
 		}
+		if (target.isVisitorCookieEnabled()) {
+			sb.append("      <span class=\"badge badge-status\">&#127850; COOKIE: ").append(escapeHtml(target.getVisitorCookieName())).append("</span>\n");
+		} else if (target.isVisitorTrackingActive()) {
+			sb.append("      <span class=\"badge badge-info\">&#127850; COOKIE: INHERITED</span>\n");
+		}
+		if (target.isAuthTrackingEnabled()) {
+			sb.append("      <span class=\"badge badge-status\">&#128274; AUTH: ").append(escapeHtml(target.getAuthTrackingMode())).append("</span>\n");
+		} else if (target.isAuthTrackingActive()) {
+			sb.append("      <span class=\"badge badge-info\">&#128274; AUTH: INHERITED</span>\n");
+		}
 
 		sb.append("    </div>\n")
 				.append("  </div>\n");
@@ -1176,25 +1228,7 @@ public class AntiDoSStatusRenderer {
 		sb.append("    <tr><th>System Settings</th><td>Log Throttling: <code>").append(logThrottling)
 				.append("</code> &bull; Async Eviction: <code>").append(asyncEvict).append("</code></td></tr>\n");
 
-		String visitorCookieStatus;
-		if (target.isVisitorCookieEnabled()) {
-			visitorCookieStatus = "Enabled (name: <code>" + escapeHtml(target.getVisitorCookieName()) + "</code>, TTL: <strong>"
-					+ target.getVisitorCookieTtlSeconds() + "s</strong>, min-age: <strong>" + target.getVisitorCookieMinAgeSeconds() + "s</strong>, masks: /" + target.getVisitorCookieSubnetMaskV4()
-					+ " v4, /" + target.getVisitorCookieSubnetMaskV6() + " v6"
-					+ (target.getVisitorCookieDomain() != null ? ", domain: <code>" + escapeHtml(target.getVisitorCookieDomain()) + "</code>" : "")
-					+ ", UA: <code>" + (target.isVisitorCookieEnforceUserAgent() ? "enforce" : "track-only") + "</code>)";
-		} else if (target.isVisitorTrackingActive()) {
-			AntiDoSValve upstream = target.getInheritedVisitorCookieValve();
-			String upstreamName = upstream != null ? escapeHtml(upstream.getMonitorName()) : "upstream";
-			visitorCookieStatus = "Inherited from <strong>" + upstreamName + "</strong> (name: <code>"
-					+ escapeHtml(target.getEffectiveVisitorCookieName()) + "</code>"
-					+ ", min-age: <strong>" + target.getEffectiveVisitorCookieMinAgeSeconds() + "s</strong>"
-					+ (target.getEffectiveVisitorCookieDomain() != null ? ", domain: <code>" + escapeHtml(target.getEffectiveVisitorCookieDomain()) + "</code>" : "")
-					+ ", UA: <code>" + (target.isEffectiveVisitorCookieEnforceUserAgent() ? "enforce" : "track-only") + "</code>)";
-		} else {
-			visitorCookieStatus = "Disabled";
-		}
-		sb.append("    <tr><th>Visitor Cookie</th><td>").append(visitorCookieStatus).append("</td></tr>\n");
+		sb.append("    <tr><th>Visitor Cookie</th><td>").append(formatVisitorCookieHtmlStatus(target)).append("</td></tr>\n");
 		sb.append("    <tr><th>Auth Tracking</th><td>").append(formatAuthTrackingHtmlStatus(target)).append("</td></tr>\n");
 		if (!AntiDoSValve.RELEVANT_AUTH_SCOPE_ALL.equals(target.getRelevantAuthScope())) {
 			sb.append("    <tr><th>Relevant Auth Scope</th><td><span class=\"badge badge-yellow\">").append(escapeHtml(target.getRelevantAuthScope())).append("</span></td></tr>\n");
