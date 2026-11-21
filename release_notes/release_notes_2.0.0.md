@@ -1,10 +1,10 @@
 # Release Notes – Version 2.0.0
 
-Version 2.0.0 marks a major milestone in the evolution of the Anti-DoS-Valve ecosystem: **the graduation of the Anti-DoS Collector from preview status to a production-tested enterprise security center**, accompanied by **advanced User-Agent integrity enforcement in the Valve**, comprehensive **Role-Based Access Control (RBAC)**, and **intelligent capacity management for autonomous fleet defense**.
+Version 2.0.0 marks a major milestone in the evolution of the Anti-DoS-Valve ecosystem: the graduation of the Anti-DoS Collector from preview status to a production-tested enterprise security center**, accompanied by advanced User-Agent integrity enforcement in the Valve**, comprehensive Role-Based Access Control (RBAC), and intelligent capacity management for autonomous fleet defense.
 
 With Version 2.0.0, the Collector supports flexible multi-topology operational modes (`FULL`, `HEADLESS`, `OPERATOR`, `VIEWER`), interactive web login protection with fine-grained API security, autonomous defense with carpet-bombing radar and priority-based capacity budgeting, and deep forensic correlation across Autonomous Systems and client fingerprints.
 
-DISCLAIMER: The collector is the result of a complete AI-driven development. Its complex architecture and advanced features are already in use with in a medium sized production environment with very positive feedback. However, the collector is still in active development and new features are being added regularly. Bugs are likely and should be reported. Feedback is always welcome. 
+**DISCLAIMER**: The collector is the result of a complete AI-driven development. Its complex architecture and advanced features are already in use in a medium sized production environment with very positive results. However, the collector is still in active development and new features are being added regularly. **Bugs are likely**, please report them. Feedback is always welcome. 
 
 ---
 
