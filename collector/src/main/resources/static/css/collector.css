@@ -1787,17 +1787,44 @@ html[data-theme="light"] .theme-icon-moon {
     background: linear-gradient(90deg, #f43f5e, #e11d48);
 }
 
-/* Button HTMX In-Flight Loading State */
-.btn.htmx-request {
+/* Button & Interactive HTMX In-Flight Loading State */
+.btn.htmx-request,
+.filter-btn.htmx-request,
+.nav-util-btn.htmx-request,
+form.htmx-request button[type="submit"],
+form.htmx-request button:not([type="button"]),
+form.htmx-request input[type="submit"] {
     opacity: 0.7;
     pointer-events: none;
     cursor: wait !important;
 }
 
-.btn.htmx-request::after {
+.btn.htmx-request::after,
+.filter-btn.htmx-request::after,
+form.htmx-request button[type="submit"]::after,
+form.htmx-request button:not([type="button"])::after {
     content: " \23F3";
-    animation: spin 1s linear infinite;
     display: inline-block;
+    margin-left: 5px;
+}
+
+a.htmx-request {
+    opacity: 0.6;
+    pointer-events: none;
+    cursor: wait !important;
+}
+
+/* Dim & prevent double-actions on other controls inside an in-flight submitting form */
+form.htmx-request {
+    cursor: wait !important;
+}
+
+form.htmx-request .btn,
+form.htmx-request .filter-btn,
+form.htmx-request button,
+form.htmx-request input,
+form.htmx-request select {
+    pointer-events: none;
 }
 
 /* Floating Toast Notification */
