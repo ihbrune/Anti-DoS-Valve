@@ -366,7 +366,15 @@ public class RollupAggregationService {
 		long bucketStartMinutes = (currentEpochMinutes / windowMinutes) * windowMinutes;
 		Instant bStart = Instant.ofEpochSecond(bucketStartMinutes * 60);
 		Instant bEnd = bStart.plus(windowMinutes, ChronoUnit.MINUTES);
-		return aggregateWindow(bStart, bEnd);
+		int persisted = aggregateWindow(bStart, bEnd);
+		if (userAgentMemoryService != null) {
+			try {
+				userAgentMemoryService.refreshProfiles24h();
+			} catch (Exception e) {
+				log.debug("Real-time User-Agent 24h profile refresh skipped: {}", e.getMessage());
+			}
+		}
+		return persisted;
 	}
 
 	/**

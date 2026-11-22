@@ -318,4 +318,50 @@ class UserAgentMemoryServiceTest {
 		assertEquals(UserAgentAutoVerdict.SUSPICIOUS_ULTRA_SPREAD, slicedLadder.verdict());
 		assertTrue(slicedLadder.verdict().isSuspicious());
 	}
+
+	@Test
+	void testMarkedEventsAndSyntheticUaSubnetSpreadInRefreshProfiles24h() {
+		Instant now = Instant.now();
+		Instant bucketStart = now.minus(1, ChronoUnit.HOURS).truncatedTo(ChronoUnit.HOURS);
+		Instant bucketEnd = bucketStart.plus(2, ChronoUnit.HOURS);
+		Instant t1 = bucketStart.plus(10, ChronoUnit.MINUTES);
+		Instant t2 = bucketStart.plus(20, ChronoUnit.MINUTES);
+
+		String markedUa = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/145.0.0.0 Safari/537.36";
+		ClientEvent markedEv1 = new ClientEvent(
+				null, "Node-A", "Limiter", 401L, t1, "198.51.100.20",
+				4, 24, null, null, null, null, "198.51.100.0/24",
+				2000, 0, false, ClientEvent.STATUS_MARKED, true, t1,
+				64521L, "Residential Net Beta", "DE", ClientType.RESIDENTIAL, EnrichmentStatus.ENRICHED,
+				null, 1, 1, 0, 0, 0, "GET", "/portal/course/catalog", markedUa, false
+		);
+		ClientEvent markedEv2 = new ClientEvent(
+				null, "Node-A", "Limiter", 402L, t2, "198.51.100.21",
+				4, 24, null, null, null, null, "198.51.100.0/24",
+				1500, 0, false, ClientEvent.STATUS_MARKED, true, t2,
+				64521L, "Residential Net Beta", "DE", ClientType.RESIDENTIAL, EnrichmentStatus.ENRICHED,
+				null, 1, 1, 0, 0, 0, "GET", "/catalog/details", markedUa, false
+		);
+
+		String syntheticSpreadUa = "Mozilla/5.0 Chrome/154.0.0.0 SyntheticSpreadBot";
+		String syntheticKey = "UA:" + UserAgentMemoryRepository.computeUaHash32(syntheticSpreadUa);
+		ClientEvent syntheticEvent = new ClientEvent(
+				null, "Node-A", "Limiter", 403L, t1, syntheticKey,
+				15, 0, false, ClientEvent.STATUS_BLOCKED, true, t1,
+				320, 1, 0, 0, 0, "GET", "/portal/course/catalog", syntheticSpreadUa, false, false
+		);
+
+		clientEventRepository.batchUpsert(List.of(markedEv1, markedEv2, syntheticEvent));
+
+		assertEquals(2, memoryService.aggregateHourlyWindow(bucketStart, bucketEnd));
+		assertEquals(2, memoryService.refreshProfiles24h());
+
+		UserAgentProfile markedProfile = memoryRepository.findByRawUserAgent(markedUa).orElseThrow();
+		assertEquals(0L, markedProfile.last24hBlockedRequests());
+		assertEquals(3500L, markedProfile.last24hMarkedRequests());
+		assertEquals(UserAgentAutoVerdict.SUSPICIOUS_CORRELATED, markedProfile.effectiveAutoVerdict());
+
+		UserAgentProfile syntheticProfile = memoryRepository.findByRawUserAgent(syntheticSpreadUa).orElseThrow();
+		assertEquals(320, syntheticProfile.last24hDistinctSubnets());
+	}
 }

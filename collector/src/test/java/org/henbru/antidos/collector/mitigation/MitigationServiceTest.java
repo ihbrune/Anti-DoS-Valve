@@ -895,6 +895,24 @@ class MitigationServiceTest {
 		assertTrue(activeUa.stream().anyMatch(r -> r.rawUserAgent().equals(authBearingUa)));
 		assertFalse(activeUa.stream().anyMatch(r -> r.rawUserAgent().equals(immuneInternalUa)));
 		assertFalse(activeUa.stream().anyMatch(r -> r.rawUserAgent().equals(protectedOverrideUa)));
+
+		// 3. Immediately re-running evaluation must NOT spam extensions for fresh rules
+		MitigationService.AutoUaEvaluationResult repeatRes = svc.evaluateAutoUaMitigation("admin");
+		assertEquals(0, repeatRes.rulesActivated());
+
+		// 4. Expiring rule under ongoing attack (within renewal lead window + recent hits) is proactively extended
+		Instant probeNow = Instant.now();
+		String pillar1Hash = UserAgentMemoryRepository.computeSha256Hex(pillar1Ua);
+		jdbcTemplate.update(
+				"UPDATE mitigation_ua_rules SET expires_at = ?, last_hit_at = ?, total_blocked_hits = 500 WHERE user_agent_hash = ?",
+				java.sql.Timestamp.from(probeNow.plusSeconds(300)),
+				java.sql.Timestamp.from(probeNow),
+				pillar1Hash);
+		MitigationService.AutoUaEvaluationResult extendRes = svc.evaluateAutoUaMitigation("admin");
+		assertEquals(1, extendRes.rulesActivated());
+		MitigationUaRule extendedRule = uaRuleRepo.findByHashAndScope(pillar1Hash, "ALL").orElseThrow();
+		assertTrue(extendedRule.expiresAt().isAfter(probeNow.plusSeconds(3600)));
+		assertEquals(500L, extendedRule.totalBlockedHits());
 	}
 
 	@Test

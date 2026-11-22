@@ -579,7 +579,7 @@ public class UserAgentMemoryService {
 				    SUM(CASE WHEN client_type IN ('RESIDENTIAL', 'PRIVACY_RELAY') THEN request_count ELSE 0 END) AS residential_requests,
 				    SUM(COALESCE(returning_count, 0)) AS returning_requests,
 				    SUM(COALESCE(ua_mismatch_count, 0)) AS ua_mismatch_requests,
-				    COUNT(DISTINCT NULLIF(subnet_group, '')) AS distinct_subnets,
+				    CASE WHEN COALESCE(MAX(CASE WHEN client_key LIKE 'UA:%' THEN distinct_clients ELSE 0 END), 0) > COUNT(DISTINCT NULLIF(subnet_group, '')) THEN COALESCE(MAX(CASE WHEN client_key LIKE 'UA:%' THEN distinct_clients ELSE 0 END), 0) ELSE COUNT(DISTINCT NULLIF(subnet_group, '')) END AS distinct_subnets,
 				    COUNT(DISTINCT asn) AS distinct_asns,
 				""" + mitExpr + """
 				
@@ -780,8 +780,9 @@ public class UserAgentMemoryService {
 			long seReqs = exact != null ? exact.searchEngineRequests() : 0L;
 
 			int approxBlockedEv = (r24Blk > 0 && r24IncEvents > 0) ? r24IncEvents : 0;
+			int approxMarkedEv = (r24Blk == 0 && r24Mrk > 0 && r24IncEvents > 0) ? r24IncEvents : 0;
 			EvaluationOutcome eval = evaluateVerdict(new EvaluationInput(
-					rawUa, fam, r24Reqs, r24Events, approxBlockedEv, 0,
+					rawUa, fam, r24Reqs, r24Events, approxBlockedEv, approxMarkedEv,
 					subnets, asns, r24AuthSamples, r24AuthReqs, r24InternalReqs, seReqs,
 					r24DcReqs, r24ResReqs, mitAsnReqs, r24MmReqs, false, null
 			), cfg);
@@ -1072,7 +1073,7 @@ public class UserAgentMemoryService {
 				    SUM(CASE WHEN client_type IN ('RESIDENTIAL', 'PRIVACY_RELAY') THEN request_count ELSE 0 END) AS residential_requests,
 				    SUM(COALESCE(returning_count, 0)) AS returning_requests,
 				    SUM(COALESCE(ua_mismatch_count, 0)) AS ua_mismatch_requests,
-				    COUNT(DISTINCT NULLIF(subnet_group, '')) AS distinct_subnets,
+				    CASE WHEN COALESCE(MAX(CASE WHEN client_key LIKE 'UA:%' THEN distinct_clients ELSE 0 END), 0) > COUNT(DISTINCT NULLIF(subnet_group, '')) THEN COALESCE(MAX(CASE WHEN client_key LIKE 'UA:%' THEN distinct_clients ELSE 0 END), 0) ELSE COUNT(DISTINCT NULLIF(subnet_group, '')) END AS distinct_subnets,
 				    COUNT(DISTINCT asn) AS distinct_asns,
 				""" + mitExpr + """
 				
@@ -1166,7 +1167,7 @@ public class UserAgentMemoryService {
 		String sql = """
 				SELECT
 				    TRIM(sample_user_agent) AS ua,
-				    COUNT(DISTINCT NULLIF(subnet_group, '')) AS distinct_subnets,
+				    CASE WHEN COALESCE(MAX(CASE WHEN client_key LIKE 'UA:%' THEN distinct_clients ELSE 0 END), 0) > COUNT(DISTINCT NULLIF(subnet_group, '')) THEN COALESCE(MAX(CASE WHEN client_key LIKE 'UA:%' THEN distinct_clients ELSE 0 END), 0) ELSE COUNT(DISTINCT NULLIF(subnet_group, '')) END AS distinct_subnets,
 				    COUNT(DISTINCT asn) AS distinct_asns,
 				    SUM(CASE WHEN client_type = 'SEARCH_ENGINE' THEN request_count ELSE 0 END) AS search_engine_requests,
 				""" + mitExpr + """
@@ -1222,7 +1223,7 @@ public class UserAgentMemoryService {
 				SELECT
 				    COALESCE(SUM(request_count), 0) AS total_requests,
 				    COUNT(*) AS event_count,
-				    COUNT(DISTINCT NULLIF(subnet_group, '')) AS distinct_subnets,
+				    CASE WHEN COALESCE(MAX(CASE WHEN client_key LIKE 'UA:%' THEN distinct_clients ELSE 0 END), 0) > COUNT(DISTINCT NULLIF(subnet_group, '')) THEN COALESCE(MAX(CASE WHEN client_key LIKE 'UA:%' THEN distinct_clients ELSE 0 END), 0) ELSE COUNT(DISTINCT NULLIF(subnet_group, '')) END AS distinct_subnets,
 				    COUNT(DISTINCT asn) AS distinct_asns,
 				    COALESCE(SUM(CASE WHEN sample_authenticated = TRUE THEN 1 ELSE 0 END), 0) AS auth_samples,
 				    COALESCE(SUM(authenticated_count), 0) AS auth_requests,
