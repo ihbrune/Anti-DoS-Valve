@@ -802,15 +802,22 @@ public class BlockDiagnosisService {
 		for (ClientEvent ev : rawEvents) {
 			boolean exactIp = false;
 			boolean collateralSubnet = false;
+			boolean isSyntheticUa = IpNetworkUtil.isSyntheticUaKey(ev.clientKey());
 			if (ipInfo != null) {
-				IpNetworkInfo evIp = parseStrictIp(ev.clientKey());
-				if (evIp == null || !ipIntervalsOverlap(ipInfo, evIp)) {
-					continue;
-				}
-				if (evIp.prefix() < ipInfo.prefix()) {
-					collateralSubnet = true;
+				if (isSyntheticUa) {
+					if (uaLower == null) {
+						continue;
+					}
 				} else {
-					exactIp = true;
+					IpNetworkInfo evIp = parseStrictIp(ev.clientKey());
+					if (evIp == null || !ipIntervalsOverlap(ipInfo, evIp)) {
+						continue;
+					}
+					if (evIp.prefix() < ipInfo.prefix()) {
+						collateralSubnet = true;
+					} else {
+						exactIp = true;
+					}
 				}
 			}
 
@@ -851,6 +858,7 @@ public class BlockDiagnosisService {
 			List<ClientSubnetRollup> matchedRollups,
 			boolean subnetCollateralDetected) {
 		List<Finding> findings = new ArrayList<>();
+		Integer computedUaHash32 = rawUa != null ? UserAgentMemoryRepository.computeUaHash32(rawUa) : null;
 
 		// 1. Static Forbidden / Exempt Valves
 		for (ValveEvaluationInternal ve : valveEvals) {
@@ -890,8 +898,15 @@ public class BlockDiagnosisService {
 			long collateralCount = blockedOrMarkedEvents.stream()
 					.filter(ObservedEventMatch::subnetCollateralMatch)
 					.count();
+			long syntheticUaBlockedCount = blockedOrMarkedEvents.stream()
+					.filter(m -> IpNetworkUtil.isSyntheticUaKey(m.event().clientKey()) && (m.event().isBlocked() || m.event().isHoneypot()))
+					.count();
+			long uaMatchBlockedCount = blockedOrMarkedEvents.stream()
+					.filter(m -> m.sampleUaMatches() && (m.event().isBlocked() || m.event().isHoneypot()))
+					.count();
 
-			String eventsUrl = "/events" + (normalizedIp != null ? "?clientQuery=" + encodeUrl(normalizedIp) : "");
+			String eventsUrl = "/events" + (normalizedIp != null ? "?clientQuery=" + encodeUrl(normalizedIp)
+					: (computedUaHash32 != null ? "?clientQuery=" + encodeUrl("UA:" + computedUaHash32) : ""));
 			if (exactBlockedCount > 0) {
 				findings.add(new Finding(
 						"BLOCKED",
@@ -902,6 +917,17 @@ public class BlockDiagnosisService {
 						null,
 						eventsUrl,
 						"Open in Incident Explorer"));
+			}
+			if (syntheticUaBlockedCount > 0) {
+				findings.add(new Finding(
+						"BLOCKED",
+						"Observed Dynamic UA Block Events",
+						syntheticUaBlockedCount + " dynamic User-Agent block event(s) recorded in time window",
+						"The Valve reported explicit HTTP 429 block events recorded under dynamic User-Agent rule counter(s).",
+						null,
+						null,
+						eventsUrl,
+						"Inspect UA Block Events"));
 			}
 			if (subnetCollateralDetected) {
 				findings.add(new Finding(
@@ -915,7 +941,18 @@ public class BlockDiagnosisService {
 						eventsUrl,
 						"Inspect Subnet Events"));
 			}
-			if (markedCount > 0 && exactBlockedCount == 0 && !subnetCollateralDetected) {
+			if (exactBlockedCount == 0 && syntheticUaBlockedCount == 0 && uaMatchBlockedCount > 0 && ipInfo == null) {
+				findings.add(new Finding(
+						"BLOCKED",
+						"Observed User-Agent Block Events",
+						uaMatchBlockedCount + " BLOCKED slot event(s) with matching User-Agent recorded in time window",
+						"The Valve reported blocked slot events matching this User-Agent string during the inspected window.",
+						null,
+						null,
+						eventsUrl,
+						"Open in Incident Explorer"));
+			}
+			if (markedCount > 0 && exactBlockedCount == 0 && syntheticUaBlockedCount == 0 && !subnetCollateralDetected) {
 				findings.add(new Finding(
 						"WARNING",
 						"Observed Marking Events",

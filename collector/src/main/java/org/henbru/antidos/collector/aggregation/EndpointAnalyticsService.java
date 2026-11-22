@@ -296,7 +296,7 @@ public class EndpointAnalyticsService {
 				             THEN request_count ELSE 0 END) AS internal_requests,
 				    SUM(CASE WHEN client_type IN ('SEARCH_ENGINE', 'AI_CRAWLER') THEN request_count ELSE 0 END) AS crawler_requests,
 				    COUNT(DISTINCT client_key) AS distinct_clients,
-				    COUNT(DISTINCT subnet_group) AS distinct_subnets,
+				    COUNT(DISTINCT NULLIF(subnet_group, '')) AS distinct_subnets,
 				    COALESCE(MAX(distinct_user_agents), 0) AS distinct_user_agents,
 				    SUM(CASE WHEN sample_authenticated = TRUE THEN 1 ELSE 0 END) AS auth_samples,
 				    SUM(CASE WHEN sample_returning_visitor = TRUE THEN 1 ELSE 0 END) AS returning_samples
@@ -421,15 +421,15 @@ public class EndpointAnalyticsService {
 				FROM client_events
 				WHERE slot_time >= ? AND slot_time < ?
 				  AND sample_uri IS NOT NULL
-				  AND (sample_uri = ? OR sample_uri LIKE ? OR sample_uri LIKE ?)
+				  AND (sample_uri = ? OR sample_uri LIKE ? ESCAPE '\\' OR sample_uri LIKE ? ESCAPE '\\')
 				""");
 
 		List<Object> subnetParams = new ArrayList<>();
 		subnetParams.add(Timestamp.from(fromTime));
 		subnetParams.add(Timestamp.from(now));
 		subnetParams.add(cleanEndpoint);
-		subnetParams.add(cleanEndpoint + "?%");
-		subnetParams.add(cleanEndpoint + ";%");
+		subnetParams.add(escapeSqlLike(cleanEndpoint) + "?%");
+		subnetParams.add(escapeSqlLike(cleanEndpoint) + ";%");
 
 		if (servers != null && !servers.isEmpty()) {
 			subnetSql.append(" AND server_id IN (").append(String.join(",", Collections.nCopies(servers.size(), "?"))).append(")");
@@ -469,7 +469,7 @@ public class EndpointAnalyticsService {
 				FROM client_events
 				WHERE slot_time >= ? AND slot_time < ?
 				  AND sample_uri IS NOT NULL
-				  AND (sample_uri = ? OR sample_uri LIKE ? OR sample_uri LIKE ?)
+				  AND (sample_uri = ? OR sample_uri LIKE ? ESCAPE '\\' OR sample_uri LIKE ? ESCAPE '\\')
 				  AND sample_user_agent IS NOT NULL AND TRIM(sample_user_agent) != ''
 				""");
 
@@ -477,8 +477,8 @@ public class EndpointAnalyticsService {
 		uaParams.add(Timestamp.from(fromTime));
 		uaParams.add(Timestamp.from(now));
 		uaParams.add(cleanEndpoint);
-		uaParams.add(cleanEndpoint + "?%");
-		uaParams.add(cleanEndpoint + ";%");
+		uaParams.add(escapeSqlLike(cleanEndpoint) + "?%");
+		uaParams.add(escapeSqlLike(cleanEndpoint) + ";%");
 
 		if (servers != null && !servers.isEmpty()) {
 			uaSql.append(" AND server_id IN (").append(String.join(",", Collections.nCopies(servers.size(), "?"))).append(")");
@@ -542,5 +542,14 @@ public class EndpointAnalyticsService {
 				userAgents,
 				Collections.emptyList()
 		);
+	}
+
+	static String escapeSqlLike(String val) {
+		if (val == null) {
+			return "";
+		}
+		return val.replace("\\", "\\\\")
+				.replace("%", "\\%")
+				.replace("_", "\\_");
 	}
 }

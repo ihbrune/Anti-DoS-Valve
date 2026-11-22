@@ -969,7 +969,7 @@ public class ClientEventRepository {
 				    COALESCE(NULLIF(TRIM(sample_user_agent), ''), '(No User-Agent captured)') AS ua,
 				    SUM(request_count) AS total_requests,
 				    COUNT(*) AS event_count,
-				    COUNT(DISTINCT subnet_group) AS distinct_subnets
+				    COUNT(DISTINCT NULLIF(subnet_group, '')) AS distinct_subnets
 				FROM client_events
 				WHERE asn = ?
 				  AND slot_time >= ?

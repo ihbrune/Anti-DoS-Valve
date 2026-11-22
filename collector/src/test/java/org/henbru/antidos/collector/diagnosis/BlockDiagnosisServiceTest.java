@@ -320,6 +320,40 @@ class BlockDiagnosisServiceTest {
 		assertEquals("HONEYPOT_INSTANT_BLOCK", honeypotReport.valveEvaluations().getFirst().effectiveOutcome());
 	}
 
+	@Test
+	void testDiagnosisWithSyntheticUserAgentBlockEvents() {
+		Instant now = Instant.now();
+		String targetUa = "Mozilla/5.0 Chrome/154.0.0.0 TargetBotnet";
+		int uaHash32 = org.henbru.antidos.collector.storage.UserAgentMemoryRepository.computeUaHash32(targetUa);
+		String syntheticKey = "UA:" + uaHash32;
+
+		ClientEvent uaBlockedEvent = new ClientEvent(
+				null, "DIAG-SRV-UA-SYN", "DIAG-VALVE", 501L, now.minusSeconds(120), syntheticKey,
+				15, 0, null, null, null, null, "",
+				350, 0, true, ClientEvent.STATUS_BLOCKED, true, now,
+				null, "Dynamic User-Agent Rule", null, ClientType.UNKNOWN,
+				org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED, null,
+				45, 1, 0, 0, 0,
+				"GET", "/portal/course/catalog", targetUa,
+				false, false
+		);
+		clientEventRepository.batchUpsert(List.of(uaBlockedEvent));
+
+		BlockDiagnosisReport report = blockDiagnosisService.diagnose(new BlockDiagnosisRequest(
+				null, targetUa, null,
+				now.minusSeconds(600), now, null,
+				null, null, false, false));
+
+		assertEquals(BlockDiagnosisReport.VerdictLevel.LIKELY_BLOCKED, report.verdictLevel());
+		assertTrue(report.findings().stream().anyMatch(f ->
+				"Observed Dynamic UA Block Events".equals(f.category()) && "BLOCKED".equals(f.severity())));
+		BlockDiagnosisReport.Finding uaFinding = report.findings().stream()
+				.filter(f -> "Observed Dynamic UA Block Events".equals(f.category()))
+				.findFirst()
+				.orElseThrow();
+		assertTrue(uaFinding.actionUrl().contains("clientQuery=UA%3A" + uaHash32));
+	}
+
 	private static MonitoredValve buildValve(
 			String serverId,
 			String valveName,

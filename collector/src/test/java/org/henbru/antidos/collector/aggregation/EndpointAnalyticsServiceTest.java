@@ -230,4 +230,40 @@ class EndpointAnalyticsServiceTest {
 		assertEquals("GET", top.get(0).sampleMethod());
 		assertEquals(400L, top.get(0).totalRequests());
 	}
+
+	@Test
+	void testDrilldownSqlLikeEscapesUnderscoreAndPercent() {
+		Instant now = Instant.now();
+		// Two paths: one with underscore (/api_v1/search), another similar with hyphen (/api-v1/search)
+		ClientEvent ev1 = new ClientEvent(
+				null, testServer, testValve, 1L, now.minusSeconds(300), "198.51.100.10",
+				4, 32, null, null, null, null, "198.51.100.0/24",
+				100, 0, false, ClientEvent.STATUS_BLOCKED, true, now,
+				64512L, "Hosting Provider", "DE", ClientType.DATACENTER,
+				org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED, null,
+				1, 1, 0, 0, 0,
+				"GET", "/api_v1/search?term=1", "ScraperBot/2.0",
+				false, false
+		);
+		ClientEvent ev2 = new ClientEvent(
+				null, testServer, testValve, 2L, now.minusSeconds(300), "198.51.100.11",
+				4, 32, null, null, null, null, "198.51.100.0/24",
+				250, 0, false, ClientEvent.STATUS_ACTIVE, true, now,
+				64512L, "Hosting Provider", "DE", ClientType.DATACENTER,
+				org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED, null,
+				1, 1, 0, 0, 0,
+				"GET", "/api-v1/search?term=2", "NormalClient/1.0",
+				false, false
+		);
+		clientEventRepository.batchUpsert(List.of(ev1, ev2));
+
+		// Drilldown specifically for /api_v1/search must NOT match /api-v1/search despite SQL LIKE
+		EndpointAnalyticsService.EndpointDrilldownDto drilldown = endpointAnalyticsService.getEndpointDrilldown(
+				"/api_v1/search", "GET", 2, List.of(testServer), List.of(testValve));
+		assertEquals("/api_v1/search", drilldown.cleanEndpoint());
+		assertEquals(100L, drilldown.totalRequests());
+		assertEquals(100L, drilldown.blockedRequests());
+		assertEquals(1, drilldown.topUserAgents().size());
+		assertEquals("ScraperBot/2.0", drilldown.topUserAgents().getFirst().userAgent());
+	}
 }
