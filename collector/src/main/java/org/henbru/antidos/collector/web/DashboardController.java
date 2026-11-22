@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import org.henbru.antidos.collector.docs.DocumentationService;
@@ -406,14 +407,16 @@ public class DashboardController {
 		String effectiveTraffic = (scatterTrafficFilter != null && !scatterTrafficFilter.isBlank()) ? scatterTrafficFilter.trim().toUpperCase() : "ALL";
 		String effectiveAuth = (scatterAuthFilter != null && !scatterAuthFilter.isBlank()) ? scatterAuthFilter.trim().toUpperCase() : "ALL";
 
+		String effectiveTab = (tab != null && !tab.isBlank()) ? tab.trim().toLowerCase() : "charts";
+
 		if (analyticsService != null) {
 			org.henbru.antidos.collector.model.AnalyticsDashboardDto analytics =
-					analyticsService.getDashboardAnalytics(hours, fromTime, toTime, servers, valves, effectiveGroupBy, effectiveTraffic, effectiveAuth);
+					analyticsService.getDashboardAnalytics(effectiveTab, hours, fromTime, toTime, servers, valves, effectiveGroupBy, effectiveTraffic, effectiveAuth);
 			model.addAttribute("analytics", analytics);
 			model.addAttribute("analyticsJson", toJson(analytics));
 		}
 		model.addAttribute("selectedHours", hours);
-		model.addAttribute("activeTab", tab != null ? tab : "charts");
+		model.addAttribute("activeTab", effectiveTab);
 		model.addAttribute("scatterGroupBy", effectiveGroupBy);
 		model.addAttribute("scatterTrafficFilter", effectiveTraffic);
 		model.addAttribute("scatterAuthFilter", effectiveAuth);
@@ -850,7 +853,7 @@ public class DashboardController {
 
 		if (analyticsService != null) {
 			org.henbru.antidos.collector.model.AnalyticsDashboardDto analytics =
-					analyticsService.getDashboardAnalytics(24, null, null);
+					analyticsService.getDashboardAnalytics("charts", 24, null, null);
 			model.addAttribute("analytics", analytics);
 			model.addAttribute("analyticsJson", toJson(analytics));
 		}
@@ -1128,18 +1131,41 @@ public class DashboardController {
 	}
 
 	private List<String> getAvailableServerIds() {
-		List<String> serverIds = new ArrayList<>(clientEventRepository.findDistinctServerIds());
-		for (EndpointHeartbeat hb : heartbeatRepository.findAll()) {
-			if (!serverIds.contains(hb.serverId())) {
-				serverIds.add(hb.serverId());
+		Set<String> serverIds = new TreeSet<>();
+		if (monitoredValveRepository != null) {
+			for (org.henbru.antidos.collector.model.MonitoredValve v : monitoredValveRepository.findAll()) {
+				if (v.serverId() != null && !v.serverId().isBlank()) {
+					serverIds.add(v.serverId());
+				}
 			}
 		}
-		serverIds.sort(String::compareTo);
-		return serverIds;
+		if (heartbeatRepository != null) {
+			for (EndpointHeartbeat hb : heartbeatRepository.findAll()) {
+				if (hb.serverId() != null && !hb.serverId().isBlank()) {
+					serverIds.add(hb.serverId());
+				}
+			}
+		}
+		if (serverIds.isEmpty() && clientEventRepository != null) {
+			serverIds.addAll(clientEventRepository.findDistinctServerIds());
+		}
+		return new ArrayList<>(serverIds);
 	}
 
 	private List<String> getAvailableValveNames(List<String> servers) {
-		return clientEventRepository.findDistinctValveNames(servers);
+		if (monitoredValveRepository != null) {
+			List<String> valves = monitoredValveRepository.findAll().stream()
+					.filter(v -> servers == null || servers.isEmpty() || servers.contains(v.serverId()))
+					.map(org.henbru.antidos.collector.model.MonitoredValve::valveName)
+					.filter(Objects::nonNull)
+					.distinct()
+					.sorted()
+					.toList();
+			if (!valves.isEmpty()) {
+				return valves;
+			}
+		}
+		return clientEventRepository != null ? clientEventRepository.findDistinctValveNames(servers) : List.of();
 	}
 
 	private Instant parseDateTime(String input) {

@@ -31,6 +31,7 @@ public class AdvisorService {
 
 	private final JdbcTemplate jdbcTemplate;
 	private final MonitoredValveRepository monitoredValveRepository;
+	private final boolean isPostgres;
 
 	@Autowired
 	public AdvisorService(
@@ -38,6 +39,27 @@ public class AdvisorService {
 			@Autowired(required = false) MonitoredValveRepository monitoredValveRepository) {
 		this.jdbcTemplate = jdbcTemplate;
 		this.monitoredValveRepository = monitoredValveRepository;
+		this.isPostgres = checkIsPostgres(jdbcTemplate);
+	}
+
+	private static boolean checkIsPostgres(JdbcTemplate jdbcTemplate) {
+		try {
+			if (jdbcTemplate != null && jdbcTemplate.getDataSource() != null) {
+				try (java.sql.Connection conn = jdbcTemplate.getDataSource().getConnection()) {
+					String productName = conn.getMetaData().getDatabaseProductName();
+					return productName != null && productName.toLowerCase().contains("postgres");
+				}
+			}
+		} catch (Exception ignored) {
+		}
+		return false;
+	}
+
+	private String buildServerValveGroupBy(String additionalColumns) {
+		if (isPostgres) {
+			return "r.server_id, r.valve_name, " + additionalColumns;
+		}
+		return "COALESCE(r.server_id, ''), COALESCE(r.valve_name, ''), r.server_id, r.valve_name, " + additionalColumns;
 	}
 
 	public AdvisorReport generateReport(int hours, List<String> servers, List<String> valves) {
@@ -143,7 +165,7 @@ public class AdvisorService {
 		List<Object> params = new ArrayList<>();
 		params.add(cutoff);
 		appendFilterClauses(sql, params, servers, valves);
-		sql.append(" GROUP BY r.server_id, r.valve_name, r.subnet_group, r.as_org, r.country_code, r.client_type ORDER BY blocked_req DESC LIMIT 10");
+		sql.append(" GROUP BY ").append(buildServerValveGroupBy("r.subnet_group, r.as_org, r.country_code, r.client_type")).append(" ORDER BY blocked_req DESC LIMIT 10");
 
 		jdbcTemplate.query(sql.toString(), rs -> {
 			String serverId = rs.getString("server_id");
@@ -229,7 +251,7 @@ public class AdvisorService {
 		List<Object> params = new ArrayList<>();
 		params.add(cutoff);
 		appendFilterClauses(sql, params, servers, valves);
-		sql.append(" GROUP BY r.server_id, r.valve_name, r.subnet_group, r.as_org, r.client_type ORDER BY blocked_req DESC LIMIT 20");
+		sql.append(" GROUP BY ").append(buildServerValveGroupBy("r.subnet_group, r.as_org, r.client_type")).append(" ORDER BY blocked_req DESC LIMIT 20");
 
 		jdbcTemplate.query(sql.toString(), rs -> {
 			String serverId = rs.getString("server_id");
@@ -321,7 +343,7 @@ public class AdvisorService {
 		List<Object> params = new ArrayList<>();
 		params.add(cutoff);
 		appendFilterClauses(sql, params, servers, valves);
-		sql.append(" GROUP BY r.server_id, r.valve_name, r.subnet_group, r.as_org, r.client_type ORDER BY blocked_req DESC LIMIT 20");
+		sql.append(" GROUP BY ").append(buildServerValveGroupBy("r.subnet_group, r.as_org, r.client_type")).append(" ORDER BY blocked_req DESC LIMIT 20");
 
 		jdbcTemplate.query(sql.toString(), rs -> {
 			String serverId = rs.getString("server_id");
@@ -415,8 +437,8 @@ public class AdvisorService {
 		List<Object> params = new ArrayList<>();
 		params.add(cutoff);
 		appendFilterClauses(sql, params, servers, valves);
-		sql.append(" GROUP BY r.server_id, r.valve_name, r.subnet_group, r.as_org, r.country_code, r.client_type " +
-				" HAVING ret_pct >= 75.0 ORDER BY blocked_req DESC LIMIT 10");
+		sql.append(" GROUP BY ").append(buildServerValveGroupBy("r.subnet_group, r.as_org, r.country_code, r.client_type"))
+				.append(" HAVING ret_pct >= 75.0 ORDER BY blocked_req DESC LIMIT 10");
 
 		jdbcTemplate.query(sql.toString(), rs -> {
 			String serverId = rs.getString("server_id");
@@ -507,7 +529,7 @@ public class AdvisorService {
 		List<Object> params = new ArrayList<>();
 		params.add(cutoff);
 		appendFilterClauses(sql, params, servers, valves);
-		sql.append(" GROUP BY r.server_id, r.valve_name, r.asn, r.as_org ORDER BY blocked_req DESC LIMIT 5");
+		sql.append(" GROUP BY ").append(buildServerValveGroupBy("r.asn, r.as_org")).append(" ORDER BY blocked_req DESC LIMIT 5");
 
 		jdbcTemplate.query(sql.toString(), rs -> {
 			String serverId = rs.getString("server_id");
@@ -592,12 +614,12 @@ public class AdvisorService {
 		List<Object> params = new ArrayList<>();
 		params.add(cutoff);
 		appendFilterClauses(sql, params, servers, valves);
-		sql.append(" GROUP BY r.server_id, r.valve_name, r.asn, r.as_org, r.country_code " +
-				" HAVING SUM(r.total_requests) >= 5000 " +
-				"    AND COUNT(DISTINCT r.subnet_group) >= 3 " +
-				"    AND (SUM(r.blocked_requests) * 100.0 / SUM(r.total_requests)) < 2.0 " +
-				"    AND (SUM(r.authenticated_requests) * 100.0 / SUM(r.total_requests)) < 1.0 " +
-				" ORDER BY total_req DESC LIMIT 10");
+		sql.append(" GROUP BY ").append(buildServerValveGroupBy("r.asn, r.as_org, r.country_code"))
+				.append(" HAVING SUM(r.total_requests) >= 5000 ")
+				.append("    AND COUNT(DISTINCT r.subnet_group) >= 3 ")
+				.append("    AND (SUM(r.blocked_requests) * 100.0 / SUM(r.total_requests)) < 2.0 ")
+				.append("    AND (SUM(r.authenticated_requests) * 100.0 / SUM(r.total_requests)) < 1.0 ")
+				.append(" ORDER BY total_req DESC LIMIT 10");
 
 		jdbcTemplate.query(sql.toString(), rs -> {
 			String serverId = rs.getString("server_id");
@@ -700,10 +722,10 @@ public class AdvisorService {
 		List<Object> params = new ArrayList<>();
 		params.add(cutoff);
 		appendFilterClauses(sql, params, servers, valves);
-		sql.append(" GROUP BY r.server_id, r.valve_name, r.subnet_group, r.as_org, r.country_code, r.client_type " +
-				" HAVING SUM(r.total_requests) >= 300 " +
-				"    AND (SUM(r.authenticated_requests) * 100.0 / SUM(r.total_requests)) < 5.0 " +
-				" ORDER BY max_uas DESC, total_req DESC LIMIT 10");
+		sql.append(" GROUP BY ").append(buildServerValveGroupBy("r.subnet_group, r.as_org, r.country_code, r.client_type"))
+				.append(" HAVING SUM(r.total_requests) >= 300 ")
+				.append("    AND (SUM(r.authenticated_requests) * 100.0 / SUM(r.total_requests)) < 5.0 ")
+				.append(" ORDER BY max_uas DESC, total_req DESC LIMIT 10");
 
 		jdbcTemplate.query(sql.toString(), rs -> {
 			String serverId = rs.getString("server_id");

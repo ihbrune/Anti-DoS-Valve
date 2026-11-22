@@ -285,8 +285,9 @@ public class ApiController {
 			@RequestParam(name = "valves", required = false) List<String> valves,
 			@RequestParam(name = "groupBy", defaultValue = "SUBNET") String groupBy,
 			@RequestParam(name = "trafficFilter", defaultValue = "ALL") String trafficFilter,
-			@RequestParam(name = "authFilter", defaultValue = "ALL") String authFilter) {
-		return analyticsService.getDashboardAnalytics(hours, servers, valves, groupBy, trafficFilter, authFilter);
+			@RequestParam(name = "authFilter", defaultValue = "ALL") String authFilter,
+			@RequestParam(name = "tab", required = false) String tab) {
+		return analyticsService.getDashboardAnalytics(tab != null ? tab : "ALL", hours, servers, valves, groupBy, trafficFilter, authFilter);
 	}
 
 	@GetMapping("/analytics/timeline")
@@ -294,7 +295,7 @@ public class ApiController {
 			@RequestParam(name = "hours", defaultValue = "24") int hours,
 			@RequestParam(name = "servers", required = false) List<String> servers,
 			@RequestParam(name = "valves", required = false) List<String> valves) {
-		return analyticsService.getDashboardAnalytics(hours, servers, valves).timeline();
+		return analyticsService.getDashboardAnalytics("charts", hours, servers, valves).timeline();
 	}
 
 	@GetMapping("/analytics/composition")
@@ -302,7 +303,7 @@ public class ApiController {
 			@RequestParam(name = "hours", defaultValue = "24") int hours,
 			@RequestParam(name = "servers", required = false) List<String> servers,
 			@RequestParam(name = "valves", required = false) List<String> valves) {
-		return analyticsService.getDashboardAnalytics(hours, servers, valves).composition();
+		return analyticsService.getDashboardAnalytics("charts", hours, servers, valves).composition();
 	}
 
 	@GetMapping("/analytics/scatter")
@@ -313,7 +314,7 @@ public class ApiController {
 			@RequestParam(name = "groupBy", defaultValue = "SUBNET") String groupBy,
 			@RequestParam(name = "trafficFilter", defaultValue = "ALL") String trafficFilter,
 			@RequestParam(name = "authFilter", defaultValue = "ALL") String authFilter) {
-		return analyticsService.getDashboardAnalytics(hours, servers, valves, groupBy, trafficFilter, authFilter).scatterPoints();
+		return analyticsService.getDashboardAnalytics("scatter", hours, servers, valves, groupBy, trafficFilter, authFilter).scatterPoints();
 	}
 
 	@GetMapping("/analytics/advisor")
@@ -321,7 +322,7 @@ public class ApiController {
 			@RequestParam(name = "hours", defaultValue = "24") int hours,
 			@RequestParam(name = "servers", required = false) List<String> servers,
 			@RequestParam(name = "valves", required = false) List<String> valves) {
-		org.henbru.antidos.collector.model.AnalyticsDashboardDto dto = analyticsService.getDashboardAnalytics(hours, servers, valves);
+		org.henbru.antidos.collector.model.AnalyticsDashboardDto dto = analyticsService.getDashboardAnalytics("advisor", hours, servers, valves);
 		return dto != null ? dto.advisorReport() : null;
 	}
 

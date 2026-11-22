@@ -27,13 +27,15 @@ class AnalyticsServiceTest {
 
 	private SubnetRollupRepository rollupRepository;
 	private RollupAggregationService rollupAggregationService;
+	private org.henbru.antidos.collector.advisor.AdvisorService advisorService;
 	private AnalyticsService analyticsService;
 
 	@BeforeEach
 	void setUp() {
 		rollupRepository = Mockito.mock(SubnetRollupRepository.class);
 		rollupAggregationService = Mockito.mock(RollupAggregationService.class);
-		analyticsService = new AnalyticsService(rollupRepository, rollupAggregationService);
+		advisorService = Mockito.mock(org.henbru.antidos.collector.advisor.AdvisorService.class);
+		analyticsService = new AnalyticsService(rollupRepository, rollupAggregationService, null, advisorService, null);
 	}
 
 	@Test
@@ -487,5 +489,70 @@ class AnalyticsServiceTest {
 		for (var fam : dto.browserReference().families()) {
 			assertEquals(5, fam.topVersions().size(), fam.familyName() + " must have exactly 5 top versions");
 		}
+	}
+
+	@Test
+	void testDashboardAnalyticsLazyLoadingChartsTab() {
+		List<TimelinePoint> mockTimeline = List.of(
+				new TimelinePoint(Instant.now(), 1000, 800, 200, 50)
+		);
+		List<SubnetRollupRepository.RawCompositionRow> mockComp = List.of(
+				new SubnetRollupRepository.RawCompositionRow(ClientType.RESIDENTIAL, 1000, 200, 50, 5)
+		);
+
+		when(rollupRepository.findTimeline(any(), any(), any(), any())).thenReturn(mockTimeline);
+		when(rollupRepository.findTrafficComposition(any(), any(), any(), any())).thenReturn(mockComp);
+
+		AnalyticsDashboardDto dto = analyticsService.getDashboardAnalytics("charts", 24, null, null);
+
+		assertNotNull(dto);
+		assertFalse(dto.timeline().isEmpty());
+		assertFalse(dto.composition().isEmpty());
+		assertTrue(dto.scatterPoints().isEmpty(), "Scatter points must not be computed when activeTab is charts");
+		assertNull(dto.advisorReport(), "Advisor report must not be computed when activeTab is charts");
+		assertNull(dto.userAgents(), "User agents must not be computed when activeTab is charts");
+	}
+
+	@Test
+	void testDashboardAnalyticsLazyLoadingScatterTab() {
+		List<TimelinePoint> mockTimeline = List.of(
+				new TimelinePoint(Instant.now(), 1000, 800, 200, 50)
+		);
+		List<SubnetRollupRepository.RawScatterCluster> mockScatter = List.of(
+				new SubnetRollupRepository.RawScatterCluster("192.0.2.0/24", 500, 400, 100, 10, 64512L, "Example Host", "DE", ClientType.RESIDENTIAL)
+		);
+
+		when(rollupRepository.findTimeline(any(), any(), any(), any())).thenReturn(mockTimeline);
+		when(rollupRepository.findScatterClusters(any(), any(), any(), any(), anyInt())).thenReturn(mockScatter);
+
+		AnalyticsDashboardDto dto = analyticsService.getDashboardAnalytics("scatter", 24, null, null);
+
+		assertNotNull(dto);
+		assertFalse(dto.timeline().isEmpty());
+		assertTrue(dto.composition().isEmpty(), "Composition must not be computed when activeTab is scatter");
+		assertFalse(dto.scatterPoints().isEmpty(), "Scatter points must be computed when activeTab is scatter");
+		assertNull(dto.advisorReport(), "Advisor report must not be computed when activeTab is scatter");
+		assertNull(dto.userAgents(), "User agents must not be computed when activeTab is scatter");
+	}
+
+	@Test
+	void testDashboardAnalyticsLazyLoadingAdvisorTab() {
+		List<TimelinePoint> mockTimeline = List.of(
+				new TimelinePoint(Instant.now(), 1000, 800, 200, 50)
+		);
+
+		when(rollupRepository.findTimeline(any(), any(), any(), any())).thenReturn(mockTimeline);
+		when(advisorService.generateReport(anyInt(), any(), any())).thenReturn(
+				new org.henbru.antidos.collector.advisor.AdvisorReport(Instant.now(), 24, List.of(), 0, 0, 0, java.util.Set.of(), "", "")
+		);
+
+		AnalyticsDashboardDto dto = analyticsService.getDashboardAnalytics("advisor", 24, null, null);
+
+		assertNotNull(dto);
+		assertFalse(dto.timeline().isEmpty());
+		assertTrue(dto.composition().isEmpty(), "Composition must not be computed when activeTab is advisor");
+		assertTrue(dto.scatterPoints().isEmpty(), "Scatter points must not be computed when activeTab is advisor");
+		assertNotNull(dto.advisorReport(), "Advisor report must be computed when activeTab is advisor");
+		assertNull(dto.userAgents(), "User agents must not be computed when activeTab is advisor");
 	}
 }

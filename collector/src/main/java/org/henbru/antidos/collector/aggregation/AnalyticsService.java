@@ -149,7 +149,16 @@ public class AnalyticsService {
 			List<String> servers,
 			List<String> valves
 	) {
-		return getDashboardAnalytics(hours, null, null, servers, valves, "SUBNET", "ALL", "ALL");
+		return getDashboardAnalytics("ALL", hours, null, null, servers, valves, "SUBNET", "ALL", "ALL");
+	}
+
+	public AnalyticsDashboardDto getDashboardAnalytics(
+			String tab,
+			int hours,
+			List<String> servers,
+			List<String> valves
+	) {
+		return getDashboardAnalytics(tab, hours, null, null, servers, valves, "SUBNET", "ALL", "ALL");
 	}
 
 	public AnalyticsDashboardDto getDashboardAnalytics(
@@ -160,10 +169,36 @@ public class AnalyticsService {
 			String trafficFilter,
 			String authFilter
 	) {
-		return getDashboardAnalytics(hours, null, null, servers, valves, groupBy, trafficFilter, authFilter);
+		return getDashboardAnalytics("ALL", hours, null, null, servers, valves, groupBy, trafficFilter, authFilter);
 	}
 
 	public AnalyticsDashboardDto getDashboardAnalytics(
+			String tab,
+			int hours,
+			List<String> servers,
+			List<String> valves,
+			String groupBy,
+			String trafficFilter,
+			String authFilter
+	) {
+		return getDashboardAnalytics(tab, hours, null, null, servers, valves, groupBy, trafficFilter, authFilter);
+	}
+
+	public AnalyticsDashboardDto getDashboardAnalytics(
+			int hours,
+			Instant fromTime,
+			Instant toTime,
+			List<String> servers,
+			List<String> valves,
+			String groupBy,
+			String trafficFilter,
+			String authFilter
+	) {
+		return getDashboardAnalytics("ALL", hours, fromTime, toTime, servers, valves, groupBy, trafficFilter, authFilter);
+	}
+
+	public AnalyticsDashboardDto getDashboardAnalytics(
+			String tab,
 			int hours,
 			Instant fromTime,
 			Instant toTime,
@@ -180,7 +215,13 @@ public class AnalyticsService {
 		String effectiveTraffic = trafficFilter != null && !trafficFilter.isBlank() ? trafficFilter.trim().toUpperCase() : "ALL";
 		String effectiveAuth = authFilter != null && !authFilter.isBlank() ? authFilter.trim().toUpperCase() : "ALL";
 
-		// 1. Timeline Points
+		boolean needAll = tab == null || tab.isBlank() || "all".equalsIgnoreCase(tab);
+		boolean isCharts = needAll || "charts".equalsIgnoreCase(tab);
+		boolean isScatter = needAll || "scatter".equalsIgnoreCase(tab);
+		boolean isAdvisor = needAll || "advisor".equalsIgnoreCase(tab);
+		boolean isUserAgents = needAll || "useragents".equalsIgnoreCase(tab);
+
+		// 1. Timeline Points (always required for KPI cards and timeline chart)
 		List<TimelinePoint> timeline = subnetRollupRepository.findTimeline(servers, valves, from, to);
 		if (timeline.isEmpty() && safeHours <= 24 && fromTime == null && toTime == null) {
 			// Trigger on-demand rollup catch-up if tables are fresh or pending
@@ -200,125 +241,129 @@ public class AnalyticsService {
 			totalMarked += pt.markedRequests();
 		}
 
-		// 2. Traffic Composition
-		List<SubnetRollupRepository.RawCompositionRow> rawComp =
-				subnetRollupRepository.findTrafficComposition(servers, valves, from, to);
-
+		// 2. Traffic Composition (only needed for charts tab or all)
 		List<TrafficCompositionPoint> composition = new ArrayList<>();
-		long compTotal = 0;
-		for (SubnetRollupRepository.RawCompositionRow row : rawComp) {
-			compTotal += row.totalRequests();
-		}
+		if (isCharts) {
+			List<SubnetRollupRepository.RawCompositionRow> rawComp =
+					subnetRollupRepository.findTrafficComposition(servers, valves, from, to);
 
-		for (SubnetRollupRepository.RawCompositionRow row : rawComp) {
-			double pct = compTotal > 0 ? (double) row.totalRequests() / compTotal * 100.0 : 0.0;
-			double roundedPct = Math.round(pct * 10.0) / 10.0;
-			composition.add(new TrafficCompositionPoint(
-					row.clientType(),
-					getClientTypeLabel(row.clientType()),
-					getClientTypeIcon(row.clientType()),
-					row.totalRequests(),
-					row.blockedRequests(),
-					row.markedRequests(),
-					row.subnetCount(),
-					roundedPct
-			));
-		}
-
-		// 3. Residential Proxy & Subnet Scatterplot Points (Top 150 clusters)
-		List<SubnetRollupRepository.RawScatterCluster> rawClusters =
-				("SUBNET".equals(effectiveGroupBy) && "ALL".equals(effectiveTraffic) && "ALL".equals(effectiveAuth))
-						? subnetRollupRepository.findScatterClusters(servers, valves, from, to, 150)
-						: subnetRollupRepository.findScatterClusters(servers, valves, from, to, effectiveGroupBy, effectiveTraffic, effectiveAuth, 150);
-
-		Map<String, NetworkAnnotation> subnetNotes = (networkAnnotationService != null)
-				? networkAnnotationService.getSubnetAnnotationMap()
-				: Map.of();
-		Map<Long, NetworkAnnotation> asnNotes = (networkAnnotationService != null)
-				? networkAnnotationService.getAsnAnnotationMap()
-				: Map.of();
-
-		List<SubnetScatterPoint> scatterPoints = new ArrayList<>();
-		for (SubnetRollupRepository.RawScatterCluster c : rawClusters) {
-			int distinctClients = Math.max(1, c.distinctClients());
-			double avgReqs = Math.round(((double) c.totalRequests() / distinctClients) * 10.0) / 10.0;
-			Double retRatio = c.returningRatio();
-			boolean isHighReturningHumanNat = c.returningTrackedRequests() >= 20 && retRatio != null && retRatio >= 40.0 && c.blockedRequests() == 0;
-			boolean isResidential = (c.clientType() == ClientType.RESIDENTIAL || distinctClients >= 5)
-					&& avgReqs < 50.0
-					&& !isHighReturningHumanNat;
-
-			String classification;
-			if (c.clientType() == ClientType.AI_CRAWLER || c.clientType() == ClientType.SEARCH_ENGINE) {
-				classification = "VERIFIED_BOT";
-			} else if (c.clientType() == ClientType.PRIVACY_RELAY) {
-				classification = "PRIVACY_RELAY";
-			} else if (c.clientType() == ClientType.TOR_EXIT_NODE) {
-				classification = "TOR_ANONYMIZER";
-			} else if (c.clientType() == ClientType.DATACENTER) {
-				classification = "DATACENTER_CLUSTER";
-			} else if (c.clientType() == ClientType.PRIVATE_NETWORK || c.clientType() == ClientType.INTERNAL_NETWORK) {
-				classification = "REGULAR_SUBNET";
-			} else if (isResidential && (distinctClients >= 5 || c.blockedRequests() > 0 || c.markedRequests() > 0)) {
-				classification = "HIGH_RISK_RESIDENTIAL";
-			} else if (distinctClients >= 10) {
-				classification = "DISTRIBUTED_ACTIVE";
-			} else {
-				classification = "REGULAR_SUBNET";
+			long compTotal = 0;
+			for (SubnetRollupRepository.RawCompositionRow row : rawComp) {
+				compTotal += row.totalRequests();
 			}
 
-			// Forensic Notes lookup
-			NetworkAnnotation subNote = (c.subnetGroup() != null) ? subnetNotes.get(c.subnetGroup().trim()) : null;
-			NetworkAnnotation asNote = (c.asn() != null) ? asnNotes.get(c.asn()) : null;
+			for (SubnetRollupRepository.RawCompositionRow row : rawComp) {
+				double pct = compTotal > 0 ? (double) row.totalRequests() / compTotal * 100.0 : 0.0;
+				double roundedPct = Math.round(pct * 10.0) / 10.0;
+				composition.add(new TrafficCompositionPoint(
+						row.clientType(),
+						getClientTypeLabel(row.clientType()),
+						getClientTypeIcon(row.clientType()),
+						row.totalRequests(),
+						row.blockedRequests(),
+						row.markedRequests(),
+						row.subnetCount(),
+						roundedPct
+				));
+			}
+		}
 
-			boolean hasNote = (subNote != null || asNote != null);
-			String subnetNoteVerdict = (subNote != null && subNote.verdict() != null) ? subNote.verdict().displayName() : null;
-			String subnetNoteIcon = (subNote != null && subNote.verdict() != null) ? subNote.verdict().icon() : null;
-			String subnetNoteSnippet = (subNote != null) ? extractSnippet(subNote.noteMarkdown(), 70) : null;
+		// 3. Residential Proxy & Subnet Scatterplot Points (only needed for scatter tab or all)
+		List<SubnetScatterPoint> scatterPoints = new ArrayList<>();
+		if (isScatter) {
+			List<SubnetRollupRepository.RawScatterCluster> rawClusters =
+					("SUBNET".equals(effectiveGroupBy) && "ALL".equals(effectiveTraffic) && "ALL".equals(effectiveAuth))
+							? subnetRollupRepository.findScatterClusters(servers, valves, from, to, 150)
+							: subnetRollupRepository.findScatterClusters(servers, valves, from, to, effectiveGroupBy, effectiveTraffic, effectiveAuth, 150);
 
-			String asnNoteVerdict = (asNote != null && asNote.verdict() != null) ? asNote.verdict().displayName() : null;
-			String asnNoteIcon = (asNote != null && asNote.verdict() != null) ? asNote.verdict().icon() : null;
-			String asnNoteSnippet = (asNote != null) ? extractSnippet(asNote.noteMarkdown(), 70) : null;
+			Map<String, NetworkAnnotation> subnetNotes = (networkAnnotationService != null)
+					? networkAnnotationService.getSubnetAnnotationMap()
+					: Map.of();
+			Map<Long, NetworkAnnotation> asnNotes = (networkAnnotationService != null)
+					? networkAnnotationService.getAsnAnnotationMap()
+					: Map.of();
 
-			// Effective verdict (Subnet note takes precedence if present, else ASN note)
-			NetworkAnnotation effectiveNote = (subNote != null) ? subNote : asNote;
-			String noteVerdict = (effectiveNote != null && effectiveNote.verdict() != null) ? effectiveNote.verdict().name() : null;
-			String noteVerdictIcon = (effectiveNote != null && effectiveNote.verdict() != null) ? effectiveNote.verdict().icon() : null;
-			String noteVerdictDisplayName = (effectiveNote != null && effectiveNote.verdict() != null) ? effectiveNote.verdict().displayName() : null;
-			String noteVerdictColor = (effectiveNote != null && effectiveNote.verdict() != null) ? effectiveNote.verdict().colorHex() : null;
-			String noteSnippet = (subNote != null) ? subnetNoteSnippet : asnNoteSnippet;
+			for (SubnetRollupRepository.RawScatterCluster c : rawClusters) {
+				int distinctClients = Math.max(1, c.distinctClients());
+				double avgReqs = Math.round(((double) c.totalRequests() / distinctClients) * 10.0) / 10.0;
+				Double retRatio = c.returningRatio();
+				boolean isHighReturningHumanNat = c.returningTrackedRequests() >= 20 && retRatio != null && retRatio >= 40.0 && c.blockedRequests() == 0;
+				boolean isResidential = (c.clientType() == ClientType.RESIDENTIAL || distinctClients >= 5)
+						&& avgReqs < 50.0
+						&& !isHighReturningHumanNat;
 
-			scatterPoints.add(new SubnetScatterPoint(
-					c.subnetGroup(),
-					distinctClients,
-					c.distinctUserAgents(),
-					avgReqs,
-					c.totalRequests(),
-					c.blockedRequests(),
-					c.markedRequests(),
-					isResidential,
-					c.asn(),
-					c.asOrg() != null ? c.asOrg() : "Unknown Provider",
-					c.countryCode() != null ? c.countryCode() : "--",
-					c.clientType(),
-					classification,
-					hasNote,
-					noteVerdict,
-					noteVerdictIcon,
-					noteVerdictDisplayName,
-					noteVerdictColor,
-					noteSnippet,
-					subnetNoteVerdict,
-					subnetNoteIcon,
-					subnetNoteSnippet,
-					asnNoteVerdict,
-					asnNoteIcon,
-					asnNoteSnippet,
-					retRatio,
-					c.authenticatedRequests(),
-					c.authenticatedTrackedRequests(),
-					effectiveGroupBy
-			));
+				String classification;
+				if (c.clientType() == ClientType.AI_CRAWLER || c.clientType() == ClientType.SEARCH_ENGINE) {
+					classification = "VERIFIED_BOT";
+				} else if (c.clientType() == ClientType.PRIVACY_RELAY) {
+					classification = "PRIVACY_RELAY";
+				} else if (c.clientType() == ClientType.TOR_EXIT_NODE) {
+					classification = "TOR_ANONYMIZER";
+				} else if (c.clientType() == ClientType.DATACENTER) {
+					classification = "DATACENTER_CLUSTER";
+				} else if (c.clientType() == ClientType.PRIVATE_NETWORK || c.clientType() == ClientType.INTERNAL_NETWORK) {
+					classification = "REGULAR_SUBNET";
+				} else if (isResidential && (distinctClients >= 5 || c.blockedRequests() > 0 || c.markedRequests() > 0)) {
+					classification = "HIGH_RISK_RESIDENTIAL";
+				} else if (distinctClients >= 10) {
+					classification = "DISTRIBUTED_ACTIVE";
+				} else {
+					classification = "REGULAR_SUBNET";
+				}
+
+				// Forensic Notes lookup
+				NetworkAnnotation subNote = (c.subnetGroup() != null) ? subnetNotes.get(c.subnetGroup().trim()) : null;
+				NetworkAnnotation asNote = (c.asn() != null) ? asnNotes.get(c.asn()) : null;
+
+				boolean hasNote = (subNote != null || asNote != null);
+				String subnetNoteVerdict = (subNote != null && subNote.verdict() != null) ? subNote.verdict().displayName() : null;
+				String subnetNoteIcon = (subNote != null && subNote.verdict() != null) ? subNote.verdict().icon() : null;
+				String subnetNoteSnippet = (subNote != null) ? extractSnippet(subNote.noteMarkdown(), 70) : null;
+
+				String asnNoteVerdict = (asNote != null && asNote.verdict() != null) ? asNote.verdict().displayName() : null;
+				String asnNoteIcon = (asNote != null && asNote.verdict() != null) ? asNote.verdict().icon() : null;
+				String asnNoteSnippet = (asNote != null) ? extractSnippet(asNote.noteMarkdown(), 70) : null;
+
+				// Effective verdict (Subnet note takes precedence if present, else ASN note)
+				NetworkAnnotation effectiveNote = (subNote != null) ? subNote : asNote;
+				String noteVerdict = (effectiveNote != null && effectiveNote.verdict() != null) ? effectiveNote.verdict().name() : null;
+				String noteVerdictIcon = (effectiveNote != null && effectiveNote.verdict() != null) ? effectiveNote.verdict().icon() : null;
+				String noteVerdictDisplayName = (effectiveNote != null && effectiveNote.verdict() != null) ? effectiveNote.verdict().displayName() : null;
+				String noteVerdictColor = (effectiveNote != null && effectiveNote.verdict() != null) ? effectiveNote.verdict().colorHex() : null;
+				String noteSnippet = (subNote != null) ? subnetNoteSnippet : asnNoteSnippet;
+
+				scatterPoints.add(new SubnetScatterPoint(
+						c.subnetGroup(),
+						distinctClients,
+						c.distinctUserAgents(),
+						avgReqs,
+						c.totalRequests(),
+						c.blockedRequests(),
+						c.markedRequests(),
+						isResidential,
+						c.asn(),
+						c.asOrg() != null ? c.asOrg() : "Unknown Provider",
+						c.countryCode() != null ? c.countryCode() : "--",
+						c.clientType(),
+						classification,
+						hasNote,
+						noteVerdict,
+						noteVerdictIcon,
+						noteVerdictDisplayName,
+						noteVerdictColor,
+						noteSnippet,
+						subnetNoteVerdict,
+						subnetNoteIcon,
+						subnetNoteSnippet,
+						asnNoteVerdict,
+						asnNoteIcon,
+						asnNoteSnippet,
+						retRatio,
+						c.authenticatedRequests(),
+						c.authenticatedTrackedRequests(),
+						effectiveGroupBy
+				));
+			}
 		}
 
 		double blockedRatio = totalRequests > 0
@@ -328,10 +373,13 @@ public class AnalyticsService {
 				? Math.round(((double) totalMarked / totalRequests) * 1000.0) / 10.0
 				: 0.0;
 
-		AdvisorReport advisorReport = advisorService != null
+		// 4. Configuration & False-Positive Advisor (only needed for advisor tab or all)
+		AdvisorReport advisorReport = (isAdvisor && advisorService != null)
 				? advisorService.generateReport(safeHours, servers, valves) : null;
 
-		UserAgentAnalyticsDto userAgents = getUserAgentAnalytics(safeHours, from, to, servers, valves);
+		// 5. User-Agent Forensics (only needed for useragents tab or all)
+		UserAgentAnalyticsDto userAgents = isUserAgents
+				? getUserAgentAnalytics(safeHours, from, to, servers, valves) : null;
 
 		return new AnalyticsDashboardDto(
 				from,
