@@ -459,8 +459,7 @@
 
                         <div
                             style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
-                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Collector
-                                Integration</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Collector Integration</div>
                             <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);"
                                 th:text="${rv.collectorIntegrationLabel()}">AUTO</div>
                             <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;"
@@ -476,8 +475,7 @@
 
                         <div
                             style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
-                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Visitor Tracking
-                                &amp; Cookies</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Visitor Tracking &amp; Cookies</div>
                             <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);"
                                 th:text="${rv.visitorCookieEnabled ? 'ACTIVE' : 'DISABLED'}">DISABLED</div>
                             <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;"
@@ -493,8 +491,7 @@
 
                         <div
                             style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
-                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Auth Session
-                                Tracking &amp; Scope</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Auth Session Tracking &amp; Scope</div>
                             <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);"
                                 th:text="${rv.authTrackingEnabled ? 'ACTIVE (' + rv.authTrackingMode() + ')' : (rv.relevantAuthScope() != 'ALL' ? 'DECOUPLED SCOPE' : 'DISABLED')}">
                                 DISABLED</div>
@@ -560,23 +557,18 @@
                             </div>
                             <div th:if="${rv.alwaysAllowedIPs != null and !rv.alwaysAllowedIPs.isBlank()}"
                                 style="display: flex; gap: 8px; align-items: baseline;">
-                                <span style="min-width: 150px; font-weight: 600; color: var(--text-muted);">Always
-                                    Allowed IPs:</span>
+                                <span style="min-width: 150px; font-weight: 600; color: var(--text-muted);">Always Allowed IPs:</span>
                                 <code style="word-break: break-all; color: var(--color-success);"
                                     th:text="${rv.alwaysAllowedIPs}">127.0.0.1, 10.0.0.0/8</code>
                             </div>
                             <div style="display: flex; gap: 8px; align-items: baseline;">
-                                <span style="min-width: 150px; font-weight: 600; color: var(--text-muted);">Private IPs
-                                    Bypass:</span>
-                                <span th:if="${rv.alwaysAllowPrivateIPs}" class="badge badge-success">&#x2714; ALWAYS
-                                    ALLOWED (RFC 1918 / ULA)</span>
-                                <span th:unless="${rv.alwaysAllowPrivateIPs}" style="color: var(--text-muted);">Standard
-                                    rate limiting</span>
+                                <span style="min-width: 150px; font-weight: 600; color: var(--text-muted);">Private IPs Bypass:</span>
+                                <span th:if="${rv.alwaysAllowPrivateIPs}" class="badge badge-success">&#x2714; ALWAYS ALLOWED (RFC 1918 / ULA)</span>
+                                <span th:unless="${rv.alwaysAllowPrivateIPs}" style="color: var(--text-muted);">Standard rate limiting</span>
                             </div>
                             <div th:if="${rv.alwaysForbiddenIPs != null and !rv.alwaysForbiddenIPs.isBlank()}"
                                 style="display: flex; gap: 8px; align-items: baseline;">
-                                <span style="min-width: 150px; font-weight: 600; color: var(--text-muted);">Always
-                                    Forbidden IPs:</span>
+                                <span style="min-width: 150px; font-weight: 600; color: var(--text-muted);">Always Forbidden IPs:</span>
                                 <code style="word-break: break-all; color: var(--color-danger);"
                                     th:text="${rv.alwaysForbiddenIPs}">198.51.100.0/24</code>
                             </div>
@@ -781,16 +773,10 @@
                 style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                 <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
                     <div class="section-title" style="margin-bottom: 0;">
-                        <span th:if="${selectedStatus == 'BLOCKED'}">&#x1F6A8; Blocked Client Incidents on this
-                            Server</span>
-                        <span th:if="${selectedStatus == 'MARKED'}">&#x1F3F7;&#xFE0F; Marked / Simulation Events on this
-                            Server</span>
-                        <span
-                            th:if="${selectedStatus == 'ACTIVE' or selectedStatus == 'ALLOWED' or selectedStatus == 'UNBLOCKED'}">&#x1F535;
-                            Allowed Client Traffic on this Server</span>
-                        <span
-                            th:if="${selectedStatus != 'BLOCKED' and selectedStatus != 'MARKED' and selectedStatus != 'ACTIVE' and selectedStatus != 'ALLOWED' and selectedStatus != 'UNBLOCKED'}">&#x26A1;
-                            Client Traffic &amp; Incidents on this Server</span>
+                        <span th:if="${selectedStatus == 'BLOCKED'}">&#x1F6A8; Blocked Client Incidents on this Server</span>
+                        <span th:if="${selectedStatus == 'MARKED'}">&#x1F3F7;&#xFE0F; Marked / Simulation Events on this Server</span>
+                        <span th:if="${selectedStatus == 'ACTIVE' or selectedStatus == 'ALLOWED' or selectedStatus == 'UNBLOCKED'}">&#x1F535; Allowed Client Traffic on this Server</span>
+                        <span th:if="${selectedStatus != 'BLOCKED' and selectedStatus != 'MARKED' and selectedStatus != 'ACTIVE' and selectedStatus != 'ALLOWED' and selectedStatus != 'UNBLOCKED'}">&#x26A1; Client Traffic &amp; Incidents on this Server</span>
                     </div>
                     <div class="filter-btn-group">
                         <a th:href="${selectedValve != null and !selectedValve.isBlank()} ? @{'/server/' + ${serverId}(valve=${selectedValve}, status='ALL')} : @{'/server/' + ${serverId}(status='ALL')}"
