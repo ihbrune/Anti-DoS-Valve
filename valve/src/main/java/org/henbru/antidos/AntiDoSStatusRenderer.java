@@ -1694,6 +1694,7 @@ public class AntiDoSStatusRenderer {
 				.append("      \"sampleUri\": \"/api/login\",\n")
 				.append("      \"sampleUserAgent\": \"python-requests/2.31.0\",\n")
 				.append("      \"sampleAuthenticated\": false,\n")
+				.append("      \"sampleReturningVisitor\": false,\n")
 				.append("      \"status\": \"BLOCKED\"\n")
 				.append("    }\n")
 				.append("  ],\n")
@@ -2115,12 +2116,14 @@ public class AntiDoSStatusRenderer {
 				sb.append("      \"sampleMethod\": ").append(e.sample().method() != null ? "\"" + escapeJson(e.sample().method()) + "\"" : "null").append(",\n")
 						.append("      \"sampleUri\": ").append(e.sample().uri() != null ? "\"" + escapeJson(e.sample().uri()) + "\"" : "null").append(",\n")
 						.append("      \"sampleUserAgent\": ").append(e.sample().userAgent() != null ? "\"" + escapeJson(e.sample().userAgent()) + "\"" : "null").append(",\n")
-						.append("      \"sampleAuthenticated\": ").append(e.sample().authenticated()).append(",\n");
+						.append("      \"sampleAuthenticated\": ").append(e.sample().authenticated()).append(",\n")
+						.append("      \"sampleReturningVisitor\": ").append(e.sample().returningVisitor()).append(",\n");
 			} else {
 				sb.append("      \"sampleMethod\": null,\n")
 						.append("      \"sampleUri\": null,\n")
 						.append("      \"sampleUserAgent\": null,\n")
-						.append("      \"sampleAuthenticated\": null,\n");
+						.append("      \"sampleAuthenticated\": null,\n")
+						.append("      \"sampleReturningVisitor\": null,\n");
 			}
 			sb.append("      \"status\": \"BLOCKED\"\n")
 					.append("    }");
@@ -2175,7 +2178,8 @@ public class AntiDoSStatusRenderer {
 						.append("      \"sampleMethod\": ").append(e.sample().method() != null ? "\"" + escapeJson(e.sample().method()) + "\"" : "null").append(",\n")
 						.append("      \"sampleUri\": ").append(e.sample().uri() != null ? "\"" + escapeJson(e.sample().uri()) + "\"" : "null").append(",\n")
 						.append("      \"sampleUserAgent\": ").append(e.sample().userAgent() != null ? "\"" + escapeJson(e.sample().userAgent()) + "\"" : "null").append(",\n")
-						.append("      \"sampleAuthenticated\": ").append(e.sample().authenticated()).append("\n");
+						.append("      \"sampleAuthenticated\": ").append(e.sample().authenticated()).append(",\n")
+						.append("      \"sampleReturningVisitor\": ").append(e.sample().returningVisitor()).append("\n");
 			} else {
 				sb.append("\n");
 			}

@@ -2523,16 +2523,18 @@ class AntiDoSValveTest {
 			assertEquals("GET", sample.method());
 			assertEquals("/portal/course/catalog", sample.uri(),
 					"Semantic priority sampling must preserve the content URL instead of the 5th JS asset");
-			assertEquals(2, sample.priority());
+			assertEquals(2, sample.semanticCategory());
+			assertEquals(8, sample.priority());
 
-			// Request 6: Mutating POST action (Priority 3) -> Strictly higher than Priority 2, must UPGRADE sample!
+			// Request 6: Mutating POST action (Category 3, Unauth cookieless -> Priority 11) -> Strictly higher than Priority 8, must UPGRADE sample!
 			TestRequest req6 = new TestRequest("/idp/login", clientIp);
 			req6.setMethod("POST");
 			testValve.invoke(req6, new TestResponse());
 
 			assertEquals("POST", counter.getSample().method());
 			assertEquals("/idp/login", counter.getSample().uri());
-			assertEquals(3, counter.getSample().priority());
+			assertEquals(3, counter.getSample().semanticCategory());
+			assertEquals(11, counter.getSample().priority());
 		} finally {
 			testValve.stop();
 		}
@@ -3280,6 +3282,7 @@ class AntiDoSValveTest {
 		assertTrue(json.contains("\"sampleUri\": \"/api/data\""));
 		assertTrue(json.contains("\"sampleUserAgent\": \"TestBot/2.0\""));
 		assertTrue(json.contains("\"sampleAuthenticated\": false"));
+		assertTrue(json.contains("\"sampleReturningVisitor\": false"));
 	}
 
 	@Test

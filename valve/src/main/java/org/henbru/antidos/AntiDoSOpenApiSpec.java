@@ -972,6 +972,13 @@ public final class AntiDoSOpenApiSpec {
             ],
             "description": "True if the sampled request had a valid authenticated session."
           },
+          "sampleReturningVisitor": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "True if the sampled request had a valid visitor cookie (returning visitor)."
+          },
           "status": {
             "type": "string",
             "enum": [

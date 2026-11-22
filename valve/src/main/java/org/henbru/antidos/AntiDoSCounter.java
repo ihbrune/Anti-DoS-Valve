@@ -43,16 +43,38 @@ public class AntiDoSCounter {
 
 	/**
 	 * Compact, immutable snapshot of an offending client request captured upon rate-limit blocking or sampling.
-	 * All string fields are strictly bounded and sanitized. Includes a semantic priority level (0-3) to ensure
-	 * content pages, routes, documents and mutating actions take precedence over static frontend assets.
+	 * All string fields are strictly bounded and sanitized. Includes a composite forensic priority level (0-11)
+	 * combining semantic endpoint categories with client suspicion tiers (unauthenticated cookieless scrapers take precedence).
 	 */
-	public record SampleRequest(String method, String uri, String userAgent, boolean authenticated, int priority) {
+	public record SampleRequest(String method, String uri, String userAgent, boolean authenticated, boolean returningVisitor, int priority) {
+		public SampleRequest(String method, String uri, String userAgent, boolean authenticated, boolean returningVisitor) {
+			this(method, uri, userAgent, authenticated, returningVisitor, calculatePriority(method, uri, authenticated, returningVisitor));
+		}
+
 		public SampleRequest(String method, String uri, String userAgent, boolean authenticated) {
-			this(method, uri, userAgent, authenticated, calculatePriority(method, uri));
+			this(method, uri, userAgent, authenticated, false, calculatePriority(method, uri, authenticated, false));
+		}
+
+		public SampleRequest(String method, String uri, String userAgent, boolean authenticated, int priority) {
+			this(method, uri, userAgent, authenticated, false, priority);
 		}
 
 		public SampleRequest(String method, String uri, String userAgent) {
-			this(method, uri, userAgent, false, calculatePriority(method, uri));
+			this(method, uri, userAgent, false, false, calculatePriority(method, uri, false, false));
+		}
+
+		/**
+		 * Base semantic category: 3 (mutating), 2 (content/doc/api), 1 (media), 0 (static assets).
+		 */
+		public int semanticCategory() {
+			return priority / 3;
+		}
+
+		/**
+		 * Client suspicion sub-tier: 2 (unauth &amp; no cookie), 1 (unauth &amp; returning visitor), 0 (authenticated).
+		 */
+		public int suspicionTier() {
+			return priority % 3;
 		}
 	}
 
@@ -457,17 +479,16 @@ public class AntiDoSCounter {
 	 * @return true if the sample was successfully captured, false if a sample already exists
 	 */
 	public boolean recordSampleIfAbsent(String method, String uri, String userAgent, boolean authenticated) {
-		return recordSampleIfHigherPriority(method, uri, userAgent, authenticated);
+		return recordSampleIfHigherPriority(method, uri, userAgent, authenticated, false);
+	}
+
+	public boolean recordSampleIfAbsent(String method, String uri, String userAgent, boolean authenticated, boolean returningVisitor) {
+		return recordSampleIfHigherPriority(method, uri, userAgent, authenticated, returningVisitor);
 	}
 
 	/**
 	 * Atomically captures or upgrades a request sample snapshot if no sample has been recorded yet,
-	 * or if the incoming request has a strictly higher semantic priority level than the existing sample.
-	 * Priority levels:
-	 *   Level 3: Mutating actions (POST, PUT, DELETE, PATCH)
-	 *   Level 2: Content pages, routes, documents and APIs (extensionless, .jsp, .html, .pdf, .xml, .json, etc.)
-	 *   Level 1: Media and images (.png, .jpg, .svg, etc.)
-	 *   Level 0: Static frontend infrastructure (.js, .css, .woff, .ico, etc.)
+	 * or if the incoming request has a strictly higher composite priority level than the existing sample.
 	 *
 	 * @param method        HTTP method (e.g. "POST")
 	 * @param uri           Request URI path (query string stripped, max 256 chars)
@@ -476,14 +497,31 @@ public class AntiDoSCounter {
 	 * @return true if the sample was successfully captured or upgraded, false if existing sample has equal or higher priority
 	 */
 	public boolean recordSampleIfHigherPriority(String method, String uri, String userAgent, boolean authenticated) {
+		return recordSampleIfHigherPriority(method, uri, userAgent, authenticated, false);
+	}
+
+	/**
+	 * Atomically captures or upgrades a request sample snapshot if no sample has been recorded yet,
+	 * or if the incoming request has a strictly higher composite priority level than the existing sample.
+	 * Major Tier (x 3): Mutating (3), Content/API (2), Media (1), Static Frontend (0).
+	 * Minor Tier (+ 0..2): Unauthenticated without cookie (+2), Unauthenticated with cookie (+1), Authenticated (+0).
+	 *
+	 * @param method           HTTP method (e.g. "POST")
+	 * @param uri              Request URI path (query string stripped, max 256 chars)
+	 * @param userAgent        User-Agent header (max 128 chars)
+	 * @param authenticated    true if the sampled request had a valid authenticated session
+	 * @param returningVisitor true if the sampled request carried a valid visitor token cookie
+	 * @return true if the sample was successfully captured or upgraded, false if existing sample has equal or higher priority
+	 */
+	public boolean recordSampleIfHigherPriority(String method, String uri, String userAgent, boolean authenticated, boolean returningVisitor) {
 		String cleanMethod = sanitizeMethod(method);
 		String cleanUri = sanitizeUri(uri);
 		String cleanUserAgent = sanitizeUserAgent(userAgent);
 		if (cleanMethod == null && cleanUri == null) {
 			return false;
 		}
-		int newPriority = calculatePriority(cleanMethod, cleanUri);
-		SampleRequest newSample = new SampleRequest(cleanMethod, cleanUri, cleanUserAgent, authenticated, newPriority);
+		int newPriority = calculatePriority(cleanMethod, cleanUri, authenticated, returningVisitor);
+		SampleRequest newSample = new SampleRequest(cleanMethod, cleanUri, cleanUserAgent, authenticated, returningVisitor, newPriority);
 
 		while (true) {
 			SampleRequest current = this.sampleRequest;
@@ -497,14 +535,14 @@ public class AntiDoSCounter {
 	}
 
 	/**
-	 * Computes a semantic priority score (0-3) for a request URI to prioritize content and business
+	 * Computes the base semantic category score (0-3) for a request URI to prioritize content and business
 	 * endpoints over static frontend assets in forensic sampling.
 	 *
 	 * @param method HTTP method (e.g. "GET", "POST")
 	 * @param uri    Cleaned or raw request URI
-	 * @return Priority score: 3 (mutating), 2 (content/route/doc/api), 1 (media), 0 (static asset)
+	 * @return Category score: 3 (mutating), 2 (content/route/doc/api), 1 (media), 0 (static asset)
 	 */
-	public static int calculatePriority(String method, String uri) {
+	public static int calculateSemanticCategory(String method, String uri) {
 		if (method != null && !method.equalsIgnoreCase("GET") && !method.equalsIgnoreCase("HEAD") && !method.equalsIgnoreCase("OPTIONS")) {
 			return 3;
 		}
@@ -536,6 +574,56 @@ public class AntiDoSCounter {
 			     "pdf", "xml", "json", "csv", "txt", "docx", "xlsx", "zip", "tar", "gz" -> 2;
 			default -> 1;
 		};
+	}
+
+	/**
+	 * Backward-compatible helper returning the base semantic category score (0-3).
+	 *
+	 * @param method HTTP method
+	 * @param uri    Request URI
+	 * @return Semantic category (0-3)
+	 */
+	public static int calculatePriority(String method, String uri) {
+		return calculateSemanticCategory(method, uri);
+	}
+
+	/**
+	 * Computes a composite forensic priority score (0-11) combining the semantic endpoint category (0-3)
+	 * with client suspicion tiers (0-2).
+	 *
+	 * Major Tier - Semantic Endpoint Category (weight x 3):
+	 *   Level 3: Mutating actions (POST, PUT, DELETE, PATCH)
+	 *   Level 2: Content pages, routes, documents and APIs (extensionless, .jsp, .html, .pdf, .json, etc.)
+	 *   Level 1: Media and images (.png, .jpg, .svg, etc.)
+	 *   Level 0: Static frontend infrastructure (.js, .css, .woff, .ico, etc.)
+	 *
+	 * Minor Tier - Client Suspicion &amp; Scraper Interest (within same category, + 0..2):
+	 *   Tier 2 (+2): Unauthenticated AND no visitor cookie (!authenticated &amp;&amp; !returningVisitor)
+	 *                Target of highest forensic interest: automated scrapers, headless tools, raw curl/Python bots.
+	 *   Tier 1 (+1): Unauthenticated browser WITH visitor cookie (!authenticated &amp;&amp; returningVisitor)
+	 *                Legitimate anonymous visitors or scrapers maintaining cookies.
+	 *   Tier 0 (+0): Authenticated session (authenticated == true)
+	 *                Legitimate logged-in users navigating the application.
+	 *
+	 * Composite Formula: (semanticCategory * 3) + suspicionTier  -&gt; Range: [0..11]
+	 *
+	 * @param method           HTTP method
+	 * @param uri              Request URI
+	 * @param authenticated    true if verified authenticated session
+	 * @param returningVisitor true if valid visitor token cookie was present
+	 * @return Composite priority score between 0 and 11
+	 */
+	public static int calculatePriority(String method, String uri, boolean authenticated, boolean returningVisitor) {
+		int category = calculateSemanticCategory(method, uri);
+		int suspicionTier;
+		if (authenticated) {
+			suspicionTier = 0;
+		} else if (returningVisitor) {
+			suspicionTier = 1;
+		} else {
+			suspicionTier = 2;
+		}
+		return (category * 3) + suspicionTier;
 	}
 
 	static String sanitizeMethod(String method) {

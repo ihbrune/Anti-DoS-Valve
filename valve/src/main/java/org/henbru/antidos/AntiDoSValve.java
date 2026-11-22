@@ -2238,9 +2238,9 @@ public class AntiDoSValve extends ValveBase {
 
 		boolean allowed = isRequestAllowed(ip, path, isReturningVisitor, isAuthenticated, uaMismatch, userAgent);
 		if (!allowed) {
-			recordBlockedSampleIfAbsent(ip, request, path, isAuthenticated);
+			recordBlockedSampleIfAbsent(ip, request, path, isAuthenticated, isReturningVisitor);
 		} else if (activeSampleThreshold > 0 && isExtendedMetricsActive()) {
-			recordActiveSampleIfEligible(ip, request, path, isAuthenticated);
+			recordActiveSampleIfEligible(ip, request, path, isAuthenticated, isReturningVisitor);
 		}
 		if (allowed || simulationMode) {
 			if (visitorCookieEnabled && visitorTokenService != null && issueNewCookie && clientSubnetBytes != null) {
@@ -2293,10 +2293,14 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	void recordBlockedSampleIfAbsent(String ip, Request request, String path) {
-		recordBlockedSampleIfAbsent(ip, request, path, false);
+		recordBlockedSampleIfAbsent(ip, request, path, false, false);
 	}
 
 	void recordBlockedSampleIfAbsent(String ip, Request request, String path, boolean authenticated) {
+		recordBlockedSampleIfAbsent(ip, request, path, authenticated, false);
+	}
+
+	void recordBlockedSampleIfAbsent(String ip, Request request, String path, boolean authenticated, boolean returningVisitor) {
 		AntiDoSMonitor monitor = provideMonitor();
 		if (monitor == null || request == null) {
 			return;
@@ -2315,15 +2319,19 @@ public class AntiDoSValve extends ValveBase {
 		if (counter != null) {
 			String method = request.getMethod();
 			String ua = request.getHeader("User-Agent");
-			counter.recordSampleIfHigherPriority(method, path, ua, authenticated);
+			counter.recordSampleIfHigherPriority(method, path, ua, authenticated, returningVisitor);
 		}
 	}
 
 	void recordActiveSampleIfEligible(String ip, Request request, String path) {
-		recordActiveSampleIfEligible(ip, request, path, false);
+		recordActiveSampleIfEligible(ip, request, path, false, false);
 	}
 
 	void recordActiveSampleIfEligible(String ip, Request request, String path, boolean authenticated) {
+		recordActiveSampleIfEligible(ip, request, path, authenticated, false);
+	}
+
+	void recordActiveSampleIfEligible(String ip, Request request, String path, boolean authenticated, boolean returningVisitor) {
 		AntiDoSMonitor monitor = provideMonitor();
 		if (monitor == null || request == null) {
 			return;
@@ -2336,7 +2344,7 @@ public class AntiDoSValve extends ValveBase {
 		if (counter != null) {
 			String method = request.getMethod();
 			String ua = request.getHeader("User-Agent");
-			counter.recordSampleIfHigherPriority(method, path, ua, authenticated);
+			counter.recordSampleIfHigherPriority(method, path, ua, authenticated, returningVisitor);
 		}
 	}
 

@@ -378,15 +378,21 @@ In standard web architectures, an initial user or scraper request to a dynamic c
 
 To guarantee high forensic value without runtime overhead, the Valve employs a **semantic priority scoring engine** and **pre-threshold candidate tracking**:
 
-1. **Priority Scoring Hierarchy (`AntiDoSCounter.calculatePriority`)**:
-   * **Level 3 (Mutating Business Actions)**: `POST`, `PUT`, `DELETE`, `PATCH`. Captures logins, API mutations, form submissions, and authentication attempts.
-   * **Level 2 (Content Routes, Documents & APIs)**: Clean extensionless URLs (e.g. `/catalog/details`, `/idp/login`, `/api/v1/search`), dynamic server pages (`.html`, `.htm`, `.jsp`), documents (`.pdf`, `.docx`, `.xlsx`, `.csv`), and structured data (`.json`, `.xml`, `.txt`, `.zip`).
-   * **Level 1 (Media Assets)**: `.png`, `.jpg`, `.jpeg`, `.gif`, `.svg`, `.webp`.
-   * **Level 0 (Static Frontend Infrastructure)**: `.js`, `.css`, `.map`, `.woff`, `.woff2`, `.ttf`, `.ico`.
+1. **Composite Priority Scoring Hierarchy (`AntiDoSCounter.calculatePriority`)**:
+   * **Major Tier - Semantic Category (weight &times; 3)**:
+     * **Level 3 (Mutating Business Actions)**: `POST`, `PUT`, `DELETE`, `PATCH`. Captures logins, API mutations, form submissions, and authentication attempts.
+     * **Level 2 (Content Routes, Documents & APIs)**: Clean extensionless URLs (e.g. `/catalog/details`, `/idp/login`, `/api/v1/search`), dynamic server pages (`.html`, `.htm`, `.jsp`), documents (`.pdf`, `.docx`, `.xlsx`, `.csv`), and structured data (`.json`, `.xml`, `.txt`, `.zip`).
+     * **Level 1 (Media Assets)**: `.png`, `.jpg`, `.jpeg`, `.gif`, `.svg`, `.webp`.
+     * **Level 0 (Static Frontend Infrastructure)**: `.js`, `.css`, `.map`, `.woff`, `.woff2`, `.ttf`, `.ico`.
+   * **Minor Tier - Client Suspicion &amp; Scraper Interest (within same category, + 0..2)**:
+     * **Tier 2 (+2 / Highest Interest)**: **Unauthenticated AND no visitor cookie** (`!authenticated && !returningVisitor`). Captures raw automated scrapers, headless tools, command-line bots, and initial attack probes.
+     * **Tier 1 (+1 / Medium Interest)**: **Unauthenticated browser WITH visitor cookie** (`!authenticated && returningVisitor`). Captures normal anonymous human browsing or cookie-retaining scrapers.
+     * **Tier 0 (+0 / Lowest Suspicion)**: **Authenticated session** (`authenticated == true`). Legitimate logged-in users navigating the application.
+   * **Composite Formula**: `(semanticCategory * 3) + suspicionTier` (range `0` to `11`). Within equal-priority semantic categories (e.g., Content vs. Content), requests from unauthenticated cookieless scrapers always take precedence and dynamically upgrade the sampled URL.
 
 2. **Pre-Threshold Candidate Tracking & Lock-Free CAS Upgrades**:
    * When `activeSampleThreshold > 0`, the Valve starts tracking the most significant request candidate starting from **Request #1**.
-   * Incoming requests are evaluated lock-free using atomic CAS operations (`VarHandle`). A sample is upgraded **only if the incoming request has a strictly higher semantic priority** than the currently stored candidate (e.g., Level 2 content replaces Level 0 JS, or Level 3 POST replaces Level 2 GET).
+   * Incoming requests are evaluated lock-free using atomic CAS operations (`VarHandle`). A sample is upgraded **only if the incoming request has a strictly higher composite priority** than the currently stored candidate (e.g., an unauthenticated cookieless content scrape replaces an authenticated user's view, or a mutating POST replaces a read-only GET).
    * Subsequent lower-priority or equal-priority requests (such as static assets loaded after an HTML page) never overwrite an existing high-priority route. The entry-point URL is cleanly preserved.
 
 3. **Status JSON Exposure & Overhead**:

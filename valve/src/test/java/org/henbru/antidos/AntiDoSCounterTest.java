@@ -178,42 +178,92 @@ class AntiDoSCounterTest {
 		AntiDoSCounter counter = new AntiDoSCounter();
 		assertNull(counter.getSample());
 
-		// 1. Initial static CSS asset (Priority 0)
+		// 1. Initial static CSS asset (Category 0, Unauth cookieless -> Composite Priority 2)
 		assertTrue(counter.recordSampleIfHigherPriority("GET", "/styles/layout.css", "Browser/1.0", false));
 		assertEquals("/styles/layout.css", counter.getSample().uri());
-		assertEquals(0, counter.getSample().priority());
+		assertEquals(0, counter.getSample().semanticCategory());
+		assertEquals(2, counter.getSample().priority());
 
-		// 2. Subsequent static JS asset (Priority 0) -> equal priority, NOT overwritten
+		// 2. Subsequent static JS asset (Priority 2) -> equal priority, NOT overwritten
 		assertFalse(counter.recordSampleIfHigherPriority("GET", "/scripts/app.js", "Browser/1.0", false));
 		assertEquals("/styles/layout.css", counter.getSample().uri());
 
-		// 3. Image (Priority 1) -> strictly higher than 0, UPGRADES sample!
+		// 3. Image (Category 1, Unauth cookieless -> Composite Priority 5) -> strictly higher than 2, UPGRADES sample!
 		assertTrue(counter.recordSampleIfHigherPriority("GET", "/images/logo.png", "Browser/1.0", false));
 		assertEquals("/images/logo.png", counter.getSample().uri());
-		assertEquals(1, counter.getSample().priority());
+		assertEquals(1, counter.getSample().semanticCategory());
+		assertEquals(5, counter.getSample().priority());
 
-		// 4. JS asset (Priority 0) -> lower than 1, NOT overwritten
+		// 4. JS asset (Priority 2) -> lower than 5, NOT overwritten
 		assertFalse(counter.recordSampleIfHigherPriority("GET", "/scripts/staticJavascript.js", "Browser/1.0", false));
 		assertEquals("/images/logo.png", counter.getSample().uri());
 
-		// 5. Semantic extensionless page (Priority 2) -> strictly higher than 1, UPGRADES sample!
+		// 5. Semantic extensionless page (Category 2, Unauth cookieless -> Composite Priority 8) -> strictly higher than 5, UPGRADES sample!
 		assertTrue(counter.recordSampleIfHigherPriority("GET", "/portal/course/catalog", "Browser/1.0", false));
 		assertEquals("/portal/course/catalog", counter.getSample().uri());
-		assertEquals(2, counter.getSample().priority());
+		assertEquals(2, counter.getSample().semanticCategory());
+		assertEquals(8, counter.getSample().priority());
 
-		// 6. Another content page (Priority 2) -> equal priority, NOT overwritten (entry point preserved)
+		// 6. Another content page (Priority 8) -> equal priority, NOT overwritten (entry point preserved)
 		assertFalse(counter.recordSampleIfHigherPriority("GET", "/portal/member/detail.jsp", "Browser/1.0", false));
 		assertEquals("/portal/course/catalog", counter.getSample().uri());
 
-		// 7. Login POST (Priority 3) -> strictly higher than 2, UPGRADES sample to mutating action!
+		// 7. Login POST (Category 3, Unauth cookieless -> Composite Priority 11) -> strictly higher than 8, UPGRADES sample to mutating action!
 		assertTrue(counter.recordSampleIfHigherPriority("POST", "/idp/login", "Browser/1.0", false));
 		assertEquals("POST", counter.getSample().method());
 		assertEquals("/idp/login", counter.getSample().uri());
-		assertEquals(3, counter.getSample().priority());
+		assertEquals(3, counter.getSample().semanticCategory());
+		assertEquals(11, counter.getSample().priority());
 
-		// 8. Subsequent GET page (Priority 2) -> lower than 3, NOT overwritten
+		// 8. Subsequent GET page (Priority 8) -> lower than 11, NOT overwritten
 		assertFalse(counter.recordSampleIfHigherPriority("GET", "/dashboard", "Browser/1.0", false));
 		assertEquals("/idp/login", counter.getSample().uri());
+	}
+
+	@Test
+	void testCompositePriorityWithAuthenticationAndVisitorCookie() {
+		AntiDoSCounter counter = new AntiDoSCounter();
+
+		// Step 1: Authenticated user visits a content route (Category 2, Tier 0 -> Priority 6)
+		assertTrue(counter.recordSampleIfHigherPriority("GET", "/portal/user/home", "Mozilla/5.0", true, true));
+		assertEquals("/portal/user/home", counter.getSample().uri());
+		assertEquals(2, counter.getSample().semanticCategory());
+		assertEquals(0, counter.getSample().suspicionTier());
+		assertEquals(6, counter.getSample().priority());
+		assertTrue(counter.getSample().authenticated());
+		assertTrue(counter.getSample().returningVisitor());
+
+		// Step 2: Unauthenticated returning visitor visits a content route (Category 2, Tier 1 -> Priority 7)
+		// Strictly higher than 6 -> MUST UPGRADE sample to the unauthenticated visitor!
+		assertTrue(counter.recordSampleIfHigherPriority("GET", "/portal/course/catalog", "Mozilla/5.0", false, true));
+		assertEquals("/portal/course/catalog", counter.getSample().uri());
+		assertEquals(2, counter.getSample().semanticCategory());
+		assertEquals(1, counter.getSample().suspicionTier());
+		assertEquals(7, counter.getSample().priority());
+		assertFalse(counter.getSample().authenticated());
+		assertTrue(counter.getSample().returningVisitor());
+
+		// Step 3: Raw cookieless scraper visits an API/content route (Category 2, Tier 2 -> Priority 8)
+		// Strictly higher than 7 -> MUST UPGRADE sample to the cookieless scraper!
+		assertTrue(counter.recordSampleIfHigherPriority("GET", "/api/v1/search", "ScraperBot/1.0", false, false));
+		assertEquals("/api/v1/search", counter.getSample().uri());
+		assertEquals(2, counter.getSample().semanticCategory());
+		assertEquals(2, counter.getSample().suspicionTier());
+		assertEquals(8, counter.getSample().priority());
+		assertFalse(counter.getSample().authenticated());
+		assertFalse(counter.getSample().returningVisitor());
+
+		// Step 4: Subsequent authenticated or returning visitor requests must NOT overwrite the cookieless scraper
+		assertFalse(counter.recordSampleIfHigherPriority("GET", "/portal/important", "Browser/1.0", true, true));
+		assertFalse(counter.recordSampleIfHigherPriority("GET", "/portal/important2", "Browser/1.0", false, true));
+		assertEquals("/api/v1/search", counter.getSample().uri());
+
+		// Step 5: Cookieless mutating action (Category 3, Tier 2 -> Priority 11) UPGRADES to absolute top
+		assertTrue(counter.recordSampleIfHigherPriority("POST", "/auth/login", "AttackTool/2.0", false, false));
+		assertEquals("/auth/login", counter.getSample().uri());
+		assertEquals(11, counter.getSample().priority());
+		assertEquals(3, counter.getSample().semanticCategory());
+		assertEquals(2, counter.getSample().suspicionTier());
 	}
 
 	@Test
