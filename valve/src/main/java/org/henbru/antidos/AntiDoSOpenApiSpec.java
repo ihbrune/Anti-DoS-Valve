@@ -311,6 +311,9 @@ public final class AntiDoSOpenApiSpec {
             "format": "date-time",
             "description": "Server time in ISO-8601 UTC format (e.g. 2026-11-07T22:30:00Z)."
           },
+          "system": {
+            "$ref": "#/components/schemas/SystemMetricsDto"
+          },
           "totalActiveValves": {
             "type": "integer",
             "description": "Total number of Anti-DoS Valve instances configured in the pipeline."
@@ -672,6 +675,9 @@ public final class AntiDoSOpenApiSpec {
             "format": "date-time",
             "description": "Server time in ISO-8601 UTC format."
           },
+          "system": {
+            "$ref": "#/components/schemas/SystemMetricsDto"
+          },
           "valve": {
             "$ref": "#/components/schemas/ValveSummaryDto"
           },
@@ -757,6 +763,60 @@ public final class AntiDoSOpenApiSpec {
             "type": "integer",
             "format": "int64",
             "description": "Time in milliseconds taken by the server to generate this JSON response."
+          }
+        }
+      },
+      "SystemMetricsDto": {
+        "type": "object",
+        "description": "Host, JVM, and Tomcat container resource utilization metrics.",
+        "properties": {
+          "processCpuLoad": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "CPU load of the Tomcat JVM process (0.0 - 1.0)."
+          },
+          "systemCpuLoad": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "Overall system CPU load (0.0 - 1.0)."
+          },
+          "systemLoadAverage": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "Operating system 1-minute load average."
+          },
+          "heapUsedBytes": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "JVM heap memory currently used in bytes."
+          },
+          "heapMaxBytes": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Maximum configured JVM heap memory in bytes."
+          },
+          "heapUsedPercent": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "JVM heap memory utilization percentage (0.0 - 100.0)."
+          },
+          "gcCollectionCount": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Cumulative Garbage Collection invocations."
+          },
+          "gcCollectionTimeMs": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Cumulative Garbage Collection pause time in milliseconds."
+          },
+          "tomcatBusyThreads": {
+            "type": ["integer", "null"],
+            "description": "Currently active/busy worker threads in Tomcat connectors."
+          },
+          "tomcatMaxThreads": {
+            "type": ["integer", "null"],
+            "description": "Maximum configured worker threads in Tomcat connectors."
           }
         }
       },

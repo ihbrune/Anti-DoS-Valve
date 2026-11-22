@@ -75,7 +75,8 @@ class DatabaseMigrationAndRepositoryTest {
 	void testHeartbeatRepositoryUpsertAndFind() {
 		Instant now = Instant.now();
 		EndpointHeartbeat hb = new EndpointHeartbeat(
-				"TEST-NODE-1", "http://localhost:8080/antidos-status", true, now, now, null, 15L, 2);
+				"TEST-NODE-1", "http://localhost:8080/antidos-status", true, now, now, null, 15L, 2,
+				0.25, 0.40, 1.35, 536870912L, 2147483648L, 25.0, 350L, 16, 200);
 
 		heartbeatRepository.upsert(hb);
 
@@ -84,6 +85,10 @@ class DatabaseMigrationAndRepositoryTest {
 		assertEquals("http://localhost:8080/antidos-status", found.get().url());
 		assertTrue(found.get().online());
 		assertEquals(2, found.get().valvesCount());
+		assertTrue(found.get().hasSystemMetrics());
+		assertEquals("25%", found.get().formattedCpu());
+		assertEquals("25%", found.get().formattedHeap());
+		assertEquals("16 / 200", found.get().formattedThreads());
 
 		// Test updating heartbeat on failure
 		EndpointHeartbeat failure = found.get().failure(Instant.now(), "Connection timed out");
@@ -94,6 +99,8 @@ class DatabaseMigrationAndRepositoryTest {
 		assertFalse(updated.get().online());
 		assertEquals("Connection timed out", updated.get().lastError());
 		assertNotNull(updated.get().lastSuccessAt()); // Retains last success!
+		// Retains last known resource metrics via COALESCE
+		assertEquals(0.25, updated.get().processCpuLoad());
 	}
 
 	@Test
@@ -382,7 +389,8 @@ class DatabaseMigrationAndRepositoryTest {
 		Instant now = Instant.now();
 		PollEventLog log1 = new PollEventLog(
 				null, "NODE-A", "http://node-a:8080/antidos-status", now.minus(10, ChronoUnit.MINUTES),
-				"SUCCESS", 200, 35L, 2, 2, 0, "Polled 2 valves", null
+				"SUCCESS", 200, 35L, 2, 2, 10, 2, 0, "Polled 2 valves", null, 1024L, 15,
+				0.30, 45.0, 12, 200
 		);
 		PollEventLog log2 = new PollEventLog(
 				null, "NODE-B", "http://node-b:8080/antidos-status", now.minus(5, ChronoUnit.MINUTES),
@@ -408,6 +416,12 @@ class DatabaseMigrationAndRepositoryTest {
 		// Filter by server
 		List<PollEventLog> nodeA = pollEventLogRepository.findRecent(null, "ALL", "NODE-A", 10);
 		assertTrue(nodeA.stream().allMatch(e -> "NODE-A".equals(e.serverId())));
+		PollEventLog foundNodeA = nodeA.stream().filter(e -> e.processCpuLoad() != null).findFirst().orElse(null);
+		assertNotNull(foundNodeA);
+		assertEquals(0.30, foundNodeA.processCpuLoad());
+		assertEquals(45.0, foundNodeA.heapUsedPercent());
+		assertEquals(12, foundNodeA.tomcatBusyThreads());
+		assertEquals(200, foundNodeA.tomcatMaxThreads());
 
 		// Cursor pagination using beforeId
 		Long topId = all.getFirst().id();

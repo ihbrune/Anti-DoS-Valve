@@ -25,8 +25,37 @@ public record ValveDetailsDto(
 		List<ActiveClientDto> topActiveClients,
 		String error,
 		Long serverGenerationMs,
-		Long payloadBytes
+		Long payloadBytes,
+		SystemMetricsDto system
 ) {
+	/**
+	 * Backward-compatible constructor for previous 17-parameter signature.
+	 */
+	public ValveDetailsDto(
+			String serverTime,
+			ValveHeaderDto valve,
+			SelectedSlotDto selectedSlot,
+			int totalBlockedClients,
+			String blockedLimit,
+			Long maxBlockedOrder,
+			Long sinceBlockedOrder,
+			List<BlockedClientDto> blockedClients,
+			int totalActiveClients,
+			String activeLimit,
+			Long maxActiveOrder,
+			Long sinceActiveOrder,
+			Integer activeMinCount,
+			List<ActiveClientDto> topActiveClients,
+			String error,
+			Long serverGenerationMs,
+			Long payloadBytes
+	) {
+		this(serverTime, valve, selectedSlot, totalBlockedClients, blockedLimit,
+				maxBlockedOrder, sinceBlockedOrder, blockedClients, totalActiveClients,
+				activeLimit, maxActiveOrder, sinceActiveOrder, activeMinCount,
+				topActiveClients, error, serverGenerationMs, payloadBytes, null);
+	}
+
 	/**
 	 * Backward-compatible constructor for previous 15-parameter signature.
 	 */
@@ -50,7 +79,7 @@ public record ValveDetailsDto(
 		this(serverTime, valve, selectedSlot, totalBlockedClients, blockedLimit,
 				maxBlockedOrder, sinceBlockedOrder, blockedClients, totalActiveClients,
 				activeLimit, maxActiveOrder, sinceActiveOrder, activeMinCount,
-				topActiveClients, error, null, null);
+				topActiveClients, error, null, null, null);
 	}
 
 	/**
@@ -59,14 +88,14 @@ public record ValveDetailsDto(
 	public ValveDetailsDto(String serverTime, ValveHeaderDto valve, SelectedSlotDto selectedSlot,
 			int totalBlockedClients, String blockedLimit, List<BlockedClientDto> blockedClients, String error) {
 		this(serverTime, valve, selectedSlot, totalBlockedClients, blockedLimit, null, null,
-				blockedClients, 0, null, null, null, null, null, error, null, null);
+				blockedClients, 0, null, null, null, null, null, error, null, null, null);
 	}
 
 	public ValveDetailsDto withPayloadBytes(long bytes) {
 		return new ValveDetailsDto(serverTime, valve, selectedSlot, totalBlockedClients, blockedLimit,
 				maxBlockedOrder, sinceBlockedOrder, blockedClients, totalActiveClients,
 				activeLimit, maxActiveOrder, sinceActiveOrder, activeMinCount,
-				topActiveClients, error, serverGenerationMs, bytes);
+				topActiveClients, error, serverGenerationMs, bytes, system);
 	}
 
 	public long payloadBytesOrDefault() {

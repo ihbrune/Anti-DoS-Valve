@@ -39,6 +39,38 @@ public class PollEventLogRepository {
 			serverGenerationMs = rs.getInt("server_generation_ms");
 		} catch (java.sql.SQLException ignored) {
 		}
+		Double cpuProcess = null;
+		try {
+			Object obj = rs.getObject("cpu_process");
+			if (obj instanceof Number n) {
+				cpuProcess = n.doubleValue();
+			}
+		} catch (java.sql.SQLException ignored) {
+		}
+		Double heapUsedPercent = null;
+		try {
+			Object obj = rs.getObject("heap_used_percent");
+			if (obj instanceof Number n) {
+				heapUsedPercent = n.doubleValue();
+			}
+		} catch (java.sql.SQLException ignored) {
+		}
+		Integer busyThreads = null;
+		try {
+			Object obj = rs.getObject("busy_threads");
+			if (obj instanceof Number n) {
+				busyThreads = n.intValue();
+			}
+		} catch (java.sql.SQLException ignored) {
+		}
+		Integer maxThreads = null;
+		try {
+			Object obj = rs.getObject("max_threads");
+			if (obj instanceof Number n) {
+				maxThreads = n.intValue();
+			}
+		} catch (java.sql.SQLException ignored) {
+		}
 		return new PollEventLog(
 				rs.getLong("id"),
 				rs.getString("server_id"),
@@ -55,7 +87,11 @@ public class PollEventLogRepository {
 				rs.getString("details"),
 				rs.getString("error_message"),
 				payloadBytes,
-				serverGenerationMs
+				serverGenerationMs,
+				cpuProcess,
+				heapUsedPercent,
+				busyThreads,
+				maxThreads
 		);
 	};
 
@@ -65,8 +101,9 @@ public class PollEventLogRepository {
 				    server_id, url, poll_time, status, http_status_code,
 				    response_time_ms, valves_polled, slots_ingested, events_ingested,
 				    blocked_events_ingested, marked_events_ingested, details, error_message,
-				    payload_bytes, server_generation_ms
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				    payload_bytes, server_generation_ms, cpu_process, heap_used_percent,
+				    busy_threads, max_threads
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				""";
 
 		StorageRetryUtil.executeWithRetry("PollEventLogRepository.insert", () -> {
@@ -86,7 +123,11 @@ public class PollEventLogRepository {
 					log.details(),
 					log.errorMessage(),
 					log.payloadBytes(),
-					log.serverGenerationMs()
+					log.serverGenerationMs(),
+					log.processCpuLoad(),
+					log.heapUsedPercent(),
+					log.tomcatBusyThreads(),
+					log.tomcatMaxThreads()
 			);
 		});
 	}
@@ -101,8 +142,9 @@ public class PollEventLogRepository {
 				    server_id, url, poll_time, status, http_status_code,
 				    response_time_ms, valves_polled, slots_ingested, events_ingested,
 				    blocked_events_ingested, marked_events_ingested, details, error_message,
-				    payload_bytes, server_generation_ms
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				    payload_bytes, server_generation_ms, cpu_process, heap_used_percent,
+				    busy_threads, max_threads
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				""";
 
 		StorageRetryUtil.executeWithRetry("PollEventLogRepository.batchInsert", () -> {
@@ -125,6 +167,26 @@ public class PollEventLogRepository {
 					ps.setString(13, log.errorMessage());
 					ps.setLong(14, log.payloadBytes());
 					ps.setInt(15, log.serverGenerationMs());
+					if (log.processCpuLoad() != null) {
+						ps.setDouble(16, log.processCpuLoad());
+					} else {
+						ps.setNull(16, java.sql.Types.REAL);
+					}
+					if (log.heapUsedPercent() != null) {
+						ps.setDouble(17, log.heapUsedPercent());
+					} else {
+						ps.setNull(17, java.sql.Types.REAL);
+					}
+					if (log.tomcatBusyThreads() != null) {
+						ps.setInt(18, log.tomcatBusyThreads());
+					} else {
+						ps.setNull(18, java.sql.Types.INTEGER);
+					}
+					if (log.tomcatMaxThreads() != null) {
+						ps.setInt(19, log.tomcatMaxThreads());
+					} else {
+						ps.setNull(19, java.sql.Types.INTEGER);
+					}
 				}
 
 				@Override

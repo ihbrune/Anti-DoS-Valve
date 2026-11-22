@@ -700,6 +700,37 @@ public class AntiDoSStatusRenderer {
 				.append("</div>\n")
 				.append("</div>\n");
 
+		AntiDoSSystemMetrics sys = AntiDoSSystemMetrics.collect();
+		if (sys.processCpuLoad() != null || sys.heapUsedPercent() != null || sys.tomcatBusyThreads() != null) {
+			sb.append("<div style=\"margin-bottom:16px; padding:8px 14px; background:var(--card); border:1px solid var(--border); border-radius:6px; display:flex; gap:16px; flex-wrap:wrap; font-size:12px; align-items:center;\">\n")
+					.append("  <span style=\"font-weight:600; color:var(--text);\">&#9881; Host Telemetry:</span>\n");
+			if (sys.processCpuLoad() != null) {
+				sb.append("  <span>CPU (Process): <strong>").append(Math.round(sys.processCpuLoad() * 100.0)).append("%</strong></span>\n");
+			}
+			if (sys.systemCpuLoad() != null) {
+				sb.append("  <span>CPU (System): <strong>").append(Math.round(sys.systemCpuLoad() * 100.0)).append("%</strong></span>\n");
+			}
+			if (sys.heapUsedPercent() != null) {
+				sb.append("  <span>Heap: <strong>").append(sys.heapUsedPercent()).append("%</strong>");
+				if (sys.heapUsedBytes() != null && sys.heapMaxBytes() != null) {
+					sb.append(" (").append(sys.heapUsedBytes() / (1024 * 1024)).append(" MB / ")
+							.append(sys.heapMaxBytes() / (1024 * 1024)).append(" MB)");
+				}
+				sb.append("</span>\n");
+			}
+			if (sys.tomcatBusyThreads() != null) {
+				sb.append("  <span>Tomcat Threads: <strong>").append(sys.tomcatBusyThreads());
+				if (sys.tomcatMaxThreads() != null) {
+					sb.append(" / ").append(sys.tomcatMaxThreads());
+				}
+				sb.append("</strong></span>\n");
+			}
+			if (sys.gcCollectionTimeMs() != null) {
+				sb.append("  <span>GC Time: <strong>").append(sys.gcCollectionTimeMs()).append(" ms</strong></span>\n");
+			}
+			sb.append("</div>\n");
+		}
+
 		int renderedCount = 0;
 		int pipelineOrder = 0;
 		for (AntiDoSValve v : valves) {
@@ -1044,6 +1075,37 @@ public class AntiDoSStatusRenderer {
 				.append("    <button type=\"button\" class=\"btn\" onclick=\"toggleTheme()\" title=\"Toggle Light/Dark Theme\"><span class=\"theme-sun\">&#9728;&#65039;</span><span class=\"theme-moon\">&#127769;</span> Theme</button>\n")
 				.append("  </div>\n")
 				.append("</div>\n");
+
+		AntiDoSSystemMetrics detailsSys = AntiDoSSystemMetrics.collect();
+		if (detailsSys.processCpuLoad() != null || detailsSys.heapUsedPercent() != null || detailsSys.tomcatBusyThreads() != null) {
+			sb.append("<div style=\"margin-bottom:16px; padding:8px 14px; background:var(--card); border:1px solid var(--border); border-radius:6px; display:flex; gap:16px; flex-wrap:wrap; font-size:12px; align-items:center;\">\n")
+					.append("  <span style=\"font-weight:600; color:var(--text);\">&#9881; Host Telemetry:</span>\n");
+			if (detailsSys.processCpuLoad() != null) {
+				sb.append("  <span>CPU (Process): <strong>").append(Math.round(detailsSys.processCpuLoad() * 100.0)).append("%</strong></span>\n");
+			}
+			if (detailsSys.systemCpuLoad() != null) {
+				sb.append("  <span>CPU (System): <strong>").append(Math.round(detailsSys.systemCpuLoad() * 100.0)).append("%</strong></span>\n");
+			}
+			if (detailsSys.heapUsedPercent() != null) {
+				sb.append("  <span>Heap: <strong>").append(detailsSys.heapUsedPercent()).append("%</strong>");
+				if (detailsSys.heapUsedBytes() != null && detailsSys.heapMaxBytes() != null) {
+					sb.append(" (").append(detailsSys.heapUsedBytes() / (1024 * 1024)).append(" MB / ")
+							.append(detailsSys.heapMaxBytes() / (1024 * 1024)).append(" MB)");
+				}
+				sb.append("</span>\n");
+			}
+			if (detailsSys.tomcatBusyThreads() != null) {
+				sb.append("  <span>Tomcat Threads: <strong>").append(detailsSys.tomcatBusyThreads());
+				if (detailsSys.tomcatMaxThreads() != null) {
+					sb.append(" / ").append(detailsSys.tomcatMaxThreads());
+				}
+				sb.append("</strong></span>\n");
+			}
+			if (detailsSys.gcCollectionTimeMs() != null) {
+				sb.append("  <span>GC Time: <strong>").append(detailsSys.gcCollectionTimeMs()).append(" ms</strong></span>\n");
+			}
+			sb.append("</div>\n");
+		}
 
 		// Card 1: Configuration & Status Summary
 		sb.append("<div class=\"card\">\n")
@@ -1755,7 +1817,9 @@ public class AntiDoSStatusRenderer {
 
 		StringBuilder sb = new StringBuilder(2048);
 		sb.append("{\n  \"serverTime\": \"").append(serverTime).append("\",\n");
-		sb.append("  \"totalActiveValves\": ").append(valves.size()).append(",\n");
+		AntiDoSSystemMetrics sysMetrics = AntiDoSSystemMetrics.collect();
+		sysMetrics.appendJson(sb);
+		sb.append(",\n  \"totalActiveValves\": ").append(valves.size()).append(",\n");
 		sb.append("  \"valves\": [\n");
 
 		boolean first = true;
@@ -1921,7 +1985,9 @@ public class AntiDoSStatusRenderer {
 
 		StringBuilder sb = new StringBuilder(4096);
 		sb.append("{\n  \"serverTime\": \"").append(serverTime).append("\",\n");
-		sb.append("  \"valve\": {\n")
+		AntiDoSSystemMetrics sysMetrics = AntiDoSSystemMetrics.collect();
+		sysMetrics.appendJson(sb);
+		sb.append(",\n  \"valve\": {\n")
 				.append("    \"monitorName\": \"").append(escapeJson(target.getMonitorName())).append("\",\n")
 				.append("    \"description\": ").append(target.getDescription() != null ? "\"" + escapeJson(target.getDescription()) + "\"" : "null").append(",\n")
 				.append("    \"pipelineOrder\": ").append(targetPipelineOrder).append(",\n")

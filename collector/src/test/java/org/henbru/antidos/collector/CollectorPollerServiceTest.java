@@ -74,7 +74,10 @@ class CollectorPollerServiceTest {
 		ValveOverviewDto.ValveSummaryDto summary = new ValveOverviewDto.ValveSummaryDto(
 				"POLL_VALVE", 1, "BLOCKING", false, false, 50, 60, 5, 5, 1, 500L, 499L, 2000L, 200L, 10, 1
 		);
-		ValveOverviewDto overview = new ValveOverviewDto("2026-10-17T10:00:00Z", List.of(summary), null);
+		org.henbru.antidos.collector.model.SystemMetricsDto sys = new org.henbru.antidos.collector.model.SystemMetricsDto(
+				0.35, 0.50, 1.80, 536870912L, 2147483648L, 25.0, 42L, 180L, 24, 200
+		);
+		ValveOverviewDto overview = new ValveOverviewDto("2026-10-17T10:00:00Z", List.of(summary), null, 10L, 2048L, sys);
 		when(statusClient.fetchOverview(any())).thenReturn(overview);
 
 		ValveDetailsDto.SelectedSlotDto slotDto = new ValveDetailsDto.SelectedSlotDto(
@@ -95,6 +98,10 @@ class CollectorPollerServiceTest {
 		assertTrue(hb.isPresent());
 		assertTrue(hb.get().online());
 		assertEquals(1, hb.get().valvesCount());
+		assertEquals(0.35, hb.get().processCpuLoad());
+		assertEquals(25.0, hb.get().heapUsedPercent());
+		assertEquals(24, hb.get().tomcatBusyThreads());
+		assertEquals(200, hb.get().tomcatMaxThreads());
 
 		// Verify snapshot
 		Optional<Long> latestKey = slotSnapshotRepository.findLatestSlotKey("POLL-TEST-NODE", "POLL_VALVE");
@@ -117,6 +124,10 @@ class CollectorPollerServiceTest {
 		assertEquals(1, pollLogs.getFirst().eventsIngested());
 		assertEquals(1, pollLogs.getFirst().blockedEventsIngested());
 		assertEquals(0, pollLogs.getFirst().activeEventsIngested());
+		assertEquals(0.35, pollLogs.getFirst().processCpuLoad());
+		assertEquals(25.0, pollLogs.getFirst().heapUsedPercent());
+		assertEquals(24, pollLogs.getFirst().tomcatBusyThreads());
+		assertEquals(200, pollLogs.getFirst().tomcatMaxThreads());
 	}
 
 	@Test

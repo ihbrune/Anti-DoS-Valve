@@ -40,6 +40,9 @@ class DashboardControllerTest {
 	private org.henbru.antidos.collector.storage.PollEventLogRepository pollEventLogRepository;
 
 	@Autowired
+	private org.henbru.antidos.collector.storage.HeartbeatRepository heartbeatRepository;
+
+	@Autowired
 	private org.henbru.antidos.collector.storage.SubnetProfileRepository subnetProfileRepository;
 
 	@Autowired
@@ -320,9 +323,20 @@ class DashboardControllerTest {
 				"/antidos-status", "127.0.0.1", now, 12345
 		));
 
+		heartbeatRepository.upsert(new org.henbru.antidos.collector.model.EndpointHeartbeat(
+				"Demo-Server", "http://localhost:8080/antidos-status", true, now, now, null, 15L, 1,
+				0.28, 0.45, 1.25, 1073741824L, 2147483648L, 50.0, 450L, 18, 200
+		));
+
 		mockMvc.perform(get("/server/Demo-Server"))
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("Demo-Server")))
+				.andExpect(content().string(containsString("Process CPU")))
+				.andExpect(content().string(containsString("28%")))
+				.andExpect(content().string(containsString("Heap Memory")))
+				.andExpect(content().string(containsString("50% (1024 MB / 2048 MB)")))
+				.andExpect(content().string(containsString("Tomcat Threads")))
+				.andExpect(content().string(containsString("18 / 200")))
 				.andExpect(content().string(containsString("Node Incidents")))
 				.andExpect(content().string(containsString("Monitored Valves &amp; Active Tracking Configuration")))
 				.andExpect(content().string(containsString("Global Default")))

@@ -12,18 +12,23 @@ public record ValveOverviewDto(
 		List<ValveSummaryDto> valves,
 		String error,
 		Long serverGenerationMs,
-		Long payloadBytes
+		Long payloadBytes,
+		SystemMetricsDto system
 ) {
+	public ValveOverviewDto(String serverTime, List<ValveSummaryDto> valves, String error, Long serverGenerationMs, Long payloadBytes) {
+		this(serverTime, valves, error, serverGenerationMs, payloadBytes, null);
+	}
+
 	public ValveOverviewDto(String serverTime, List<ValveSummaryDto> valves, String error) {
-		this(serverTime, valves, error, null, null);
+		this(serverTime, valves, error, null, null, null);
 	}
 
 	public ValveOverviewDto(String serverTime, List<ValveSummaryDto> valves, String error, Long serverGenerationMs) {
-		this(serverTime, valves, error, serverGenerationMs, null);
+		this(serverTime, valves, error, serverGenerationMs, null, null);
 	}
 
 	public ValveOverviewDto withPayloadBytes(long bytes) {
-		return new ValveOverviewDto(serverTime, valves, error, serverGenerationMs, bytes);
+		return new ValveOverviewDto(serverTime, valves, error, serverGenerationMs, bytes, system);
 	}
 
 	public long payloadBytesOrDefault() {

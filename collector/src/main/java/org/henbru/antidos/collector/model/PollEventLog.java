@@ -1,6 +1,7 @@
 package org.henbru.antidos.collector.model;
 
 import java.time.Instant;
+import java.util.Locale;
 
 /**
  * Audit log entry capturing an individual polling attempt against a monitored endpoint node.
@@ -21,8 +22,38 @@ public record PollEventLog(
 		String details,
 		String errorMessage,
 		long payloadBytes,
-		int serverGenerationMs
+		int serverGenerationMs,
+		Double processCpuLoad,
+		Double heapUsedPercent,
+		Integer tomcatBusyThreads,
+		Integer tomcatMaxThreads
 ) {
+	/**
+	 * Backward-compatible constructor for 16-parameter signature.
+	 */
+	public PollEventLog(
+			Long id,
+			String serverId,
+			String url,
+			Instant pollTime,
+			String status,
+			int httpStatusCode,
+			long responseTimeMs,
+			int valvesPolled,
+			int slotsIngested,
+			int eventsIngested,
+			int blockedEventsIngested,
+			int markedEventsIngested,
+			String details,
+			String errorMessage,
+			long payloadBytes,
+			int serverGenerationMs
+	) {
+		this(id, serverId, url, pollTime, status, httpStatusCode, responseTimeMs,
+				valvesPolled, slotsIngested, eventsIngested, blockedEventsIngested, markedEventsIngested,
+				details, errorMessage, payloadBytes, serverGenerationMs, null, null, null, null);
+	}
+
 	/**
 	 * Backward-compatible constructor for 14-parameter signature.
 	 */
@@ -104,8 +135,32 @@ public record PollEventLog(
 			return payloadBytes + " B";
 		}
 		if (payloadBytes < 1024 * 1024) {
-			return String.format(java.util.Locale.US, "%.1f KB", payloadBytes / 1024.0);
+			return String.format(Locale.US, "%.1f KB", payloadBytes / 1024.0);
 		}
-		return String.format(java.util.Locale.US, "%.2f MB", payloadBytes / (1024.0 * 1024.0));
+		return String.format(Locale.US, "%.2f MB", payloadBytes / (1024.0 * 1024.0));
+	}
+
+	public String formattedCpu() {
+		if (processCpuLoad == null) {
+			return "-";
+		}
+		return String.format(Locale.US, "%.0f%%", processCpuLoad * 100.0);
+	}
+
+	public String formattedHeap() {
+		if (heapUsedPercent == null) {
+			return "-";
+		}
+		return String.format(Locale.US, "%.0f%%", heapUsedPercent);
+	}
+
+	public String formattedThreads() {
+		if (tomcatBusyThreads == null) {
+			return "-";
+		}
+		if (tomcatMaxThreads == null) {
+			return String.valueOf(tomcatBusyThreads);
+		}
+		return tomcatBusyThreads + "/" + tomcatMaxThreads;
 	}
 }

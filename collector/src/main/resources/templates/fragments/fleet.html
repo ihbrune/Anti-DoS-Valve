@@ -36,6 +36,21 @@
                 </div>
             </div>
 
+            <div th:if="${hb.hasSystemMetrics()}" class="endpoint-stats-row" style="margin-top: 8px; border-top: 1px dashed var(--border-color); padding-top: 6px;">
+                <div>
+                    <div class="endpoint-stat-label">CPU</div>
+                    <div class="endpoint-stat-val" th:text="${hb.formattedCpu()}">12%</div>
+                </div>
+                <div>
+                    <div class="endpoint-stat-label">Heap</div>
+                    <div class="endpoint-stat-val" th:text="${hb.formattedHeap()}">45%</div>
+                </div>
+                <div>
+                    <div class="endpoint-stat-label">Threads</div>
+                    <div class="endpoint-stat-val" th:text="${hb.formattedThreads()}">14 / 200</div>
+                </div>
+            </div>
+
             <div th:if="${hb.lastError}" style="color: var(--color-danger); font-size: 11px; margin-top: 6px; word-break: break-all;">
                 <strong>Error:</strong> <span th:text="${hb.lastError}">Connection refused</span>
             </div>

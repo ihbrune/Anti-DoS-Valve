@@ -61,6 +61,12 @@
             <div th:text="${e.details}" style="color: var(--text-secondary); word-break: break-word;">
                 Polled 1 valve(s), 1 slot(s), 0 event(s)
             </div>
+            <div th:if="${e.processCpuLoad != null or e.heapUsedPercent != null or e.tomcatBusyThreads != null}"
+                 style="font-size: 11px; color: var(--text-muted); font-family: ui-monospace, monospace; margin-top: 3px;">
+                <span th:if="${e.processCpuLoad != null}" th:text="'CPU: ' + ${e.formattedCpu()} + ' '">CPU: 15% </span>
+                <span th:if="${e.heapUsedPercent != null}" th:text="'Heap: ' + ${e.formattedHeap()} + ' '">Heap: 42% </span>
+                <span th:if="${e.tomcatBusyThreads != null}" th:text="'Threads: ' + ${e.formattedThreads()}">Threads: 18/200</span>
+            </div>
             <div th:if="${e.errorMessage != null}"
                  class="log-err-text"
                  th:text="${e.errorMessage}">

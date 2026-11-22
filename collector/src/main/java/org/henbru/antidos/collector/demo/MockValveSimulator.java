@@ -141,7 +141,43 @@ public class MockValveSimulator {
 			}
 		}
 
-		return new ValveOverviewDto(serverTime, valves, null);
+		return new ValveOverviewDto(serverTime, valves, null, 8L, 4096L, buildSimulatedSystemMetrics(nodeId));
+	}
+
+	public org.henbru.antidos.collector.model.SystemMetricsDto buildSimulatedSystemMetrics(String nodeId) {
+		String norm = normalizeNodeId(nodeId);
+		double cpu = switch (norm) {
+			case "edge-eu" -> 0.28;
+			case "api-gateway" -> 0.42;
+			case "staging-node" -> 0.12;
+			default -> 0.20;
+		};
+		double heapPct = switch (norm) {
+			case "edge-eu" -> 54.2;
+			case "api-gateway" -> 68.5;
+			case "staging-node" -> 31.0;
+			default -> 40.0;
+		};
+		int busyThreads = switch (norm) {
+			case "edge-eu" -> 18;
+			case "api-gateway" -> 35;
+			case "staging-node" -> 4;
+			default -> 10;
+		};
+		long heapMax = 2147483648L; // 2 GB
+		long heapUsed = (long) (heapMax * (heapPct / 100.0));
+		return new org.henbru.antidos.collector.model.SystemMetricsDto(
+				cpu,
+				Math.min(1.0, cpu + 0.10),
+				1.25,
+				heapUsed,
+				heapMax,
+				heapPct,
+				120L,
+				450L,
+				busyThreads,
+				200
+		);
 	}
 
 	public ValveDetailsDto buildDetails(String nodeId, String valveName, String slotParam, String limitParam) {
@@ -239,7 +275,10 @@ public class MockValveSimulator {
 				null,
 				activeMinCount,
 				activeList,
-				null
+				null,
+				8L,
+				4096L,
+				buildSimulatedSystemMetrics(nodeId)
 		);
 	}
 

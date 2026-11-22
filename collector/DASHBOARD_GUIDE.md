@@ -86,6 +86,7 @@ Accessible via `/`. The central command center summarizing telemetry across all 
 Each card represents a distinct Tomcat instance:
 * **Health Badge (`ONLINE` / `OFFLINE`):** Node responsiveness detected via background polling.
 * **Uptime & Latency:** Response time for the `/antidos-status` JSON handshake.
+* **Host Resource Indicators:** Live CPU utilization, JVM heap memory percentage, and Tomcat worker thread count (`busy / max`).
 * **Valve Breakdown:** Lists each active valve within that node, its current operating mode (`BLOCKING` or `MARKING`), slot length, and request throughput.
 * **Direct Navigation:** Click any server card header to open the dedicated **Server Node Detail View** (`/server/{serverId}`).
 
@@ -375,6 +376,7 @@ Accessible by clicking any server card header in the fleet dashboard or visiting
 * **Target Endpoint URL:** Base URL queried by the Collector poller (e.g., `http://tomcat-node-01:8080/antidos-status`).
 * **Runtime Platform:** Operating system name, architecture, Java runtime version, and detected Tomcat Catalina container version.
 * **Polling Diagnostics:** Last successful synchronization timestamp and HTTP response latency.
+* **Host & Runtime Resource Telemetry:** Real-time JVM Process CPU load, System CPU / OS load average, JVM heap memory usage (`used / max` and percentage), active Tomcat connector worker threads (`busy / max`), and cumulative Garbage Collection pause times.
 
 ### 2. Monitored Valves & Active Tracking Configuration
 Summarizes all Valve instances configured on the node and how the Collector ingests client-level telemetry:

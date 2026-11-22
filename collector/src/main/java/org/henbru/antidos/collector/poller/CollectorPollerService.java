@@ -211,6 +211,7 @@ public class CollectorPollerService {
 			int valveCount = overview.valves() != null
 					? (int) overview.valves().stream().filter(v -> endpoint.isValveIncluded(v.monitorName())).count()
 					: 0;
+			org.henbru.antidos.collector.model.SystemMetricsDto sys = overview.system();
 			heartbeatRepository.upsert(new EndpointHeartbeat(
 					endpoint.getName(),
 					endpoint.getUrl(),
@@ -219,7 +220,16 @@ public class CollectorPollerService {
 					now,
 					null,
 					overviewDuration,
-					valveCount
+					valveCount,
+					sys != null ? sys.processCpuLoad() : null,
+					sys != null ? sys.systemCpuLoad() : null,
+					sys != null ? sys.systemLoadAverage() : null,
+					sys != null ? sys.heapUsedBytes() : null,
+					sys != null ? sys.heapMaxBytes() : null,
+					sys != null ? sys.heapUsedPercent() : null,
+					sys != null ? sys.gcCollectionTimeMs() : null,
+					sys != null ? sys.tomcatBusyThreads() : null,
+					sys != null ? sys.tomcatMaxThreads() : null
 			));
 
 			java.util.Set<String> activeIncludedValveNames = new java.util.HashSet<>();
@@ -326,7 +336,11 @@ public class CollectorPollerService {
 					details,
 					errorMsg,
 					totalPayloadBytes,
-					totalServerGenerationMs
+					totalServerGenerationMs,
+					sys != null ? sys.processCpuLoad() : null,
+					sys != null ? sys.heapUsedPercent() : null,
+					sys != null ? sys.tomcatBusyThreads() : null,
+					sys != null ? sys.tomcatMaxThreads() : null
 			));
 
 		} catch (IOException | InterruptedException | RuntimeException e) {
