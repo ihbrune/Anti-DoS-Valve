@@ -851,6 +851,15 @@ public class AntiDoSDynamicBlockRegistry {
 	// =========================================================================
 
 	/**
+	 * Fast-path check indicating whether any dynamic User-Agent block rules are currently registered.
+	 *
+	 * @return {@code true} if at least one active User-Agent rule is present
+	 */
+	public boolean hasActiveUaBlocks() {
+		return hasActiveUaBlocks;
+	}
+
+	/**
 	 * Matches an incoming request's 32-bit User-Agent hash against active (non-expired) dynamic UA rules.
 	 *
 	 * @param uaHash32  Folded 32-bit FNV-1a hash of the User-Agent string

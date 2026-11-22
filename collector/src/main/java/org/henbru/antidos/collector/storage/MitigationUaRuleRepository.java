@@ -219,6 +219,42 @@ public class MitigationUaRuleRepository {
 		}
 	}
 
+	public record UaDeterrenceUpdate(
+			long id,
+			long totalBlockedHits,
+			long totalBypassedHits,
+			Instant lastHitAt
+	) {}
+
+	public void batchUpdateDeterrenceTelemetry(List<UaDeterrenceUpdate> updates, Instant now) {
+		if (updates == null || updates.isEmpty()) {
+			return;
+		}
+		String sql = """
+				UPDATE mitigation_ua_rules
+				SET total_blocked_hits = ?,
+				    total_bypassed_hits = ?,
+				    last_hit_at = ?,
+				    updated_at = ?
+				WHERE id = ?
+				""";
+		Timestamp tsNow = Timestamp.from(now != null ? now : Instant.now());
+		StorageRetryUtil.executeWithRetry("MitigationUaRuleRepository.batchUpdateDeterrenceTelemetry", () -> {
+			jdbcTemplate.batchUpdate(sql, updates, updates.size(), (ps, u) -> {
+				ps.setLong(1, u.totalBlockedHits());
+				ps.setLong(2, u.totalBypassedHits());
+				if (u.lastHitAt() != null) {
+					ps.setTimestamp(3, Timestamp.from(u.lastHitAt()));
+				} else {
+					ps.setNull(3, java.sql.Types.TIMESTAMP);
+				}
+				ps.setTimestamp(4, tsNow);
+				ps.setLong(5, u.id());
+			});
+			return null;
+		});
+	}
+
 	public int deleteHistoricalRulesOlderThan(Instant cutoff) {
 		if (cutoff == null) {
 			return 0;

@@ -27,11 +27,34 @@ public record AntiDoSSystemMetrics(
 		Integer tomcatMaxThreads
 ) {
 
+	public static final long CACHE_TTL_MS = 1000L;
+
+	private record CachedSnapshot(long timestampMs, AntiDoSSystemMetrics metrics) {}
+
+	private static volatile CachedSnapshot cachedSnapshot = null;
+
 	/**
 	 * Gathers current system, JVM, and Tomcat container metrics with zero external dependencies
-	 * and safe exception isolation.
+	 * and safe exception isolation, cached briefly to avoid repeated JMX scans across multi-valve polls.
 	 */
 	public static AntiDoSSystemMetrics collect() {
+		long now = System.currentTimeMillis();
+		CachedSnapshot snap = cachedSnapshot;
+		if (snap != null) {
+			long age = now - snap.timestampMs();
+			if (age >= 0 && age < CACHE_TTL_MS) {
+				return snap.metrics();
+			}
+		}
+		AntiDoSSystemMetrics fresh = collectFresh();
+		cachedSnapshot = new CachedSnapshot(now, fresh);
+		return fresh;
+	}
+
+	/**
+	 * Uncached collection of current system, JVM, and Tomcat container metrics.
+	 */
+	public static AntiDoSSystemMetrics collectFresh() {
 		Double processCpu = null;
 		Double systemCpu = null;
 		Double loadAvg = null;

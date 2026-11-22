@@ -887,4 +887,66 @@ class MitigationServiceTest {
 		assertFalse(activeUa.stream().anyMatch(r -> r.rawUserAgent().equals(immuneInternalUa)));
 		assertFalse(activeUa.stream().anyMatch(r -> r.rawUserAgent().equals(authBearingUa)));
 	}
+
+	@Test
+	void testSyntheticUaEventDeterrenceAndOffenderExclusion() {
+		UserAgentMemoryRepository uaMemRepo = new UserAgentMemoryRepository(jdbcTemplate);
+		MitigationUaRuleRepository uaRuleRepo = new MitigationUaRuleRepository(jdbcTemplate);
+		SystemSettingsRepository settingsRepo = new SystemSettingsRepository(jdbcTemplate);
+		org.henbru.antidos.collector.storage.ClientEventRepository eventRepo =
+				new org.henbru.antidos.collector.storage.ClientEventRepository(jdbcTemplate);
+
+		CollectorProperties props = new CollectorProperties();
+		props.setDefaultMitigationTtlMinutes(60);
+		props.setMitigationToken("secret-mitigation-token");
+		MitigationService svc = new MitigationService(
+				props, ruleRepository, valveRepository,
+				new ValveStatusClient(new com.fasterxml.jackson.databind.ObjectMapper()),
+				null, null, jdbcTemplate, uaRuleRepo, uaMemRepo, settingsRepo);
+
+		String botUa = "Mozilla/5.0 Chrome/154.0.0.0 SyntheticCounterBot";
+		MitigationUaRule createdRule = svc.createOrUpdateUaBlock(
+				botUa, 60, "Pillar 1 botnet", MitigationUaRule.SOURCE_MANUAL, null, false, "ADMIN");
+		assertEquals(0L, createdRule.totalBlockedHits());
+
+		String syntheticKey = "UA:" + createdRule.uaHash32();
+		Instant now = Instant.now();
+		org.henbru.antidos.collector.model.ClientEvent uaEvent = new org.henbru.antidos.collector.model.ClientEvent(
+				null,
+				"Pub01",
+				"EDGE_VALVE",
+				1001L,
+				now,
+				syntheticKey,
+				15,
+				0,
+				true,
+				org.henbru.antidos.collector.model.ClientEvent.STATUS_BLOCKED,
+				true,
+				now,
+				7,
+				1,
+				0,
+				0,
+				0,
+				"GET",
+				"/portal/catalog",
+				botUa,
+				false,
+				false
+		);
+		assertEquals("", uaEvent.subnetGroup());
+		assertEquals(org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED, uaEvent.enrichmentStatus());
+		eventRepo.batchUpsert(List.of(uaEvent));
+
+		// Offenders ranking must exclude synthetic UA: keys
+		assertTrue(eventRepo.findTopOffenders(now.minusSeconds(3600), 20).stream()
+				.noneMatch(o -> o.clientKey().startsWith("UA:")));
+
+		// Deterrence refresh must aggregate hits onto mitigation_ua_rules
+		svc.refreshDeterrenceMetrics();
+		MitigationUaRule refreshed = svc.getUaRuleById(createdRule.id()).orElseThrow();
+		assertEquals(15L, refreshed.totalBlockedHits());
+		assertNotNull(refreshed.lastHitAt());
+	}
 }

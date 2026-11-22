@@ -198,9 +198,10 @@ public class ClientEventRepository {
 		try {
 			List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
 					SELECT id, client_key FROM client_events
-					WHERE (ip_version = 4 AND (ip_v4_start IS NULL OR ip_v4_end IS NULL))
+					WHERE client_key NOT LIKE 'UA:%'
+					  AND ((ip_version = 4 AND (ip_v4_start IS NULL OR ip_v4_end IS NULL))
 					   OR (ip_version = 6 AND (ip_v6_start IS NULL OR ip_v6_end IS NULL))
-					   OR (subnet_group NOT LIKE '%/%' AND (client_key LIKE '%.%' OR client_key LIKE '%:%'))
+					   OR (subnet_group NOT LIKE '%/%' AND (client_key LIKE '%.%' OR client_key LIKE '%:%')))
 					""");
 			if (!rows.isEmpty()) {
 				log.info("Repairing {} unnormalized client events with canonical network ranges and subnets...", rows.size());
@@ -580,7 +581,7 @@ public class ClientEventRepository {
 				.append("MIN(slot_time) AS first_seen, ")
 				.append("MAX(slot_time) AS last_seen ")
 				.append("FROM client_events ")
-				.append("WHERE 1=1 ");
+				.append("WHERE client_key NOT LIKE 'UA:%' ");
 
 		List<Object> params = new ArrayList<>();
 		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn, asOrg, status);
@@ -1043,7 +1044,7 @@ public class ClientEventRepository {
 				    SUM(CASE WHEN status = 'MARKED' THEN 1 ELSE 0 END) AS marked_count,
 				    SUM(CASE WHEN status = 'ACTIVE' THEN 1 ELSE 0 END) AS active_count,
 				    SUM(CASE WHEN sample_authenticated = TRUE OR (authenticated_count IS NOT NULL AND authenticated_count > 0) THEN 1 ELSE 0 END) AS auth_count,
-				    COUNT(DISTINCT subnet_group) AS distinct_subnets,
+				    COUNT(DISTINCT NULLIF(subnet_group, '')) AS distinct_subnets,
 				    COUNT(DISTINCT asn) AS distinct_asns,
 				    SUM(CASE WHEN client_type IN ('DATACENTER', 'TOR_EXIT_NODE') THEN 1 ELSE 0 END) AS datacenter_count,
 				    SUM(CASE WHEN client_type IN ('RESIDENTIAL', 'PRIVACY_RELAY') THEN 1 ELSE 0 END) AS residential_count,
@@ -1120,6 +1121,7 @@ public class ClientEventRepository {
 				FROM client_events
 				WHERE slot_time >= ? AND slot_time <= ?
 				  AND TRIM(sample_user_agent) = ?
+				  AND subnet_group IS NOT NULL AND subnet_group != ''
 				""");
 		List<Object> params = new ArrayList<>();
 		params.add(Timestamp.from(from));

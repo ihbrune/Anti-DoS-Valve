@@ -3716,7 +3716,7 @@ class AntiDoSValveTest {
 		assertTrue(upsertUa.getOutput().contains("\"dynamicUaBlocksActiveCount\": 1"));
 		assertEquals(1, valve.getDynamicBlockRegistry().getActiveUaCount(valve.getTimeInMillis()));
 
-		// 1. Unauthenticated first contact with blocked UA -> rejected immediately (HTTP 429) & counted
+		// 1. Unauthenticated first contact with blocked UA -> rejected immediately (HTTP 429) & counted under synthetic UA:<hash> key
 		TestRequest r1 = new TestRequest("/portal/catalog", "198.51.100.10");
 		r1.setHeader("User-Agent", botUa);
 		TestResponse resp1 = new TestResponse();
@@ -3724,6 +3724,11 @@ class AntiDoSValveTest {
 		assertEquals(429, resp1.getErrorCode());
 		assertEquals(1L, valve.getDynamicBlockRegistry().getTotalUaBlockedRequests());
 		assertEquals(0L, valve.getDynamicBlockRegistry().getTotalUaBypassedRequests());
+		AntiDoSSlot currentSlot = AntiDoSStatusRenderer.resolveTargetSlot(valve.provideMonitor(), "current");
+		assertNotNull(currentSlot.getBlockedCounters().get(AntiDoSValve.DYNAMIC_UA_COUNTER_PREFIX + botHash),
+				"Blocked UA request must be accounted under synthetic UA:<hash> counter");
+		assertNull(currentSlot.getBlockedCounters().get("198.51.100.10"),
+				"Client IP counter must not be locked in blockedCounters by a UA rule");
 
 		// 2. Unrelated legitimate UA from same subnet -> allowed
 		TestRequest rClean = new TestRequest("/portal/catalog", "198.51.100.11");
@@ -3784,6 +3789,93 @@ class AntiDoSValveTest {
 		assertEquals(200, combinedReplace.getStatus());
 		assertEquals(1, valve.getDynamicBlockRegistry().getActiveCount(valve.getTimeInMillis()));
 		assertEquals(0, valve.getDynamicBlockRegistry().getActiveUaCount(valve.getTimeInMillis()));
+	}
+
+	@Test
+	void testDynamicUserAgentBlockDoesNotCollateralLockSubnetOrSameIp() throws Exception {
+		AntiDoSValve.getSharedAuthSessionCache().clear();
+		AntiDoSValve valve = createGuardrailTestValve("DYNAMIC_UA_SUBNET_ISOLATION_TEST");
+		valve.setStatusUri("/antidos-status");
+		valve.setStatusPassword("uaSubnetStatusToken123");
+		valve.setRelevantPaths("/portal/.*");
+		valve.setIpv4SubnetMask(24);
+		valve.setAllowedRequestsPerSlot(50);
+		valve.setVisitorCookieEnabled(true);
+		valve.setVisitorCookieSecret("00112233445566778899aabbccddeeff");
+		valve.setVisitorCookieEnforceUserAgent(true);
+		valve.setVisitorCookieMinAgeSeconds(10);
+		valve.setAuthTrackingMode("COOKIE");
+		valve.setAuthCookieName("JSESSIONID");
+		valve.setAuthLoginPaths("/trust");
+		valve.reloadMonitor();
+
+		String botUa = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/154.0.0.0 Safari/537.36";
+		String cleanUa = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/158.0.0.0 Safari/537.36";
+		int botHash = AntiDoSVisitorTokenService.computeUserAgentHash32(botUa);
+		int cleanHash = AntiDoSVisitorTokenService.computeUserAgentHash32(cleanUa);
+
+		assertEquals(200, sendMitigationCommand(valve,
+				"action", "upsertua",
+				"uaHash32", String.valueOf(botHash),
+				"ttlSeconds", "600",
+				"reason", "Subnet isolation test").getStatus());
+
+		// 1. Trigger dynamic UA block on 198.51.100.10 (inside /24)
+		TestRequest blockedReq = new TestRequest("/portal/catalog", "198.51.100.10");
+		blockedReq.setHeader("User-Agent", botUa);
+		TestResponse blockedResp = new TestResponse();
+		valve.invoke(blockedReq, blockedResp);
+		assertEquals(429, blockedResp.getErrorCode());
+
+		AntiDoSSlot slot = AntiDoSStatusRenderer.resolveTargetSlot(valve.provideMonitor(), "current");
+		assertNull(slot.getBlockedCounters().get("198.51.100.0/24"),
+				"/24 subnet must not be collateral-locked by dynamic UA rule");
+		AntiDoSCounter uaCounter = slot.getBlockedCounters().get(AntiDoSValve.DYNAMIC_UA_COUNTER_PREFIX + botHash);
+		assertNotNull(uaCounter);
+		assertNotNull(uaCounter.getSample());
+		assertEquals("/portal/catalog", uaCounter.getSample().uri());
+
+		// 2. Same IP (198.51.100.10) with clean browser UA is allowed immediately
+		TestRequest cleanSameIp = new TestRequest("/portal/catalog", "198.51.100.10");
+		cleanSameIp.setHeader("User-Agent", cleanUa);
+		TestResponse cleanSameIpResp = new TestResponse();
+		valve.invoke(cleanSameIp, cleanSameIpResp);
+		assertEquals(-1, cleanSameIpResp.getErrorCode());
+
+		// 3. Another IP in same /24 subnet (198.51.100.20) hits UA mismatch -> blocked (429)
+		long now = valve.getTimeInMillis();
+		byte[] subnetBytes = valve.extractVisitorSubnetBytes("198.51.100.20");
+		String wrongCookie = valve.getVisitorTokenService().createToken(subnetBytes, cleanHash, 2, 900_000L, now);
+		TestRequest mismatchReq = new TestRequest("/portal/catalog", "198.51.100.20");
+		mismatchReq.setHeader("User-Agent", botUa);
+		mismatchReq.setCookies(new Cookie[]{new Cookie(valve.getVisitorCookieName(), wrongCookie)});
+		TestResponse mismatchResp = new TestResponse();
+		valve.invoke(mismatchReq, mismatchResp);
+		assertEquals(429, mismatchResp.getErrorCode());
+
+		// 4. Immediately afterwards on the SAME IP (198.51.100.20) with valid mismatch-free cookie -> must bypass!
+		String validCookie = valve.getVisitorTokenService().createToken(subnetBytes, botHash, 2, 900_000L, now);
+		TestRequest validRetry = new TestRequest("/portal/catalog", "198.51.100.20");
+		validRetry.setHeader("User-Agent", botUa);
+		validRetry.setCookies(new Cookie[]{new Cookie(valve.getVisitorCookieName(), validCookie)});
+		TestResponse validRetryResp = new TestResponse();
+		valve.invoke(validRetry, validRetryResp);
+		assertEquals(-1, validRetryResp.getErrorCode(),
+				"Valid returning visitor on same IP after UA block must not be collateral-blocked");
+
+		// 5. Same IP (198.51.100.10) with authenticated session and blocked UA -> must bypass!
+		AntiDoSValve.getSharedAuthSessionCache().registerSession("ua-isolation-auth", 1_800_000L, now);
+		TestRequest authRetry = new TestRequest("/portal/catalog", "198.51.100.10");
+		authRetry.setHeader("User-Agent", botUa);
+		authRetry.setCookies(new Cookie[]{new Cookie("JSESSIONID", "ua-isolation-auth")});
+		TestResponse authRetryResp = new TestResponse();
+		valve.invoke(authRetry, authRetryResp);
+		assertEquals(-1, authRetryResp.getErrorCode(),
+				"Authenticated user on same IP after UA block must not be collateral-blocked");
+
+		// Synthetic UA:<hash> counter aggregated distinct attacker IPs (.10 and .20)
+		assertEquals(2L, uaCounter.getCount());
+		assertEquals(2, uaCounter.getDistinctClients());
 	}
 
 	@Test

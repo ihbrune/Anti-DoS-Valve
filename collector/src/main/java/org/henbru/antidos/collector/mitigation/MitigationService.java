@@ -1644,10 +1644,13 @@ public class MitigationService {
 		ruleRepository.expireElapsedRules(now);
 		List<MitigationRule> activeRules = ruleRepository.findActiveRules(now);
 		lastDeterrenceRefreshMillis = System.currentTimeMillis();
-		if (activeRules.isEmpty()) {
-			return;
+		if (!activeRules.isEmpty()) {
+			refreshCidrDeterrenceMetrics(activeRules, now);
 		}
+		refreshUaDeterrenceMetrics(now);
+	}
 
+	private void refreshCidrDeterrenceMetrics(List<MitigationRule> activeRules, Instant now) {
 		Instant recentCutoff = now.minusSeconds(DETERRENCE_WINDOW_SECONDS);
 		Map<String, List<MitigationRule>> rulesByCidr = new HashMap<>(activeRules.size() * 2);
 		Instant earliestCutoff = null;
@@ -1723,6 +1726,95 @@ public class MitigationService {
 
 		if (!updates.isEmpty()) {
 			ruleRepository.batchUpdateDeterrenceTelemetry(updates, now);
+		}
+	}
+
+	private void refreshUaDeterrenceMetrics(Instant now) {
+		if (uaRuleRepository == null) {
+			return;
+		}
+		uaRuleRepository.expireElapsedRules(now);
+		List<MitigationUaRule> activeUaRules = uaRuleRepository.findActiveRules(now);
+		if (activeUaRules.isEmpty()) {
+			return;
+		}
+
+		Map<String, List<MitigationUaRule>> rulesBySyntheticKey = new HashMap<>(activeUaRules.size() * 2);
+		Map<String, List<MitigationUaRule>> rulesByRawUa = new HashMap<>(activeUaRules.size() * 2);
+		Instant earliestCutoff = null;
+		for (MitigationUaRule rule : activeUaRules) {
+			if (rule.uaHash32() != 0) {
+				rulesBySyntheticKey.computeIfAbsent("UA:" + rule.uaHash32(), k -> new ArrayList<>(1)).add(rule);
+			}
+			if (rule.rawUserAgent() != null && !rule.rawUserAgent().isBlank()) {
+				rulesByRawUa.computeIfAbsent(rule.rawUserAgent().trim(), k -> new ArrayList<>(1)).add(rule);
+			}
+			Instant ruleCutoff = rule.createdAt().minusSeconds(60);
+			if (earliestCutoff == null || ruleCutoff.isBefore(earliestCutoff)) {
+				earliestCutoff = ruleCutoff;
+			}
+		}
+
+		if (earliestCutoff == null) {
+			return;
+		}
+
+		Map<Long, DeterrenceStatsAccumulator> statsByRuleId = new HashMap<>();
+		try {
+			jdbcTemplate.query("""
+					SELECT client_key, sample_user_agent, slot_time, request_count, last_updated_at
+					FROM client_events
+					WHERE status = 'BLOCKED'
+					  AND slot_time >= ?
+					""",
+					rs -> {
+						String clientKey = rs.getString("client_key");
+						String sampleUa = rs.getString("sample_user_agent");
+						List<MitigationUaRule> matched = null;
+						if (IpNetworkUtil.isSyntheticUaKey(clientKey)) {
+							matched = rulesBySyntheticKey.get(clientKey.trim());
+						} else if (sampleUa != null && !sampleUa.isBlank()) {
+							matched = rulesByRawUa.get(sampleUa.trim());
+						}
+						if (matched == null || matched.isEmpty()) {
+							return;
+						}
+						Instant slotTime = toInstant(rs.getObject("slot_time"));
+						long reqCount = rs.getLong("request_count");
+						Instant lastUpdated = toInstant(rs.getObject("last_updated_at"));
+						for (MitigationUaRule rule : matched) {
+							if (slotTime == null || !slotTime.isBefore(rule.createdAt().minusSeconds(60))) {
+								statsByRuleId.computeIfAbsent(rule.id(), k -> new DeterrenceStatsAccumulator())
+										.accept(reqCount, 1, lastUpdated);
+							}
+						}
+					},
+					Timestamp.from(earliestCutoff));
+		} catch (Exception e) {
+			log.debug("Could not batch-query UA deterrence stats: {}", e.getMessage());
+			return;
+		}
+
+		List<MitigationUaRuleRepository.UaDeterrenceUpdate> uaUpdates = new ArrayList<>();
+		for (MitigationUaRule rule : activeUaRules) {
+			DeterrenceStatsAccumulator acc = statsByRuleId.get(rule.id());
+			long totalHits = acc != null ? acc.totalHits : 0L;
+			Instant lastHit = acc != null ? acc.lastHit : null;
+
+			long effectiveHits = Math.max(rule.totalBlockedHits(), totalHits);
+			Instant effectiveLastHit = (lastHit != null && (rule.lastHitAt() == null || lastHit.isAfter(rule.lastHitAt())))
+					? lastHit
+					: rule.lastHitAt();
+
+			if (effectiveHits != rule.totalBlockedHits()
+					|| !Objects.equals(effectiveLastHit, rule.lastHitAt())) {
+				uaUpdates.add(new MitigationUaRuleRepository.UaDeterrenceUpdate(
+						rule.id(), effectiveHits, rule.totalBypassedHits(), effectiveLastHit));
+			}
+		}
+
+		if (!uaUpdates.isEmpty()) {
+			uaRuleRepository.batchUpdateDeterrenceTelemetry(uaUpdates, now);
 		}
 	}
 

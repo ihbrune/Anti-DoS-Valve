@@ -225,7 +225,7 @@ public class RollupAggregationService {
 				             THEN request_count ELSE 0 END) AS internal_requests,
 				    SUM(CASE WHEN client_type IN ('SEARCH_ENGINE', 'AI_CRAWLER') THEN request_count ELSE 0 END) AS crawler_requests,
 				    COUNT(DISTINCT client_key) AS distinct_clients,
-				    COUNT(DISTINCT subnet_group) AS distinct_subnets,
+				    COUNT(DISTINCT NULLIF(subnet_group, '')) AS distinct_subnets,
 				    COALESCE(MAX(distinct_user_agents), 0) AS distinct_user_agents,
 				    SUM(CASE WHEN sample_authenticated = TRUE THEN 1 ELSE 0 END) AS auth_samples,
 				    SUM(CASE WHEN sample_returning_visitor = TRUE THEN 1 ELSE 0 END) AS returning_samples

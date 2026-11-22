@@ -514,17 +514,28 @@ public class AntiDoSCounter {
 	 * @return true if the sample was successfully captured or upgraded, false if existing sample has equal or higher priority
 	 */
 	public boolean recordSampleIfHigherPriority(String method, String uri, String userAgent, boolean authenticated, boolean returningVisitor) {
+		SampleRequest current = this.sampleRequest;
+		if (current != null && current.priority() >= 11) {
+			return false;
+		}
+		int rawPriority = calculatePriority(method, uri, authenticated, returningVisitor);
+		if (current != null && current.priority() >= rawPriority) {
+			return false;
+		}
 		String cleanMethod = sanitizeMethod(method);
 		String cleanUri = sanitizeUri(uri);
-		String cleanUserAgent = sanitizeUserAgent(userAgent);
 		if (cleanMethod == null && cleanUri == null) {
 			return false;
 		}
 		int newPriority = calculatePriority(cleanMethod, cleanUri, authenticated, returningVisitor);
+		if (current != null && current.priority() >= newPriority) {
+			return false;
+		}
+		String cleanUserAgent = sanitizeUserAgent(userAgent);
 		SampleRequest newSample = new SampleRequest(cleanMethod, cleanUri, cleanUserAgent, authenticated, returningVisitor, newPriority);
 
 		while (true) {
-			SampleRequest current = this.sampleRequest;
+			current = this.sampleRequest;
 			if (current != null && current.priority() >= newPriority) {
 				return false;
 			}

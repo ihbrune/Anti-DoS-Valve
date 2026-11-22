@@ -579,7 +579,7 @@ public class UserAgentMemoryService {
 				    SUM(CASE WHEN client_type IN ('RESIDENTIAL', 'PRIVACY_RELAY') THEN request_count ELSE 0 END) AS residential_requests,
 				    SUM(COALESCE(returning_count, 0)) AS returning_requests,
 				    SUM(COALESCE(ua_mismatch_count, 0)) AS ua_mismatch_requests,
-				    COUNT(DISTINCT subnet_group) AS distinct_subnets,
+				    COUNT(DISTINCT NULLIF(subnet_group, '')) AS distinct_subnets,
 				    COUNT(DISTINCT asn) AS distinct_asns,
 				""" + mitExpr + """
 				
@@ -1072,7 +1072,7 @@ public class UserAgentMemoryService {
 				    SUM(CASE WHEN client_type IN ('RESIDENTIAL', 'PRIVACY_RELAY') THEN request_count ELSE 0 END) AS residential_requests,
 				    SUM(COALESCE(returning_count, 0)) AS returning_requests,
 				    SUM(COALESCE(ua_mismatch_count, 0)) AS ua_mismatch_requests,
-				    COUNT(DISTINCT subnet_group) AS distinct_subnets,
+				    COUNT(DISTINCT NULLIF(subnet_group, '')) AS distinct_subnets,
 				    COUNT(DISTINCT asn) AS distinct_asns,
 				""" + mitExpr + """
 				
@@ -1166,7 +1166,7 @@ public class UserAgentMemoryService {
 		String sql = """
 				SELECT
 				    TRIM(sample_user_agent) AS ua,
-				    COUNT(DISTINCT subnet_group) AS distinct_subnets,
+				    COUNT(DISTINCT NULLIF(subnet_group, '')) AS distinct_subnets,
 				    COUNT(DISTINCT asn) AS distinct_asns,
 				    SUM(CASE WHEN client_type = 'SEARCH_ENGINE' THEN request_count ELSE 0 END) AS search_engine_requests,
 				""" + mitExpr + """
@@ -1222,7 +1222,7 @@ public class UserAgentMemoryService {
 				SELECT
 				    COALESCE(SUM(request_count), 0) AS total_requests,
 				    COUNT(*) AS event_count,
-				    COUNT(DISTINCT subnet_group) AS distinct_subnets,
+				    COUNT(DISTINCT NULLIF(subnet_group, '')) AS distinct_subnets,
 				    COUNT(DISTINCT asn) AS distinct_asns,
 				    COALESCE(SUM(CASE WHEN sample_authenticated = TRUE THEN 1 ELSE 0 END), 0) AS auth_samples,
 				    COALESCE(SUM(authenticated_count), 0) AS auth_requests,

@@ -549,7 +549,7 @@ public class CollectorPollerService {
 				}
 				for (ValveDetailsDto.BlockedClientDto c : details.blockedClients()) {
 					Long entityId = null;
-					if (entityResolver != null) {
+					if (entityResolver != null && !org.henbru.antidos.collector.util.IpNetworkUtil.isSyntheticUaKey(c.key())) {
 						entityId = entityResolver.getCached(c.key())
 								.map(entity -> entity.id())
 								.orElse(null);
