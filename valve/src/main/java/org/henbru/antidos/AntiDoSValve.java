@@ -237,6 +237,10 @@ public class AntiDoSValve extends ValveBase {
 	private volatile String mitigationAllowedIPsConfigValue = null;
 	private volatile Pattern mitigationAllowedIPs = null;
 	private volatile boolean mitigationAllowedIPsValid = true;
+	private volatile boolean mitigationBypassPrivateIPs = true;
+	private volatile String mitigationBypassIPsConfigValue = null;
+	private volatile Pattern mitigationBypassIPs = null;
+	private volatile boolean mitigationBypassIPsValid = true;
 	private volatile String mitigationPassword = null;
 	/** Default minimal IPv4 prefix length (i.e. broadest allowed IPv4 network) for remotely pushed dynamic blocks */
 	public static final int DEFAULT_MITIGATION_MIN_PREFIX_V4 = 16;
@@ -1940,6 +1944,85 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
+	 * @return <code>true</code> if private, loopback, and link-local IP addresses bypass dynamic mitigation blocks (default: <code>true</code>)
+	 */
+	public boolean isMitigationBypassPrivateIPs() {
+		return mitigationBypassPrivateIPs;
+	}
+
+	/**
+	 * Controls whether requests originating from private, loopback, and link-local IP
+	 * addresses (RFC 1918, RFC 1122, RFC 3927, RFC 4193 ULA, RFC 4291) bypass dynamic
+	 * CIDR and User-Agent mitigation blocks while remaining subject to local sliding-window
+	 * rate limits (default: <code>true</code>).
+	 *
+	 * @param mitigationBypassPrivateIPs <code>true</code> to exempt private/local IPs from dynamic mitigation
+	 */
+	public void setMitigationBypassPrivateIPs(boolean mitigationBypassPrivateIPs) {
+		this.mitigationBypassPrivateIPs = mitigationBypassPrivateIPs;
+	}
+
+	/**
+	 * String setter for {@link #setMitigationBypassPrivateIPs(boolean)}. Empty or null
+	 * values restore the default (<code>true</code>).
+	 *
+	 * @param mitigationBypassPrivateIPs "true" or "false"
+	 */
+	public void setMitigationBypassPrivateIPs(String mitigationBypassPrivateIPs) {
+		if (mitigationBypassPrivateIPs == null || mitigationBypassPrivateIPs.trim().isEmpty()) {
+			this.mitigationBypassPrivateIPs = true;
+		} else {
+			this.mitigationBypassPrivateIPs = Boolean.parseBoolean(mitigationBypassPrivateIPs.trim());
+		}
+	}
+
+	/**
+	 * @return Regular expression matching IP addresses that always bypass dynamic mitigation blocks
+	 */
+	public String getMitigationBypassIPs() {
+		return mitigationBypassIPsConfigValue;
+	}
+
+	/**
+	 * @see #getMitigationBypassIPs()
+	 */
+	public String getMitigationBypassIPsConfigValue() {
+		return mitigationBypassIPsConfigValue;
+	}
+
+	/**
+	 * Sets a regular expression matching client IP addresses (e.g. corporate VPN or campus
+	 * gateways) that are exempt from dynamic CIDR and User-Agent mitigation blocks while
+	 * remaining subject to local sliding-window rate limits.
+	 *
+	 * @param mitigationBypassIPs Regular expression for bypassed client IPs, or null/empty to clear
+	 */
+	public void setMitigationBypassIPs(String mitigationBypassIPs) {
+		if (mitigationBypassIPs == null || mitigationBypassIPs.trim().isEmpty()) {
+			this.mitigationBypassIPs = null;
+			this.mitigationBypassIPsConfigValue = null;
+			this.mitigationBypassIPsValid = true;
+			return;
+		}
+		String trimmed = mitigationBypassIPs.trim();
+		this.mitigationBypassIPsConfigValue = trimmed;
+		try {
+			this.mitigationBypassIPs = Pattern.compile(trimmed);
+			this.mitigationBypassIPsValid = true;
+		} catch (Exception e) {
+			this.mitigationBypassIPs = null;
+			this.mitigationBypassIPsValid = false;
+		}
+	}
+
+	/**
+	 * @return <code>true</code> if {@link #getMitigationBypassIPs()} contains a valid regular expression
+	 */
+	public boolean isMitigationBypassIPsValid() {
+		return mitigationBypassIPsValid;
+	}
+
+	/**
 	 * @return The configured password/token required to set or remove dynamic CIDR blocks, or <code>null</code> if disabled
 	 */
 	public String getMitigationPassword() {
@@ -2259,7 +2342,6 @@ public class AntiDoSValve extends ValveBase {
 		if (isMonitorModeDefault()) {
 			// block request:
 			if (httpStatusCode == DEFAULT_HTTP_STATUS_CODE) {
-				int retryAfter = provideRetryAfterSeconds(ip, now);
 				int retryAfter = provideRetryAfterSeconds(ip, userAgent, now);
 				response.setHeader("Retry-After", Integer.toString(retryAfter));
 			}
@@ -2311,7 +2393,7 @@ public class AntiDoSValve extends ValveBase {
 		if (counter == null && !counterName.equals(ip)) {
 			counter = monitor.provideCurrentCounter(ip);
 		}
-		if (counter == null && isDynamicMitigationEnabled()) {
+		if (counter == null && isDynamicMitigationEnabled() && !isIPAddressInMitigationBypass(ip)) {
 			AntiDoSDynamicBlockRegistry.DynamicBlockEntry dynEntry = dynamicBlockRegistry.match(ip, null, getTimeInMillis());
 			if (dynEntry != null) {
 				counter = monitor.provideCurrentCounter(dynEntry.getCidr());
@@ -2792,7 +2874,6 @@ public class AntiDoSValve extends ValveBase {
 				String blocksParam = request.getParameter("blocks");
 				List<AntiDoSDynamicBlockRegistry.BlockSpec> specs = parseBlockSpecs(blocksParam, now);
 				ttlCappedCount = capBlockSpecTtls(specs, now);
-				dynamicBlockRegistry.replaceAllBlocks(specs, now, mitigationMaxActiveBlocks);
 				String uaBlocksParam = request.getParameter("uaBlocks");
 				if (uaBlocksParam != null) {
 					List<AntiDoSDynamicBlockRegistry.UaBlockSpec> uaSpecs = parseUaBlockSpecs(uaBlocksParam, now);
@@ -3302,6 +3383,8 @@ public class AntiDoSValve extends ValveBase {
 			throw new LifecycleException(name4logging + ".statusAllowedIPs is invalid: " + statusAllowedIPsConfigValue);
 		if (!mitigationAllowedIPsValid)
 			throw new LifecycleException(name4logging + ".mitigationAllowedIPs is invalid: " + mitigationAllowedIPsConfigValue);
+		if (!mitigationBypassIPsValid)
+			throw new LifecycleException(name4logging + ".mitigationBypassIPs is invalid: " + mitigationBypassIPsConfigValue);
 		if (!isMitigationMinPrefixV4Valid())
 			throw new LifecycleException(name4logging + ".mitigationMinPrefixV4 must be between 1 and 32: " + mitigationMinPrefixV4);
 		if (!isMitigationMinPrefixV6Valid())
@@ -3514,17 +3597,11 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	public int provideRetryAfterSeconds(String ip, long currentTimeMillis) {
-		if (ip != null && isDynamicMitigationEnabled()) {
-			AntiDoSDynamicBlockRegistry.DynamicBlockEntry dynEntry = dynamicBlockRegistry.match(ip, null, currentTimeMillis);
-			if (dynEntry != null) {
-				long remainingMillis = dynEntry.getExpiresAtMillis() - currentTimeMillis;
-				int remainingSec = (int) Math.ceil(remainingMillis / 1000.0);
-				return Math.max(1, Math.min(3600, remainingSec));
 		return provideRetryAfterSeconds(ip, null, currentTimeMillis);
 	}
 
 	public int provideRetryAfterSeconds(String ip, String userAgent, long currentTimeMillis) {
-		if (isDynamicMitigationEnabled()) {
+		if (isDynamicMitigationEnabled() && !isIPAddressInMitigationBypass(ip)) {
 			if (ip != null) {
 				AntiDoSDynamicBlockRegistry.DynamicBlockEntry dynEntry = dynamicBlockRegistry.match(ip, null, currentTimeMillis);
 				if (dynEntry != null) {
@@ -3631,22 +3708,30 @@ public class AntiDoSValve extends ValveBase {
 			long nowMillis = getTimeInMillis();
 			AntiDoSDynamicBlockRegistry.DynamicBlockEntry matchedRule = dynamicBlockRegistry.match(ip, null, nowMillis);
 			if (matchedRule != null) {
-				dynamicBlockRegistry.recordBlockedHit(matchedRule, nowMillis);
-				registerDynamicBlockInMonitor(matchedRule, ip, null, returningVisitor, authenticated, uaMismatch, userAgent);
-				if (log.isDebugEnabled()) {
-					log.debug(name4logging + " Dynamically blocked by CIDR rule " + matchedRule.getCidr() + ": " + ip);
+				if (isIPAddressInMitigationBypass(ip)) {
+					if (log.isDebugEnabled()) {
+						log.debug(name4logging + " Dynamic CIDR block bypassed (mitigationBypass) for " + ip);
+					}
+				} else {
+					dynamicBlockRegistry.recordBlockedHit(matchedRule, nowMillis);
+					registerDynamicBlockInMonitor(matchedRule, ip, null, returningVisitor, authenticated, uaMismatch, userAgent);
+					if (log.isDebugEnabled()) {
+						log.debug(name4logging + " Dynamically blocked by CIDR rule " + matchedRule.getCidr() + ": " + ip);
+					}
+					return false;
 				}
-				return false;
 			}
 			if (userAgent != null && !userAgent.isEmpty()) {
 				int uaHash32 = AntiDoSVisitorTokenService.computeUserAgentHash32(userAgent);
 				AntiDoSDynamicBlockRegistry.DynamicUaBlockEntry matchedUa = dynamicBlockRegistry.matchUserAgent(uaHash32, nowMillis);
 				if (matchedUa != null) {
-					if (authenticated || (returningVisitor && !uaMismatch)) {
+					boolean ipBypass = isIPAddressInMitigationBypass(ip);
+					if (authenticated || (returningVisitor && !uaMismatch) || ipBypass) {
 						dynamicBlockRegistry.recordUaBypassedHit(matchedUa, nowMillis);
 						if (log.isDebugEnabled()) {
 							log.debug(name4logging + " Dynamic UA block bypassed (authenticated=" + authenticated
-									+ ", validReturning=" + (returningVisitor && !uaMismatch) + ") for " + ip);
+									+ ", validReturning=" + (returningVisitor && !uaMismatch)
+									+ ", ipBypass=" + ipBypass + ") for " + ip);
 						}
 					} else {
 						dynamicBlockRegistry.recordUaBlockedHit(matchedUa, nowMillis);
@@ -3818,7 +3903,8 @@ public class AntiDoSValve extends ValveBase {
 		if (ip == null || ip.isEmpty()) {
 			throw new IllegalArgumentException("IP address must not be null or empty");
 		}
-		if (isDynamicMitigationEnabled() && dynamicBlockRegistry.match(ip, null, getTimeInMillis()) != null) {
+		if (isDynamicMitigationEnabled() && !isIPAddressInMitigationBypass(ip)
+				&& dynamicBlockRegistry.match(ip, null, getTimeInMillis()) != null) {
 			return true;
 		}
 		String counterName = resolveCounterName(ip);
@@ -4031,6 +4117,27 @@ public class AntiDoSValve extends ValveBase {
 		Pattern alwaysAllowed = this.alwaysAllowedIPs;
 
 		return alwaysAllowed != null && alwaysAllowed.matcher(ip).matches();
+	}
+
+	/**
+	 * Checks whether the given client IP address is exempt from dynamic mitigation
+	 * rules (CIDR and User-Agent blocks) via {@link #isMitigationBypassPrivateIPs()}
+	 * or {@link #getMitigationBypassIPs()}. Unlike {@link #isIPAddressInAlwaysAllowed(String)},
+	 * bypassed IPs remain subject to normal sliding-window rate limiting unless also allowed
+	 * via {@code alwaysAllowedIPs} or {@code alwaysAllowPrivateIPs}.
+	 *
+	 * @param ip The IP address
+	 * @return <code>true</code> if dynamic mitigation blocks must be bypassed for this IP
+	 */
+	public boolean isIPAddressInMitigationBypass(String ip) {
+		if (ip == null || ip.isEmpty()) {
+			return false;
+		}
+		if (mitigationBypassPrivateIPs && isPrivateOrLocalIP(ip)) {
+			return true;
+		}
+		Pattern bypass = this.mitigationBypassIPs;
+		return bypass != null && bypass.matcher(ip).matches();
 	}
 
 	/**

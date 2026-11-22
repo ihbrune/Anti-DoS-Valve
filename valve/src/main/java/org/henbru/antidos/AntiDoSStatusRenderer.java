@@ -880,35 +880,7 @@ public class AntiDoSStatusRenderer {
 			}
 
 			if (v.isDynamicMitigationEnabled()) {
-				long nowMs = getTimeInMillis();
-				int dynActive = v.getDynamicBlockRegistry().getActiveCount(nowMs);
-				long dynBlocked = v.getDynamicBlockRegistry().getTotalBlockedRequests();
-				long dynRev = v.getDynamicBlockRegistry().getRevision(nowMs);
-				int uaActive = v.getDynamicBlockRegistry().getActiveUaCount(nowMs);
-				long uaBlocked = v.getDynamicBlockRegistry().getTotalUaBlockedRequests();
-				long uaBypassed = v.getDynamicBlockRegistry().getTotalUaBypassedRequests();
-				long uaRev = v.getDynamicBlockRegistry().getUaRevision(nowMs);
-				String effMitUri = v.getMitigationUri() != null ? v.getMitigationUri() : v.getStatusUri();
-				String effMitIps = v.getMitigationAllowedIPs() != null ? v.getMitigationAllowedIPs() : v.getStatusAllowedIPs();
-				sb.append("    <tr><th>Dynamic CIDR Mitigation</th><td><span class=\"badge badge-blocking\">ENABLED</span>")
-				sb.append("    <tr><th>Dynamic Mitigation</th><td><span class=\"badge badge-blocking\">ENABLED</span>")
-						.append(" &bull; Active CIDR Blocks: <strong>").append(dynActive).append("</strong> / ").append(v.getMitigationMaxActiveBlocks())
-						.append(" &bull; Rejected Requests: <strong>").append(dynBlocked).append("</strong>")
-						.append(" &bull; Revision: <code>").append(dynRev).append("</code>")
-						.append(" &bull; CIDR Rejected: <strong>").append(dynBlocked).append("</strong>")
-						.append(" &bull; CIDR Rev: <code>").append(dynRev).append("</code>")
-						.append(" &bull; Active UA Blocks: <strong>").append(uaActive).append("</strong>")
-						.append(" &bull; UA Rejected: <strong>").append(uaBlocked).append("</strong>")
-						.append(" &bull; UA Bypassed (Auth/Returning): <strong>").append(uaBypassed).append("</strong>")
-						.append(" &bull; UA Rev: <code>").append(uaRev).append("</code>")
-						.append(" &bull; Guardrails: min <code>/").append(v.getMitigationMinPrefixV4()).append("</code> (IPv4) / <code>/").append(v.getMitigationMinPrefixV6()).append("</code> (IPv6), max TTL <code>").append(formatDuration(v.getMitigationMaxTtlSeconds())).append("</code>");
-				if (effMitUri != null) {
-					sb.append(" &bull; Endpoint: <code>POST ").append(escapeHtml(effMitUri)).append("</code>");
-				}
-				if (effMitIps != null) {
-					sb.append(" &bull; Allowed IPs: <code>").append(escapeHtml(effMitIps)).append("</code>");
-				}
-				sb.append("</td></tr>\n");
+				appendDynamicMitigationSummaryRow(sb, v, false);
 			}
 
 			// Rate limit parameters
@@ -1231,36 +1203,7 @@ public class AntiDoSStatusRenderer {
 			sb.append("    <tr><th>Track Always Forbidden in Monitor</th><td>").append(target.isTrackAlwaysForbiddenInMonitor() ? "<span class=\"badge badge-success\">ENABLED</span>" : "<span class=\"badge badge-muted\">DISABLED</span>").append("</td></tr>\n");
 		}
 		if (target.isDynamicMitigationEnabled()) {
-			long nowMs = getTimeInMillis();
-			int dynActive = target.getDynamicBlockRegistry().getActiveCount(nowMs);
-			long dynBlocked = target.getDynamicBlockRegistry().getTotalBlockedRequests();
-			long dynRev = target.getDynamicBlockRegistry().getRevision(nowMs);
-			int uaActive = target.getDynamicBlockRegistry().getActiveUaCount(nowMs);
-			long uaBlocked = target.getDynamicBlockRegistry().getTotalUaBlockedRequests();
-			long uaBypassed = target.getDynamicBlockRegistry().getTotalUaBypassedRequests();
-			long uaRev = target.getDynamicBlockRegistry().getUaRevision(nowMs);
-			String effMitUri = target.getMitigationUri() != null ? target.getMitigationUri() : target.getStatusUri();
-			String effMitIps = target.getMitigationAllowedIPs() != null ? target.getMitigationAllowedIPs() : target.getStatusAllowedIPs();
-			sb.append("    <tr><th>Dynamic CIDR Mitigation</th><td><span class=\"badge badge-blocking\">ENABLED</span>")
-			sb.append("    <tr><th>Dynamic Mitigation</th><td><span class=\"badge badge-blocking\">ENABLED</span>")
-					.append(" &bull; Active CIDR Blocks: <strong>").append(dynActive).append("</strong> / ").append(target.getMitigationMaxActiveBlocks())
-					.append(" &bull; Rejected Requests: <strong>").append(dynBlocked).append("</strong>")
-					.append(" &bull; Revision: <code>").append(dynRev).append("</code>")
-					.append(" &bull; CIDR Rejected: <strong>").append(dynBlocked).append("</strong>")
-					.append(" &bull; CIDR Rev: <code>").append(dynRev).append("</code>")
-					.append(" &bull; Active UA Blocks: <strong>").append(uaActive).append("</strong>")
-					.append(" &bull; UA Rejected: <strong>").append(uaBlocked).append("</strong>")
-					.append(" &bull; UA Bypassed (Auth/Returning): <strong>").append(uaBypassed).append("</strong>")
-					.append(" &bull; UA Rev: <code>").append(uaRev).append("</code>")
-						.append(" &bull; Guardrails: min <code>/").append(target.getMitigationMinPrefixV4()).append("</code> (IPv4) / <code>/").append(target.getMitigationMinPrefixV6()).append("</code> (IPv6), max TTL <code>").append(formatDuration(target.getMitigationMaxTtlSeconds())).append("</code>")
-					.append(" &bull; Password: <em>*** (configured)</em>");
-			if (effMitUri != null) {
-				sb.append(" &bull; Endpoint: <code>POST ").append(escapeHtml(effMitUri)).append("</code>");
-			}
-			if (effMitIps != null) {
-				sb.append(" &bull; Allowed IPs: <code>").append(escapeHtml(effMitIps)).append("</code>");
-			}
-			sb.append("</td></tr>\n");
+			appendDynamicMitigationSummaryRow(sb, target, true);
 		}
 
 		int retentionPct = Math.round(target.getShareOfRetainedFormerRequests() * 100);
@@ -1958,23 +1901,9 @@ public class AntiDoSStatusRenderer {
 					.append("      \"activeSampleThreshold\": ").append(v.getActiveSampleThreshold()).append(",\n")
 					.append("      \"isStatusHost\": ").append(v.getStatusUri() != null).append(",\n")
 					.append("      \"isCurrentHost\": ").append(v == valve).append(",\n")
-					.append("      \"alwaysForbiddenBlockedRequests\": ").append(v.getAlwaysForbiddenBlockedRequests()).append(",\n")
-					.append("      \"dynamicMitigationEnabled\": ").append(v.isDynamicMitigationEnabled()).append(",\n")
-					.append("      \"mitigationUri\": ").append(v.getMitigationUri() != null ? "\"" + escapeJson(v.getMitigationUri()) + "\"" : "null").append(",\n")
-					.append("      \"mitigationAllowedIPs\": ").append(v.getMitigationAllowedIPs() != null ? "\"" + escapeJson(v.getMitigationAllowedIPs()) + "\"" : "null").append(",\n")
-					.append("      \"mitigationMinPrefixV4\": ").append(v.getMitigationMinPrefixV4()).append(",\n")
-					.append("      \"mitigationMinPrefixV6\": ").append(v.getMitigationMinPrefixV6()).append(",\n")
-					.append("      \"mitigationMaxTtlSeconds\": ").append(v.getMitigationMaxTtlSeconds()).append(",\n")
-					.append("      \"mitigationMaxActiveBlocks\": ").append(v.getMitigationMaxActiveBlocks()).append(",\n")
-					.append("      \"dynamicBlocksActiveCount\": ").append(v.isDynamicMitigationEnabled() ? v.getDynamicBlockRegistry().getActiveCount(getTimeInMillis()) : 0).append(",\n")
-					.append("      \"dynamicBlocksBlockedRequests\": ").append(v.isDynamicMitigationEnabled() ? v.getDynamicBlockRegistry().getTotalBlockedRequests() : 0).append(",\n")
-					.append("      \"dynamicRulesRevision\": ").append(v.isDynamicMitigationEnabled() ? v.getDynamicBlockRegistry().getRevision(getTimeInMillis()) : 0).append(",\n")
-					.append("      \"dynamicRulesHashVersion\": ").append(AntiDoSValve.DYNAMIC_RULES_HASH_VERSION).append(",\n")
-					.append("      \"dynamicUaBlocksActiveCount\": ").append(v.isDynamicMitigationEnabled() ? v.getDynamicBlockRegistry().getActiveUaCount(getTimeInMillis()) : 0).append(",\n")
-					.append("      \"dynamicUaBlocksBlockedRequests\": ").append(v.isDynamicMitigationEnabled() ? v.getDynamicBlockRegistry().getTotalUaBlockedRequests() : 0).append(",\n")
-					.append("      \"dynamicUaBlocksBypassedRequests\": ").append(v.isDynamicMitigationEnabled() ? v.getDynamicBlockRegistry().getTotalUaBypassedRequests() : 0).append(",\n")
-					.append("      \"dynamicUaRulesRevision\": ").append(v.isDynamicMitigationEnabled() ? v.getDynamicBlockRegistry().getUaRevision(getTimeInMillis()) : 0).append(",\n")
-					.append("      \"statusConcurrencyTimeoutMs\": ").append(v.getStatusConcurrencyTimeoutMs()).append(",\n")
+					.append("      \"alwaysForbiddenBlockedRequests\": ").append(v.getAlwaysForbiddenBlockedRequests()).append(",\n");
+			appendDynamicMitigationJsonFields(sb, v, "      ");
+			sb.append("      \"statusConcurrencyTimeoutMs\": ").append(v.getStatusConcurrencyTimeoutMs()).append(",\n")
 					.append("      \"httpStatusCode\": ").append(v.getHttpStatusCode()).append("\n")
 					.append("    }");
 		}
@@ -2098,23 +2027,9 @@ public class AntiDoSStatusRenderer {
 				.append("    \"activeSampleThreshold\": ").append(target.getActiveSampleThreshold()).append(",\n")
 				.append("    \"isStatusHost\": ").append(target.getStatusUri() != null).append(",\n")
 				.append("    \"isCurrentHost\": ").append(target == valve).append(",\n")
-				.append("    \"alwaysForbiddenBlockedRequests\": ").append(target.getAlwaysForbiddenBlockedRequests()).append(",\n")
-				.append("    \"dynamicMitigationEnabled\": ").append(target.isDynamicMitigationEnabled()).append(",\n")
-				.append("    \"mitigationUri\": ").append(target.getMitigationUri() != null ? "\"" + escapeJson(target.getMitigationUri()) + "\"" : "null").append(",\n")
-				.append("    \"mitigationAllowedIPs\": ").append(target.getMitigationAllowedIPs() != null ? "\"" + escapeJson(target.getMitigationAllowedIPs()) + "\"" : "null").append(",\n")
-				.append("    \"mitigationMinPrefixV4\": ").append(target.getMitigationMinPrefixV4()).append(",\n")
-				.append("    \"mitigationMinPrefixV6\": ").append(target.getMitigationMinPrefixV6()).append(",\n")
-				.append("    \"mitigationMaxTtlSeconds\": ").append(target.getMitigationMaxTtlSeconds()).append(",\n")
-				.append("    \"mitigationMaxActiveBlocks\": ").append(target.getMitigationMaxActiveBlocks()).append(",\n")
-				.append("    \"dynamicBlocksActiveCount\": ").append(target.isDynamicMitigationEnabled() ? target.getDynamicBlockRegistry().getActiveCount(getTimeInMillis()) : 0).append(",\n")
-				.append("    \"dynamicBlocksBlockedRequests\": ").append(target.isDynamicMitigationEnabled() ? target.getDynamicBlockRegistry().getTotalBlockedRequests() : 0).append(",\n")
-				.append("    \"dynamicRulesRevision\": ").append(target.isDynamicMitigationEnabled() ? target.getDynamicBlockRegistry().getRevision(getTimeInMillis()) : 0).append(",\n")
-				.append("    \"dynamicRulesHashVersion\": ").append(AntiDoSValve.DYNAMIC_RULES_HASH_VERSION).append(",\n")
-				.append("    \"dynamicUaBlocksActiveCount\": ").append(target.isDynamicMitigationEnabled() ? target.getDynamicBlockRegistry().getActiveUaCount(getTimeInMillis()) : 0).append(",\n")
-				.append("    \"dynamicUaBlocksBlockedRequests\": ").append(target.isDynamicMitigationEnabled() ? target.getDynamicBlockRegistry().getTotalUaBlockedRequests() : 0).append(",\n")
-				.append("    \"dynamicUaBlocksBypassedRequests\": ").append(target.isDynamicMitigationEnabled() ? target.getDynamicBlockRegistry().getTotalUaBypassedRequests() : 0).append(",\n")
-				.append("    \"dynamicUaRulesRevision\": ").append(target.isDynamicMitigationEnabled() ? target.getDynamicBlockRegistry().getUaRevision(getTimeInMillis()) : 0).append(",\n")
-				.append("    \"statusConcurrencyTimeoutMs\": ").append(target.getStatusConcurrencyTimeoutMs()).append(",\n")
+				.append("    \"alwaysForbiddenBlockedRequests\": ").append(target.getAlwaysForbiddenBlockedRequests()).append(",\n");
+		appendDynamicMitigationJsonFields(sb, target, "    ");
+		sb.append("    \"statusConcurrencyTimeoutMs\": ").append(target.getStatusConcurrencyTimeoutMs()).append(",\n")
 				.append("    \"httpStatusCode\": ").append(target.getHttpStatusCode()).append("\n")
 				.append("  },\n");
 
@@ -2336,6 +2251,69 @@ public class AntiDoSStatusRenderer {
 		}
 		sb.append("\n  ],\n  \"serverGenerationMs\": ").append(System.currentTimeMillis() - genStart).append("\n}\n");
 		return sb.toString();
+	}
+
+	private void appendDynamicMitigationSummaryRow(StringBuilder sb, AntiDoSValve v, boolean includePassword) {
+		long nowMs = getTimeInMillis();
+		int dynActive = v.getDynamicBlockRegistry().getActiveCount(nowMs);
+		long dynBlocked = v.getDynamicBlockRegistry().getTotalBlockedRequests();
+		long dynRev = v.getDynamicBlockRegistry().getRevision(nowMs);
+		int uaActive = v.getDynamicBlockRegistry().getActiveUaCount(nowMs);
+		long uaBlocked = v.getDynamicBlockRegistry().getTotalUaBlockedRequests();
+		long uaBypassed = v.getDynamicBlockRegistry().getTotalUaBypassedRequests();
+		long uaRev = v.getDynamicBlockRegistry().getUaRevision(nowMs);
+		String effMitUri = v.getMitigationUri() != null ? v.getMitigationUri() : v.getStatusUri();
+		String effMitIps = v.getMitigationAllowedIPs() != null ? v.getMitigationAllowedIPs() : v.getStatusAllowedIPs();
+		sb.append("    <tr><th>Dynamic Mitigation</th><td><span class=\"badge badge-blocking\">ENABLED</span>")
+				.append(" &bull; Active CIDR Blocks: <strong>").append(dynActive).append("</strong> / ").append(v.getMitigationMaxActiveBlocks())
+				.append(" &bull; CIDR Rejected: <strong>").append(dynBlocked).append("</strong>")
+				.append(" &bull; CIDR Rev: <code>").append(dynRev).append("</code>")
+				.append(" &bull; Active UA Blocks: <strong>").append(uaActive).append("</strong>")
+				.append(" &bull; UA Rejected: <strong>").append(uaBlocked).append("</strong>")
+				.append(" &bull; UA Bypassed: <strong>").append(uaBypassed).append("</strong>")
+				.append(" &bull; UA Rev: <code>").append(uaRev).append("</code>")
+				.append(" &bull; Private IP Bypass: ")
+				.append(v.isMitigationBypassPrivateIPs()
+						? "<span class=\"badge badge-success\">ENABLED</span>"
+						: "<span class=\"badge badge-muted\">DISABLED</span>");
+		if (v.getMitigationBypassIPs() != null) {
+			sb.append(" &bull; Bypass IPs: <code>").append(escapeHtml(v.getMitigationBypassIPs())).append("</code>");
+		}
+		sb.append(" &bull; Guardrails: min <code>/").append(v.getMitigationMinPrefixV4()).append("</code> (IPv4) / <code>/")
+				.append(v.getMitigationMinPrefixV6()).append("</code> (IPv6), max TTL <code>")
+				.append(formatDuration(v.getMitigationMaxTtlSeconds())).append("</code>");
+		if (includePassword) {
+			sb.append(" &bull; Password: <em>*** (configured)</em>");
+		}
+		if (effMitUri != null) {
+			sb.append(" &bull; Endpoint: <code>POST ").append(escapeHtml(effMitUri)).append("</code>");
+		}
+		if (effMitIps != null) {
+			sb.append(" &bull; Allowed IPs: <code>").append(escapeHtml(effMitIps)).append("</code>");
+		}
+		sb.append("</td></tr>\n");
+	}
+
+	private void appendDynamicMitigationJsonFields(StringBuilder sb, AntiDoSValve v, String indent) {
+		long nowMs = getTimeInMillis();
+		boolean dynEnabled = v.isDynamicMitigationEnabled();
+		sb.append(indent).append("\"dynamicMitigationEnabled\": ").append(dynEnabled).append(",\n")
+				.append(indent).append("\"mitigationUri\": ").append(v.getMitigationUri() != null ? "\"" + escapeJson(v.getMitigationUri()) + "\"" : "null").append(",\n")
+				.append(indent).append("\"mitigationAllowedIPs\": ").append(v.getMitigationAllowedIPs() != null ? "\"" + escapeJson(v.getMitigationAllowedIPs()) + "\"" : "null").append(",\n")
+				.append(indent).append("\"mitigationBypassPrivateIPs\": ").append(v.isMitigationBypassPrivateIPs()).append(",\n")
+				.append(indent).append("\"mitigationBypassIPs\": ").append(v.getMitigationBypassIPs() != null ? "\"" + escapeJson(v.getMitigationBypassIPs()) + "\"" : "null").append(",\n")
+				.append(indent).append("\"mitigationMinPrefixV4\": ").append(v.getMitigationMinPrefixV4()).append(",\n")
+				.append(indent).append("\"mitigationMinPrefixV6\": ").append(v.getMitigationMinPrefixV6()).append(",\n")
+				.append(indent).append("\"mitigationMaxTtlSeconds\": ").append(v.getMitigationMaxTtlSeconds()).append(",\n")
+				.append(indent).append("\"mitigationMaxActiveBlocks\": ").append(v.getMitigationMaxActiveBlocks()).append(",\n")
+				.append(indent).append("\"dynamicBlocksActiveCount\": ").append(dynEnabled ? v.getDynamicBlockRegistry().getActiveCount(nowMs) : 0).append(",\n")
+				.append(indent).append("\"dynamicBlocksBlockedRequests\": ").append(dynEnabled ? v.getDynamicBlockRegistry().getTotalBlockedRequests() : 0).append(",\n")
+				.append(indent).append("\"dynamicRulesRevision\": ").append(dynEnabled ? v.getDynamicBlockRegistry().getRevision(nowMs) : 0).append(",\n")
+				.append(indent).append("\"dynamicRulesHashVersion\": ").append(AntiDoSValve.DYNAMIC_RULES_HASH_VERSION).append(",\n")
+				.append(indent).append("\"dynamicUaBlocksActiveCount\": ").append(dynEnabled ? v.getDynamicBlockRegistry().getActiveUaCount(nowMs) : 0).append(",\n")
+				.append(indent).append("\"dynamicUaBlocksBlockedRequests\": ").append(dynEnabled ? v.getDynamicBlockRegistry().getTotalUaBlockedRequests() : 0).append(",\n")
+				.append(indent).append("\"dynamicUaBlocksBypassedRequests\": ").append(dynEnabled ? v.getDynamicBlockRegistry().getTotalUaBypassedRequests() : 0).append(",\n")
+				.append(indent).append("\"dynamicUaRulesRevision\": ").append(dynEnabled ? v.getDynamicBlockRegistry().getUaRevision(nowMs) : 0).append(",\n");
 	}
 
 	public static String escapeHtml(String text) {

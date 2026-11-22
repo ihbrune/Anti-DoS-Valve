@@ -2120,6 +2120,36 @@
                   placeholder="Defaults to statusAllowedIPs if empty (e.g. 127\.0\.0\.1|10\.0\.0\.5)">
               </div>
 
+              <!-- 39b. mitigationBypassPrivateIPs -->
+              <div class="field-group status-field-group">
+                <div class="field-header">
+                  <label for="mitigationBypassPrivateIPs" class="field-label">mitigationBypassPrivateIPs</label>
+                  <span class="badge badge-optional">Optional</span>
+                </div>
+                <div class="field-desc">When enabled (default: <code>true</code>), requests from private, loopback, and
+                  link-local IP addresses (RFC 1918, RFC 4193 ULA, loopback, link-local) automatically bypass dynamic
+                  CIDR and User-Agent blocks while remaining subject to local sliding-window rate limits (unlike
+                  <code>alwaysAllowPrivateIPs</code>).</div>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="mitigationBypassPrivateIPs" name="mitigationBypassPrivateIPs" checked>
+                  <span>Bypass dynamic mitigation blocks for private/local IPs (<code>mitigationBypassPrivateIPs="true"</code>)</span>
+                </label>
+              </div>
+
+              <!-- 39c. mitigationBypassIPs -->
+              <div class="field-group status-field-group">
+                <div class="field-header">
+                  <label for="mitigationBypassIPs" class="field-label">mitigationBypassIPs</label>
+                  <span class="badge badge-optional">Optional</span>
+                </div>
+                <div class="field-desc">Optional regular expression matching trusted IP addresses (e.g. corporate VPN or
+                  campus gateways) that always bypass dynamic CIDR and User-Agent blocks while remaining subject to local
+                  rate limits.</div>
+                <input type="text" id="mitigationBypassIPs" name="mitigationBypassIPs"
+                  placeholder="e.g. 198\.51\.100\.250|203\.0\.113\..*">
+                <div id="hintMitigationBypassIPs" class="status-field-hint neutral"></div>
+              </div>
+
               <!-- 40. mitigationMinPrefixV4 -->
               <div class="field-group status-field-group">
                 <div class="field-header">
