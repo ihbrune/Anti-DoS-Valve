@@ -837,6 +837,7 @@ class MitigationServiceTest {
 		String manualCandUa = "ManualTestCandidate/1.0";
 		String immuneInternalUa = "ExampleInternalApp/3.12";
 		String authBearingUa = "AuthLegacyBrowser/1.0";
+		String protectedOverrideUa = "ProtectedOperatorAllow/1.0";
 
 		uaMemRepo.batchUpdateProfilesPreservingOverrides(List.of(
 				new UserAgentProfile(null, UserAgentMemoryRepository.computeSha256Hex(pillar1Ua),
@@ -861,31 +862,39 @@ class MitigationServiceTest {
 						UserAgentMemoryRepository.computeUaHash32(authBearingUa), authBearingUa, UserAgentFamily.SAFARI_DESKTOP,
 						12, false, now, now, 4000, 10, 0, 5, 50, 0, 0,
 						3000, 200, 5, 0, 600, 20, 3, 25, 0, 0, 100, 2900, 20, 0,
-						UserAgentAutoVerdict.SUSPICIOUS_DATACENTER, "PILLAR_3", "Should be skipped due to auth", now,
-						UserAgentManualOverride.AUTO, null, null, now)
+						UserAgentAutoVerdict.SUSPICIOUS_DATACENTER, "PILLAR_3", "Eligible despite shared subnet auth history", now,
+						UserAgentManualOverride.AUTO, null, null, now),
+				new UserAgentProfile(null, UserAgentMemoryRepository.computeSha256Hex(protectedOverrideUa),
+						UserAgentMemoryRepository.computeUaHash32(protectedOverrideUa), protectedOverrideUa, UserAgentFamily.UNKNOWN,
+						1, false, now, now, 3500, 0, 0, 0, 0, 0, 0,
+						3000, 150, 10, 0, 500, 10, 0, 0, 0, 0, 0, 3000, 0, 0,
+						UserAgentAutoVerdict.SUSPICIOUS_CORRELATED, "PILLAR_2", "Protected by operator allow override", now,
+						UserAgentManualOverride.ALWAYS_ALLOW, "Always allowed by operator", "admin", now)
 		));
 		uaMemRepo.updateManualOverride(manualCandUa, UserAgentFamily.UNKNOWN, 1, UserAgentManualOverride.MANUAL_BLOCK, "Operator queued for manual UA test", "admin");
 		uaMemRepo.updateManualOverride(immuneInternalUa, UserAgentFamily.AUTOMATED_TOOL, 3, UserAgentManualOverride.ALWAYS_ALLOW, "Protected client", "admin");
+		uaMemRepo.updateManualOverride(protectedOverrideUa, UserAgentFamily.UNKNOWN, 1, UserAgentManualOverride.ALWAYS_ALLOW, "Always allowed by operator", "admin");
 
 		// 1. Dry-Run simulation
 		svc.updateUaAutoSettings(true, true, 90, 50, 500, true, true, true, true, false, "admin");
 		MitigationService.AutoUaEvaluationResult dryRes = svc.evaluateAutoUaMitigation("admin");
-		assertEquals(2, dryRes.candidatesEvaluated());
+		assertEquals(3, dryRes.candidatesEvaluated());
 		assertEquals(0, dryRes.rulesActivated());
-		assertEquals(2, dryRes.dryRunLogged());
+		assertEquals(3, dryRes.dryRunLogged());
 		assertTrue(dryRes.skippedProtected() >= 1);
 		assertEquals(0, svc.getActiveUaRules().size());
 
 		// 2. Live enforcement
 		svc.updateUaAutoSettings(true, false, 90, 50, 500, true, true, true, true, false, "admin");
 		MitigationService.AutoUaEvaluationResult liveRes = svc.evaluateAutoUaMitigation("admin");
-		assertEquals(2, liveRes.rulesActivated());
+		assertEquals(3, liveRes.rulesActivated());
 		List<MitigationUaRule> activeUa = svc.getActiveUaRules();
-		assertEquals(2, activeUa.size());
+		assertEquals(3, activeUa.size());
 		assertTrue(activeUa.stream().anyMatch(r -> r.rawUserAgent().equals(pillar1Ua)));
 		assertTrue(activeUa.stream().anyMatch(r -> r.rawUserAgent().equals(manualCandUa)));
+		assertTrue(activeUa.stream().anyMatch(r -> r.rawUserAgent().equals(authBearingUa)));
 		assertFalse(activeUa.stream().anyMatch(r -> r.rawUserAgent().equals(immuneInternalUa)));
-		assertFalse(activeUa.stream().anyMatch(r -> r.rawUserAgent().equals(authBearingUa)));
+		assertFalse(activeUa.stream().anyMatch(r -> r.rawUserAgent().equals(protectedOverrideUa)));
 	}
 
 	@Test

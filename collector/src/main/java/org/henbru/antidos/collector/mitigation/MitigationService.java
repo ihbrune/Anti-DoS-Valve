@@ -2284,8 +2284,10 @@ public class MitigationService {
 			}
 
 			if (authReqs24h > 0 || authSamples24h > 0 || p.totalAuthenticatedRequests() > 0) {
-				warnings.add(new PreflightWarning("CRITICAL", targetLabel,
-						"Collateral Damage Risk: Observed authenticated usage (24h slot auth reqs: " + authReqs24h
+				// Valve bypasses dynamic UA rules for authenticated requests and clean returning visitors,
+				// so shared-subnet auth hits are informational rather than a blocking error.
+				warnings.add(new PreflightWarning("WARNING", targetLabel,
+						"Observed authenticated usage in associated slots (24h slot auth reqs: " + authReqs24h
 								+ ", 24h auth samples: " + authSamples24h
 								+ ", lifetime auth reqs: " + p.totalAuthenticatedRequests() + ")."));
 			}
@@ -2650,10 +2652,13 @@ public class MitigationService {
 			uaRuleRepository.expireElapsedRules(now);
 			List<MitigationUaRule> currentlyActive = uaRuleRepository.findActiveRules(now);
 			Set<String> activeHashes = new HashSet<>();
+			Map<String, MitigationUaRule> activeRulesByHash = new HashMap<>();
 			for (MitigationUaRule r : currentlyActive) {
 				activeHashes.add(r.userAgentHash());
+				activeRulesByHash.put(r.userAgentHash(), r);
 			}
 			int remainingCapacity = Math.max(0, config.maxActiveRules() - currentlyActive.size());
+			long renewalLeadSeconds = Math.min(900L, Math.max(60L, (config.defaultTtlMinutes() * 60L) / 4L));
 
 			List<UserAgentProfile> profiles = new ArrayList<>(uaMemoryRepository.findAllProfiles(500));
 			// Ensure manual block candidates outside top-500 volume are also considered
@@ -2678,17 +2683,13 @@ public class MitigationService {
 				if (p.rawUserAgent() == null || p.rawUserAgent().isBlank() || "-".equals(p.rawUserAgent().trim())) {
 					continue;
 				}
-				boolean hasAuthHistory = p.last24hAuthRequests() > 0
-						|| p.last24hAuthSamples() > 0
-						|| p.totalAuthenticatedRequests() > 0;
 				UserAgentAutoVerdict autoVerdict = p.effectiveAutoVerdict();
 				UserAgentManualOverride override = p.effectiveOverride();
 
 				if (override == UserAgentManualOverride.ALWAYS_ALLOW
 						|| override == UserAgentManualOverride.OBSERVE_ONLY
-						|| autoVerdict.isImmune()
-						|| hasAuthHistory) {
-					if (autoVerdict.isSuspicious() || override == UserAgentManualOverride.MANUAL_BLOCK) {
+						|| (override != UserAgentManualOverride.MANUAL_BLOCK && autoVerdict.isImmune())) {
+					if (autoVerdict.isSuspicious()) {
 						skippedProtected++;
 					}
 					continue;
@@ -2716,26 +2717,43 @@ public class MitigationService {
 					continue;
 				}
 				evaluated++;
-				if (activeHashes.contains(p.userAgentHash())) {
-					continue;
-				}
-				if (config.dryRun()) {
+				boolean alreadyActive = activeHashes.contains(p.userAgentHash());
+				if (alreadyActive) {
+					if (config.dryRun()) {
+						continue;
+					}
+					MitigationUaRule existingRule = activeRulesByHash.get(p.userAgentHash());
+					boolean withinRenewalWindow = existingRule != null
+							&& existingRule.expiresAt() != null
+							&& !existingRule.expiresAt().isAfter(now.plusSeconds(renewalLeadSeconds));
+					boolean ongoingTraffic = existingRule != null && (
+							(existingRule.lastHitAt() != null
+									&& existingRule.lastHitAt().isAfter(now.minusSeconds(Math.max(900L, renewalLeadSeconds))))
+							|| (p.lastSeenAt() != null
+									&& existingRule.updatedAt() != null
+									&& !p.lastSeenAt().isBefore(existingRule.updatedAt())));
+					if (!withinRenewalWindow || !ongoingTraffic) {
+						continue;
+					}
+				} else if (config.dryRun()) {
 					recordUaAudit(null, formatUaAuditTarget(p.uaHash32(), p.rawUserAgent()),
 							"DRY-RUN-UA", "UA_AUTO_WOULD_BLOCK", config.defaultTtlMinutes() * 60,
 							"[DRY-RUN] " + matchReason + " | UA=" + p.rawUserAgent(), effectiveActor);
 					dryRunLogged++;
 					continue;
-				}
-				if (remainingCapacity <= 0) {
+				} else if (remainingCapacity <= 0) {
 					log.info("[AUTO-UA-CAP] Skipping auto UA block for {} because active UA cap ({}) is reached.",
 							formatUaAuditTarget(p.uaHash32(), p.rawUserAgent()), config.maxActiveRules());
 					continue;
 				}
 				try {
-					createOrUpdateUaBlock(p.rawUserAgent(), config.defaultTtlMinutes(), matchReason,
+					MitigationUaRule saved = createOrUpdateUaBlock(p.rawUserAgent(), config.defaultTtlMinutes(), matchReason,
 							MitigationUaRule.SOURCE_AUTO_UA, "AUTO-UA", false, effectiveActor);
 					activeHashes.add(p.userAgentHash());
-					remainingCapacity--;
+					activeRulesByHash.put(p.userAgentHash(), saved);
+					if (!alreadyActive) {
+						remainingCapacity--;
+					}
 					activated++;
 				} catch (Exception e) {
 					log.debug("Skipped auto UA block for {}: {}", formatUaAuditTarget(p.uaHash32(), p.rawUserAgent()), e.getMessage());
