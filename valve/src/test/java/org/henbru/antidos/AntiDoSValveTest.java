@@ -3016,6 +3016,7 @@ class AntiDoSValveTest {
 		valve.setNumberOfSlots(5);
 		valve.setSlotLength(60);
 		valve.setMaxIPCacheSize(50);
+		valve.reloadMonitor();
 
 		valve.start();
 		try {
@@ -3783,6 +3784,127 @@ class AntiDoSValveTest {
 		assertEquals(200, combinedReplace.getStatus());
 		assertEquals(1, valve.getDynamicBlockRegistry().getActiveCount(valve.getTimeInMillis()));
 		assertEquals(0, valve.getDynamicBlockRegistry().getActiveUaCount(valve.getTimeInMillis()));
+	}
+
+	@Test
+	void testMitigationBypassPrivateIPsAndMitigationBypassIPs() throws Exception {
+		AntiDoSValve valve = createGuardrailTestValve("MITIGATION_BYPASS_TEST");
+		valve.setContainer(new StandardEngine());
+		valve.setAlwaysAllowPrivateIPs(false);
+		valve.setRelevantPaths("/portal/.*");
+		valve.setAllowedRequestsPerSlot(2);
+		valve.setNumberOfSlots(2);
+		valve.setSlotLength(60);
+		valve.setMaxIPCacheSize(50);
+		valve.reloadMonitor();
+
+		// 1. Defaults & regex validation
+		assertTrue(valve.isMitigationBypassPrivateIPs(), "mitigationBypassPrivateIPs must default to true");
+		assertNull(valve.getMitigationBypassIPs());
+		assertTrue(valve.isMitigationBypassIPsValid());
+
+		valve.setMitigationBypassIPs("[unclosed-regex");
+		assertFalse(valve.isMitigationBypassIPsValid());
+		LifecycleException ex = assertThrows(LifecycleException.class, valve::start);
+		assertTrue(ex.getMessage().contains("mitigationBypassIPs"));
+
+		valve.setMitigationBypassIPs("");
+		assertNull(valve.getMitigationBypassIPs());
+		assertTrue(valve.isMitigationBypassIPsValid());
+		valve.setMitigationBypassIPs("198\\.51\\.100\\.250|203\\.0\\.113\\..*");
+		valve.start();
+		try {
+			String blockedUa = "ScraperBot/9.9";
+			int uaHash = AntiDoSVisitorTokenService.computeUserAgentHash32(blockedUa);
+
+			// Push a dynamic CIDR block covering private 10.20.30.0/24 and public 198.51.100.0/24, plus a dynamic UA block
+			assertEquals(200, sendMitigationCommand(valve,
+					"action", "upsert",
+					"blocks", "10.20.30.0/24|600|internal-cidr;198.51.100.0/24|600|public-cidr").getStatus());
+			assertEquals(200, sendMitigationCommand(valve,
+					"action", "upsertua",
+					"uaHash32", String.valueOf(uaHash),
+					"ttlSeconds", "600",
+					"reason", "Scraper UA").getStatus());
+
+			// 2. Private IP (10.20.30.40) bypasses both CIDR and UA dynamic blocks while alwaysAllowPrivateIPs=false
+			//    and increments dynamicUaBlocksBypassedRequests, yet remains subject to local rate limits (allowedRequestsPerSlot=2)!
+			for (int i = 1; i <= 2; i++) {
+				TestRequest privReq = new TestRequest("/portal/catalog", "10.20.30.40");
+				privReq.setHeader("User-Agent", blockedUa);
+				TestResponse privResp = new TestResponse();
+				valve.invoke(privReq, privResp);
+				assertEquals(-1, privResp.getErrorCode(), "Private IP request #" + i + " must bypass dynamic CIDR/UA blocks");
+			}
+			assertEquals(2L, valve.getDynamicBlockRegistry().getTotalUaBypassedRequests());
+			assertFalse(valve.isIPAddressCurrentlyBlocked("10.20.30.40"));
+
+			// 3rd request from 10.20.30.40 exceeds local allowedRequestsPerSlot=2 -> blocked by local monitor (not dynamic rule)
+			TestRequest privLimitReq = new TestRequest("/portal/catalog", "10.20.30.40");
+			privLimitReq.setHeader("User-Agent", blockedUa);
+			TestResponse privLimitResp = new TestResponse();
+			valve.invoke(privLimitReq, privLimitResp);
+			assertEquals(429, privLimitResp.getErrorCode(), "Private IP must still be rate-limited locally once threshold is exceeded");
+			assertEquals(3L, valve.getDynamicBlockRegistry().getTotalUaBypassedRequests());
+
+			// 3. Another private IP (192.168.1.10) only hitting UA block bypasses it cleanly
+			TestRequest priv2Req = new TestRequest("/portal/catalog", "192.168.1.10");
+			priv2Req.setHeader("User-Agent", blockedUa);
+			TestResponse priv2Resp = new TestResponse();
+			valve.invoke(priv2Req, priv2Resp);
+			assertEquals(-1, priv2Resp.getErrorCode());
+			assertEquals(4L, valve.getDynamicBlockRegistry().getTotalUaBypassedRequests());
+
+			// 4. Turning mitigationBypassPrivateIPs off immediately enforces CIDR and UA blocks on private IPs
+			valve.setMitigationBypassPrivateIPs("false");
+			assertFalse(valve.isMitigationBypassPrivateIPs());
+			TestRequest privBlockedCidr = new TestRequest("/portal/catalog", "10.20.30.41");
+			TestResponse privBlockedCidrResp = new TestResponse();
+			valve.invoke(privBlockedCidr, privBlockedCidrResp);
+			assertEquals(429, privBlockedCidrResp.getErrorCode(), "Private IP in dynamic CIDR must be blocked when mitigationBypassPrivateIPs=false");
+
+			TestRequest privBlockedUa = new TestRequest("/portal/catalog", "192.168.1.11");
+			privBlockedUa.setHeader("User-Agent", blockedUa);
+			TestResponse privBlockedUaResp = new TestResponse();
+			valve.invoke(privBlockedUa, privBlockedUaResp);
+			assertEquals(429, privBlockedUaResp.getErrorCode(), "Private IP with blocked UA must be blocked when mitigationBypassPrivateIPs=false");
+
+			// Empty string restores default true
+			valve.setMitigationBypassPrivateIPs("");
+			assertTrue(valve.isMitigationBypassPrivateIPs());
+
+			// 5. Public gateway IP matching mitigationBypassIPs (198.51.100.250) bypasses both 198.51.100.0/24 CIDR and UA block
+			TestRequest gwReq = new TestRequest("/portal/catalog", "198.51.100.250");
+			gwReq.setHeader("User-Agent", blockedUa);
+			TestResponse gwResp = new TestResponse();
+			valve.invoke(gwReq, gwResp);
+			assertEquals(-1, gwResp.getErrorCode(), "Gateway IP in mitigationBypassIPs must bypass dynamic CIDR and UA blocks");
+			assertEquals(5L, valve.getDynamicBlockRegistry().getTotalUaBypassedRequests());
+
+			// Another public IP inside the same CIDR (198.51.100.10) NOT in mitigationBypassIPs is blocked
+			TestRequest extReq = new TestRequest("/portal/catalog", "198.51.100.10");
+			extReq.setHeader("User-Agent", blockedUa);
+			TestResponse extResp = new TestResponse();
+			valve.invoke(extReq, extResp);
+			assertEquals(429, extResp.getErrorCode());
+
+			// 6. Status JSON and HTML expose mitigationBypassPrivateIPs and mitigationBypassIPs
+			AntiDoSStatusRenderer renderer = new AntiDoSStatusRenderer(valve);
+			String overviewJson = renderer.buildStatusJson("MITIGATION_BYPASS_TEST");
+			assertTrue(overviewJson.contains("\"mitigationBypassPrivateIPs\": true"));
+			assertTrue(overviewJson.contains("\"mitigationBypassIPs\": \"198\\\\.51\\\\.100\\\\.250|203\\\\.0\\\\.113\\\\..*\""));
+			String detailsJson = renderer.buildStatusJsonDetails("MITIGATION_BYPASS_TEST");
+			assertTrue(detailsJson.contains("\"mitigationBypassPrivateIPs\": true"));
+			assertTrue(detailsJson.contains("\"mitigationBypassIPs\": \"198\\\\.51\\\\.100\\\\.250|203\\\\.0\\\\.113\\\\..*\""));
+			String overviewHtml = renderer.buildStatusHtml("MITIGATION_BYPASS_TEST");
+			assertTrue(overviewHtml.contains("Private IP Bypass:"));
+			assertTrue(overviewHtml.contains("Bypass IPs:"));
+			String detailsHtml = renderer.buildStatusHtmlDetails("MITIGATION_BYPASS_TEST");
+			assertTrue(detailsHtml.contains("Private IP Bypass:"));
+			assertTrue(detailsHtml.contains("Bypass IPs:"));
+		} finally {
+			valve.stop();
+		}
 	}
 }
 

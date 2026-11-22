@@ -1421,7 +1421,13 @@
                 <label for="alwaysAllowPrivateIPs" class="field-label">alwaysAllowPrivateIPs</label>
                 <span class="badge badge-optional">Optional</span>
               </div>
-              <div class="field-desc">When enabled, requests originating from standard private, loopback, and link-local IP addresses (RFC 1918 <code>10.0.0.0/8</code>, <code>172.16.0.0/12</code>, <code>192.168.0.0/16</code>; RFC 4193 ULA <code>fc00::/7</code>; loopback <code>127.0.0.0/8</code>, <code>::1</code>; link-local <code>169.254.0.0/16</code>, <code>fe80::/10</code>) are unconditionally allowed without rate limiting, eliminating large regular expressions. Evaluated after <code>alwaysForbiddenIPs</code>. <strong>Security Notice:</strong> When running behind a reverse proxy, ensure Tomcat's <code>RemoteIpValve</code> is configured upstream so proxy IPs are not mistaken for client addresses.
+              <div class="field-desc">When enabled, requests originating from standard private, loopback, and link-local
+                IP addresses (RFC 1918 <code>10.0.0.0/8</code>, <code>172.16.0.0/12</code>, <code>192.168.0.0/16</code>;
+                RFC 4193 ULA <code>fc00::/7</code>; loopback <code>127.0.0.0/8</code>, <code>::1</code>; link-local
+                <code>169.254.0.0/16</code>, <code>fe80::/10</code>) are unconditionally allowed without rate limiting,
+                eliminating large regular expressions. Evaluated after <code>alwaysForbiddenIPs</code>. <strong>Security
+                  Notice:</strong> When running behind a reverse proxy, ensure Tomcat's <code>RemoteIpValve</code> is
+                configured upstream so proxy IPs are not mistaken for client addresses.
               </div>
               <label class="checkbox-label">
                 <input type="checkbox" id="alwaysAllowPrivateIPs" name="alwaysAllowPrivateIPs">
@@ -1555,9 +1561,11 @@
               </div>
               <div class="field-desc">Request count threshold per slot above which an active (allowed) client or subnet
                 counter captures a sample request (method, URI, User-Agent) for forensic analysis.
-                Features <strong>semantic priority weighting (Levels 0–3)</strong> with pre-threshold candidate tracking, prioritizing mutating actions (POST) and content routes over static JS/CSS assets.
+                Features <strong>semantic priority weighting (Levels 0–3)</strong> with pre-threshold candidate
+                tracking, prioritizing mutating actions (POST) and content routes over static JS/CSS assets.
                 <code>0</code> (default) disables active request sampling (samples captured only on block/mark).
-                Recommended: <code>2</code>–<code>5</code> for subnet monitoring valves (captures low-frequency distributed waves), <code>10</code>–<code>20</code> for IP valves.
+                Recommended: <code>2</code>–<code>5</code> for subnet monitoring valves (captures low-frequency
+                distributed waves), <code>10</code>–<code>20</code> for IP valves.
               </div>
               <input type="number" id="activeSampleThreshold" name="activeSampleThreshold" min="0" step="1" value="0"
                 placeholder="0 (Default: disabled)">
@@ -1825,9 +1833,11 @@
                     <label for="visitorCookieMinAgeSeconds" class="field-label">visitorCookieMinAgeSeconds</label>
                     <span class="badge badge-optional">Optional</span>
                   </div>
-                  <div class="field-desc">Minimum age in seconds before a first-contact visitor cookie is recognized as a returning visitor (prevents single-page asset-scraping bots from appearing as returning users). Set to 0 to disable. Default: <code>10</code>.</div>
-                  <input type="number" id="visitorCookieMinAgeSeconds" name="visitorCookieMinAgeSeconds" min="0" step="1"
-                    placeholder="10 (Default: 10s)">
+                  <div class="field-desc">Minimum age in seconds before a first-contact visitor cookie is recognized as
+                    a returning visitor (prevents single-page asset-scraping bots from appearing as returning users).
+                    Set to 0 to disable. Default: <code>10</code>.</div>
+                  <input type="number" id="visitorCookieMinAgeSeconds" name="visitorCookieMinAgeSeconds" min="0"
+                    step="1" placeholder="10 (Default: 10s)">
                 </div>
 
                 <!-- 24. visitorCookieRefreshRatio -->
@@ -1926,7 +1936,8 @@
                   style="border-bottom:none; margin-bottom:0; padding-bottom:0;">
                   <label class="checkbox-label">
                     <input type="checkbox" id="visitorCookieEnforceUserAgent" name="visitorCookieEnforceUserAgent">
-                    <span>Enforce User-Agent match (<code>visitorCookieEnforceUserAgent="true"</code>; if false, UA mismatches are passively tracked)</span>
+                    <span>Enforce User-Agent match (<code>visitorCookieEnforceUserAgent="true"</code>; if false, UA
+                      mismatches are passively tracked)</span>
                   </label>
                 </div>
               </div>
@@ -2049,11 +2060,13 @@
             </div>
 
             <!-- Optional Feature: Dynamic CIDR Mitigation -->
+            <!-- Optional Feature: Dynamic Fleet Mitigation (CIDR & User-Agent) -->
             <div class="status-dashboard-section" style="border-left-color: #ef4444;">
               <div class="status-dashboard-header">
                 <div class="status-dashboard-title">
                   <span class="status-dashboard-icon" style="color: #ef4444;">&#128737;&#65039;</span>
                   <span>Active Fleet Mitigation (Dynamic CIDR Blocking)</span>
+                  <span>Active Fleet Mitigation (Dynamic CIDR &amp; User-Agent Blocking)</span>
                 </div>
                 <span class="badge badge-optional-feature"
                   style="background: #fee2e2; color: #b91c1c; border-color: #fecaca;">Optional Feature</span>
@@ -2064,6 +2077,12 @@
                 this specific Valve at runtime via HTTP <code>POST</code>. Dynamic blocks are evaluated with
                 server-wide priority right after <code>alwaysAllowedIPs</code> and record forensic deterrence hits in
                 the current monitor slot.
+                blocks (IPv4 <code>/16</code>&ndash;<code>/32</code>, IPv6 <code>/32</code>&ndash;<code>/128</code>) as
+                well as User-Agent signature blocks (32-bit FNV-1a hash rules with automatic bypass for authenticated
+                sessions and valid returning visitors) to this specific Valve at runtime via HTTP <code>POST</code>.
+                Dynamic rules are evaluated with server-wide priority right after <code>alwaysAllowedIPs</code>
+                (respecting <code>mitigationBypassPrivateIPs</code> and <code>mitigationBypassIPs</code>) and record
+                forensic deterrence hits in the current monitor slot.
               </div>
 
               <!-- 37. mitigationPassword -->
@@ -2074,6 +2093,9 @@
                 </div>
                 <div class="field-desc">Write token/password (&ge; 10 chars) enabling dynamic CIDR mitigation on this
                   Valve. <strong>Leave empty to disable dynamic mitigation on this Valve.</strong></div>
+                <div class="field-desc">Write token/password (&ge; 10 chars) enabling dynamic CIDR and User-Agent
+                  mitigation on this Valve. <strong>Leave empty to disable dynamic mitigation on this Valve.</strong>
+                </div>
                 <div class="secret-input-wrapper">
                   <input type="text" id="mitigationPassword" name="mitigationPassword" minlength="10"
                     placeholder="Leave empty to disable (or set >= 10 char secret token)" autocomplete="off"
@@ -2129,10 +2151,12 @@
                 <div class="field-desc">When enabled (default: <code>true</code>), requests from private, loopback, and
                   link-local IP addresses (RFC 1918, RFC 4193 ULA, loopback, link-local) automatically bypass dynamic
                   CIDR and User-Agent blocks while remaining subject to local sliding-window rate limits (unlike
-                  <code>alwaysAllowPrivateIPs</code>).</div>
+                  <code>alwaysAllowPrivateIPs</code>).
+                </div>
                 <label class="checkbox-label">
                   <input type="checkbox" id="mitigationBypassPrivateIPs" name="mitigationBypassPrivateIPs" checked>
-                  <span>Bypass dynamic mitigation blocks for private/local IPs (<code>mitigationBypassPrivateIPs="true"</code>)</span>
+                  <span>Bypass dynamic mitigation blocks for private/local IPs
+                    (<code>mitigationBypassPrivateIPs="true"</code>)</span>
                 </label>
               </div>
 
@@ -2143,7 +2167,8 @@
                   <span class="badge badge-optional">Optional</span>
                 </div>
                 <div class="field-desc">Optional regular expression matching trusted IP addresses (e.g. corporate VPN or
-                  campus gateways) that always bypass dynamic CIDR and User-Agent blocks while remaining subject to local
+                  campus gateways) that always bypass dynamic CIDR and User-Agent blocks while remaining subject to
+                  local
                   rate limits.</div>
                 <input type="text" id="mitigationBypassIPs" name="mitigationBypassIPs"
                   placeholder="e.g. 198\.51\.100\.250|203\.0\.113\..*">
@@ -2181,7 +2206,8 @@
                   <span class="badge badge-optional">Optional</span>
                 </div>
                 <div class="field-desc">Upper bound in seconds for the expiration of pushed dynamic blocks (default:
-                  <code>86400</code> = 24h). Longer expiration requests are automatically capped to this duration.</div>
+                  <code>86400</code> = 24h). Longer expiration requests are automatically capped to this duration.
+                </div>
                 <input type="number" id="mitigationMaxTtlSeconds" name="mitigationMaxTtlSeconds" min="1" step="1"
                   placeholder="86400">
               </div>
@@ -2829,6 +2855,8 @@
       { key: 'mitigationPassword', isRequired: false, defaultVal: '' },
       { key: 'mitigationUri', isRequired: false, defaultVal: '' },
       { key: 'mitigationAllowedIPs', isRequired: false, defaultVal: '' },
+      { key: 'mitigationBypassPrivateIPs', isRequired: false, defaultVal: true, isBoolean: true },
+      { key: 'mitigationBypassIPs', isRequired: false, defaultVal: '' },
       { key: 'mitigationMinPrefixV4', isRequired: false, defaultVal: 16 },
       { key: 'mitigationMinPrefixV6', isRequired: false, defaultVal: 32 },
       { key: 'mitigationMaxTtlSeconds', isRequired: false, defaultVal: 86400 },
@@ -2954,6 +2982,9 @@
               if (val === true || !document.getElementById('visitorCookieEnabled').checked) return;
             } else if (param.key === 'visitorCookieEnforceUserAgent') {
               if (!val || !document.getElementById('visitorCookieEnabled').checked) return;
+            } else if (param.key === 'mitigationBypassPrivateIPs') {
+              const mitPwdVal = (document.getElementById('mitigationPassword').value || '').trim();
+              if (val === true || !mitPwdVal) return;
             } else {
               if (!val) return; // Default false omitted
             }
@@ -3361,6 +3392,7 @@
           mitPwdInput.classList.remove('input-invalid');
           mitPwdHint.className = 'status-field-hint neutral';
           mitPwdHint.innerHTML = '<span>&#9432;</span><div><strong>Dynamic mitigation disabled:</strong> Leave empty if this Valve should only perform passive rate limiting. Generate or set a token (&ge; 10 chars) to designate this Valve for dynamic CIDR blocking.</div>';
+          mitPwdHint.innerHTML = '<span>&#9432;</span><div><strong>Dynamic mitigation disabled:</strong> Leave empty if this Valve should only perform passive rate limiting. Generate or set a token (&ge; 10 chars) to designate this Valve for dynamic CIDR and User-Agent blocking.</div>';
         } else if (rawMitPwd.length < 10) {
           mitPwdInput.classList.add('input-invalid');
           mitPwdHint.className = 'status-field-hint invalid';
@@ -3369,6 +3401,30 @@
           mitPwdInput.classList.remove('input-invalid');
           mitPwdHint.className = 'status-field-hint valid';
           mitPwdHint.innerHTML = `<span>&#10003;</span><div><strong>Dynamic mitigation active:</strong> ${rawMitPwd.length} characters. This Valve will accept dynamic CIDR blocks via HTTP <code>POST</code>. Configure the same token in Collector's <code>collector.mitigation-token</code>.</div>`;
+          mitPwdHint.innerHTML = `<span>&#10003;</span><div><strong>Dynamic mitigation active:</strong> ${rawMitPwd.length} characters. This Valve will accept dynamic CIDR and User-Agent blocks via HTTP <code>POST</code>. Configure the same token in Collector's <code>collector.mitigation-token</code>.</div>`;
+        }
+      }
+
+      // 5. mitigationBypassIPs validation
+      const bypassIpsInput = document.getElementById('mitigationBypassIPs');
+      const bypassIpsHint = document.getElementById('hintMitigationBypassIPs');
+      if (bypassIpsInput && bypassIpsHint) {
+        const rawBypassIps = bypassIpsInput.value.trim();
+        if (!rawBypassIps) {
+          bypassIpsInput.classList.remove('input-invalid');
+          bypassIpsHint.className = 'status-field-hint neutral';
+          bypassIpsHint.innerHTML = '<span>&#9432;</span><div><strong>No custom IP bypass regex:</strong> Only private/local IPs bypass dynamic blocks (if <code>mitigationBypassPrivateIPs</code> is enabled).</div>';
+        } else {
+          try {
+            new RegExp(rawBypassIps);
+            bypassIpsInput.classList.remove('input-invalid');
+            bypassIpsHint.className = 'status-field-hint valid';
+            bypassIpsHint.innerHTML = `<span>&#10003;</span><div><strong>Dynamic mitigation bypass active:</strong> Matching IPs (<code>${escapeHtml(rawBypassIps)}</code>) will never be blocked by dynamic CIDR or UA rules while remaining subject to local rate limits.</div>`;
+          } catch (e) {
+            bypassIpsInput.classList.add('input-invalid');
+            bypassIpsHint.className = 'status-field-hint invalid';
+            bypassIpsHint.innerHTML = `<span>&#9888;</span><div><strong>Invalid Regular Expression:</strong> ${escapeHtml(e.message)}</div>`;
+          }
         }
       }
     }
