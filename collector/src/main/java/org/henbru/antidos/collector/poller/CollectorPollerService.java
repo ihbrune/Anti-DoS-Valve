@@ -748,6 +748,8 @@ public class CollectorPollerService {
 				v.dynamicUaBlocksBlockedRequestsOrDefault(),
 				v.dynamicUaBlocksBypassedRequestsOrDefault(),
 				v.dynamicUaRulesRevisionOrDefault(),
+				v.mitigationBypassPrivateIPsOrDefault(),
+				v.mitigationBypassIPs(),
 				now,
 				configHash,
 				true

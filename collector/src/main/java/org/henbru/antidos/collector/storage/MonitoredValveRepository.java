@@ -85,6 +85,8 @@ public class MonitoredValveRepository {
 			getLongSafe(rs, "dynamic_ua_blocks_blocked_requests", 0L),
 			getLongSafe(rs, "dynamic_ua_blocks_bypassed_requests", 0L),
 			getLongSafe(rs, "dynamic_ua_rules_revision", 0L),
+			getBooleanSafe(rs, "mitigation_bypass_private_ips", true),
+			getStringSafe(rs, "mitigation_bypass_ips"),
 			toInstant(rs.getTimestamp("last_updated_at")),
 			rs.getInt("config_hash"),
 			rs.getBoolean("is_active")
@@ -127,6 +129,14 @@ public class MonitoredValveRepository {
 		}
 	}
 
+	private static String getStringSafe(ResultSet rs, String colName) {
+		try {
+			return rs.getString(colName);
+		} catch (SQLException ignored) {
+			return null;
+		}
+	}
+
 	public void upsert(MonitoredValve v) {
 		String sql = """
 				INSERT INTO monitored_valves (
@@ -146,9 +156,10 @@ public class MonitoredValveRepository {
 				    mitigation_max_ttl_seconds, mitigation_max_active_blocks,
 				    dynamic_ua_blocks_active_count, dynamic_ua_blocks_blocked_requests,
 				    dynamic_ua_blocks_bypassed_requests, dynamic_ua_rules_revision,
+				    mitigation_bypass_private_ips, mitigation_bypass_ips,
 				    last_updated_at, config_hash, is_active
 				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (server_id, valve_name) DO UPDATE SET
 				    description = EXCLUDED.description,
 				    pipeline_order = EXCLUDED.pipeline_order,
@@ -196,6 +207,8 @@ public class MonitoredValveRepository {
 				    dynamic_ua_blocks_blocked_requests = EXCLUDED.dynamic_ua_blocks_blocked_requests,
 				    dynamic_ua_blocks_bypassed_requests = EXCLUDED.dynamic_ua_blocks_bypassed_requests,
 				    dynamic_ua_rules_revision = EXCLUDED.dynamic_ua_rules_revision,
+				    mitigation_bypass_private_ips = EXCLUDED.mitigation_bypass_private_ips,
+				    mitigation_bypass_ips = EXCLUDED.mitigation_bypass_ips,
 				    last_updated_at = EXCLUDED.last_updated_at,
 				    config_hash = EXCLUDED.config_hash,
 				    is_active = EXCLUDED.is_active
@@ -250,6 +263,8 @@ public class MonitoredValveRepository {
 				v.dynamicUaBlocksBlockedRequests(),
 				v.dynamicUaBlocksBypassedRequests(),
 				v.dynamicUaRulesRevision(),
+				v.mitigationBypassPrivateIPs(),
+				v.mitigationBypassIPs(),
 				v.lastUpdatedAt() != null ? Timestamp.from(v.lastUpdatedAt()) : Timestamp.from(Instant.now()),
 				v.configHash(),
 				v.isActive()

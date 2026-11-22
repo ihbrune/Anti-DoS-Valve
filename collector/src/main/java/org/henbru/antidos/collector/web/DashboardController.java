@@ -63,6 +63,7 @@ public class DashboardController {
 	private final org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService;
 	private final org.henbru.antidos.collector.aggregation.UserAgentMemoryService userAgentMemoryService;
 	private final org.henbru.antidos.collector.aggregation.EndpointAnalyticsService endpointAnalyticsService;
+	private final org.henbru.antidos.collector.diagnosis.BlockDiagnosisService blockDiagnosisService;
 
 	@org.springframework.beans.factory.annotation.Autowired
 	public DashboardController(
@@ -91,7 +92,9 @@ public class DashboardController {
 			@org.springframework.beans.factory.annotation.Autowired(required = false)
 			org.henbru.antidos.collector.aggregation.UserAgentMemoryService userAgentMemoryService,
 			@org.springframework.beans.factory.annotation.Autowired(required = false)
-			org.henbru.antidos.collector.aggregation.EndpointAnalyticsService endpointAnalyticsService) {
+			org.henbru.antidos.collector.aggregation.EndpointAnalyticsService endpointAnalyticsService,
+			@org.springframework.beans.factory.annotation.Autowired(required = false)
+			org.henbru.antidos.collector.diagnosis.BlockDiagnosisService blockDiagnosisService) {
 		this.heartbeatRepository = heartbeatRepository;
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
@@ -109,6 +112,7 @@ public class DashboardController {
 		this.rollupAggregationService = rollupAggregationService;
 		this.userAgentMemoryService = userAgentMemoryService;
 		this.endpointAnalyticsService = endpointAnalyticsService;
+		this.blockDiagnosisService = blockDiagnosisService;
 	}
 
 	public DashboardController(
@@ -121,7 +125,7 @@ public class DashboardController {
 			org.henbru.antidos.collector.config.CollectorProperties properties,
 			org.henbru.antidos.collector.config.ValveRuleResolver valveRuleResolver) {
 		this(heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
-				subnetRollupRepository, documentationService, properties, valveRuleResolver, null, null, null, null, null, null, null, null, null);
+				subnetRollupRepository, documentationService, properties, valveRuleResolver, null, null, null, null, null, null, null, null, null, null);
 	}
 
 	public DashboardController(
@@ -133,7 +137,7 @@ public class DashboardController {
 			DocumentationService documentationService,
 			org.henbru.antidos.collector.config.CollectorProperties properties) {
 		this(heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
-				subnetRollupRepository, documentationService, properties, new org.henbru.antidos.collector.config.ValveRuleResolver(properties), null, null, null, null, null, null, null, null, null);
+				subnetRollupRepository, documentationService, properties, new org.henbru.antidos.collector.config.ValveRuleResolver(properties), null, null, null, null, null, null, null, null, null, null);
 	}
 
 	@org.springframework.web.bind.annotation.ModelAttribute("demoMode")
@@ -514,6 +518,7 @@ public class DashboardController {
 
 	@GetMapping("/events")
 	public String eventsPage(
+			@RequestParam(name = "tab", defaultValue = "incidents") String tab,
 			@RequestParam(name = "servers", required = false) List<String> servers,
 			@RequestParam(name = "valves", required = false) List<String> valves,
 			@RequestParam(name = "from", required = false) String fromStr,
@@ -523,9 +528,141 @@ public class DashboardController {
 			@RequestParam(name = "asn", required = false) String asn,
 			@RequestParam(name = "status", required = false) String status,
 			@RequestParam(name = "limit", defaultValue = "50") int limit,
+			@RequestParam(name = "ip", required = false) String diagIp,
+			@RequestParam(name = "ua", required = false) String diagUa,
+			@RequestParam(name = "url", required = false) String diagUrl,
+			@RequestParam(name = "targetTime", required = false) String diagTargetTime,
+			@RequestParam(name = "toleranceMinutes", defaultValue = "60") int diagToleranceMinutes,
+			@RequestParam(name = "presetHours", defaultValue = "24") int diagPresetHours,
+			@RequestParam(name = "server", required = false) String diagServer,
+			@RequestParam(name = "valve", required = false) String diagValve,
+			@RequestParam(name = "assumeAuth", defaultValue = "false") boolean diagAssumeAuth,
+			@RequestParam(name = "assumeReturning", defaultValue = "false") boolean diagAssumeReturning,
 			Model model) {
-		populateEventsModel(servers, valves, fromStr, toStr, clientQuery, clientTypes, asn, status, limit, 0, model);
+		String activeTab = "diagnosis".equalsIgnoreCase(tab) ? "diagnosis" : "incidents";
+		model.addAttribute("activeTab", activeTab);
+		if ("diagnosis".equals(activeTab)) {
+			boolean runLookup = (diagIp != null && !diagIp.isBlank())
+					|| (diagUa != null && !diagUa.isBlank())
+					|| (diagUrl != null && !diagUrl.isBlank());
+			populateDiagnosisModel(diagIp, diagUa, diagUrl, diagTargetTime, diagToleranceMinutes,
+					diagPresetHours, diagServer, diagValve, diagAssumeAuth, diagAssumeReturning, runLookup, model);
+		} else {
+			populateEventsModel(servers, valves, fromStr, toStr, clientQuery, clientTypes, asn, status, limit, 0, model);
+		}
 		return "events";
+	}
+
+	@GetMapping("/fragments/block-diagnosis")
+	public String blockDiagnosisFragment(
+			@RequestParam(name = "ip", required = false) String diagIp,
+			@RequestParam(name = "ua", required = false) String diagUa,
+			@RequestParam(name = "url", required = false) String diagUrl,
+			@RequestParam(name = "targetTime", required = false) String diagTargetTime,
+			@RequestParam(name = "toleranceMinutes", defaultValue = "60") int diagToleranceMinutes,
+			@RequestParam(name = "presetHours", defaultValue = "24") int diagPresetHours,
+			@RequestParam(name = "server", required = false) String diagServer,
+			@RequestParam(name = "valve", required = false) String diagValve,
+			@RequestParam(name = "assumeAuth", defaultValue = "false") boolean diagAssumeAuth,
+			@RequestParam(name = "assumeReturning", defaultValue = "false") boolean diagAssumeReturning,
+			jakarta.servlet.http.HttpServletResponse response,
+			Model model) {
+		populateDiagnosisModel(diagIp, diagUa, diagUrl, diagTargetTime, diagToleranceMinutes,
+				diagPresetHours, diagServer, diagValve, diagAssumeAuth, diagAssumeReturning, true, model);
+		if (response != null) {
+			response.setHeader("HX-Push-Url", buildDiagnosisPushUrl(
+					diagIp, diagUa, diagUrl, diagTargetTime, diagToleranceMinutes,
+					diagPresetHours, diagServer, diagValve, diagAssumeAuth, diagAssumeReturning));
+		}
+		return "fragments/block-diagnosis :: diagnosisResults";
+	}
+
+	private void populateDiagnosisModel(
+			String diagIp,
+			String diagUa,
+			String diagUrl,
+			String diagTargetTime,
+			int diagToleranceMinutes,
+			int diagPresetHours,
+			String diagServer,
+			String diagValve,
+			boolean diagAssumeAuth,
+			boolean diagAssumeReturning,
+			boolean runLookup,
+			Model model) {
+		int safePresetHours = Math.max(1, Math.min(diagPresetHours, 24 * 90));
+		int safeToleranceMin = Math.max(5, Math.min(diagToleranceMinutes, 24 * 60));
+		List<String> serverScope = (diagServer != null && !diagServer.isBlank()) ? List.of(diagServer.trim()) : List.of();
+		List<String> valveScope = (diagValve != null && !diagValve.isBlank()) ? List.of(diagValve.trim()) : List.of();
+
+		model.addAttribute("availableServers", getAvailableServerIds());
+		model.addAttribute("availableValves", getAvailableValveNames(serverScope));
+		model.addAttribute("diagIp", diagIp != null ? diagIp : "");
+		model.addAttribute("diagUa", diagUa != null ? diagUa : "");
+		model.addAttribute("diagUrl", diagUrl != null ? diagUrl : "");
+		model.addAttribute("diagTargetTime", diagTargetTime != null ? diagTargetTime : "");
+		model.addAttribute("diagToleranceMinutes", safeToleranceMin);
+		model.addAttribute("diagPresetHours", safePresetHours);
+		model.addAttribute("diagServer", diagServer != null ? diagServer : "");
+		model.addAttribute("diagValve", diagValve != null ? diagValve : "");
+		model.addAttribute("diagAssumeAuth", diagAssumeAuth);
+		model.addAttribute("diagAssumeReturning", diagAssumeReturning);
+
+		if (runLookup && blockDiagnosisService != null) {
+			Instant referenceTime = parseDateTime(diagTargetTime);
+			Instant now = Instant.now();
+			Instant windowStart;
+			Instant windowEnd;
+			if (referenceTime != null) {
+				windowStart = referenceTime.minusSeconds(safeToleranceMin * 60L);
+				windowEnd = referenceTime.plusSeconds(safeToleranceMin * 60L);
+			} else {
+				windowEnd = now;
+				windowStart = now.minusSeconds(safePresetHours * 3600L);
+			}
+			var request = new org.henbru.antidos.collector.diagnosis.BlockDiagnosisRequest(
+					diagIp, diagUa, diagUrl, windowStart, windowEnd, referenceTime,
+					serverScope, valveScope, diagAssumeAuth, diagAssumeReturning);
+			model.addAttribute("diagnosisReport", blockDiagnosisService.diagnose(request));
+		} else {
+			model.addAttribute("diagnosisReport", null);
+		}
+	}
+
+	private String buildDiagnosisPushUrl(
+			String diagIp,
+			String diagUa,
+			String diagUrl,
+			String diagTargetTime,
+			int diagToleranceMinutes,
+			int diagPresetHours,
+			String diagServer,
+			String diagValve,
+			boolean diagAssumeAuth,
+			boolean diagAssumeReturning) {
+		StringBuilder sb = new StringBuilder("/events?tab=diagnosis");
+		appendQueryParam(sb, "ip", diagIp);
+		appendQueryParam(sb, "ua", diagUa);
+		appendQueryParam(sb, "url", diagUrl);
+		appendQueryParam(sb, "targetTime", diagTargetTime);
+		sb.append("&toleranceMinutes=").append(Math.max(5, Math.min(diagToleranceMinutes, 24 * 60)));
+		sb.append("&presetHours=").append(Math.max(1, Math.min(diagPresetHours, 24 * 90)));
+		appendQueryParam(sb, "server", diagServer);
+		appendQueryParam(sb, "valve", diagValve);
+		if (diagAssumeAuth) {
+			sb.append("&assumeAuth=true");
+		}
+		if (diagAssumeReturning) {
+			sb.append("&assumeReturning=true");
+		}
+		return sb.toString();
+	}
+
+	private static void appendQueryParam(StringBuilder sb, String key, String value) {
+		if (value != null && !value.isBlank()) {
+			sb.append('&').append(key).append('=')
+					.append(java.net.URLEncoder.encode(value.trim(), java.nio.charset.StandardCharsets.UTF_8));
+		}
 	}
 
 	@GetMapping("/fragments/events-table")

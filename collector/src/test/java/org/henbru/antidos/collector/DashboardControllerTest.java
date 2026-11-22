@@ -976,5 +976,61 @@ class DashboardControllerTest {
 			jdbcTemplate.update("DELETE FROM dim_user_agent");
 		}
 	}
+
+	@Test
+	void testBlockDiagnosisTabsFragmentViewerModeAndServerBypassDisplay() throws Exception {
+		Instant now = Instant.now();
+		monitoredValveRepository.upsert(new org.henbru.antidos.collector.model.MonitoredValve(
+				"DIAG-WEB-SRV", "MitBypassValve", "Diagnosis Web Test Valve", 1,
+				"BLOCKING", false, false, 429,
+				100, 60, 5, 0.8f,
+				32, 64, 10000, 5000,
+				"/portal/.*", null, null, true, null,
+				"/antidos-status", "127.0.0.1", "auto",
+				false, "_rv", false, "OFF", null, null, 900, 10000,
+				"ALL", 0,
+				true, "/antidos-mitigation",
+				0, 0L, 0L, 1, 24, 64, 86400, 5000,
+				0, 0L, 0L, 0L,
+				false, "^198\\.51\\.100\\.250$",
+				now, 88888, true
+		));
+		heartbeatRepository.upsert(new org.henbru.antidos.collector.model.EndpointHeartbeat(
+				"DIAG-WEB-SRV", "http://localhost:8080/antidos-status", true, now, now, null, 10L, 1,
+				0.10, 0.20, 0.50, 512L, 1024L, 50.0, 100L, 5, 100
+		));
+
+		try {
+			// 1. Server details shows Dynamic Mitigation Private Bypass and Bypass IPs regex
+			mockMvc.perform(get("/server/DIAG-WEB-SRV"))
+					.andExpect(status().isOk())
+					.andExpect(content().string(containsString("Dynamic Mitigation Private Bypass:")))
+					.andExpect(content().string(containsString("ENFORCED ON PRIVATE IPs")))
+					.andExpect(content().string(containsString("Dynamic Mitigation Bypass IPs:")))
+					.andExpect(content().string(containsString("^198\\.51\\.100\\.250$")));
+
+			// 2. Block Diagnosis tab renders cleanly in Incidents without unrendered Thymeleaf tags
+			mockMvc.perform(get("/events").param("tab", "diagnosis"))
+					.andExpect(status().isOk())
+					.andExpect(content().string(containsString("Block Diagnosis (Support Lookup)")))
+					.andExpect(content().string(containsString("block-diagnosis-form")))
+					.andExpect(content().string(not(containsString("th:if="))));
+
+			// 3. HTMX diagnosis fragment works in VIEWER mode and sets HX-Push-Url
+			collectorProperties.setMode(org.henbru.antidos.collector.config.CollectorMode.VIEWER);
+			mockMvc.perform(get("/fragments/block-diagnosis")
+							.param("ip", "198.51.100.42")
+							.param("presetHours", "24"))
+					.andExpect(status().isOk())
+					.andExpect(header().string("HX-Push-Url", org.hamcrest.Matchers.startsWith("/events?tab=diagnosis")))
+					.andExpect(content().string(containsString("diagnosis-results-container")))
+					.andExpect(content().string(containsString("198.51.100.42")))
+					.andExpect(content().string(not(containsString("th:if="))));
+		} finally {
+			collectorProperties.setMode(org.henbru.antidos.collector.config.CollectorMode.FULL);
+			jdbcTemplate.update("DELETE FROM monitored_valves WHERE server_id = 'DIAG-WEB-SRV'");
+			jdbcTemplate.update("DELETE FROM endpoint_heartbeats WHERE server_id = 'DIAG-WEB-SRV'");
+		}
+	}
 }
 

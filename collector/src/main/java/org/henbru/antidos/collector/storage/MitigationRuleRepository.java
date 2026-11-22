@@ -505,4 +505,29 @@ public class MitigationRuleRepository {
 						"DELETE FROM mitigation_audit_log WHERE created_at < ?",
 						Timestamp.from(cutoff)));
 	}
+
+	/**
+	 * Finds all CIDR mitigation rules whose lifetime overlaps the requested time window.
+	 */
+	public List<MitigationRule> findRulesOverlappingWindow(Instant windowStart, Instant windowEnd, int limit) {
+		return jdbcTemplate.query("""
+				SELECT * FROM mitigation_rules
+				WHERE created_at <= ?
+				  AND COALESCE(revoked_at, expires_at) >= ?
+				ORDER BY created_at DESC, id DESC
+				LIMIT ?
+				""", RULE_MAPPER, Timestamp.from(windowEnd), Timestamp.from(windowStart), Math.max(1, limit));
+	}
+
+	/**
+	 * Finds all mitigation audit log entries created within the given time window.
+	 */
+	public List<MitigationAuditEntry> findAuditEntriesInWindow(Instant windowStart, Instant windowEnd, int limit) {
+		return jdbcTemplate.query("""
+				SELECT * FROM mitigation_audit_log
+				WHERE created_at >= ? AND created_at <= ?
+				ORDER BY created_at DESC, id DESC
+				LIMIT ?
+				""", AUDIT_MAPPER, Timestamp.from(windowStart), Timestamp.from(windowEnd), Math.max(1, limit));
+	}
 }

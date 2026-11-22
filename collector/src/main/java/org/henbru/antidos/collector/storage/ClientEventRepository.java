@@ -1179,5 +1179,41 @@ public class ClientEventRepository {
 		Integer count = jdbcTemplate.queryForObject(sql.toString(), Integer.class, params.toArray());
 		return count != null ? count : 0;
 	}
+
+	/**
+	 * Queries client events for Block Diagnosis within the specified time window.
+	 * When an IP query is provided, parent/overlapping CIDR events are included without filtering out
+	 * rows on sample_uri/sample_user_agent in SQL because each counter retains only one prioritized sample.
+	 */
+	public List<ClientEvent> findEventsForDiagnosis(
+			List<String> serverIds,
+			List<String> valveNames,
+			Instant fromTime,
+			Instant toTime,
+			String ipQuery,
+			String userAgentQuery,
+			String urlPathQuery,
+			int limit
+	) {
+		StringBuilder sql = new StringBuilder("SELECT * FROM client_events WHERE 1=1 ");
+		List<Object> params = new ArrayList<>();
+
+		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, ipQuery, null, null, null, null);
+
+		if (ipQuery == null || ipQuery.isBlank()) {
+			if (userAgentQuery != null && !userAgentQuery.isBlank()) {
+				sql.append("AND LOWER(COALESCE(sample_user_agent, '')) LIKE ? ");
+				params.add("%" + userAgentQuery.trim().toLowerCase() + "%");
+			}
+			if (urlPathQuery != null && !urlPathQuery.isBlank()) {
+				sql.append("AND LOWER(COALESCE(sample_uri, '')) LIKE ? ");
+				params.add("%" + urlPathQuery.trim().toLowerCase() + "%");
+			}
+		}
+
+		sql.append("ORDER BY slot_time DESC, id DESC LIMIT ?");
+		params.add(Math.max(1, Math.min(limit, 200)));
+		return jdbcTemplate.query(sql.toString(), ROW_MAPPER, params.toArray());
+	}
 }
 

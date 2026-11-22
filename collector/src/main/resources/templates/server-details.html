@@ -566,6 +566,17 @@
                                 <span th:if="${rv.alwaysAllowPrivateIPs}" class="badge badge-success">&#x2714; ALWAYS ALLOWED (RFC 1918 / ULA)</span>
                                 <span th:unless="${rv.alwaysAllowPrivateIPs}" style="color: var(--text-muted);">Standard rate limiting</span>
                             </div>
+                            <div th:if="${rv.dynamicMitigationEnabled}" style="display: flex; gap: 8px; align-items: baseline;">
+                                <span style="min-width: 150px; font-weight: 600; color: var(--text-muted);">Dynamic Mitigation Private Bypass:</span>
+                                <span th:if="${rv.mitigationBypassPrivateIPs}" class="badge badge-success">&#x2714; BYPASSED (RFC 1918 / ULA)</span>
+                                <span th:unless="${rv.mitigationBypassPrivateIPs}" class="badge badge-warning">ENFORCED ON PRIVATE IPs</span>
+                            </div>
+                            <div th:if="${rv.mitigationBypassIPs != null and !rv.mitigationBypassIPs.isBlank()}"
+                                style="display: flex; gap: 8px; align-items: baseline;">
+                                <span style="min-width: 150px; font-weight: 600; color: var(--text-muted);">Dynamic Mitigation Bypass IPs:</span>
+                                <code style="word-break: break-all; color: var(--color-success);"
+                                    th:text="${rv.mitigationBypassIPs}">198.51.100.250</code>
+                            </div>
                             <div th:if="${rv.alwaysForbiddenIPs != null and !rv.alwaysForbiddenIPs.isBlank()}"
                                 style="display: flex; gap: 8px; align-items: baseline;">
                                 <span style="min-width: 150px; font-weight: 600; color: var(--text-muted);">Always Forbidden IPs:</span>

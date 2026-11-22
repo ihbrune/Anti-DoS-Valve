@@ -135,6 +135,19 @@ public class MitigationUaRuleRepository {
 				ROW_MAPPER, Timestamp.from(now));
 	}
 
+	/**
+	 * Finds all User-Agent mitigation rules whose lifetime overlaps the requested time window.
+	 */
+	public List<MitigationUaRule> findRulesOverlappingWindow(Instant windowStart, Instant windowEnd, int limit) {
+		return jdbcTemplate.query("""
+				SELECT * FROM mitigation_ua_rules
+				WHERE created_at <= ?
+				  AND COALESCE(revoked_at, expires_at) >= ?
+				ORDER BY updated_at DESC, id DESC
+				LIMIT ?
+				""", ROW_MAPPER, Timestamp.from(windowEnd), Timestamp.from(windowStart), Math.max(1, limit));
+	}
+
 	public List<MitigationUaRule> findRecentRules(int limit) {
 		return jdbcTemplate.query(
 				"SELECT * FROM mitigation_ua_rules ORDER BY updated_at DESC, id DESC LIMIT ?",

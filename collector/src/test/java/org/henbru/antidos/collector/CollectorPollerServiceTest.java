@@ -1081,6 +1081,89 @@ class CollectorPollerServiceTest {
 		assertTrue(valveOpt.isPresent());
 		assertTrue(valveOpt.get().alwaysAllowPrivateIPs());
 		assertTrue(valveOpt.get().hasIpLists());
+		assertTrue(valveOpt.get().mitigationBypassPrivateIPs());
+	}
+
+	@Test
+	void testPollEndpointMitigationBypassSettings() throws Exception {
+		EndpointConfig endpoint = new EndpointConfig("MIT-BYPASS-NODE", "http://localhost:8080/antidos-status", "tok", false, true);
+
+		ValveOverviewDto.ValveSummaryDto summary = new ValveOverviewDto.ValveSummaryDto(
+				"MIT_BYPASS_VALVE",
+				"Test Valve with custom mitigation bypass",
+				1,
+				"BLOCKING",
+				false,
+				false,
+				429,
+				100,
+				60,
+				5,
+				0.8f,
+				32,
+				64,
+				10000,
+				10000,
+				null,
+				null,
+				null,
+				null,
+				"/antidos-status",
+				"127.0.0.1",
+				"auto",
+				false,
+				"_adv",
+				false,
+				"OFF",
+				null,
+				null,
+				900,
+				50000,
+				0,
+				"ALL",
+				0,
+				true,
+				"/antidos-mitigation",
+				null,
+				false,
+				"^198\\.51\\.100\\.250$",
+				0,
+				0L,
+				0L,
+				1,
+				16,
+				32,
+				86400,
+				5000,
+				0,
+				0L,
+				0L,
+				0L,
+				false,
+				0L,
+				0,
+				0,
+				500L,
+				499L,
+				100L,
+				0L,
+				0L,
+				0L,
+				0,
+				0,
+				5,
+				true,
+				true
+		);
+		when(statusClient.fetchOverview(any())).thenReturn(new ValveOverviewDto("2026-10-18T10:00:00Z", List.of(summary), null));
+
+		pollerService.pollEndpoint(endpoint);
+
+		var valveOpt = monitoredValveRepository.findByServerIdAndValveName("MIT-BYPASS-NODE", "MIT_BYPASS_VALVE");
+		assertTrue(valveOpt.isPresent());
+		assertFalse(valveOpt.get().mitigationBypassPrivateIPs());
+		assertEquals("^198\\.51\\.100\\.250$", valveOpt.get().mitigationBypassIPs());
+		assertTrue(valveOpt.get().hasIpLists());
 	}
 }
 

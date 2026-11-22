@@ -610,6 +610,22 @@ public class UserAgentMemoryRepository {
 		);
 	}
 
+	/**
+	 * Finds User-Agent profiles matching the given raw User-Agent or browser family substring.
+	 */
+	public List<UserAgentProfile> searchProfilesBySubstring(String query, int limit) {
+		if (query == null || query.isBlank()) {
+			return List.of();
+		}
+		String term = "%" + query.trim().toLowerCase() + "%";
+		return jdbcTemplate.query("""
+				SELECT * FROM dim_user_agent
+				WHERE LOWER(COALESCE(raw_user_agent, '')) LIKE ? OR LOWER(COALESCE(browser_family, '')) LIKE ?
+				ORDER BY last_24h_requests DESC, total_lifetime_requests DESC
+				LIMIT ?
+				""", PROFILE_MAPPER, term, term, Math.max(1, limit));
+	}
+
 	public long countProfiles() {
 		Long count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM dim_user_agent", Long.class);
 		return count != null ? count : 0L;

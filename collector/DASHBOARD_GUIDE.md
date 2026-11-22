@@ -688,6 +688,18 @@ When an abusive client IP address or subnet transitions into rate-limit blocking
   ```
   The note verdict is automatically initialized to 🔴 `MALICIOUS`, allowing operators to document verified attacks or vulnerability probes in the persistent, retention-immune Knowledge Store (`/notes`) with a single click.
 
+### Block Diagnosis (Support Lookup) (`/events?tab=diagnosis`)
+- **Service Desk & Admin Self-Service Research:** Provides a strictly **read-only** forensic lookup inside Incidents for investigating why a specific user or automated client may have been blocked at a given time (works safely in both full operator mode and Read-Only `VIEWER` mode).
+- **Flexible Lookup Inputs:** Search by any combination of **Client IP / CIDR** (IPv4 or IPv6), **User-Agent** (full header or substring fragment), **Target URL or Path** (automatic normalization to `getRequestURI()`, stripping query parameters), **Lookback Window** or **Exact Incident Timestamp +/- Tolerance**, optional **Server / Valve Scope**, and request context toggles (**Assume authenticated user**, **Assume valid returning visitor cookie**).
+- **6-Pillar Analysis Pipeline:**
+  1. **Client IP & Network Intel:** Resolves canonical `/24` or `/64` subnet, RFC private/local classification, GeoIP/ASN enrichment, verified crawler feeds, threat-intel labels, and saved Network Notes.
+  2. **Static Valve Lists & Dynamic Mitigation Bypass:** Evaluates `alwaysForbiddenIPs`, `alwaysAllowPrivateIPs`, `alwaysAllowedIPs`, `mitigationBypassPrivateIPs`, and `mitigationBypassIPs` per active Valve instance.
+  3. **Dynamic CIDR Rules & Audit Trail:** Matches overlapping active or historical CIDR block rules across the queried time window plus `MitigationAuditEntry` lifecycle events, showing which Valves enforce or bypass each rule.
+  4. **Dynamic User-Agent Rules & UA Memory:** Matches exact FNV-1a 32-bit `uaHash32` rules and substring patterns, evaluates context bypasses (authenticated users, valid returning visitors, or `mitigationBypass*` IP exemptions), and inspects `dim_user_agent` reputation verdicts.
+  5. **Observed Telemetry & Historical Subnet Rollups:** Correlates matching `BLOCKED`, `MARKED`, and `HONEYPOT` events (distinguishing exact-IP matches from shared `/24` or `/64` collateral subnet blocks) and falls back to hourly `client_subnet_rollups` when slot-level details have aged out.
+  6. **Valve URL & Auth Scope Pipeline:** Evaluates `nonRelevantPaths`, `relevantPaths`, `relevantAuthScope`, Honeypot mode, `serverWideBlocking`, and `simulationMode` per Valve.
+- **Transparency Caveats:** When comparing observed slot events against a queried URL, remember that each Valve slot entry retains only a single prioritized sample URI (`sampleUri`), so a rate-limited IP/subnet may still receive HTTP 429 on other paths inside the same blocked slot window.
+
 ---
 
 ## Network Notes & Forensics Memory (/notes)

@@ -875,6 +875,72 @@ class DatabaseMigrationAndRepositoryTest {
 		assertTrue(foundPrivate.isPresent());
 		assertTrue(foundPrivate.get().alwaysAllowPrivateIPs());
 		assertTrue(foundPrivate.get().hasIpLists());
+		assertTrue(foundPrivate.get().mitigationBypassPrivateIPs());
+		assertNull(foundPrivate.get().mitigationBypassIPs());
+
+		// Test explicit mitigationBypassPrivateIPs=false and mitigationBypassIPs regex persistence
+		org.henbru.antidos.collector.model.MonitoredValve valveMitBypass = new org.henbru.antidos.collector.model.MonitoredValve(
+				"VALVE-NODE-MIT-BYPASS",
+				"Mitigation-Bypass-Limiter",
+				"Mitigation bypass persistence test",
+				1,
+				"BLOCKING",
+				false,
+				false,
+				429,
+				100,
+				60,
+				5,
+				0.8f,
+				32,
+				64,
+				15000,
+				10000,
+				null,
+				null,
+				null,
+				false,
+				null,
+				"/antidos-status",
+				"127.0.0.1",
+				"auto",
+				false,
+				"_adv",
+				false,
+				"OFF",
+				null,
+				null,
+				900,
+				50000,
+				"ALL",
+				0,
+				true,
+				"/antidos-mitigation",
+				0,
+				0L,
+				0L,
+				1,
+				24,
+				64,
+				86400,
+				5000,
+				0,
+				0L,
+				0L,
+				0L,
+				false,
+				"^198\\.51\\.100\\.250$",
+				now,
+				54322,
+				true
+		);
+		monitoredValveRepository.upsert(valveMitBypass);
+		Optional<org.henbru.antidos.collector.model.MonitoredValve> foundMitBypass =
+				monitoredValveRepository.findByServerIdAndValveName("VALVE-NODE-MIT-BYPASS", "Mitigation-Bypass-Limiter");
+		assertTrue(foundMitBypass.isPresent());
+		assertFalse(foundMitBypass.get().mitigationBypassPrivateIPs());
+		assertEquals("^198\\.51\\.100\\.250$", foundMitBypass.get().mitigationBypassIPs());
+		assertTrue(foundMitBypass.get().hasIpLists());
 
 		// Test update on conflict
 		org.henbru.antidos.collector.model.MonitoredValve updated = new org.henbru.antidos.collector.model.MonitoredValve(
