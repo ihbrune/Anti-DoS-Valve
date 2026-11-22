@@ -41,12 +41,62 @@ public record ClientEvent(
 		String sampleMethod,
 		String sampleUri,
 		String sampleUserAgent,
-		Boolean sampleAuthenticated
+		Boolean sampleAuthenticated,
+		Boolean sampleReturningVisitor
 ) {
 
 	public static final String STATUS_BLOCKED = "BLOCKED";
 	public static final String STATUS_MARKED = "MARKED";
 	public static final String STATUS_ACTIVE = "ACTIVE";
+
+	/**
+	 * Backward-compatible constructor defaulting sampleReturningVisitor to null.
+	 */
+	public ClientEvent(
+			Long id,
+			String serverId,
+			String valveName,
+			long slotKey,
+			Instant slotTime,
+			String clientKey,
+			int ipVersion,
+			int cidrPrefix,
+			Long ipV4Start,
+			Long ipV4End,
+			String ipV6Start,
+			String ipV6End,
+			String subnetGroup,
+			int requestCount,
+			int retainedCount,
+			boolean locked,
+			String status,
+			boolean completed,
+			Instant lastUpdatedAt,
+			Long asn,
+			String asOrg,
+			String countryCode,
+			ClientType clientType,
+			EnrichmentStatus enrichmentStatus,
+			Long entityId,
+			int distinctClients,
+			Integer distinctUserAgents,
+			Integer returningCount,
+			Integer authenticatedCount,
+			Integer uaMismatchCount,
+			String sampleMethod,
+			String sampleUri,
+			String sampleUserAgent,
+			Boolean sampleAuthenticated
+	) {
+		this(
+				id, serverId, valveName, slotKey, slotTime, clientKey, ipVersion, cidrPrefix,
+				ipV4Start, ipV4End, ipV6Start, ipV6End, subnetGroup, requestCount, retainedCount,
+				locked, status, completed, lastUpdatedAt, asn, asOrg, countryCode, clientType,
+				enrichmentStatus, entityId, distinctClients, distinctUserAgents, returningCount,
+				authenticatedCount, uaMismatchCount, sampleMethod, sampleUri, sampleUserAgent,
+				sampleAuthenticated, null
+		);
+	}
 
 	/**
 	 * Backward-compatible constructor defaulting uaMismatchCount to null.
@@ -599,7 +649,8 @@ public record ClientEvent(
 			String sampleMethod,
 			String sampleUri,
 			String sampleUserAgent,
-			Boolean sampleAuthenticated
+			Boolean sampleAuthenticated,
+			Boolean sampleReturningVisitor
 	) {
 		this(
 				id,
@@ -629,7 +680,57 @@ public record ClientEvent(
 				sampleMethod,
 				sampleUri,
 				sampleUserAgent,
-				sampleAuthenticated
+				sampleAuthenticated,
+				sampleReturningVisitor
+		);
+	}
+
+	public ClientEvent(
+			Long id,
+			String serverId,
+			String valveName,
+			long slotKey,
+			Instant slotTime,
+			String clientKey,
+			int requestCount,
+			int retainedCount,
+			boolean locked,
+			String status,
+			boolean completed,
+			Instant lastUpdatedAt,
+			int distinctClients,
+			Integer distinctUserAgents,
+			Integer returningCount,
+			Integer authenticatedCount,
+			Integer uaMismatchCount,
+			String sampleMethod,
+			String sampleUri,
+			String sampleUserAgent,
+			Boolean sampleAuthenticated
+	) {
+		this(
+				id,
+				serverId,
+				valveName,
+				slotKey,
+				slotTime,
+				clientKey,
+				requestCount,
+				retainedCount,
+				locked,
+				status,
+				completed,
+				lastUpdatedAt,
+				distinctClients,
+				distinctUserAgents,
+				returningCount,
+				authenticatedCount,
+				uaMismatchCount,
+				sampleMethod,
+				sampleUri,
+				sampleUserAgent,
+				sampleAuthenticated,
+				null
 		);
 	}
 
@@ -1006,7 +1107,8 @@ public record ClientEvent(
 			String sampleMethod,
 			String sampleUri,
 			String sampleUserAgent,
-			Boolean sampleAuthenticated
+			Boolean sampleAuthenticated,
+			Boolean sampleReturningVisitor
 	) {
 		this(
 				id,
@@ -1042,7 +1144,71 @@ public record ClientEvent(
 				sampleMethod,
 				sampleUri,
 				sampleUserAgent,
-				sampleAuthenticated
+				sampleAuthenticated,
+				sampleReturningVisitor
+		);
+	}
+
+	public ClientEvent(
+			Long id,
+			String serverId,
+			String valveName,
+			long slotKey,
+			Instant slotTime,
+			String clientKey,
+			IpNetworkInfo net,
+			int requestCount,
+			int retainedCount,
+			boolean locked,
+			String status,
+			boolean completed,
+			Instant lastUpdatedAt,
+			Long asn,
+			String asOrg,
+			String countryCode,
+			ClientType clientType,
+			EnrichmentStatus enrichmentStatus,
+			Long entityId,
+			int distinctClients,
+			Integer distinctUserAgents,
+			Integer returningCount,
+			Integer authenticatedCount,
+			Integer uaMismatchCount,
+			String sampleMethod,
+			String sampleUri,
+			String sampleUserAgent,
+			Boolean sampleAuthenticated
+	) {
+		this(
+				id,
+				serverId,
+				valveName,
+				slotKey,
+				slotTime,
+				clientKey,
+				net,
+				requestCount,
+				retainedCount,
+				locked,
+				status,
+				completed,
+				lastUpdatedAt,
+				asn,
+				asOrg,
+				countryCode,
+				clientType,
+				enrichmentStatus,
+				entityId,
+				distinctClients,
+				distinctUserAgents,
+				returningCount,
+				authenticatedCount,
+				uaMismatchCount,
+				sampleMethod,
+				sampleUri,
+				sampleUserAgent,
+				sampleAuthenticated,
+				null
 		);
 	}
 
@@ -1362,7 +1528,8 @@ public record ClientEvent(
 				sampleMethod,
 				sampleUri,
 				sampleUserAgent,
-				sampleAuthenticated
+				sampleAuthenticated,
+				sampleReturningVisitor
 		);
 	}
 
@@ -1401,7 +1568,8 @@ public record ClientEvent(
 				sampleMethod,
 				sampleUri,
 				sampleUserAgent,
-				sampleAuthenticated
+				sampleAuthenticated,
+				sampleReturningVisitor
 		);
 	}
 
@@ -1440,7 +1608,8 @@ public record ClientEvent(
 				sampleMethod,
 				sampleUri,
 				sampleUserAgent,
-				sampleAuthenticated
+				sampleAuthenticated,
+				sampleReturningVisitor
 		);
 	}
 
@@ -1450,6 +1619,10 @@ public record ClientEvent(
 
 	public boolean isSampleAuthenticated() {
 		return Boolean.TRUE.equals(sampleAuthenticated);
+	}
+
+	public boolean isSampleReturningVisitor() {
+		return Boolean.TRUE.equals(sampleReturningVisitor);
 	}
 
 	public String formattedSample() {

@@ -125,6 +125,7 @@ public class ClientEventRepository {
 		String sampleUri = null;
 		String sampleUserAgent = null;
 		Boolean sampleAuthenticated = null;
+		Boolean sampleReturningVisitor = null;
 		try {
 			sampleMethod = rs.getString("sample_method");
 			sampleUri = rs.getString("sample_uri");
@@ -132,6 +133,10 @@ public class ClientEventRepository {
 			boolean sa = rs.getBoolean("sample_authenticated");
 			if (!rs.wasNull()) {
 				sampleAuthenticated = sa;
+			}
+			boolean srv = rs.getBoolean("sample_returning_visitor");
+			if (!rs.wasNull()) {
+				sampleReturningVisitor = srv;
 			}
 		} catch (SQLException ignored) {
 		}
@@ -170,7 +175,8 @@ public class ClientEventRepository {
 				sampleMethod,
 				sampleUri,
 				sampleUserAgent,
-				sampleAuthenticated
+				sampleAuthenticated,
+				sampleReturningVisitor
 		);
 	};
 
@@ -268,9 +274,9 @@ public class ClientEventRepository {
 				    request_count, retained_count, is_locked, status, is_completed, last_updated_at,
 				    asn, as_org, country_code, client_type, enrichment_status, entity_id, distinct_clients,
 				    distinct_user_agents, returning_count, authenticated_count, ua_mismatch_count,
-				    sample_method, sample_uri, sample_user_agent, sample_authenticated
+				    sample_method, sample_uri, sample_user_agent, sample_authenticated, sample_returning_visitor
 				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (server_id, valve_name, slot_key, client_key) DO UPDATE SET
 				    slot_time = EXCLUDED.slot_time,
 				    ip_version = EXCLUDED.ip_version,
@@ -295,6 +301,7 @@ public class ClientEventRepository {
 				    sample_uri = COALESCE(EXCLUDED.sample_uri, client_events.sample_uri),
 				    sample_user_agent = COALESCE(EXCLUDED.sample_user_agent, client_events.sample_user_agent),
 				    sample_authenticated = COALESCE(EXCLUDED.sample_authenticated, client_events.sample_authenticated),
+				    sample_returning_visitor = COALESCE(EXCLUDED.sample_returning_visitor, client_events.sample_returning_visitor),
 				    entity_id = COALESCE(EXCLUDED.entity_id, client_events.entity_id)
 				""";
 
@@ -375,6 +382,11 @@ public class ClientEventRepository {
 							ps.setBoolean(33, e.sampleAuthenticated());
 						} else {
 							ps.setNull(33, Types.BOOLEAN);
+						}
+						if (e.sampleReturningVisitor() != null) {
+							ps.setBoolean(34, e.sampleReturningVisitor());
+						} else {
+							ps.setNull(34, Types.BOOLEAN);
 						}
 					}
 

@@ -1251,7 +1251,7 @@ class DatabaseMigrationAndRepositoryTest {
 		ClientEvent eventWithSample = new ClientEvent(
 				null, "SAMPLE-NODE", "API-LIMITER", 200L, now, ip,
 				150, 0, true, ClientEvent.STATUS_BLOCKED, true, now,
-				1, null, null, null, "POST", "/wp-login.php", "curl/7.88.1", true
+				1, null, null, null, null, "POST", "/wp-login.php", "curl/7.88.1", true, false
 		);
 		clientEventRepository.batchUpsert(List.of(eventWithSample));
 
@@ -1264,6 +1264,7 @@ class DatabaseMigrationAndRepositoryTest {
 		assertEquals("curl/7.88.1", loaded.sampleUserAgent());
 		assertEquals("POST /wp-login.php", loaded.formattedSample());
 		assertTrue(loaded.isSampleAuthenticated());
+		assertFalse(loaded.isSampleReturningVisitor());
 
 		// 2. Simulate subsequent poll update in the same slot without sample data -> COALESCE must preserve existing sample
 		ClientEvent updateWithoutSample = new ClientEvent(
@@ -1282,6 +1283,7 @@ class DatabaseMigrationAndRepositoryTest {
 		assertEquals("/wp-login.php", reloaded.sampleUri());
 		assertEquals("curl/7.88.1", reloaded.sampleUserAgent());
 		assertTrue(reloaded.isSampleAuthenticated(), "COALESCE in upsert must preserve sample_authenticated");
+		assertFalse(reloaded.isSampleReturningVisitor(), "COALESCE in upsert must preserve sample_returning_visitor");
 	}
 
 	@Test

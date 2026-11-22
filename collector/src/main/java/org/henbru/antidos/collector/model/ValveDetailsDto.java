@@ -126,8 +126,29 @@ public record ValveDetailsDto(
 			String sampleMethod,
 			String sampleUri,
 			String sampleUserAgent,
-			Boolean sampleAuthenticated
+			Boolean sampleAuthenticated,
+			Boolean sampleReturningVisitor
 	) {
+		public BlockedClientDto(
+				String key,
+				int count,
+				int retained,
+				int effective,
+				boolean locked,
+				String lastUpdate,
+				Integer distinctClients,
+				Integer distinctUserAgents,
+				Integer returningCount,
+				Integer authenticatedCount,
+				Integer uaMismatchCount,
+				String sampleMethod,
+				String sampleUri,
+				String sampleUserAgent,
+				Boolean sampleAuthenticated
+		) {
+			this(key, count, retained, effective, locked, lastUpdate, distinctClients, distinctUserAgents, returningCount, authenticatedCount, uaMismatchCount, sampleMethod, sampleUri, sampleUserAgent, sampleAuthenticated, null);
+		}
+
 		public BlockedClientDto(
 				String key,
 				int count,
@@ -144,7 +165,7 @@ public record ValveDetailsDto(
 				String sampleUserAgent,
 				Boolean sampleAuthenticated
 		) {
-			this(key, count, retained, effective, locked, lastUpdate, distinctClients, distinctUserAgents, returningCount, authenticatedCount, null, sampleMethod, sampleUri, sampleUserAgent, sampleAuthenticated);
+			this(key, count, retained, effective, locked, lastUpdate, distinctClients, distinctUserAgents, returningCount, authenticatedCount, null, sampleMethod, sampleUri, sampleUserAgent, sampleAuthenticated, null);
 		}
 		public BlockedClientDto(
 				String key,
@@ -224,8 +245,29 @@ public record ValveDetailsDto(
 			String sampleMethod,
 			String sampleUri,
 			String sampleUserAgent,
-			Boolean sampleAuthenticated
+			Boolean sampleAuthenticated,
+			Boolean sampleReturningVisitor
 	) {
+		public ActiveClientDto(
+				String key,
+				int count,
+				int retained,
+				int effective,
+				int limit,
+				int quotaPercent,
+				Integer distinctClients,
+				Integer distinctUserAgents,
+				Integer returningCount,
+				Integer authenticatedCount,
+				Integer uaMismatchCount,
+				String sampleMethod,
+				String sampleUri,
+				String sampleUserAgent,
+				Boolean sampleAuthenticated
+		) {
+			this(key, count, retained, effective, limit, quotaPercent, distinctClients, distinctUserAgents, returningCount, authenticatedCount, uaMismatchCount, sampleMethod, sampleUri, sampleUserAgent, sampleAuthenticated, null);
+		}
+
 		public ActiveClientDto(
 				String key,
 				int count,
@@ -242,7 +284,7 @@ public record ValveDetailsDto(
 				String sampleUserAgent,
 				Boolean sampleAuthenticated
 		) {
-			this(key, count, retained, effective, limit, quotaPercent, distinctClients, distinctUserAgents, returningCount, authenticatedCount, null, sampleMethod, sampleUri, sampleUserAgent, sampleAuthenticated);
+			this(key, count, retained, effective, limit, quotaPercent, distinctClients, distinctUserAgents, returningCount, authenticatedCount, null, sampleMethod, sampleUri, sampleUserAgent, sampleAuthenticated, null);
 		}
 		public ActiveClientDto(
 				String key,

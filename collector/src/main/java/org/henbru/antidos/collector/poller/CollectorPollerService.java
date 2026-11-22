@@ -574,7 +574,8 @@ public class CollectorPollerService {
 							c.sampleMethod(),
 							c.sampleUri(),
 							c.sampleUserAgent(),
-							c.sampleAuthenticated()
+							c.sampleAuthenticated(),
+							c.sampleReturningVisitor()
 					).withEntityId(entityId));
 				}
 			}
@@ -626,7 +627,8 @@ public class CollectorPollerService {
 							c.sampleMethod(),
 							c.sampleUri(),
 							c.sampleUserAgent(),
-							c.sampleAuthenticated()
+							c.sampleAuthenticated(),
+							c.sampleReturningVisitor()
 					).withEntityId(entityId));
 				}
 			}
