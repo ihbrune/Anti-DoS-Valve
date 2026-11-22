@@ -199,6 +199,8 @@ public class SystemStatusService {
 		tableCounts.put("client_events", countTable("client_events"));
 		tableCounts.put("client_subnet_rollups", countTable("client_subnet_rollups"));
 		tableCounts.put("subnet_profiles", countTable("subnet_profiles"));
+		tableCounts.put("dim_user_agent", countTable("dim_user_agent"));
+		tableCounts.put("user_agent_hourly_rollups", countTable("user_agent_hourly_rollups"));
 		tableCounts.put("network_entity", countTable("network_entity"));
 		tableCounts.put("network_annotations", countTable("network_annotations"));
 		tableCounts.put("poll_event_log", countTable("poll_event_log"));

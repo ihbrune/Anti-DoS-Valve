@@ -47,6 +47,7 @@ public class CollectorProperties {
 	private String mitigationToken; // Optional fleet-wide default write token for dynamic CIDR mitigation
 	private int defaultMitigationTtlMinutes = 60;
 	private AutoMitigationConfig autoMitigation = new AutoMitigationConfig();
+	private UserAgentHeuristicConfig userAgentHeuristics = new UserAgentHeuristicConfig();
 	private NotificationConfig notification = new NotificationConfig();
 	private BrowserReferenceConfig browserReference = new BrowserReferenceConfig();
 	private SecurityConfig security = new SecurityConfig();
@@ -411,6 +412,17 @@ public class CollectorProperties {
 		this.autoMitigation = autoMitigation != null ? autoMitigation : new AutoMitigationConfig();
 	}
 
+	public UserAgentHeuristicConfig getUserAgentHeuristics() {
+		if (userAgentHeuristics == null) {
+			userAgentHeuristics = new UserAgentHeuristicConfig();
+		}
+		return userAgentHeuristics;
+	}
+
+	public void setUserAgentHeuristics(UserAgentHeuristicConfig userAgentHeuristics) {
+		this.userAgentHeuristics = userAgentHeuristics != null ? userAgentHeuristics : new UserAgentHeuristicConfig();
+	}
+
 	public NotificationConfig getNotification() {
 		return notification;
 	}
@@ -550,6 +562,64 @@ public class CollectorProperties {
 			}
 			return Collections.unmodifiableSet(set);
 		}
+	}
+
+	/**
+	 * Configuration properties for the 3-pillar User-Agent heuristic and Stage-0 immunity thresholds.
+	 */
+	public static class UserAgentHeuristicConfig {
+		private double internalImmunityMinRatioPct = 5.0;
+		private long internalImmunityMinRequests = 100L;
+		private double searchEngineImmunityMinRatioPct = 50.0;
+		private double authImmunityMinSampleRatioPct = 1.0;
+		private double authImmunityMinSlotRatioPct = 2.0;
+
+		private long spreadMinRequests = 10000L;
+		private int spreadMinSubnets = 200;
+		private int spreadMinAsns = 30;
+		private double spreadMaxAvgSlotRequests = 10.0;
+		private int spreadMinVersionLagMajors = 2;
+
+		private long correlatedMinRequests = 2000L;
+		private double correlatedMinIncidentRatioPct = 30.0;
+		private double correlatedMinMitigatedAsnRatioPct = 40.0;
+		private double correlatedMinUaMismatchRatioPct = 20.0;
+
+		private long datacenterMinRequests = 5000L;
+		private double datacenterMinRatioPct = 80.0;
+
+		public double getInternalImmunityMinRatioPct() { return internalImmunityMinRatioPct; }
+		public void setInternalImmunityMinRatioPct(double v) { this.internalImmunityMinRatioPct = Math.max(0.0, Math.min(100.0, v)); }
+		public long getInternalImmunityMinRequests() { return internalImmunityMinRequests; }
+		public void setInternalImmunityMinRequests(long v) { this.internalImmunityMinRequests = Math.max(1L, v); }
+		public double getSearchEngineImmunityMinRatioPct() { return searchEngineImmunityMinRatioPct; }
+		public void setSearchEngineImmunityMinRatioPct(double v) { this.searchEngineImmunityMinRatioPct = Math.max(0.0, Math.min(100.0, v)); }
+		public double getAuthImmunityMinSampleRatioPct() { return authImmunityMinSampleRatioPct; }
+		public void setAuthImmunityMinSampleRatioPct(double v) { this.authImmunityMinSampleRatioPct = Math.max(0.0, Math.min(100.0, v)); }
+		public double getAuthImmunityMinSlotRatioPct() { return authImmunityMinSlotRatioPct; }
+		public void setAuthImmunityMinSlotRatioPct(double v) { this.authImmunityMinSlotRatioPct = Math.max(0.0, Math.min(100.0, v)); }
+		public long getSpreadMinRequests() { return spreadMinRequests; }
+		public void setSpreadMinRequests(long v) { this.spreadMinRequests = Math.max(1L, v); }
+		public int getSpreadMinSubnets() { return spreadMinSubnets; }
+		public void setSpreadMinSubnets(int v) { this.spreadMinSubnets = Math.max(1, v); }
+		public int getSpreadMinAsns() { return spreadMinAsns; }
+		public void setSpreadMinAsns(int v) { this.spreadMinAsns = Math.max(1, v); }
+		public double getSpreadMaxAvgSlotRequests() { return spreadMaxAvgSlotRequests; }
+		public void setSpreadMaxAvgSlotRequests(double v) { this.spreadMaxAvgSlotRequests = Math.max(0.1, v); }
+		public int getSpreadMinVersionLagMajors() { return spreadMinVersionLagMajors; }
+		public void setSpreadMinVersionLagMajors(int v) { this.spreadMinVersionLagMajors = Math.max(1, v); }
+		public long getCorrelatedMinRequests() { return correlatedMinRequests; }
+		public void setCorrelatedMinRequests(long v) { this.correlatedMinRequests = Math.max(1L, v); }
+		public double getCorrelatedMinIncidentRatioPct() { return correlatedMinIncidentRatioPct; }
+		public void setCorrelatedMinIncidentRatioPct(double v) { this.correlatedMinIncidentRatioPct = Math.max(0.0, Math.min(100.0, v)); }
+		public double getCorrelatedMinMitigatedAsnRatioPct() { return correlatedMinMitigatedAsnRatioPct; }
+		public void setCorrelatedMinMitigatedAsnRatioPct(double v) { this.correlatedMinMitigatedAsnRatioPct = Math.max(0.0, Math.min(100.0, v)); }
+		public double getCorrelatedMinUaMismatchRatioPct() { return correlatedMinUaMismatchRatioPct; }
+		public void setCorrelatedMinUaMismatchRatioPct(double v) { this.correlatedMinUaMismatchRatioPct = Math.max(0.0, Math.min(100.0, v)); }
+		public long getDatacenterMinRequests() { return datacenterMinRequests; }
+		public void setDatacenterMinRequests(long v) { this.datacenterMinRequests = Math.max(1L, v); }
+		public double getDatacenterMinRatioPct() { return datacenterMinRatioPct; }
+		public void setDatacenterMinRatioPct(double v) { this.datacenterMinRatioPct = Math.max(0.0, Math.min(100.0, v)); }
 	}
 
 	/**

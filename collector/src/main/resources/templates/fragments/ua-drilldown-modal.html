@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<body>
+
+    <!-- Fragment: uaDrilldownModal -->
+    <div th:fragment="uaDrilldownModal" id="ua-modal-wrapper" class="note-modal-overlay" style="display: flex;">
+        <div class="note-modal-backdrop" onclick="closeUaModal(event)"></div>
+
+        <div class="note-modal-dialog" style="max-width: 1020px; width: 95%; max-height: 92vh; overflow-y: auto;"
+            role="dialog" aria-modal="true">
+            <!-- Modal Header -->
+            <div class="note-modal-header"
+                style="display: flex; justify-content: space-between; align-items: flex-start; padding: 16px 20px; border-bottom: 1px solid var(--border-color); gap: 12px;">
+                <div style="min-width: 0; flex: 1;">
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <span th:if="${drilldown != null and drilldown.family != null}"
+                            th:utext="${drilldown.family.icon()}" style="font-size: 16px;">&#x1F310;</span>
+                        <h3 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary);"
+                            th:text="${drilldown != null and drilldown.family != null ? drilldown.family.displayName() : 'User-Agent Forensics'}">
+                            Chrome Desktop</h3>
+                        <span th:if="${drilldown != null and drilldown.hasManualOverride()}" class="badge"
+                            th:classappend="${drilldown.manualOverride.badgeClass()}" style="font-size: 11px;">
+                            <span>&#x1F464;</span> Manual: <span th:text="${drilldown.manualOverride.displayName()}">Always Allowed</span>
+                        </span>
+                        <span th:if="${drilldown != null and drilldown.liveAutoVerdict != null}" class="badge"
+                            th:classappend="${drilldown.liveAutoVerdict.badgeClass()}" style="font-size: 11px;">
+                            <span>&#x1F916;</span> Auto-Heuristic: <span th:text="${drilldown.liveAutoVerdict.displayName()}">Standard</span>
+                        </span>
+                    </div>
+                    <div th:if="${drilldown != null}"
+                        style="margin-top: 8px; padding: 8px 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 4px; font-family: monospace; font-size: 11.5px; word-break: break-all; color: var(--text-primary);"
+                        th:text="${drilldown.userAgent}">Mozilla/5.0...</div>
+                    <div th:if="${drilldown != null}"
+                        style="font-size: 11.5px; color: var(--text-muted); margin-top: 6px; display: flex; gap: 12px; flex-wrap: wrap;">
+                        <span>SHA-256: <code th:text="${#strings.abbreviate(drilldown.userAgentHash, 18)}">abc123...</code></span>
+                        <span>32-bit FNV-1a: <code th:text="${drilldown.uaHash32}">12345678</code></span>
+                        <span th:if="${drilldown.firstSeenAt != null}">First seen: <strong
+                                th:text="${#temporals.format(drilldown.firstSeenAt, 'yyyy-MM-dd HH:mm')}">2026-11-18 09:00</strong></span>
+                        <span th:if="${drilldown.lastSeenAt != null}">Last seen: <strong
+                                th:text="${#temporals.format(drilldown.lastSeenAt, 'yyyy-MM-dd HH:mm')}">2026-11-21 12:00</strong></span>
+                    </div>
+                </div>
+                <button type="button" class="drawer-close-btn" onclick="closeUaModal(event)" aria-label="Close"
+                    title="Close (Esc)"
+                    style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); line-height: 1;">&times;</button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="note-modal-body" style="padding: 20px;" th:if="${drilldown != null}">
+                <!-- Feedback Alerts -->
+                <div th:if="${uaModalSuccess != null}" class="alert alert-success"
+                    style="margin-bottom: 14px; padding: 10px 14px; border-radius: 6px; font-size: 12.5px;"
+                    th:text="${uaModalSuccess}">Saved</div>
+                <div th:if="${uaModalError != null}" class="alert alert-danger"
+                    style="margin-bottom: 14px; padding: 10px 14px; border-radius: 6px; font-size: 12.5px;"
+                    th:text="${uaModalError}">Error</div>
+
+                <!-- Dual Status & Manual Override Panel -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-bottom: 20px;">
+                    <!-- Left: Auto-Heuristic Diagnostic Breakdown -->
+                    <div style="padding: 14px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                        <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+                            <span>&#x1F916; Automatic 3-Pillar Heuristic Verdict</span>
+                            <span class="badge" th:classappend="${drilldown.liveAutoVerdict.badgeClass()}"
+                                style="font-size: 10.5px;" th:text="${drilldown.liveAutoVerdict.displayName()}">Verdict</span>
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-primary); margin-bottom: 12px; line-height: 1.4;"
+                            th:text="${drilldown.liveAutoReason}">
+                            Heuristic rationale
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 11.5px;">
+                            <div style="padding: 6px 8px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 4px;">
+                                <div style="color: var(--text-muted); font-size: 10px;">Internal / Private Share</div>
+                                <strong th:classappend="${drilldown.internalRatioPct >= drilldown.thresholds.internalImmunityMinRatioPct() ? 'text-success' : ''}"
+                                    th:text="${drilldown.internalRatioPct} + '% (' + ${#numbers.formatInteger(drilldown.internalRequests, 1, 'COMMA')} + ' reqs)'">0%</strong>
+                            </div>
+                            <div style="padding: 6px 8px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 4px;">
+                                <div style="color: var(--text-muted); font-size: 10px;">Sample / Slot Auth</div>
+                                <strong th:classappend="${(drilldown.sampleAuthRatioPct >= drilldown.thresholds.authImmunityMinSampleRatioPct() and drilldown.authSamples >= 2) ? 'text-success' : ''}"
+                                    th:text="${drilldown.sampleAuthRatioPct} + '% (' + ${drilldown.authSamples} + ') / ' + ${drilldown.slotAuthRatioPct} + '%'">0%</strong>
+                            </div>
+                            <div style="padding: 6px 8px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 4px;">
+                                <div style="color: var(--text-muted); font-size: 10px;">Volume &amp; Slot Avg</div>
+                                <strong th:text="${#numbers.formatInteger(drilldown.totalRequests, 1, 'COMMA')} + ' reqs (avg ' + ${drilldown.avgRequestsPerSlot} + '/slot)'">0</strong>
+                            </div>
+                            <div style="padding: 6px 8px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 4px;">
+                                <div style="color: var(--text-muted); font-size: 10px;">Spread (Subnets / ASNs)</div>
+                                <strong th:text="${drilldown.distinctSubnets} + ' subnets / ' + ${drilldown.distinctAsns} + ' ASNs'">0</strong>
+                            </div>
+                            <div style="padding: 6px 8px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 4px;">
+                                <div style="color: var(--text-muted); font-size: 10px;">Incident / Mitigated ASN</div>
+                                <strong th:text="${drilldown.incidentEventRatioPct} + '% inc / ' + ${drilldown.mitigatedAsnRatioPct} + '% mit-ASN'">0%</strong>
+                            </div>
+                            <div style="padding: 6px 8px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 4px;">
+                                <div style="color: var(--text-muted); font-size: 10px;">Datacenter / UA Mismatch</div>
+                                <strong th:text="${drilldown.datacenterRatioPct} + '% DC / ' + ${drilldown.uaMismatchRatioPct} + '% mm'">0%</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Manual Status Override & Operator Note Form -->
+                    <div style="padding: 14px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                        <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+                            <span>&#x1F464; Manual Override &amp; Operator Note</span>
+                            <span th:if="${drilldown.hasManualOverride()}" class="badge"
+                                th:classappend="${drilldown.manualOverride.badgeClass()}" style="font-size: 10.5px;"
+                                th:text="${drilldown.manualOverride.displayName()}">Override</span>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
+                            Manual overrides are stored permanently in <code>dim_user_agent</code> and are never overwritten by automatic rollups.
+                            Even when overridden, the automatic heuristic continues to report its live assessment on the left.
+                        </div>
+
+                        <form hx-post="/analytics/user-agents/override" hx-target="#ua-modal-wrapper" hx-swap="outerHTML">
+                            <input type="hidden" name="ua" th:value="${drilldown.userAgent}">
+                            <input type="hidden" name="hours" th:value="${drilldown.lookbackHours}">
+
+                            <div style="margin-bottom: 10px;">
+                                <label style="display: block; font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
+                                    Manual Classification Status
+                                </label>
+                                <select name="manualOverride" class="form-control" style="width: 100%; font-size: 12px; padding: 6px 8px;"
+                                    th:disabled="${viewerMode or aiAgentMode}">
+                                    <option th:each="opt : ${overrideOptions}" th:value="${opt.name()}"
+                                        th:selected="${drilldown.manualOverride == opt}"
+                                        th:text="${opt.displayName()}">Automatic</option>
+                                </select>
+                            </div>
+
+                            <div style="margin-bottom: 10px;">
+                                <label style="display: block; font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
+                                    Operator Note (Optional)
+                                </label>
+                                <textarea name="operatorNote" rows="2" class="form-control"
+                                    style="width: 100%; font-size: 12px; padding: 6px 8px; resize: vertical;"
+                                    placeholder="e.g. Verified internal digital signage display or confirmed manual block test..."
+                                    th:disabled="${viewerMode or aiAgentMode}"
+                                    th:text="${drilldown.operatorNote}"></textarea>
+                            </div>
+
+                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                <span th:if="${drilldown.updatedBy != null}" style="font-size: 10.5px; color: var(--text-muted);">
+                                    Last updated by <strong th:text="${drilldown.updatedBy}">ADMIN</strong>
+                                    <span th:if="${drilldown.updatedAt != null}"
+                                        th:text="'(' + ${#temporals.format(drilldown.updatedAt, 'yyyy-MM-dd HH:mm')} + ')'"></span>
+                                </span>
+                                <span th:unless="${drilldown.updatedBy != null}" style="font-size: 10.5px; color: var(--text-muted);">
+                                    No manual edits recorded
+                                </span>
+
+                                <button th:unless="${viewerMode or aiAgentMode}" type="submit" class="btn btn-primary"
+                                    style="font-size: 12px; padding: 6px 12px;">
+                                    &#x1F4BE; Save Override &amp; Note
+                                </button>
+                                <span th:if="${viewerMode or aiAgentMode}" class="badge badge-neutral" style="font-size: 10.5px;">
+                                    Read-Only Mode
+                                </span>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Chronological Evaluation History Header + Lookback Selector -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                    <div>
+                        <h4 style="margin: 0; font-size: 13.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-secondary);">
+                            &#x1F4C8; Chronological Hourly Evaluation History
+                        </h4>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                            <span th:if="${!drilldown.historyFromLiveEvents}">Source: Persistent <code>user_agent_hourly_rollups</code> (retained up to 30 days)</span>
+                            <span th:if="${drilldown.historyFromLiveEvents}">Source: Live hourly grouping from <code>client_events</code> (hourly rollups pending catch-up)</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 6px;">
+                        <button type="button" class="btn" th:classappend="${drilldown.lookbackHours == 24 ? 'btn-primary' : ''}"
+                            style="padding: 3px 9px; font-size: 11px;"
+                            th:attr="hx-get=@{/analytics/user-agent-drilldown(ua=${drilldown.userAgent},hours=24)}"
+                            hx-target="#ua-modal-wrapper" hx-swap="outerHTML">24h</button>
+                        <button type="button" class="btn" th:classappend="${drilldown.lookbackHours == 168 ? 'btn-primary' : ''}"
+                            style="padding: 3px 9px; font-size: 11px;"
+                            th:attr="hx-get=@{/analytics/user-agent-drilldown(ua=${drilldown.userAgent},hours=168)}"
+                            hx-target="#ua-modal-wrapper" hx-swap="outerHTML">7d</button>
+                        <button type="button" class="btn" th:classappend="${drilldown.lookbackHours == 720 ? 'btn-primary' : ''}"
+                            style="padding: 3px 9px; font-size: 11px;"
+                            th:attr="hx-get=@{/analytics/user-agent-drilldown(ua=${drilldown.userAgent},hours=720)}"
+                            hx-target="#ua-modal-wrapper" hx-swap="outerHTML">30d</button>
+                    </div>
+                </div>
+
+                <!-- Hourly Evaluation History Table -->
+                <div class="table-responsive"
+                    style="max-height: 320px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-md); margin-bottom: 18px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                        <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 2;">
+                            <tr>
+                                <th style="padding: 8px 10px; text-align: left;">Hour Bucket</th>
+                                <th style="padding: 8px 10px; text-align: right;">Total Reqs</th>
+                                <th style="padding: 8px 10px; text-align: right;">Blocked / Marked</th>
+                                <th style="padding: 8px 10px; text-align: right;">Subnets / ASNs</th>
+                                <th style="padding: 8px 10px; text-align: right;">Auth / Internal</th>
+                                <th style="padding: 8px 10px; text-align: left;">Evaluated Verdict &amp; Rationale</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:if="${#lists.isEmpty(drilldown.hourlyHistory)}">
+                                <td colspan="6" style="padding: 24px; text-align: center; color: var(--text-muted);">
+                                    No hourly evaluation history found for this User-Agent within the selected lookback window.
+                                </td>
+                            </tr>
+                            <tr th:each="pt : ${drilldown.hourlyHistory}" style="border-top: 1px solid var(--border-color);">
+                                <td style="padding: 6px 10px; font-family: monospace; font-weight: 600; white-space: nowrap;"
+                                    th:text="${pt.hourLabel()}">21.11. 12:00</td>
+                                <td style="padding: 6px 10px; text-align: right; font-weight: 600;"
+                                    th:text="${#numbers.formatInteger(pt.totalRequests(), 1, 'COMMA')}">12,400</td>
+                                <td style="padding: 6px 10px; text-align: right; white-space: nowrap;">
+                                    <span th:if="${pt.blockedRequests() > 0 or pt.markedRequests() > 0}"
+                                        style="color: var(--color-danger); font-weight: 600;"
+                                        th:text="${#numbers.formatInteger(pt.blockedRequests() + pt.markedRequests(), 1, 'COMMA')} + ' (' + ${pt.incidentEventRatioPct()} + '%)'">200</span>
+                                    <span th:unless="${pt.blockedRequests() > 0 or pt.markedRequests() > 0}"
+                                        style="color: var(--text-muted);">-</span>
+                                </td>
+                                <td style="padding: 6px 10px; text-align: right; white-space: nowrap;"
+                                    th:text="${pt.distinctSubnets()} + ' / ' + ${pt.distinctAsns()}">400 / 25</td>
+                                <td style="padding: 6px 10px; text-align: right; white-space: nowrap;">
+                                    <span th:if="${pt.authenticatedSamples() > 0}" class="badge badge-success"
+                                        style="font-size: 10px; padding: 1px 5px;"
+                                        th:text="${pt.authenticatedSamples()} + ' auth'">5 auth</span>
+                                    <span th:if="${pt.internalRequests() > 0}" class="badge badge-info"
+                                        style="font-size: 10px; padding: 1px 5px;"
+                                        th:text="${pt.internalRatioPct()} + '% int'">100% int</span>
+                                    <span th:if="${pt.authenticatedSamples() == 0 and pt.internalRequests() == 0}"
+                                        style="color: var(--text-muted);">0 / 0</span>
+                                </td>
+                                <td style="padding: 6px 10px;">
+                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                        <span class="badge" th:classappend="${pt.safeVerdict().badgeClass()}"
+                                            style="font-size: 10px; padding: 1px 6px;"
+                                            th:text="${pt.safeVerdict().displayName()}">Verdict</span>
+                                        <span style="font-size: 11px; color: var(--text-muted);"
+                                            th:text="${pt.evaluatedReason()}">Reason</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Top Origin ASNs & Subnets -->
+                <div th:unless="${#lists.isEmpty(drilldown.topOrigins)}">
+                    <h4 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-secondary);">
+                        &#x1F30D; Top Origin Networks in Lookback Window
+                    </h4>
+                    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                        <div th:each="origin : ${drilldown.topOrigins}"
+                            style="padding: 4px 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 4px; font-size: 11.5px; display: flex; align-items: center; gap: 6px;">
+                            <span class="badge badge-neutral" style="font-size: 10.5px;"
+                                th:text="${origin.formattedAsn()}">AS7922 Comcast</span>
+                            <code th:text="${origin.subnetGroup()}" style="font-size: 11px;">198.51.100.0/24</code>
+                            <span style="color: var(--text-muted);"
+                                th:text="${#numbers.formatInteger(origin.requests(), 1, 'COMMA')} + ' reqs'">100 reqs</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="note-modal-footer"
+                style="padding: 12px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="button" class="btn" onclick="closeUaModal(event)">Close</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+
+</html>

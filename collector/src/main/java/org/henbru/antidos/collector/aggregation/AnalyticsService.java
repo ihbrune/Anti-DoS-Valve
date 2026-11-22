@@ -24,12 +24,17 @@ import org.henbru.antidos.collector.model.NetworkAnnotation;
 import org.henbru.antidos.collector.model.SubnetScatterPoint;
 import org.henbru.antidos.collector.model.TimelinePoint;
 import org.henbru.antidos.collector.model.TrafficCompositionPoint;
+import org.henbru.antidos.collector.model.EffectiveUaHeuristicSettings;
 import org.henbru.antidos.collector.model.UserAgentAnalyticsDto;
+import org.henbru.antidos.collector.model.UserAgentAutoVerdict;
+import org.henbru.antidos.collector.model.UserAgentDrilldownDto;
 import org.henbru.antidos.collector.model.UserAgentFamily;
 import org.henbru.antidos.collector.model.UserAgentFamilySummary;
 import org.henbru.antidos.collector.model.UserAgentIndicatorStats;
 import org.henbru.antidos.collector.model.UserAgentItemSummary;
+import org.henbru.antidos.collector.model.UserAgentManualOverride;
 import org.henbru.antidos.collector.model.UserAgentOriginSummary;
+import org.henbru.antidos.collector.model.UserAgentProfile;
 import org.henbru.antidos.collector.storage.ClientEventRepository;
 import org.henbru.antidos.collector.storage.MitigationRuleRepository;
 import org.henbru.antidos.collector.storage.MonitoredValveRepository;
@@ -52,6 +57,7 @@ public class AnalyticsService {
 	private final MonitoredValveRepository monitoredValveRepository;
 	private final MitigationRuleRepository mitigationRuleRepository;
 	private final BrowserVersionSyncService browserVersionSyncService;
+	private final UserAgentMemoryService userAgentMemoryService;
 
 	@Autowired
 	public AnalyticsService(
@@ -62,7 +68,8 @@ public class AnalyticsService {
 			@Autowired(required = false) org.henbru.antidos.collector.storage.ClientEventRepository clientEventRepository,
 			@Autowired(required = false) MonitoredValveRepository monitoredValveRepository,
 			@Autowired(required = false) MitigationRuleRepository mitigationRuleRepository,
-			@Autowired(required = false) BrowserVersionSyncService browserVersionSyncService
+			@Autowired(required = false) BrowserVersionSyncService browserVersionSyncService,
+			@Autowired(required = false) UserAgentMemoryService userAgentMemoryService
 	) {
 		this.subnetRollupRepository = subnetRollupRepository;
 		this.rollupAggregationService = rollupAggregationService;
@@ -72,6 +79,21 @@ public class AnalyticsService {
 		this.monitoredValveRepository = monitoredValveRepository;
 		this.mitigationRuleRepository = mitigationRuleRepository;
 		this.browserVersionSyncService = browserVersionSyncService;
+		this.userAgentMemoryService = userAgentMemoryService;
+	}
+
+	public AnalyticsService(
+			SubnetRollupRepository subnetRollupRepository,
+			RollupAggregationService rollupAggregationService,
+			NetworkAnnotationService networkAnnotationService,
+			org.henbru.antidos.collector.advisor.AdvisorService advisorService,
+			org.henbru.antidos.collector.storage.ClientEventRepository clientEventRepository,
+			MonitoredValveRepository monitoredValveRepository,
+			MitigationRuleRepository mitigationRuleRepository,
+			BrowserVersionSyncService browserVersionSyncService
+	) {
+		this(subnetRollupRepository, rollupAggregationService, networkAnnotationService, advisorService,
+				clientEventRepository, monitoredValveRepository, mitigationRuleRepository, browserVersionSyncService, null);
 	}
 
 	public AnalyticsService(
@@ -393,6 +415,17 @@ public class AnalyticsService {
 		Map<UserAgentFamily, FamilyAggregator> familyMap = new EnumMap<>(UserAgentFamily.class);
 		List<UserAgentItemSummary> items = new ArrayList<>();
 
+		EffectiveUaHeuristicSettings heuristicSettings = userAgentMemoryService != null
+				? userAgentMemoryService.getEffectiveSettings()
+				: EffectiveUaHeuristicSettings.defaults();
+
+		List<String> rawUaNames = rawList.stream()
+				.map(ClientEventRepository.RawUserAgentAggregation::userAgent)
+				.toList();
+		Map<String, UserAgentProfile> storedProfiles = userAgentMemoryService != null
+				? userAgentMemoryService.getProfilesMap(rawUaNames)
+				: Map.of();
+
 		for (ClientEventRepository.RawUserAgentAggregation row : rawList) {
 			UserAgentFamily family = UserAgentClassifier.classify(row.userAgent());
 
@@ -406,10 +439,6 @@ public class AnalyticsService {
 			FamilyAggregator famAgg = familyMap.computeIfAbsent(family, FamilyAggregator::new);
 			famAgg.add(row.totalRequests(), row.eventCount(), row.blockedCount(), row.markedCount(), row.activeCount(), row.authenticatedCount());
 
-			// Suspicion heuristics:
-			boolean isSuspicious = false;
-			List<String> reasons = new ArrayList<>();
-
 			int totalIncidents = row.blockedCount() + row.markedCount();
 			double incidentRatio = row.eventCount() > 0 ? (totalIncidents * 100.0 / row.eventCount()) : 0.0;
 			int totalGeo = row.datacenterCount() + row.residentialCount();
@@ -422,6 +451,7 @@ public class AnalyticsService {
 
 			boolean mitigationMatch = false;
 			String mitigationDetails = null;
+			long mitigatedAsnRequests = 0L;
 			if (!activeMitigatedCidrs.isEmpty() || !activeMitigatedAsns.isEmpty()) {
 				for (UserAgentOriginSummary origin : origins) {
 					if (origin.subnetGroup() != null && activeMitigatedCidrs.contains(origin.subnetGroup().trim())) {
@@ -435,56 +465,124 @@ public class AnalyticsService {
 						break;
 					}
 				}
+				for (UserAgentOriginSummary origin : origins) {
+					if (origin.asn() != null && activeMitigatedAsns.containsKey(origin.asn())) {
+						mitigatedAsnRequests += origin.requests();
+					}
+				}
 			}
 
-			boolean residentialZeroAuth = false;
-			if (row.residentialCount() >= 10 && row.authenticatedCount() == 0 && (resRatio >= 50.0 || row.residentialCount() >= 25)) {
-				residentialZeroAuth = true;
-			}
+			UserAgentProfile storedProfile = storedProfiles.get(row.userAgent().trim());
+			UserAgentManualOverride manualOverride = storedProfile != null
+					? storedProfile.effectiveOverride()
+					: UserAgentManualOverride.AUTO;
+			String operatorNote = storedProfile != null ? storedProfile.operatorNote() : null;
+			Instant firstSeen = storedProfile != null ? storedProfile.firstSeenAt() : null;
+			Instant lastSeen = storedProfile != null ? storedProfile.lastSeenAt() : null;
 
-			if (family.isAutomated()) {
-				isSuspicious = true;
-				reasons.add(family == UserAgentFamily.BOT_CRAWLER ? "Crawler signature" : "Scraper / tool library signature");
-			}
-			if (family == UserAgentFamily.EMPTY) {
-				isSuspicious = true;
-				reasons.add("Empty User-Agent header");
-			}
-			if (incidentRatio >= 50.0 && totalIncidents >= 2) {
-				isSuspicious = true;
-				reasons.add(String.format(Locale.ROOT, "High incident rate (%.1f%% blocked/marked)", incidentRatio));
-			}
-			if (dcRatio >= 75.0 && row.datacenterCount() >= 2) {
-				isSuspicious = true;
-				reasons.add(String.format(Locale.ROOT, "Datacenter concentration (%.1f%%)", dcRatio));
-			}
-			if (residentialZeroAuth) {
-				isSuspicious = true;
-				reasons.add(String.format(Locale.ROOT, "Residential Zero-Auth anomaly (%d res samples, 0.0%% auth)", row.residentialCount()));
-			}
-			if (mitigationMatch) {
-				isSuspicious = true;
-				reasons.add(mitigationDetails != null ? mitigationDetails : "Origin in mitigated network");
-			}
+			boolean residentialZeroAuth = row.residentialCount() >= 10 && row.authenticatedCount() == 0
+					&& (resRatio >= 50.0 || row.residentialCount() >= 25);
 
-			// Authoritative browser version assessment
+			UserAgentAutoVerdict autoVerdict;
+			boolean isSuspicious = false;
+			String suspicionReason;
 			BrowserVersionLagAssessment versionAssessment = BrowserVersionLagAssessment.UNTRACKED;
 			Integer parsedMajorVersion = null;
 			Integer versionLagMajors = null;
+			double internalRatioPct = row.totalRequests() > 0 ? Math.round((row.internalRequests() * 1000.0) / row.totalRequests()) / 10.0 : 0.0;
+			double sampleAuthRatioPct = row.eventCount() > 0 ? Math.round((row.sampleAuthenticatedEvents() * 10000.0) / row.eventCount()) / 100.0 : 0.0;
+			double slotAuthRatioPct = row.totalRequests() > 0 ? Math.round((row.slotAuthenticatedRequests() * 10000.0) / row.totalRequests()) / 100.0 : 0.0;
+			double mitigatedAsnRatioPct = row.totalRequests() > 0 ? Math.round((mitigatedAsnRequests * 1000.0) / row.totalRequests()) / 10.0 : 0.0;
+			double uaMismatchRatioPct = row.totalRequests() > 0 ? Math.round((row.uaMismatchRequests() * 1000.0) / row.totalRequests()) / 10.0 : 0.0;
+			double avgReqsPerSlot = row.eventCount() > 0 ? Math.round((row.totalRequests() * 10.0) / row.eventCount()) / 10.0 : 0.0;
 
-			if (browserVersionSyncService != null) {
-				var vRes = browserVersionSyncService.assessUserAgent(family, row.userAgent());
-				versionAssessment = vRes.assessment();
-				parsedMajorVersion = vRes.parsedMajorVersion();
-				versionLagMajors = vRes.versionLagMajors();
+			if (userAgentMemoryService != null) {
+				var eval = userAgentMemoryService.evaluateVerdict(new UserAgentMemoryService.EvaluationInput(
+						row.userAgent(),
+						family,
+						row.totalRequests(),
+						row.eventCount(),
+						row.blockedCount(),
+						row.markedCount(),
+						row.distinctSubnets(),
+						row.distinctAsns(),
+						row.sampleAuthenticatedEvents(),
+						row.slotAuthenticatedRequests(),
+						row.internalRequests(),
+						row.searchEngineRequests(),
+						row.datacenterRequests(),
+						row.residentialRequests(),
+						mitigatedAsnRequests,
+						row.uaMismatchRequests(),
+						mitigationMatch,
+						mitigationDetails
+				), heuristicSettings);
 
-				if (versionAssessment == BrowserVersionLagAssessment.IMPLAUSIBLE_FUTURE) {
-					isSuspicious = true;
-					reasons.add(String.format(Locale.ROOT, "Implausible future version (%s v%d)", vRes.browserFamily(), parsedMajorVersion));
-				} else if (versionAssessment == BrowserVersionLagAssessment.OBSOLETE_ANOMALY) {
-					isSuspicious = true;
-					reasons.add(String.format(Locale.ROOT, "Obsolete browser version (%s v%d, -%d lag)", vRes.browserFamily(), parsedMajorVersion, versionLagMajors));
+				autoVerdict = eval.verdict();
+				suspicionReason = eval.reason();
+				versionAssessment = eval.versionAssessment();
+				parsedMajorVersion = eval.parsedMajorVersion();
+				versionLagMajors = eval.versionLagMajors();
+				internalRatioPct = eval.internalRatioPct();
+				sampleAuthRatioPct = eval.sampleAuthRatioPct();
+				slotAuthRatioPct = eval.slotAuthRatioPct();
+				mitigatedAsnRatioPct = eval.mitigatedAsnRatioPct();
+				uaMismatchRatioPct = eval.uaMismatchRatioPct();
+				avgReqsPerSlot = eval.avgRequestsPerSlot();
+				if (eval.residentialZeroAuthAnomaly() && !autoVerdict.isImmune()) {
+					residentialZeroAuth = true;
 				}
+				isSuspicious = manualOverride.isEffectiveSuspicious(autoVerdict);
+				if (manualOverride == UserAgentManualOverride.MANUAL_BLOCK) {
+					suspicionReason = "Manual override: Blocked by operator (" + eval.reason() + ")";
+				} else if (manualOverride == UserAgentManualOverride.ALWAYS_ALLOW) {
+					suspicionReason = "";
+				} else if (manualOverride == UserAgentManualOverride.OBSERVE_ONLY) {
+					suspicionReason = "Manual override: Observe only — auto-heuristic rated " + autoVerdict.displayName() + " (" + eval.reason() + ")";
+				}
+			} else {
+				List<String> reasons = new ArrayList<>();
+				if (family.isAutomated()) {
+					isSuspicious = true;
+					reasons.add(family == UserAgentFamily.BOT_CRAWLER ? "Crawler signature" : "Scraper / tool library signature");
+				}
+				if (family == UserAgentFamily.EMPTY) {
+					isSuspicious = true;
+					reasons.add("Empty User-Agent header");
+				}
+				if (incidentRatio >= 50.0 && totalIncidents >= 2) {
+					isSuspicious = true;
+					reasons.add(String.format(Locale.ROOT, "High incident rate (%.1f%% blocked/marked)", incidentRatio));
+				}
+				if (dcRatio >= 75.0 && row.datacenterCount() >= 2) {
+					isSuspicious = true;
+					reasons.add(String.format(Locale.ROOT, "Datacenter concentration (%.1f%%)", dcRatio));
+				}
+				if (residentialZeroAuth) {
+					isSuspicious = true;
+					reasons.add(String.format(Locale.ROOT, "Residential Zero-Auth anomaly (%d res samples, 0.0%% auth)", row.residentialCount()));
+				}
+				if (mitigationMatch) {
+					isSuspicious = true;
+					reasons.add(mitigationDetails != null ? mitigationDetails : "Origin in mitigated network");
+				}
+				if (browserVersionSyncService != null) {
+					var vRes = browserVersionSyncService.assessUserAgent(family, row.userAgent());
+					versionAssessment = vRes.assessment();
+					parsedMajorVersion = vRes.parsedMajorVersion();
+					versionLagMajors = vRes.versionLagMajors();
+
+					if (versionAssessment == BrowserVersionLagAssessment.IMPLAUSIBLE_FUTURE) {
+						isSuspicious = true;
+						reasons.add(String.format(Locale.ROOT, "Implausible future version (%s v%d)", vRes.browserFamily(), parsedMajorVersion));
+					} else if (versionAssessment == BrowserVersionLagAssessment.OBSOLETE_ANOMALY) {
+						isSuspicious = true;
+						reasons.add(String.format(Locale.ROOT, "Obsolete browser version (%s v%d, -%d lag)", vRes.browserFamily(), parsedMajorVersion, versionLagMajors));
+					}
+				}
+				autoVerdict = isSuspicious ? UserAgentAutoVerdict.SUSPICIOUS_SIGNATURE
+						: (row.authenticatedCount() > 0 ? UserAgentAutoVerdict.IMMUNE_AUTHENTICATED : UserAgentAutoVerdict.NEUTRAL);
+				suspicionReason = String.join(" • ", reasons);
 			}
 
 			items.add(new UserAgentItemSummary(
@@ -503,14 +601,26 @@ public class AnalyticsService {
 					row.residentialCount(),
 					Math.round(dcRatio * 10.0) / 10.0,
 					isSuspicious,
-					String.join(" • ", reasons),
+					isSuspicious || manualOverride.isManual() ? suspicionReason : "",
 					origins,
 					residentialZeroAuth,
 					mitigationMatch,
 					mitigationDetails,
 					versionAssessment,
 					parsedMajorVersion,
-					versionLagMajors
+					versionLagMajors,
+					storedProfile != null ? storedProfile.userAgentHash() : null,
+					autoVerdict,
+					manualOverride,
+					operatorNote,
+					firstSeen,
+					lastSeen,
+					internalRatioPct,
+					sampleAuthRatioPct,
+					slotAuthRatioPct,
+					mitigatedAsnRatioPct,
+					uaMismatchRatioPct,
+					avgReqsPerSlot
 			));
 		}
 
@@ -524,11 +634,18 @@ public class AnalyticsService {
 		int datacenterCount = 0;
 		int automatedCount = 0;
 		int authenticatedCount = 0;
+		int internalImmuneCount = 0;
+		int searchEngineImmuneCount = 0;
+		int manualOverrideCount = 0;
 
 		for (UserAgentItemSummary item : items) {
+			if (item.hasManualOverride()) manualOverrideCount++;
+			if (item.safeAutoVerdict() == UserAgentAutoVerdict.IMMUNE_INTERNAL) internalImmuneCount++;
+			if (item.safeAutoVerdict() == UserAgentAutoVerdict.IMMUNE_SEARCH_ENGINE) searchEngineImmuneCount++;
+
 			if (item.isSuspicious()) {
 				suspiciousCount++;
-			} else if (item.hasAuthenticatedTraffic()) {
+			} else if (item.hasAuthenticatedTraffic() || item.isImmune() || item.safeManualOverride() == UserAgentManualOverride.ALWAYS_ALLOW) {
 				legitimateCount++;
 			} else {
 				standardCount++;
@@ -552,7 +669,10 @@ public class AnalyticsService {
 				highIncidentCount,
 				datacenterCount,
 				automatedCount,
-				authenticatedCount
+				authenticatedCount,
+				internalImmuneCount,
+				searchEngineImmuneCount,
+				manualOverrideCount
 		);
 
 		// Family summaries
@@ -606,8 +726,16 @@ public class AnalyticsService {
 				families,
 				items,
 				indicatorStats,
-				browserVersionSyncService != null ? browserVersionSyncService.getOverview() : BrowserReferenceOverviewDto.empty()
+				browserVersionSyncService != null ? browserVersionSyncService.getOverview() : BrowserReferenceOverviewDto.empty(),
+				heuristicSettings
 		);
+	}
+
+	public UserAgentDrilldownDto getUserAgentDrilldown(String userAgent, int hours) {
+		if (userAgentMemoryService != null) {
+			return userAgentMemoryService.getUserAgentDrilldown(userAgent, hours);
+		}
+		return null;
 	}
 
 	private static class FamilyAggregator {

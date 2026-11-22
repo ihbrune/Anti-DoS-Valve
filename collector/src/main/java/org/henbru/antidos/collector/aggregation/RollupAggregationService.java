@@ -28,6 +28,7 @@ public class RollupAggregationService {
 	private final SubnetRollupRepository rollupRepository;
 	private final CollectorProperties properties;
 	private final SubnetProfileService subnetProfileService;
+	private final UserAgentMemoryService userAgentMemoryService;
 	private final java.util.concurrent.atomic.AtomicBoolean realtimePending = new java.util.concurrent.atomic.AtomicBoolean(false);
 	private final java.util.concurrent.atomic.AtomicBoolean realtimeWorkerRunning = new java.util.concurrent.atomic.AtomicBoolean(false);
 
@@ -36,12 +37,23 @@ public class RollupAggregationService {
 			JdbcTemplate jdbcTemplate,
 			SubnetRollupRepository rollupRepository,
 			CollectorProperties properties,
-			@Autowired(required = false) SubnetProfileService subnetProfileService
+			@Autowired(required = false) SubnetProfileService subnetProfileService,
+			@Autowired(required = false) UserAgentMemoryService userAgentMemoryService
 	) {
 		this.jdbcTemplate = jdbcTemplate;
 		this.rollupRepository = rollupRepository;
 		this.properties = properties;
 		this.subnetProfileService = subnetProfileService;
+		this.userAgentMemoryService = userAgentMemoryService;
+	}
+
+	public RollupAggregationService(
+			JdbcTemplate jdbcTemplate,
+			SubnetRollupRepository rollupRepository,
+			CollectorProperties properties,
+			SubnetProfileService subnetProfileService
+	) {
+		this(jdbcTemplate, rollupRepository, properties, subnetProfileService, null);
 	}
 
 	public RollupAggregationService(
@@ -49,7 +61,7 @@ public class RollupAggregationService {
 			SubnetRollupRepository rollupRepository,
 			CollectorProperties properties
 	) {
-		this(jdbcTemplate, rollupRepository, properties, null);
+		this(jdbcTemplate, rollupRepository, properties, null, null);
 	}
 
 	/**
@@ -150,6 +162,14 @@ public class RollupAggregationService {
 					rollups.size(), bucketStart, bucketEnd, bucketMinutes);
 		} else {
 			log.debug("No client events to roll up for window [{} -> {}]", bucketStart, bucketEnd);
+		}
+
+		if (userAgentMemoryService != null) {
+			try {
+				userAgentMemoryService.aggregateHourlyWindow(bucketStart, bucketEnd);
+			} catch (Exception e) {
+				log.debug("User-Agent hourly rollup skipped for [{} -> {}]: {}", bucketStart, bucketEnd, e.getMessage());
+			}
 		}
 
 		return rollups.size();
@@ -254,6 +274,14 @@ public class RollupAggregationService {
 				log.warn("Subnet profiles refresh failed after rollup catchup: {}", e.getMessage());
 			}
 		}
+		if (userAgentMemoryService != null) {
+			try {
+				userAgentMemoryService.backfillIfEmpty();
+				userAgentMemoryService.refreshProfiles24h();
+			} catch (Exception e) {
+				log.warn("User-Agent profiles refresh failed after rollup catchup: {}", e.getMessage());
+			}
+		}
 		long durationMs = System.currentTimeMillis() - start;
 		RollupExecutionResult result = new RollupExecutionResult(Instant.now(), persisted, durationMs);
 		this.lastRollupResult = result;
@@ -333,6 +361,13 @@ public class RollupAggregationService {
 			if (deleted > 0) {
 				log.info("Purged {} historical subnet rollups older than {} days (cutoff: {})",
 						deleted, properties.getRollupRetentionDays(), cutoff);
+			}
+			if (userAgentMemoryService != null) {
+				int deletedUa = userAgentMemoryService.cleanupOldHourlyRollups();
+				if (deletedUa > 0) {
+					log.info("Purged {} historical User-Agent hourly rollups older than {} days",
+							deletedUa, properties.getRollupRetentionDays());
+				}
 			}
 		} catch (Exception e) {
 			log.error("Error during subnet rollup retention cleanup: {}", e.getMessage(), e);

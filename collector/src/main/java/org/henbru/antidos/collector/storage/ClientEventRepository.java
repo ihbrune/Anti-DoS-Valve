@@ -985,8 +985,41 @@ public class ClientEventRepository {
 			int distinctSubnets,
 			int distinctAsns,
 			int datacenterCount,
-			int residentialCount
-	) {}
+			int residentialCount,
+			int sampleAuthenticatedEvents,
+			long slotAuthenticatedRequests,
+			long internalRequests,
+			long searchEngineRequests,
+			long crawlerRequests,
+			long datacenterRequests,
+			long residentialRequests,
+			long returningRequests,
+			long uaMismatchRequests,
+			long blockedRequests,
+			long markedRequests
+	) {
+		public RawUserAgentAggregation(
+				String userAgent,
+				long totalRequests,
+				int eventCount,
+				int blockedCount,
+				int markedCount,
+				int activeCount,
+				int authenticatedCount,
+				int distinctSubnets,
+				int distinctAsns,
+				int datacenterCount,
+				int residentialCount
+		) {
+			this(userAgent, totalRequests, eventCount, blockedCount, markedCount, activeCount,
+					authenticatedCount, distinctSubnets, distinctAsns, datacenterCount, residentialCount,
+					authenticatedCount, authenticatedCount > 0 ? totalRequests / Math.max(1, eventCount) * authenticatedCount : 0L,
+					0L, 0L, 0L,
+					datacenterCount > 0 ? totalRequests / Math.max(1, eventCount) * datacenterCount : 0L,
+					residentialCount > 0 ? totalRequests / Math.max(1, eventCount) * residentialCount : 0L,
+					0L, 0L, 0L, 0L);
+		}
+	}
 
 	public List<RawUserAgentAggregation> findUserAgentAggregations(Instant from, Instant to, List<String> servers, List<String> valves, int limit) {
 		StringBuilder sql = new StringBuilder("""
@@ -1001,7 +1034,18 @@ public class ClientEventRepository {
 				    COUNT(DISTINCT subnet_group) AS distinct_subnets,
 				    COUNT(DISTINCT asn) AS distinct_asns,
 				    SUM(CASE WHEN client_type IN ('DATACENTER', 'TOR_EXIT_NODE') THEN 1 ELSE 0 END) AS datacenter_count,
-				    SUM(CASE WHEN client_type IN ('RESIDENTIAL', 'PRIVACY_RELAY') THEN 1 ELSE 0 END) AS residential_count
+				    SUM(CASE WHEN client_type IN ('RESIDENTIAL', 'PRIVACY_RELAY') THEN 1 ELSE 0 END) AS residential_count,
+				    SUM(CASE WHEN sample_authenticated = TRUE THEN 1 ELSE 0 END) AS sample_auth_events,
+				    SUM(COALESCE(authenticated_count, 0)) AS slot_auth_requests,
+				    SUM(CASE WHEN client_type IN ('PRIVATE_NETWORK', 'INTERNAL_NETWORK') THEN request_count ELSE 0 END) AS internal_requests,
+				    SUM(CASE WHEN client_type = 'SEARCH_ENGINE' THEN request_count ELSE 0 END) AS search_engine_requests,
+				    SUM(CASE WHEN client_type IN ('SEARCH_ENGINE', 'AI_CRAWLER') THEN request_count ELSE 0 END) AS crawler_requests,
+				    SUM(CASE WHEN client_type IN ('DATACENTER', 'TOR_EXIT_NODE') THEN request_count ELSE 0 END) AS datacenter_requests,
+				    SUM(CASE WHEN client_type IN ('RESIDENTIAL', 'PRIVACY_RELAY') THEN request_count ELSE 0 END) AS residential_requests,
+				    SUM(COALESCE(returning_count, 0)) AS returning_requests,
+				    SUM(COALESCE(ua_mismatch_count, 0)) AS ua_mismatch_requests,
+				    SUM(CASE WHEN status = 'BLOCKED' THEN request_count ELSE 0 END) AS blocked_requests,
+				    SUM(CASE WHEN status = 'MARKED' THEN request_count ELSE 0 END) AS marked_requests
 				FROM client_events
 				WHERE slot_time >= ? AND slot_time <= ?
 				  AND sample_user_agent IS NOT NULL
@@ -1038,7 +1082,18 @@ public class ClientEventRepository {
 				rs.getInt("distinct_subnets"),
 				rs.getInt("distinct_asns"),
 				rs.getInt("datacenter_count"),
-				rs.getInt("residential_count")
+				rs.getInt("residential_count"),
+				rs.getInt("sample_auth_events"),
+				rs.getLong("slot_auth_requests"),
+				rs.getLong("internal_requests"),
+				rs.getLong("search_engine_requests"),
+				rs.getLong("crawler_requests"),
+				rs.getLong("datacenter_requests"),
+				rs.getLong("residential_requests"),
+				rs.getLong("returning_requests"),
+				rs.getLong("ua_mismatch_requests"),
+				rs.getLong("blocked_requests"),
+				rs.getLong("marked_requests")
 		), params.toArray());
 	}
 

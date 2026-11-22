@@ -303,55 +303,45 @@ The **User-Agents** focus tab cross-correlates request header samples captured b
 2. **Authenticated Client Share:** Tracks whether the User-Agent was observed in requests carrying valid authentication cookies or session credentials (`sampleAuthenticated=true`). Legitimate desktop and mobile browsers exhibit healthy authentication ratios, whereas scrapers and automated bots rarely possess authenticated sessions.
 3. **Incident Rate Correlation:** Quantifies the proportion of samples associated with HTTP 429 rate blocks or simulation marks:
    $$\text{Incident Rate} = \frac{\text{Blocked Samples} + \text{Marked Samples}}{\text{Total Samples}} \times 100\%$$
-4. **Origin ASNs & Subnet Footprints:** For suspicious or automated User-Agents, the dashboard lists the top Autonomous Systems (e.g. Hetzner, OVH, DigitalOcean) and CIDR subnets from which the User-Agent originated, allowing operators to cross-check with ASN notes or prepare targeted mitigation rules.
-5. **Heuristic Evaluation Engine & Suspicion Badges:**
-   Each observed User-Agent is assessed by the analytics engine using a deterministic multi-signal heuristic:
-   
-   * **Classification Decision Tree (`isSuspicious`):**
-     A User-Agent is flagged as 🔴 **`Suspicious`** if **any** of the following conditions are met:
-     1. **Automated Signature:** The parsed family is an automated tool, scraping library, or known bot (`family.isAutomated() == true`, e.g. `python-requests`, `curl`, `Scrapy`, `Go-http-client`, etc.).
-     2. **High Incident Ratio:** The ratio of rate-limiting incidents (blocks + marks) relative to total captured telemetry events is $\ge 50.0\%$ (with at least 2 incident events):
-        $$\text{Incident Ratio} = \frac{\text{Blocked Samples} + \text{Marked Samples}}{\text{Total Telemetry Events}} \ge 50\%$$
-     3. **Datacenter Concentration:** The proportion of datacenter/cloud infrastructure origins relative to resolved residential and datacenter origins is $\ge 75.0\%$ (with at least 2 datacenter events):
-        $$\text{Datacenter Ratio} = \frac{\text{Datacenter Samples}}{\text{Datacenter Samples} + \text{Residential Samples}} \ge 75\%$$
-     4. **Empty User-Agent:** The User-Agent header is missing or blank (`UserAgentFamily.EMPTY`).
-     5. **Residential Zero-Auth Anomaly:** The User-Agent demonstrates substantial consumer residential presence ($\ge 10$ residential samples, or $\ge 25$ samples overall with $\ge 50\%$ residential share) combined with strictly **$0.0\%$ authenticated traffic** (`authenticatedCount == 0`). This reliably detects stealth scrapers rotating through residential broadband proxies while spoofing popular desktop or mobile browser User-Agents.
-     6. **Active / Recent Mitigation Correlation:** The User-Agent originates from subnets or ASNs that are currently or were recently subjected to dynamic mitigation rules (e.g. `AUTO_CARPET` or `ASN_BATCH` blocks).
-     7. **Authoritative Browser Release Lag & Synthetic Forgery Anomaly:**
-        * **Implausible Future Version:** User-Agents asserting browser versions higher than the authoritative preview horizon ($> \text{Stable} + 2$ and unlisted in live Canary/Dev/Nightly feeds). Flagged as definitive synthetic forgery (e.g. *Chrome 185* when Stable is 157 and Canary is 159).
-        * **Obsolete Anomaly:** User-Agents claiming versions that are more than 3 years / 30 major versions obsolete (e.g. *Chrome 74* in 2026), indicating ancient frozen scraper stacks.
-        * **Plausible Preview Exemption:** Authentic developer, QA, and enthusiast traffic using Beta, Dev, Canary, Nightly, or Safari Technology Preview builds ($\text{Stable} + 1$ to $\text{Stable} + 2$) is explicitly recognized as legitimate preview traffic (`[🛠️ Preview v...]`) and protected from false-positive flags.
+4. **Origin ASNs & Subnet Footprints:** For suspicious or automated User-Agents, the dashboard lists the top Autonomous Systems (e.g. cloud/hosting providers or generic residential ASNs) and CIDR subnets from which the User-Agent originated, allowing operators to cross-check with ASN notes or inspect origin behavior.
+5. **Stage-0 Immunity & 3-Pillar Heuristic Evaluation Engine (`dim_user_agent` & `user_agent_hourly_rollups`):**
+   Each observed User-Agent is stored permanently in `dim_user_agent` alongside hourly evaluation snapshots in `user_agent_hourly_rollups` (retained up to 30 days) and assessed through a two-stage decision pipeline:
+
+   * **Stage 0 — Automatic Immunity Guards (Exempt from Negative Scoring):**
+     Before any suspicion heuristic is evaluated, traffic matching any of these barriers receives an unconditional immune verdict:
+     1. **Internal / Campus Network Immunity (`IMMUNE_INTERNAL`):** Protects internal devices, intranet scripts, and legacy unauthenticated kiosk/signage displays operating from `PRIVATE_NETWORK` or `INTERNAL_NETWORK` ranges whenever internal request share reaches the configured percentage threshold (default $\ge 5.0\%$) or absolute internal request floor ($\ge 100$ requests).
+     2. **Verified Search Engine Immunity (`IMMUNE_SEARCH_ENGINE`):** Exempts verified `SEARCH_ENGINE` crawler IP feeds (default $\ge 50.0\%$ share).
+     3. **Authenticated User / App Immunity (`IMMUNE_AUTHENTICATED`):** Exempts genuine desktop/mobile browsers and custom native apps (e.g. Flutter/Dart mobile clients) whenever authenticated sample ratio (default $\ge 1.0\%$, min 2 samples) or slot-level authenticated count ratio ($\ge 2.0\%$, min 10 auth requests) confirms active logins.
+
+   * **Stage 1 — 3-Pillar Heuristic Classification (External Zero-Auth Traffic):**
+     Non-immune User-Agents are evaluated against three complementary detection pillars (plus legacy signature/version checks):
+     1. **Pillar 1 — Ultra-Spread Proxy Botnet (`SUSPICIOUS_ULTRA_SPREAD`):** Detects heavily distributed scrapers rotating across many consumer broadband networks (e.g. high external volume $\ge 10{,}000$ reqs across $\ge 200$ subnets and $\ge 30$ ASNs with low requests per slot $\le 10.0$ or significant browser version lag).
+     2. **Pillar 2 — Guilt by Association (`SUSPICIOUS_CORRELATED`):** Detects User-Agents strongly correlated with rate-limiting incidents (default $\ge 30\%$ incident events), active or recent ASN mitigations ($\ge 40\%$ share), or Visitor-Cookie User-Agent spoofing mismatches ($\ge 20\%$ share).
+     3. **Pillar 3 — Datacenter Zero-Auth Scraper (`SUSPICIOUS_DATACENTER`):** Flags high-volume unauthenticated User-Agents predominantly originating from cloud, hosting, or Tor exit infrastructure (default $\ge 5{,}000$ reqs, $\ge 80\%$ datacenter share, $0$ auth samples).
+     4. **Signature & Version Anomalies (`SUSPICIOUS_SIGNATURE`):** Catches empty User-Agent strings, script/CLI libraries (`python-requests`, `curl`, `Scrapy`) without authentication, obsolete frozen stacks (e.g. *Chrome 74* outside internal networks), or implausible future versions ($> \text{Stable} + 2$ and absent from Canary/Dev/Nightly feeds), while exempting authentic Beta/Dev/Canary/STP builds (`[🛠️ Preview v...]`).
+
+   * **Dual-Status Visibility & Non-Overwritable Manual Overrides:**
+     Operators can click **`📈 History & Override`** on any row to open its forensic drilldown modal:
+     * **Manual Overrides (`manual_override`):** Assign `Always Allowed (Protected)` (`ALWAYS_ALLOW`), `Manual Block Candidate` (`MANUAL_BLOCK`), `Observe Only (Watchlist)` (`OBSERVE_ONLY`), or `Automatic` (`AUTO`) alongside a persistent **Operator Note**. Manual overrides are permanently preserved in `dim_user_agent` and never overwritten by hourly rollups or background refreshes.
+     * **Simultaneous Automatic Verdict Display:** Even when a manual override is active, both the table row and the drilldown modal continue to display the live `auto_verdict` badge computed by the 3-pillar heuristic so admins can verify classification behavior safely before acting.
+     * **Chronological Evaluation History Browser:** Inspect hourly `24h`, `7d`, or `30d` evaluation snapshots (`user_agent_hourly_rollups`) showing request counts, incident rates, subnet/ASN spread, auth/internal ratios, and the exact verdict reason for each hour.
+     * **Live Configurable Thresholds & RBAC:** In `CollectorMode.FULL` (and strictly disabled in `OPERATOR`, `VIEWER`, and `AI_AGENT` contexts), administrators can tune all 16 Stage-0 and 3-Pillar thresholds live or reset them to YAML defaults via `/analytics?tab=useragents`. Manual status overrides and operator notes require `FULL` or `OPERATOR` mode (denied to `VIEWER` and `AI_AGENT`).
 
    * **Authoritative Browser Release Ground Truth (Top 5 Versions):**
      Directly embedded within the User-Agents tab, an authoritative version reference displays the **top 5 most recent versions** for Chrome, Edge, Firefox, and Safari:
      * **Google Chrome & Chromium Core:** Live automated sync via Google Version History API (Canary, Beta, Stable, Extended, Previous).
      * **Microsoft Edge:** Synchronized with Chromium release channels.
      * **Mozilla Firefox:** Live automated sync via Mozilla Product Details API (Nightly, Beta, Stable, Previous, ESR).
-     * **Apple Safari (Configurable OS Matrix):** Static OS-bound matrix reflecting macOS/iOS generations. Fully configurable via `collector.browser-reference.safari-versions` in `collector-config.yaml` or `application.properties` without requiring Java code changes or rebuilds. A prominent indicator badge (*"Configurable Matrix"*) clearly informs operators of its static nature.
+     * **Apple Safari (Configurable OS Matrix):** Static OS-bound matrix reflecting macOS/iOS generations, configurable via `collector.browser-reference.safari-versions` without rebuilding Java code.
 
    * **Heuristic Risk Indicators & Signal Distribution Mini-Display:**
-     Directly above the forensic User-Agent table, an indicator breakdown bar provides operators with an instant quantitative pulse of fleet-wide heuristic activity:
-     * **Summary Tally Badges:** Real-time counts of `Suspicious`, `Standard`, and `Legitimate` User-Agents within the analytical window.
-     * **🏡 Res Zero-Auth Tile:** Number of User-Agents flagged for unauthenticated residential proxy clusters.
-     * **🛡️ Mitigation Match Tile:** Number of User-Agents exhibiting origins correlated with active or recent fleet mitigation rules.
-     * **⚡ Incidents $\ge 50\%$ Tile:** Number of User-Agents crossing the rate-limiting block/mark threshold.
-     * **🏢 Datacenter $\ge 75\%$ Tile:** Number of User-Agents dominated by cloud and hosting provider ASNs.
-     * **🤖 Tool Signatures Tile:** Number of User-Agents identifying as scripting libraries, CLI tools, or missing headers.
-     * **✅ Authenticated Tile:** Number of verified browser User-Agents exhibiting authentic user sessions.
-
-   * **UI Assessment Badge Resolution:**
-     Based on the suspicion calculation and authentication telemetry, each table row displays a primary badge and micro indicator chips:
-     * 🔴 **`Suspicious`** (with detailed rationale): Triggered when `isSuspicious == true`. Accompanied by micro-chips highlighting every triggered indicator (e.g. `[🏡 Res Zero-Auth]`, `[🛡️ Mitigation Match]`, `[🤖 Tool Sig]`, `[⚡ Incidents ≥50%]`, `[🏢 Datacenter]`, `[🟣 Future v...]`, `[⚠️ Obsolete v...]`).
-     * 🟢 **`Legitimate Traffic`**: Triggered when `isSuspicious == false` **AND** at least one authenticated request sample has been recorded (`authenticatedCount > 0`). Accompanied by the `[✔ Auth]` micro-chip and developer preview indicators (e.g. `[🛠️ Preview v...]`) when applicable.
-     * ⚪ **`Standard`**: Neutral fallback applied when `isSuspicious == false` **BUT** zero authenticated sessions have been observed (`authenticatedCount == 0`). Represents unauthenticated, non-automated web traffic that has not crossed incident, residential anomaly, or mitigation thresholds.
+     Directly above the User-Agent forensics table, summary pills display live tallies for **Suspicious (3-Pillar / Auto)**, **Immune (Internal / Crawler / Auth)**, **Manual Overrides**, **Protected Legacy / Internal**, **Pillar 1 (Ultra-Spread)**, **Pillar 2 (Mitigation Correlated)**, **Pillar 3 (Datacenter)**, **Tool Signatures**, and **Verified Auth**.
 
 #### Forensic Analysis: The Residential Proxy Scraper Blind Spot
-When reviewing User-Agent telemetry during distributed web scraping or carpet attacks, operators should be aware of why sophisticated botnets can initially appear with the ⚪ **`Standard`** badge:
-1. **Browser User-Agent Spoofing:** Modern botnets configure standard consumer desktop or mobile User-Agent strings (e.g., `Mozilla/5.0 ... Chrome/146.0.0.0 Safari/537.36`), cleanly bypassing the `family.isAutomated()` check.
-2. **Residential IP Rotation (Bypassing Datacenter Ratio):** By routing scraper traffic through residential proxy networks (e.g., Comcast `AS33659`, RCN `AS6079`), the traffic is categorized as `RESIDENTIAL`. Consequently, the datacenter ratio stays far below the $75\%$ threshold (often $\le 15\%$).
-3. **Active Sampling Dilution (Bypassing Incident Ratio):** When `activeSampleThreshold` is enabled (e.g. at 20 requests), the Valve samples high-volume requests *before* the IP exceeds the blocking threshold. If the bot distributes requests across hundreds of subnets (keeping each IP below the hard block threshold), the vast majority of telemetry events are logged as unblocked `ACTIVE` samples. For example, 31 blocked events out of 620 total sampled events yields an incident ratio of only $5.0\%$, well below the $50\%$ threshold.
-4. **Key Forensic Indicator — Zero Authentication:**
-   Even though the User-Agent mimics a popular browser, **`0.0% Auth`** across hundreds of residential samples is a strong forensic indicator of an unauthenticated scraper cluster. Real human browser traffic on interactive web applications almost invariably exhibits a non-zero authenticated session ratio. Operators can cross-reference the top origin subnets shown in the table with active mitigation rules or known residential attack networks.
+When reviewing User-Agent telemetry during distributed scraping campaigns, operators can spot stealth proxy botnets early by looking for:
+1. **Browser User-Agent Spoofing:** Modern scrapers configure standard desktop or mobile browser User-Agent strings, bypassing naive `family.isAutomated()` signature checks.
+2. **Residential IP Rotation:** Routing traffic across generic residential broadband networks (e.g. `AS64520`, `AS64521`) keeps datacenter share low while expanding subnet and ASN entropy.
+3. **Active Sampling Dilution + Pillar 1 & Stage-0 Immunity:** Even when per-IP rates stay below hard blocking thresholds, Stage-0 authentication/internal immunity isolates genuine users and displays, allowing Pillar 1 (`SUSPICIOUS_ULTRA_SPREAD`) and Pillar 2 (`SUSPICIOUS_CORRELATED`) to expose large unauthenticated scraping waves without collateral damage.
 
 * Programmatic access is available via REST at `/api/v1/analytics/user-agents`.
 
@@ -363,7 +353,7 @@ When reviewing User-Agent telemetry during distributed web scraping or carpet at
 1. Navigate to `/analytics` and select the **24 Hours** or **7 Days** time horizon.
 2. Click the **Residential Proxies** focus pill.
 3. Observe the **Residential Proxy Scatterplot**: Look for crimson bubbles positioned in the bottom-right quadrant ($X \ge 10\text{ IPs}$, $Y \le 30\text{ reqs/IP}$).
-4. Hover over the bubble to view the tooltip: Subnet CIDR, Autonomous System (e.g., `AS7922 Comcast`), total request volume, and heuristic risk rating.
+4. Hover over the bubble to view the tooltip: Subnet CIDR, Autonomous System (e.g., `AS64520 Residential Broadband A`), total request volume, and heuristic risk rating.
 5. Click the bubble: The dashboard transfers you to `/offenders` filtered for that subnet.
 6. Verify the incident timeline in `/events`. If abusive intent is confirmed, add the subnet prefix to your perimeter WAF or tune the Valve's `retainedSubnetSlots` threshold.
 

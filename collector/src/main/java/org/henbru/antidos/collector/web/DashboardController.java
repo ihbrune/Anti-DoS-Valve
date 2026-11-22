@@ -60,6 +60,7 @@ public class DashboardController {
 	private final org.henbru.antidos.collector.aggregation.SubnetProfileService subnetProfileService;
 	private final org.henbru.antidos.collector.poller.CollectorPollerService collectorPollerService;
 	private final org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService;
+	private final org.henbru.antidos.collector.aggregation.UserAgentMemoryService userAgentMemoryService;
 
 	@org.springframework.beans.factory.annotation.Autowired
 	public DashboardController(
@@ -84,7 +85,9 @@ public class DashboardController {
 			@org.springframework.beans.factory.annotation.Autowired(required = false)
 			org.henbru.antidos.collector.poller.CollectorPollerService collectorPollerService,
 			@org.springframework.beans.factory.annotation.Autowired(required = false)
-			org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService) {
+			org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService,
+			@org.springframework.beans.factory.annotation.Autowired(required = false)
+			org.henbru.antidos.collector.aggregation.UserAgentMemoryService userAgentMemoryService) {
 		this.heartbeatRepository = heartbeatRepository;
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
@@ -100,6 +103,7 @@ public class DashboardController {
 		this.subnetProfileService = subnetProfileService;
 		this.collectorPollerService = collectorPollerService;
 		this.rollupAggregationService = rollupAggregationService;
+		this.userAgentMemoryService = userAgentMemoryService;
 	}
 
 	public DashboardController(
@@ -112,7 +116,7 @@ public class DashboardController {
 			org.henbru.antidos.collector.config.CollectorProperties properties,
 			org.henbru.antidos.collector.config.ValveRuleResolver valveRuleResolver) {
 		this(heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
-				subnetRollupRepository, documentationService, properties, valveRuleResolver, null, null, null, null, null, null, null);
+				subnetRollupRepository, documentationService, properties, valveRuleResolver, null, null, null, null, null, null, null, null);
 	}
 
 	public DashboardController(
@@ -124,7 +128,7 @@ public class DashboardController {
 			DocumentationService documentationService,
 			org.henbru.antidos.collector.config.CollectorProperties properties) {
 		this(heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
-				subnetRollupRepository, documentationService, properties, new org.henbru.antidos.collector.config.ValveRuleResolver(properties), null, null, null, null, null, null, null);
+				subnetRollupRepository, documentationService, properties, new org.henbru.antidos.collector.config.ValveRuleResolver(properties), null, null, null, null, null, null, null, null);
 	}
 
 	@org.springframework.web.bind.annotation.ModelAttribute("demoMode")
@@ -229,6 +233,160 @@ public class DashboardController {
 			model.addAttribute("drilldown", drilldown);
 		}
 		return "fragments/asn-drilldown-modal :: asnDrilldownModal";
+	}
+
+	@GetMapping("/analytics/user-agent-drilldown")
+	public String userAgentDrilldownModal(
+			@RequestParam("ua") String userAgent,
+			@RequestParam(name = "hours", defaultValue = "168") int hours,
+			Model model) {
+		if (userAgentMemoryService != null) {
+			model.addAttribute("drilldown", userAgentMemoryService.getUserAgentDrilldown(userAgent, hours));
+		} else if (analyticsService != null) {
+			model.addAttribute("drilldown", analyticsService.getUserAgentDrilldown(userAgent, hours));
+		}
+		model.addAttribute("overrideOptions", org.henbru.antidos.collector.model.UserAgentManualOverride.values());
+		return "fragments/ua-drilldown-modal :: uaDrilldownModal";
+	}
+
+	@PostMapping("/analytics/user-agents/override")
+	public String updateUserAgentOverride(
+			@RequestParam("ua") String userAgent,
+			@RequestParam("manualOverride") String manualOverrideStr,
+			@RequestParam(name = "operatorNote", required = false) String operatorNote,
+			@RequestParam(name = "hours", defaultValue = "168") int hours,
+			HttpServletResponse response,
+			Model model) {
+		if (properties.isViewerMode() || !properties.canModifyOperationalData()
+				|| org.henbru.antidos.collector.security.CollectorAuthContext.isAiAgent()) {
+			if (response != null) {
+				response.setStatus(org.springframework.http.HttpStatus.FORBIDDEN.value());
+			}
+			model.addAttribute("uaModalError", "Modifying User-Agent overrides is disabled in " + properties.getEffectiveMode() + " mode.");
+			if (userAgentMemoryService != null) {
+				model.addAttribute("drilldown", userAgentMemoryService.getUserAgentDrilldown(userAgent, hours));
+			}
+			model.addAttribute("overrideOptions", org.henbru.antidos.collector.model.UserAgentManualOverride.values());
+			return "fragments/ua-drilldown-modal :: uaDrilldownModal";
+		}
+
+		try {
+			org.henbru.antidos.collector.model.UserAgentManualOverride override =
+					org.henbru.antidos.collector.model.UserAgentManualOverride.fromString(manualOverrideStr);
+			String actor = org.henbru.antidos.collector.security.CollectorAuthContext.getEffectiveActor(
+					properties.getMode().isOperator() ? "OPERATOR" : "ADMIN");
+			if (userAgentMemoryService != null) {
+				userAgentMemoryService.updateManualOverride(userAgent, override, operatorNote, actor);
+				model.addAttribute("drilldown", userAgentMemoryService.getUserAgentDrilldown(userAgent, hours));
+			}
+			model.addAttribute("uaModalSuccess", "Saved override '" + override.displayName() + "' to persistent User-Agent memory.");
+			if (response != null) {
+				response.setHeader("HX-Trigger", "uaChanged");
+			}
+		} catch (Exception e) {
+			model.addAttribute("uaModalError", "Failed to save User-Agent override: " + e.getMessage());
+			if (userAgentMemoryService != null) {
+				model.addAttribute("drilldown", userAgentMemoryService.getUserAgentDrilldown(userAgent, hours));
+			}
+		}
+		model.addAttribute("overrideOptions", org.henbru.antidos.collector.model.UserAgentManualOverride.values());
+		return "fragments/ua-drilldown-modal :: uaDrilldownModal";
+	}
+
+	@PostMapping("/analytics/user-agents/settings")
+	public String updateUserAgentHeuristicSettings(
+			@RequestParam(name = "internalImmunityMinRatioPct", defaultValue = "5.0") double internalImmunityMinRatioPct,
+			@RequestParam(name = "internalImmunityMinRequests", defaultValue = "100") long internalImmunityMinRequests,
+			@RequestParam(name = "searchEngineImmunityMinRatioPct", defaultValue = "50.0") double searchEngineImmunityMinRatioPct,
+			@RequestParam(name = "authImmunityMinSampleRatioPct", defaultValue = "1.0") double authImmunityMinSampleRatioPct,
+			@RequestParam(name = "authImmunityMinSlotRatioPct", defaultValue = "2.0") double authImmunityMinSlotRatioPct,
+			@RequestParam(name = "spreadMinRequests", defaultValue = "10000") long spreadMinRequests,
+			@RequestParam(name = "spreadMinSubnets", defaultValue = "200") int spreadMinSubnets,
+			@RequestParam(name = "spreadMinAsns", defaultValue = "30") int spreadMinAsns,
+			@RequestParam(name = "spreadMaxAvgSlotRequests", defaultValue = "10.0") double spreadMaxAvgSlotRequests,
+			@RequestParam(name = "spreadMinVersionLagMajors", defaultValue = "2") int spreadMinVersionLagMajors,
+			@RequestParam(name = "correlatedMinRequests", defaultValue = "2000") long correlatedMinRequests,
+			@RequestParam(name = "correlatedMinIncidentRatioPct", defaultValue = "30.0") double correlatedMinIncidentRatioPct,
+			@RequestParam(name = "correlatedMinMitigatedAsnRatioPct", defaultValue = "40.0") double correlatedMinMitigatedAsnRatioPct,
+			@RequestParam(name = "correlatedMinUaMismatchRatioPct", defaultValue = "20.0") double correlatedMinUaMismatchRatioPct,
+			@RequestParam(name = "datacenterMinRequests", defaultValue = "5000") long datacenterMinRequests,
+			@RequestParam(name = "datacenterMinRatioPct", defaultValue = "80.0") double datacenterMinRatioPct,
+			@RequestParam(name = "hours", defaultValue = "24") int hours,
+			@RequestParam(name = "servers", required = false) List<String> servers,
+			@RequestParam(name = "valves", required = false) List<String> valves,
+			HttpServletResponse response,
+			Model model) {
+		if (!properties.canPerformSystemAdmin()
+				|| org.henbru.antidos.collector.security.CollectorAuthContext.isAiAgent()) {
+			if (response != null) {
+				response.setStatus(org.springframework.http.HttpStatus.FORBIDDEN.value());
+			}
+			model.addAttribute("uaFeedbackError",
+					"Updating User-Agent heuristic thresholds requires FULL admin mode (current: " + properties.getEffectiveMode() + ").");
+			populateAnalyticsModel(servers, valves, hours, null, null, "useragents", "SUBNET", "ALL", "ALL", model);
+			return "fragments/analytics-overview :: analyticsCard";
+		}
+
+		try {
+			if (userAgentMemoryService != null) {
+				String actor = org.henbru.antidos.collector.security.CollectorAuthContext.getEffectiveActor("ADMIN");
+				var next = new org.henbru.antidos.collector.model.EffectiveUaHeuristicSettings(
+						internalImmunityMinRatioPct,
+						internalImmunityMinRequests,
+						searchEngineImmunityMinRatioPct,
+						authImmunityMinSampleRatioPct,
+						authImmunityMinSlotRatioPct,
+						spreadMinRequests,
+						spreadMinSubnets,
+						spreadMinAsns,
+						spreadMaxAvgSlotRequests,
+						spreadMinVersionLagMajors,
+						correlatedMinRequests,
+						correlatedMinIncidentRatioPct,
+						correlatedMinMitigatedAsnRatioPct,
+						correlatedMinUaMismatchRatioPct,
+						datacenterMinRequests,
+						datacenterMinRatioPct,
+						true
+				);
+				userAgentMemoryService.updateSettings(next, actor);
+				model.addAttribute("uaFeedbackSuccess", "User-Agent 3-pillar heuristic & immunity thresholds saved to system_settings.");
+			}
+		} catch (Exception e) {
+			model.addAttribute("uaFeedbackError", "Failed to save User-Agent heuristic thresholds: " + e.getMessage());
+		}
+		populateAnalyticsModel(servers, valves, hours, null, null, "useragents", "SUBNET", "ALL", "ALL", model);
+		return "fragments/analytics-overview :: analyticsCard";
+	}
+
+	@PostMapping("/analytics/user-agents/settings/reset")
+	public String resetUserAgentHeuristicSettings(
+			@RequestParam(name = "hours", defaultValue = "24") int hours,
+			@RequestParam(name = "servers", required = false) List<String> servers,
+			@RequestParam(name = "valves", required = false) List<String> valves,
+			HttpServletResponse response,
+			Model model) {
+		if (!properties.canPerformSystemAdmin()
+				|| org.henbru.antidos.collector.security.CollectorAuthContext.isAiAgent()) {
+			if (response != null) {
+				response.setStatus(org.springframework.http.HttpStatus.FORBIDDEN.value());
+			}
+			model.addAttribute("uaFeedbackError",
+					"Resetting User-Agent heuristic thresholds requires FULL admin mode (current: " + properties.getEffectiveMode() + ").");
+			populateAnalyticsModel(servers, valves, hours, null, null, "useragents", "SUBNET", "ALL", "ALL", model);
+			return "fragments/analytics-overview :: analyticsCard";
+		}
+		try {
+			if (userAgentMemoryService != null) {
+				String actor = org.henbru.antidos.collector.security.CollectorAuthContext.getEffectiveActor("ADMIN");
+				userAgentMemoryService.resetToDefaults(actor);
+				model.addAttribute("uaFeedbackSuccess", "User-Agent heuristic thresholds reset to YAML defaults.");
+			}
+		} catch (Exception e) {
+			model.addAttribute("uaFeedbackError", "Failed to reset thresholds: " + e.getMessage());
+		}
+		populateAnalyticsModel(servers, valves, hours, null, null, "useragents", "SUBNET", "ALL", "ALL", model);
+		return "fragments/analytics-overview :: analyticsCard";
 	}
 
 	private void populateAnalyticsModel(

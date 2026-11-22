@@ -1,6 +1,7 @@
 package org.henbru.antidos.collector;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +44,15 @@ class DashboardControllerTest {
 
 	@Autowired
 	private org.henbru.antidos.collector.storage.SubnetRollupRepository subnetRollupRepository;
+
+	@Autowired
+	private org.henbru.antidos.collector.config.CollectorProperties collectorProperties;
+
+	@Autowired
+	private org.henbru.antidos.collector.aggregation.UserAgentMemoryService userAgentMemoryService;
+
+	@Autowired
+	private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
 	@Test
 	void testIndexPageLoads() throws Exception {
@@ -812,6 +822,145 @@ class DashboardControllerTest {
 		mockMvc.perform(get("/fragments/profiles-table"))
 				.andExpect(status().isOk())
 				.andExpect(content().string(not(containsString("/events(clientQuery="))));
+	}
+
+	@Test
+	void testUserAgentsAnalyticsControlsDualStatusAndDrilldown() throws Exception {
+		Instant now = Instant.now().truncatedTo(ChronoUnit.HOURS);
+		Instant bucketStart = now.minus(1, ChronoUnit.HOURS);
+		Instant t1 = bucketStart.plus(15, ChronoUnit.MINUTES);
+		String ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/142.0.0.0 ScraperCheck";
+
+		try {
+			collectorProperties.setMode(org.henbru.antidos.collector.config.CollectorMode.FULL);
+			jdbcTemplate.update("DELETE FROM user_agent_hourly_rollups");
+			jdbcTemplate.update("DELETE FROM dim_user_agent");
+			jdbcTemplate.update("DELETE FROM client_events");
+			jdbcTemplate.update("DELETE FROM system_settings WHERE setting_key LIKE 'ua.heuristic.%'");
+
+			clientEventRepository.batchUpsert(List.of(
+					new org.henbru.antidos.collector.model.ClientEvent(
+							null, "Demo-Server", "Limiter", 881L, t1, "198.51.100.70",
+							4, 24, null, null, null, null, "198.51.100.0/24",
+							6000, 0, true, org.henbru.antidos.collector.model.ClientEvent.STATUS_BLOCKED, true, t1,
+							64520L, "Cloud Host Alpha", "DE",
+							org.henbru.antidos.collector.model.ClientType.DATACENTER,
+							org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED,
+							null, 1, 1, 0, 0, 0, "GET", "/portal/course/catalog", ua, false
+					)
+			));
+
+			userAgentMemoryService.aggregateHourlyWindow(bucketStart, now);
+			userAgentMemoryService.refreshProfiles24h();
+			userAgentMemoryService.updateManualOverride(
+					ua,
+					org.henbru.antidos.collector.model.UserAgentManualOverride.ALWAYS_ALLOW,
+					"Verified synthetic probe",
+					"ADMIN:test"
+			);
+
+			// 1. User-Agents tab renders threshold settings panel, dual status, operator note, and modal button
+			mockMvc.perform(get("/analytics").param("tab", "useragents").param("hours", "24"))
+					.andExpect(status().isOk())
+					.andExpect(content().string(containsString("User-Agent 3-Pillar Heuristic &amp; Immunity Thresholds")))
+					.andExpect(content().string(containsString("Always Allowed (Protected)")))
+					.andExpect(content().string(containsString("Auto-Heuristic:")))
+					.andExpect(content().string(containsString("Verified synthetic probe")))
+					.andExpect(content().string(containsString("History &amp; Override")))
+					.andExpect(content().string(containsString("id=\"ua-drilldown-modal-container\"")));
+
+			// 2. Drilldown modal renders automatic verdict, manual override form, and hourly history
+			mockMvc.perform(get("/analytics/user-agent-drilldown").param("ua", ua).param("hours", "168"))
+					.andExpect(status().isOk())
+					.andExpect(content().string(containsString("id=\"ua-modal-wrapper\"")))
+					.andExpect(content().string(containsString("Automatic 3-Pillar Heuristic Verdict")))
+					.andExpect(content().string(containsString("Manual Override &amp; Operator Note")))
+					.andExpect(content().string(containsString("Chronological Hourly Evaluation History")));
+
+			// 3. Updating manual override succeeds in FULL and OPERATOR modes, and emits HX-Trigger: uaChanged
+			mockMvc.perform(post("/analytics/user-agents/override")
+							.param("ua", ua)
+							.param("manualOverride", "MANUAL_BLOCK")
+							.param("operatorNote", "Testing manual block candidate")
+							.param("hours", "168"))
+					.andExpect(status().isOk())
+					.andExpect(header().string("HX-Trigger", "uaChanged"))
+					.andExpect(content().string(containsString("Manual Block Candidate")))
+					.andExpect(content().string(containsString("Testing manual block candidate")));
+
+			collectorProperties.setMode(org.henbru.antidos.collector.config.CollectorMode.OPERATOR);
+			mockMvc.perform(post("/analytics/user-agents/override")
+							.param("ua", ua)
+							.param("manualOverride", "OBSERVE_ONLY")
+							.param("operatorNote", "Operator watchlist")
+							.param("hours", "168"))
+					.andExpect(status().isOk())
+					.andExpect(header().string("HX-Trigger", "uaChanged"))
+					.andExpect(content().string(containsString("Observe Only (Watchlist)")));
+
+			// 4. Updating manual override is forbidden in VIEWER mode
+			collectorProperties.setMode(org.henbru.antidos.collector.config.CollectorMode.VIEWER);
+			mockMvc.perform(post("/analytics/user-agents/override")
+							.param("ua", ua)
+							.param("manualOverride", "AUTO")
+							.param("operatorNote", "Denied"))
+					.andExpect(status().isForbidden());
+
+			// 5. Updating/resetting global thresholds requires FULL mode (403 in OPERATOR/VIEWER)
+			collectorProperties.setMode(org.henbru.antidos.collector.config.CollectorMode.OPERATOR);
+			mockMvc.perform(post("/analytics/user-agents/settings")
+							.param("internalImmunityMinRatioPct", "8.0")
+							.param("internalImmunityMinRequests", "120")
+							.param("searchEngineImmunityMinRatioPct", "55.0")
+							.param("authImmunityMinSampleRatioPct", "1.5")
+							.param("authImmunityMinSlotRatioPct", "2.5")
+							.param("spreadMinRequests", "15000")
+							.param("spreadMinSubnets", "300")
+							.param("spreadMinAsns", "45")
+							.param("spreadMaxAvgSlotRequests", "9.0")
+							.param("spreadMinVersionLagMajors", "2")
+							.param("correlatedMinRequests", "2500")
+							.param("correlatedMinIncidentRatioPct", "30.0")
+							.param("correlatedMinMitigatedAsnRatioPct", "40.0")
+							.param("correlatedMinUaMismatchRatioPct", "20.0")
+							.param("datacenterMinRequests", "6000")
+							.param("datacenterMinRatioPct", "85.0")
+							.param("hours", "24"))
+					.andExpect(status().isForbidden());
+
+			collectorProperties.setMode(org.henbru.antidos.collector.config.CollectorMode.FULL);
+			mockMvc.perform(post("/analytics/user-agents/settings")
+							.param("internalImmunityMinRatioPct", "8.0")
+							.param("internalImmunityMinRequests", "120")
+							.param("searchEngineImmunityMinRatioPct", "55.0")
+							.param("authImmunityMinSampleRatioPct", "1.5")
+							.param("authImmunityMinSlotRatioPct", "2.5")
+							.param("spreadMinRequests", "15000")
+							.param("spreadMinSubnets", "300")
+							.param("spreadMinAsns", "45")
+							.param("spreadMaxAvgSlotRequests", "9.0")
+							.param("spreadMinVersionLagMajors", "2")
+							.param("correlatedMinRequests", "2500")
+							.param("correlatedMinIncidentRatioPct", "30.0")
+							.param("correlatedMinMitigatedAsnRatioPct", "40.0")
+							.param("correlatedMinUaMismatchRatioPct", "20.0")
+							.param("datacenterMinRequests", "6000")
+							.param("datacenterMinRatioPct", "85.0")
+							.param("hours", "24"))
+					.andExpect(status().isOk())
+					.andExpect(content().string(containsString("Custom DB Overrides Active")))
+					.andExpect(content().string(containsString("15,000")));
+
+			mockMvc.perform(post("/analytics/user-agents/settings/reset")
+							.param("hours", "24"))
+					.andExpect(status().isOk())
+					.andExpect(content().string(containsString("reset to YAML defaults")));
+		} finally {
+			collectorProperties.setMode(org.henbru.antidos.collector.config.CollectorMode.FULL);
+			jdbcTemplate.update("DELETE FROM system_settings WHERE setting_key LIKE 'ua.heuristic.%'");
+			jdbcTemplate.update("DELETE FROM user_agent_hourly_rollups");
+			jdbcTemplate.update("DELETE FROM dim_user_agent");
+		}
 	}
 }
 

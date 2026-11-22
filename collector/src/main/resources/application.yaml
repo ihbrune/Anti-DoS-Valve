@@ -186,4 +186,22 @@ collector:
       - "26.0"
       - "18.2"
       - "17.6"
+  user-agent-heuristics:
+    internal-immunity-min-ratio-pct: ${COLLECTOR_UA_INTERNAL_MIN_RATIO_PCT:5.0}
+    internal-immunity-min-requests: ${COLLECTOR_UA_INTERNAL_MIN_REQUESTS:100}
+    search-engine-immunity-min-ratio-pct: ${COLLECTOR_UA_SEARCH_ENGINE_MIN_RATIO_PCT:50.0}
+    auth-immunity-min-sample-ratio-pct: ${COLLECTOR_UA_AUTH_MIN_SAMPLE_RATIO_PCT:1.0}
+    auth-immunity-min-slot-ratio-pct: ${COLLECTOR_UA_AUTH_MIN_SLOT_RATIO_PCT:2.0}
+    spread-min-requests: ${COLLECTOR_UA_SPREAD_MIN_REQUESTS:10000}
+    spread-min-subnets: ${COLLECTOR_UA_SPREAD_MIN_SUBNETS:200}
+    spread-min-asns: ${COLLECTOR_UA_SPREAD_MIN_ASNS:30}
+    spread-max-avg-slot-requests: ${COLLECTOR_UA_SPREAD_MAX_AVG_SLOT_REQUESTS:10.0}
+    spread-min-version-lag-majors: ${COLLECTOR_UA_SPREAD_MIN_VERSION_LAG_MAJORS:2}
+    correlated-min-requests: ${COLLECTOR_UA_CORRELATED_MIN_REQUESTS:2000}
+    correlated-min-incident-ratio-pct: ${COLLECTOR_UA_CORRELATED_MIN_INCIDENT_RATIO_PCT:30.0}
+    correlated-min-mitigated-asn-ratio-pct: ${COLLECTOR_UA_CORRELATED_MIN_MITIGATED_ASN_RATIO_PCT:40.0}
+    correlated-min-ua-mismatch-ratio-pct: ${COLLECTOR_UA_CORRELATED_MIN_MISMATCH_RATIO_PCT:20.0}
+    datacenter-min-requests: ${COLLECTOR_UA_DATACENTER_MIN_REQUESTS:5000}
+    datacenter-min-ratio-pct: ${COLLECTOR_UA_DATACENTER_MIN_RATIO_PCT:80.0}
+
 

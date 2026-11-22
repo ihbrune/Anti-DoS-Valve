@@ -706,6 +706,29 @@ All parameters can be configured via `collector-config.yaml` or overridden via e
 | `safari-versions` | `COLLECTOR_BROWSER_SAFARI_VERSIONS` | `26.2 STP, 26.1, 26.0, 18.2, 17.6` | Configurable static version list for OS-bound Apple Safari releases. |
 | `sync-interval-hours` | `COLLECTOR_BROWSER_SYNC_INTERVAL_HOURS` | `24` | Background synchronization interval (in hours) for upstream vendor feeds. |
 
+### User-Agent 3-Pillar Heuristic & Memory (`collector.user-agent-heuristics.*`)
+
+Thresholds defined here serve as baseline defaults and can be overridden live in the Web UI under `/analytics?tab=useragents` (persisted in `system_settings`; restricted to `FULL` mode):
+
+| YAML Property | Default | Description |
+|---|---|---|
+| `internal-immunity-min-ratio-pct` | `5.0` | Minimum percentage of traffic from `PRIVATE_NETWORK` / `INTERNAL_NETWORK` to grant `IMMUNE_INTERNAL`. |
+| `internal-immunity-min-requests` | `100` | Absolute internal request volume threshold granting `IMMUNE_INTERNAL` regardless of share. |
+| `search-engine-immunity-min-ratio-pct` | `50.0` | Minimum share of verified `SEARCH_ENGINE` IP feed requests to grant `IMMUNE_SEARCH_ENGINE`. |
+| `auth-immunity-min-sample-ratio-pct` | `1.0` | Minimum authenticated sample ratio (%) for Stage-0 `IMMUNE_AUTHENTICATED` exemption. |
+| `auth-immunity-min-slot-ratio-pct` | `2.0` | Minimum slot-level `authenticated_count` share (%) for Stage-0 `IMMUNE_AUTHENTICATED` exemption. |
+| `spread-min-requests` | `10000` | Pillar 1 minimum external unauthenticated request volume. |
+| `spread-min-subnets` | `200` | Pillar 1 minimum distinct `/24` or `/64` subnets. |
+| `spread-min-asns` | `30` | Pillar 1 minimum distinct Autonomous Systems. |
+| `spread-max-avg-slot-requests` | `10.0` | Pillar 1 maximum average requests per slot identifying low-and-slow proxy distribution. |
+| `spread-min-version-lag-majors` | `2` | Pillar 1 minimum browser major version lag (combined with ultra-spread scale). |
+| `correlated-min-requests` | `2000` | Pillar 2 minimum external request volume for Guilt-by-Association evaluation. |
+| `correlated-min-incident-ratio-pct` | `30.0` | Pillar 2 minimum rate-limiting incident event share (%). |
+| `correlated-min-mitigated-asn-ratio-pct` | `40.0` | Pillar 2 minimum request share originating from ASNs with active or recent mitigations (%). |
+| `correlated-min-ua-mismatch-ratio-pct` | `20.0` | Pillar 2 minimum request share with Visitor-Cookie User-Agent mismatches (%). |
+| `datacenter-min-requests` | `5000` | Pillar 3 minimum external unauthenticated request volume. |
+| `datacenter-min-ratio-pct` | `80.0` | Pillar 3 minimum request share from datacenter or Tor ASNs (%). |
+
 ---
 
 ## Relational Database Schema & Data Model
@@ -771,13 +794,13 @@ The database separates real-time transient telemetry, persistent subnet aggregat
              | computed into (30d)   | N              | N
              v                       v                v
  +-----------------------+  +----------------+  +---------------------+
- |    subnet_profiles    |  |rollup_signat...|  | network_entity_match|
+ |    subnet_profiles    |  | dim_user_agent |  | network_entity_match|
  +-----------------------+  +----------------+  +---------------------+
  | PK subnet_group       |  | PK id          |  | PK id               |
- |    first/last_seen_at |  | FK rollup_id   |  | FK entity_id        |
- |    days_dormant       |  |    ua_id       |  | FK range_id         |
- |    baseline_daily_avg |  |    req_count   |  +----------+----------+
- |    peak_daily_reqs    |  +----------------+             | N
+ |    first/last_seen_at |  | UQ ua_hash_256 |  | FK entity_id        |
+ |    days_dormant       |  |    ua_hash_32  |  | FK range_id         |
+ |    baseline_daily_avg |  |    auto_verdict|  +----------+----------+
+ |    peak_daily_reqs    |  | manual_override|             | N
  |    total/last_24h_reqs|                                 |
  |    total/24h_blocked  |  +-----------------------+      | 1
  |    total/24h_marked   |  |     daily_reports     |  +---v-----------------+
@@ -822,7 +845,7 @@ The database separates real-time transient telemetry, persistent subnet aggregat
 6. **`subnet_profiles`:** Long-term frequency baselines (30-day lookback with dynamic 3-phase calibration), dormancy periods, 24-hour surge multipliers, lifetime and 24h blocked vs. marked request totals (`total_blocked_requests`, `last_24h_blocked_requests`, `total_marked_requests`, `last_24h_marked_requests`), and 24h visitor cookie / authentication ratios per subnet partition for rapid detection of dormant breakouts and residential proxy sweeps.
 7. **`daily_reports`:** Permanent daily operational summaries (`report_date`, `status`, `total_requests`, `total_blocked`, `total_marked`, `peak_requests_per_sec`, `peak_blocked_per_sec`, `peak_marked_per_sec`, and rendered GFM `markdown_content`) archived prior to raw telemetry retention cleanup.
 8. **`network_annotations`:** Persistent operator knowledge archive, threat notes, and verdict badges (`LEGITIMATE`, `INTERNAL`, `SUSPICIOUS`, `MALICIOUS`, `INFO`) assigned to specific Subnets or ASNs.
-9. **`rollup_signatures`:** Optional User-Agent and client signature dimensions linked to subnet rollups for distributed fingerprinting.
+9. **`dim_user_agent` & `user_agent_hourly_rollups`:** Persistent User-Agent identity catalog (`user_agent_hash` SHA-256 + `ua_hash_32` 32-bit FNV-1a), lifetime and 24h telemetry counters, Stage-0/3-pillar `auto_verdict`, non-overwritable `manual_override` / `operator_note` overrides, and slim hourly evaluation snapshots retained for up to 30 days.
 10. **`network_entity` & `network_entity_match`:** Normalized directory of enriched client IPs and subnets with ASN, geolocation, threat classification, and cross-references to matched threat intelligence ranges.
 11. **`intel_source` & `intel_range`:** Threat intelligence directory containing verified CIDR blocks from search engine bots, commercial AI scrapers, and Tor exit relays.
 12. **`asn_info`:** Autonomous System catalog caching organization names and datacenter / hosting provider classifications.

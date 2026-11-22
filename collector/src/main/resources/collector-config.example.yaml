@@ -256,6 +256,33 @@ collector:
       - "17.6"
 
   # ---------------------------------------------------------------------------
+  # User-Agent 3-Pillar Heuristic & Immunity Thresholds
+  # ---------------------------------------------------------------------------
+  # Defaults can also be tuned live in the web UI (/analytics?tab=useragents)
+  # when running in FULL mode (persisted in system_settings).
+  # user-agent-heuristics:
+  #   # Stage 0: Automatic Immunity Guards
+  #   internal-immunity-min-ratio-pct: 5.0
+  #   internal-immunity-min-requests: 100
+  #   search-engine-immunity-min-ratio-pct: 50.0
+  #   auth-immunity-min-sample-ratio-pct: 1.0
+  #   auth-immunity-min-slot-ratio-pct: 2.0
+  #   # Pillar 1: Ultra-Spread Proxy Botnet
+  #   spread-min-requests: 10000
+  #   spread-min-subnets: 200
+  #   spread-min-asns: 30
+  #   spread-max-avg-slot-requests: 10.0
+  #   spread-min-version-lag-majors: 2
+  #   # Pillar 2: Mitigation / Incident Correlated
+  #   correlated-min-requests: 2000
+  #   correlated-min-incident-ratio-pct: 30.0
+  #   correlated-min-mitigated-asn-ratio-pct: 40.0
+  #   correlated-min-ua-mismatch-ratio-pct: 20.0
+  #   # Pillar 3: Datacenter Zero-Auth Scraper
+  #   datacenter-min-requests: 5000
+  #   datacenter-min-ratio-pct: 80.0
+
+  # ---------------------------------------------------------------------------
   # Security: Multi-Token Authentication, Read API Lockout & AI Guardrails
   # ---------------------------------------------------------------------------
   security:

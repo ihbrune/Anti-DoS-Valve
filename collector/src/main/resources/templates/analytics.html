@@ -121,7 +121,7 @@
 
         <!-- Filter Panel specifically controlling the Visual Analytics -->
         <form id="analytics-filter-form" hx-get="/fragments/analytics-overview" hx-target="#analytics-container"
-            hx-swap="outerHTML" hx-push-url="true" hx-trigger="submit, annotationChanged from:body"
+            hx-swap="outerHTML" hx-push-url="true" hx-trigger="submit, annotationChanged from:body, uaChanged from:body"
             class="filter-panel">
 
             <!-- Hidden inputs preserving the active time window & tab mode -->
@@ -208,6 +208,9 @@
 
         <!-- ASN Hourly Drilldown Modal (loaded dynamically via HTMX) -->
         <div id="asn-drilldown-modal-container"></div>
+
+        <!-- User-Agent Evaluation History & Override Modal (loaded dynamically via HTMX) -->
+        <div id="ua-drilldown-modal-container"></div>
     </div>
 
     <script>
@@ -231,10 +234,21 @@
             document.querySelectorAll('#asn-modal-wrapper').forEach(el => el.remove());
         }
 
+        function closeUaModal(e) {
+            if (e) {
+                if (typeof e.stopPropagation === 'function') e.stopPropagation();
+                if (typeof e.preventDefault === 'function') e.preventDefault();
+            }
+            const c = document.getElementById('ua-drilldown-modal-container');
+            if (c) c.innerHTML = '';
+            document.querySelectorAll('#ua-modal-wrapper').forEach(el => el.remove());
+        }
+
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {
                 closeNoteModal(e);
                 closeAsnModal(e);
+                closeUaModal(e);
             }
         });
 
