@@ -29,19 +29,30 @@
                 <!-- Tab Switcher -->
                 <div class="pills-group" style="margin-bottom: 0;">
                     <button type="button" class="btn" th:classappend="${activeTab == 'charts' ? 'btn-primary' : ''}"
-                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='charts',servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter})}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='charts',servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter},excludeInternal=${excludeInternal},excludeAutomated=${excludeAutomated},endpointStatus=${endpointStatus})}"
                         hx-target="#analytics-container" hx-swap="outerHTML"
                         style="padding: 5px 12px; font-size: 12px;">
                         <span>&#x1F4CA;</span> Timeline &amp; Bot-Mix
                     </button>
                     <button type="button" class="btn" th:classappend="${activeTab == 'scatter' ? 'btn-primary' : ''}"
-                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter})}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='scatter',servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter},excludeInternal=${excludeInternal},excludeAutomated=${excludeAutomated},endpointStatus=${endpointStatus})}"
                         hx-target="#analytics-container" hx-swap="outerHTML"
                         style="padding: 5px 12px; font-size: 12px;">
                         <span>&#x1F3AF;</span> Cluster Scatterplot
                     </button>
+                    <button type="button" class="btn" th:classappend="${activeTab == 'endpoints' ? 'btn-primary' : ''}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='endpoints',servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter},excludeInternal=${excludeInternal},excludeAutomated=${excludeAutomated},endpointStatus=${endpointStatus})}"
+                        hx-target="#analytics-container" hx-swap="outerHTML"
+                        style="padding: 5px 12px; font-size: 12px; position: relative;">
+                        <span>&#x1F3AF;</span> Endpoints
+                        <span
+                            th:if="${analytics != null and analytics.endpoints != null and analytics.endpoints.distinctTargetEndpoints > 0}"
+                            class="badge"
+                            style="background: rgba(255, 255, 255, 0.15); font-size: 10px; padding: 1px 6px; margin-left: 4px;"
+                            th:text="${analytics.endpoints.distinctTargetEndpoints}">42</span>
+                    </button>
                     <button type="button" class="btn" th:classappend="${activeTab == 'useragents' ? 'btn-primary' : ''}"
-                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='useragents',servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter})}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='useragents',servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter},excludeInternal=${excludeInternal},excludeAutomated=${excludeAutomated},endpointStatus=${endpointStatus})}"
                         hx-target="#analytics-container" hx-swap="outerHTML"
                         style="padding: 5px 12px; font-size: 12px; position: relative;">
                         <span>&#x1F50D;</span> User-Agents
@@ -52,7 +63,7 @@
                             th:text="${analytics.userAgents.distinctUserAgents}">12</span>
                     </button>
                     <button type="button" class="btn" th:classappend="${activeTab == 'advisor' ? 'btn-primary' : ''}"
-                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='advisor',servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter})}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='advisor',servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter},excludeInternal=${excludeInternal},excludeAutomated=${excludeAutomated},endpointStatus=${endpointStatus})}"
                         hx-target="#analytics-container" hx-swap="outerHTML"
                         style="padding: 5px 12px; font-size: 12px; position: relative;">
                         <span>&#x1F4A1;</span> Config Advisor
@@ -68,19 +79,19 @@
                 <!-- Time Window Selector -->
                 <div style="display: flex; align-items: center; gap: 6px;">
                     <button type="button" class="btn" th:classappend="${selectedHours == 1 ? 'btn-primary' : ''}"
-                        th:attr="hx-get=@{/fragments/analytics-overview(hours=1,tab=${activeTab},servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter})}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=1,tab=${activeTab},servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter},excludeInternal=${excludeInternal},excludeAutomated=${excludeAutomated},endpointStatus=${endpointStatus})}"
                         hx-target="#analytics-container" hx-swap="outerHTML"
                         style="padding: 4px 10px; font-size: 11px;">1h</button>
                     <button type="button" class="btn" th:classappend="${selectedHours == 6 ? 'btn-primary' : ''}"
-                        th:attr="hx-get=@{/fragments/analytics-overview(hours=6,tab=${activeTab},servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter})}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=6,tab=${activeTab},servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter},excludeInternal=${excludeInternal},excludeAutomated=${excludeAutomated},endpointStatus=${endpointStatus})}"
                         hx-target="#analytics-container" hx-swap="outerHTML"
                         style="padding: 4px 10px; font-size: 11px;">6h</button>
                     <button type="button" class="btn" th:classappend="${selectedHours == 24 ? 'btn-primary' : ''}"
-                        th:attr="hx-get=@{/fragments/analytics-overview(hours=24,tab=${activeTab},servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter})}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=24,tab=${activeTab},servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter},excludeInternal=${excludeInternal},excludeAutomated=${excludeAutomated},endpointStatus=${endpointStatus})}"
                         hx-target="#analytics-container" hx-swap="outerHTML"
                         style="padding: 4px 10px; font-size: 11px;">24h</button>
                     <button type="button" class="btn" th:classappend="${selectedHours == 168 ? 'btn-primary' : ''}"
-                        th:attr="hx-get=@{/fragments/analytics-overview(hours=168,tab=${activeTab},servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter})}"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=168,tab=${activeTab},servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter},excludeInternal=${excludeInternal},excludeAutomated=${excludeAutomated},endpointStatus=${endpointStatus})}"
                         hx-target="#analytics-container" hx-swap="outerHTML"
                         style="padding: 4px 10px; font-size: 11px;">7d</button>
                 </div>
@@ -128,7 +139,7 @@
         </div>
 
         <!-- View A: Timeline & Bot-Mix Charts (Step 1) -->
-        <div th:if="${analytics != null and (!analytics.timeline.empty or !analytics.composition.empty) and activeTab != 'scatter' and activeTab != 'advisor' and activeTab != 'useragents'}"
+        <div th:if="${analytics != null and (!analytics.timeline.empty or !analytics.composition.empty) and activeTab != 'scatter' and activeTab != 'advisor' and activeTab != 'useragents' and activeTab != 'endpoints'}"
             style="display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr); gap: 20px; align-items: stretch;">
 
             <!-- Left Column: Traffic & Attack Timeline -->
@@ -1560,6 +1571,182 @@
                 </div>
             </div>
 
+        </div>
+
+        <!-- View E: Endpoint Forensics & URL Hotspots -->
+        <div th:if="${analytics != null and activeTab == 'endpoints'}" style="display: flex; flex-direction: column; gap: 20px;">
+            <!-- KPI Summary Cards -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px;">
+                <div class="stat-card" style="padding: 16px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                    <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Sampled Endpoint Traffic</div>
+                    <div style="font-size: 22px; font-weight: 800; color: var(--text-primary); margin-top: 4px;"
+                        th:text="${analytics.endpoints != null ? #numbers.formatInteger(analytics.endpoints.totalSampledRequests, 1, 'POINT') : '0'}">124,500</div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                        <span>Across fleet sampled requests</span>
+                    </div>
+                </div>
+
+                <div class="stat-card" style="padding: 16px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                    <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Internal / Automated Traffic</div>
+                    <div style="font-size: 22px; font-weight: 800; color: var(--text-primary); margin-top: 4px;"
+                        th:text="${analytics.endpoints != null ? #numbers.formatInteger(analytics.endpoints.totalInternalRequests, 1, 'POINT') : '0'}">34,100</div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                        <span th:if="${analytics.endpoints != null and analytics.endpoints.overallInternalPct() > 0}" class="badge badge-secondary" style="font-size: 10px;"
+                            th:text="${#numbers.formatDecimal(analytics.endpoints.overallInternalPct(), 1, 1)} + '% of sampled volume'">28.4%</span>
+                        <span th:unless="${analytics.endpoints != null and analytics.endpoints.overallInternalPct() > 0}">0% internal</span>
+                    </div>
+                </div>
+
+                <div class="stat-card" style="padding: 16px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                    <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Blocked Endpoint Attacks</div>
+                    <div style="font-size: 22px; font-weight: 800; margin-top: 4px;"
+                        th:style="${analytics.endpoints != null and analytics.endpoints.totalBlockedRequests > 0 ? 'color: var(--color-danger);' : 'color: var(--color-success);'}"
+                        th:text="${analytics.endpoints != null ? #numbers.formatInteger(analytics.endpoints.totalBlockedRequests, 1, 'POINT') : '0'}">1,240</div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                        <span th:if="${analytics.endpoints != null and analytics.endpoints.totalSampledRequests > 0 and analytics.endpoints.totalBlockedRequests > 0}"
+                            style="color: var(--color-danger);"
+                            th:text="${#numbers.formatDecimal(analytics.endpoints.totalBlockedRequests * 100.0 / analytics.endpoints.totalSampledRequests, 1, 1)} + '% attack ratio'">1.2%</span>
+                        <span th:unless="${analytics.endpoints != null and analytics.endpoints.totalBlockedRequests > 0}">0 attacks blocked</span>
+                    </div>
+                </div>
+
+                <div class="stat-card" style="padding: 16px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                    <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Distinct Target Endpoints</div>
+                    <div style="font-size: 22px; font-weight: 800; color: var(--text-primary); margin-top: 4px;"
+                        th:text="${analytics.endpoints != null ? analytics.endpoints.distinctTargetEndpoints : 0}">42</div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                        <span>Ranked by request volume</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filter & Controls Toolbar -->
+            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+                <div style="display: flex; align-items: center; gap: 18px; flex-wrap: wrap;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer; user-select: none;">
+                        <input type="checkbox" id="endpoint-exclude-internal"
+                            th:checked="${excludeInternal}"
+                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='endpoints',servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter},excludeInternal=${!excludeInternal},excludeAutomated=${excludeAutomated},endpointStatus=${endpointStatus})}"
+                            hx-target="#analytics-container" hx-swap="outerHTML" style="cursor: pointer;">
+                        <span>Exclude Internal Networks (RFC 1918 / Campus)</span>
+                    </label>
+
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer; user-select: none;">
+                        <input type="checkbox" id="endpoint-exclude-automated"
+                            th:checked="${excludeAutomated}"
+                            th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='endpoints',servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter},excludeInternal=${excludeInternal},excludeAutomated=${!excludeAutomated},endpointStatus=${endpointStatus})}"
+                            hx-target="#analytics-container" hx-swap="outerHTML" style="cursor: pointer;">
+                        <span>Exclude Automated Background Services (Door displays, CMS sync, Health)</span>
+                    </label>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 12px; color: var(--text-muted);">Status Filter:</span>
+                    <select class="form-control" style="font-size: 12px; padding: 4px 8px; border-radius: var(--radius-sm);"
+                        th:attr="hx-get=@{/fragments/analytics-overview(hours=${selectedHours},tab='endpoints',servers=${selectedServers},valves=${selectedValves},scatterGroupBy=${scatterGroupBy},scatterTrafficFilter=${scatterTrafficFilter},scatterAuthFilter=${scatterAuthFilter},excludeInternal=${excludeInternal},excludeAutomated=${excludeAutomated})}"
+                        name="endpointStatus"
+                        hx-include="this"
+                        hx-target="#analytics-container" hx-swap="outerHTML">
+                        <option value="ALL" th:selected="${endpointStatus == 'ALL'}">All Traffic</option>
+                        <option value="BLOCKED" th:selected="${endpointStatus == 'BLOCKED'}">Blocked Attacks Only</option>
+                        <option value="MARKED" th:selected="${endpointStatus == 'MARKED'}">Marked Requests Only</option>
+                        <option value="ACTIVE" th:selected="${endpointStatus == 'ACTIVE'}">Active Traffic Only</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Endpoints Hotspots Table Card -->
+            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow: hidden;">
+                <div style="padding: 14px 18px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-weight: 700; font-size: 13.5px; display: flex; align-items: center; gap: 8px;">
+                        <span>&#x1F3AF;</span> Top Target Endpoints &amp; Hotspots
+                        <span th:if="${analytics.endpoints != null and !analytics.endpoints.endpoints.empty}" class="badge badge-info"
+                            style="font-size: 11px;" th:text="${analytics.endpoints.endpoints.size()} + ' displayed'">25</span>
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-muted);">
+                        Sampling-based URL aggregation normalized by canonical route
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table" style="margin-bottom: 0; font-size: 12.5px;">
+                        <thead>
+                            <tr>
+                                <th>Target Endpoint</th>
+                                <th style="text-align: right;">Total Requests</th>
+                                <th>Status Breakdown</th>
+                                <th style="text-align: right;">Auth %</th>
+                                <th style="text-align: right;">Internal %</th>
+                                <th style="text-align: center;">Subnets / UAs</th>
+                                <th style="text-align: center;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:if="${analytics.endpoints == null or analytics.endpoints.endpoints.empty}">
+                                <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 36px 20px;">
+                                    <div style="font-size: 24px; margin-bottom: 6px;">&#x1F50D;</div>
+                                    <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">No Endpoints Matched Filter Criteria</div>
+                                    <div style="font-size: 12px;">Try adjusting the lookback window or toggling internal / automated filters above.</div>
+                                </td>
+                            </tr>
+                            <tr th:each="ep : ${analytics.endpoints.endpoints}">
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                        <span class="badge"
+                                            th:classappend="${ep.sampleMethod == 'POST' ? 'badge-warning' : (ep.sampleMethod == 'DELETE' ? 'badge-danger' : 'badge-info')}"
+                                            style="font-size: 11px; font-weight: 700; font-family: monospace;"
+                                            th:text="${ep.sampleMethod}">GET</span>
+                                        <span style="font-family: monospace; font-size: 12.5px; font-weight: 600; color: var(--text-primary);"
+                                            th:text="${ep.cleanEndpoint}">/portal/course/catalog</span>
+                                        <span th:if="${ep.isAutomatedService}" class="badge badge-secondary"
+                                            style="font-size: 10px; background: rgba(148, 163, 184, 0.15);"
+                                            title="Matches automated background service prefix or high-internal ratio">🤖 Automated</span>
+                                        <span th:if="${!ep.isAutomatedService and ep.internalRatioPct >= 50.0}" class="badge badge-secondary"
+                                            style="font-size: 10px;"
+                                            title="Predominantly internal traffic">🏢 Internal Heavy</span>
+                                    </div>
+                                </td>
+                                <td style="text-align: right; font-weight: 800;"
+                                    th:text="${#numbers.formatInteger(ep.totalRequests, 1, 'POINT')}">14,200</td>
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 6px; font-size: 11px;">
+                                        <span th:if="${ep.blockedRequests > 0}" style="color: var(--color-danger); font-weight: 700;"
+                                            th:text="${#numbers.formatInteger(ep.blockedRequests, 1, 'POINT')} + ' blk'">50 blk</span>
+                                        <span th:if="${ep.markedRequests > 0}" style="color: var(--color-purple); font-weight: 600;"
+                                            th:text="${#numbers.formatInteger(ep.markedRequests, 1, 'POINT')} + ' mrk'">10 mrk</span>
+                                        <span style="color: var(--color-success);"
+                                            th:text="${#numbers.formatInteger(ep.activeRequests, 1, 'POINT')} + ' act'">14,140 act</span>
+                                    </div>
+                                </td>
+                                <td style="text-align: right;">
+                                    <span th:if="${ep.authRatioPct > 0}" style="color: var(--color-primary); font-weight: 600;"
+                                        th:text="${#numbers.formatDecimal(ep.authRatioPct, 1, 1)} + '%'">15.2%</span>
+                                    <span th:if="${ep.authRatioPct == 0}" style="color: var(--text-muted);">-</span>
+                                </td>
+                                <td style="text-align: right;">
+                                    <span th:if="${ep.internalRatioPct > 0}" style="font-weight: 600;"
+                                        th:text="${#numbers.formatDecimal(ep.internalRatioPct, 1, 1)} + '%'">8.4%</span>
+                                    <span th:if="${ep.internalRatioPct == 0}" style="color: var(--text-muted);">-</span>
+                                </td>
+                                <td style="text-align: center; color: var(--text-muted); font-size: 11.5px;">
+                                    <span th:text="${ep.distinctSubnets} + ' subnets'">12 subnets</span>
+                                    &bull;
+                                    <span th:text="${ep.distinctUserAgents} + ' UAs'">4 UAs</span>
+                                </td>
+                                <td style="text-align: center;">
+                                    <button type="button" class="btn btn-secondary"
+                                        th:attr="hx-get=@{/analytics/endpoint-drilldown(endpoint=${ep.cleanEndpoint},method=${ep.sampleMethod},hours=${selectedHours},servers=${selectedServers},valves=${selectedValves})}"
+                                        hx-target="#endpoint-drilldown-modal-container" hx-swap="innerHTML"
+                                        onclick="document.getElementById('endpoint-drilldown-modal-container').style.display='block'"
+                                        style="padding: 3px 9px; font-size: 11px;">
+                                        <span>&#x1F50D;</span> Inspect
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
 
         <!-- Hidden Raw JSON container for safe chart initialization (must use th:utext to avoid HTML entity encoding &quot; in script tags) -->

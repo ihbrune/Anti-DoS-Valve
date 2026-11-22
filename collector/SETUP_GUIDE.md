@@ -730,6 +730,15 @@ Thresholds defined here serve as baseline defaults and can be overridden live in
 | `datacenter-min-requests` | `1500` | Pillar 3 minimum external unauthenticated request volume. |
 | `datacenter-min-ratio-pct` | `80.0` | Pillar 3 minimum request share from datacenter or Tor ASNs (%). |
 
+### Endpoint Forensics & URL Hotspot Analysis (`collector.endpoint-analytics.*`)
+
+| YAML Property (`collector.*`) | Environment Variable | Default | Description |
+|---|---|---|---|
+| `endpoint-analytics.default-exclude-automated` | `COLLECTOR_ENDPOINT_ANALYTICS_DEFAULT_EXCLUDE_AUTOMATED` | `true` | Default state of the 'Exclude Automated Background Services' toggle in dashboard & API. |
+| `endpoint-analytics.default-exclude-internal` | `COLLECTOR_ENDPOINT_ANALYTICS_DEFAULT_EXCLUDE_INTERNAL` | `false` | Default state of the 'Exclude Internal Networks' toggle. |
+| `endpoint-analytics.internal-threshold-percent` | `COLLECTOR_ENDPOINT_ANALYTICS_INTERNAL_THRESHOLD_PERCENT` | `90.0` | Traffic share (%) above which an endpoint is classified as internal. |
+| `endpoint-analytics.excluded-prefixes` | - | `[/display, /api/room, /sync, /health, /healthz, /actuator, /ping, /status]` | Path prefixes excluded when automated service filtering is active (e.g. digital door displays, CMS sync, health probes). |
+
 ---
 
 ## Relational Database Schema & Data Model

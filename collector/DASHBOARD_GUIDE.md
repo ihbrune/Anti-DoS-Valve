@@ -348,7 +348,27 @@ When reviewing User-Agent telemetry during distributed scraping campaigns, opera
 
 ---
 
-### 7. Practical Investigation Workflows
+### 7. Endpoint Forensics & URL Hotspot Analysis (`tab=endpoints`)
+
+The **Endpoints** focus tab leverages the Valve's priority-based active and blocked URL sampling to aggregate, normalize, and rank the top targeted endpoints (routes) across the entire server fleet.
+
+#### Why Endpoint Hotspot Analysis is Critical
+During high-traffic periods and scraping incidents, operators need immediate clarity on which specific routes or API endpoints are being hammered or scanned. However, raw request metrics are often heavily distorted by internal applications — such as IoT room displays / digital door signs, internal CMS replication/sync jobs, or automated load-balancer health checks — which can easily generate hundreds of thousands of requests per day.
+
+The Endpoint Forensics engine solves this by offering:
+1. **Canonical URI Normalization:** Automatically strips matrix parameters (`;jsessionid=...`), query strings (`?...`), redundant slashes, and whitespace, grouping related variants (e.g. `/portal/course/catalog;jsessionid=123` and `/portal/course/catalog?dept=cs`) into their clean canonical route (`/portal/course/catalog`).
+2. **Internal Traffic Exclusion:** Filter out RFC 1918 private subnets (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`) and configured campus network ranges with a single toggle.
+3. **Automated Background Service Filtering:** Automatically isolates and flags known internal background tasks (e.g. `/display`, `/api/room`, `/sync`, `/health`, `/actuator`, `/ping`) as well as routes with $\ge 90\%$ internal traffic share (`🤖 Automated` badge), preventing internal systems from distorting security analytics.
+4. **Interactive Deep-Dive Drilldown:** Clicking **Inspect** on any hotspot route opens the **Endpoint Forensic Drilldown Modal**, displaying:
+   * **KPIs:** Total Sampled Volume, Blocked Attacks (count and attack ratio), Internal Volume, and Authenticated User Share.
+   * **Top Client Subnets & ASNs:** The top Autonomous Systems and /24 subnets hitting this specific endpoint, along with their Client Types (`DATACENTER`, `RESIDENTIAL`, `INTERNAL`) and attack metrics.
+   * **Top User-Agents:** The specific User-Agent strings targeting the endpoint, flagged with their Session Attributes (`Authenticated`, `Returning Visitor`, or `Cookieless`).
+
+* Programmatic access is available via REST at `/api/v1/analytics/endpoints` and `/api/v1/analytics/endpoints/drilldown`.
+
+---
+
+### 8. Practical Investigation Workflows
 
 #### Workflow A: Unmasking a Stealth Residential Scraping Wave
 1. Navigate to `/analytics` and select the **24 Hours** or **7 Days** time horizon.

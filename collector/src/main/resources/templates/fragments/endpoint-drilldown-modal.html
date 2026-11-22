@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<body>
+
+    <!-- Fragment: endpointDrilldownModal -->
+    <div th:fragment="endpointDrilldownModal" id="endpoint-modal-wrapper" class="note-modal-overlay" style="display: flex;">
+        <div class="note-modal-backdrop" onclick="closeEndpointModal(event)"></div>
+
+        <div class="note-modal-dialog" style="max-width: 960px; width: 95%; max-height: 90vh; overflow-y: auto;" role="dialog" aria-modal="true">
+            <!-- Modal Header -->
+            <div class="note-modal-header" style="display: flex; justify-content: space-between; align-items: flex-start; padding: 16px 20px; border-bottom: 1px solid var(--border-color);">
+                <div>
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <span class="badge"
+                            th:classappend="${drilldown.sampleMethod == 'POST' ? 'badge-warning' : (drilldown.sampleMethod == 'DELETE' ? 'badge-danger' : 'badge-info')}"
+                            style="font-size: 13px; font-weight: 700; font-family: monospace;"
+                            th:text="${drilldown.sampleMethod}">GET</span>
+                        <h3 style="margin: 0; font-size: 17px; font-weight: 700; color: var(--text-primary); font-family: monospace;"
+                            th:text="${drilldown.cleanEndpoint}">/portal/course/catalog</h3>
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                        <span>Telemetry lookback window: Last <strong th:text="${drilldown.lookbackHours}">24</strong> hours</span>
+                        &bull;
+                        <span>Distinct Subnets: <strong th:text="${drilldown.distinctSubnets}">12</strong></span>
+                        &bull;
+                        <span>Distinct User-Agents: <strong th:text="${drilldown.distinctUserAgents}">5</strong></span>
+                    </div>
+                </div>
+                <button type="button" class="drawer-close-btn" onclick="closeEndpointModal(event)" aria-label="Close"
+                    title="Close (Esc)" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); line-height: 1;">&times;</button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="note-modal-body" style="padding: 20px;">
+                <!-- KPI Summary Cards -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px;">
+                    <div class="stat-card" style="padding: 12px 16px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                        <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Total Requests</div>
+                        <div style="font-size: 20px; font-weight: 800; color: var(--text-primary); margin-top: 4px;"
+                            th:text="${#numbers.formatInteger(drilldown.totalRequests, 1, 'POINT')}">14,200</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Sampled across fleet</div>
+                    </div>
+
+                    <div class="stat-card" style="padding: 12px 16px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                        <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Blocked Attacks</div>
+                        <div style="font-size: 20px; font-weight: 800; margin-top: 4px;"
+                            th:classappend="${drilldown.blockedRequests > 0 ? 'color-danger' : 'color-success'}"
+                            th:style="${drilldown.blockedRequests > 0 ? 'color: var(--color-danger);' : 'color: var(--color-success);'}"
+                            th:text="${#numbers.formatInteger(drilldown.blockedRequests, 1, 'POINT')}">500</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                            <span th:text="${#numbers.formatDecimal(drilldown.totalRequests > 0 ? (drilldown.blockedRequests * 100.0 / drilldown.totalRequests) : 0, 1, 1)} + '% blocked'">3.5% blocked</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card" style="padding: 12px 16px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                        <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Internal Traffic</div>
+                        <div style="font-size: 20px; font-weight: 800; color: var(--text-primary); margin-top: 4px;"
+                            th:text="${#numbers.formatInteger(drilldown.internalRequests, 1, 'POINT')}">1,200</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                            <span th:text="${#numbers.formatDecimal(drilldown.internalRatioPct, 1, 1)} + '% internal ratio'">8.4%</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card" style="padding: 12px 16px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                        <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 600;">Authenticated Ratio</div>
+                        <div style="font-size: 20px; font-weight: 800; color: var(--text-primary); margin-top: 4px;"
+                            th:text="${#numbers.formatDecimal(drilldown.authRatioPct, 1, 1)} + '%'">12.5%</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                            <span th:text="${#numbers.formatInteger(drilldown.authenticatedRequests, 1, 'POINT')} + ' auth requests'">120 auth</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section: Top Subnets Querying This Endpoint -->
+                <div style="margin-bottom: 24px;">
+                    <div style="font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                        <span>&#x1F310;</span> Top Client Subnets &amp; Autonomous Systems
+                    </div>
+                    <div class="table-responsive" style="max-height: 280px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                        <table class="table" style="margin-bottom: 0; font-size: 12px;">
+                            <thead>
+                                <tr>
+                                    <th>Subnet /24</th>
+                                    <th>ASN &amp; Organization</th>
+                                    <th>Client Type</th>
+                                    <th style="text-align: right;">Total Requests</th>
+                                    <th style="text-align: right;">Blocked</th>
+                                    <th style="text-align: right;">Auth</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:if="${drilldown.topSubnets == null or drilldown.topSubnets.empty}">
+                                    <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 16px;">
+                                        No subnet telemetry available for this endpoint.
+                                    </td>
+                                </tr>
+                                <tr th:each="s : ${drilldown.topSubnets}">
+                                    <td>
+                                        <span style="font-family: monospace; font-weight: 600;" th:text="${s.subnetGroup}">198.51.100.0/24</span>
+                                        <span th:if="${s.isInternal}" class="badge badge-secondary" style="font-size: 10px; margin-left: 4px;">INTERNAL</span>
+                                    </td>
+                                    <td>
+                                        <span th:if="${s.asn != null}" class="badge badge-info" style="font-size: 10px; margin-right: 4px;" th:text="'AS' + ${s.asn}">AS64512</span>
+                                        <span th:text="${s.asOrg != null ? s.asOrg : 'Unknown'}">Cloud Host</span>
+                                        <span th:if="${s.countryCode != null}" class="badge badge-secondary" style="font-size: 9px; margin-left: 4px;" th:text="${s.countryCode}">US</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge"
+                                            th:classappend="${s.clientType == 'SEARCH_ENGINE' or s.clientType == 'AI_CRAWLER' ? 'badge-success' : (s.clientType == 'DATACENTER' ? 'badge-warning' : 'badge-secondary')}"
+                                            style="font-size: 10px;"
+                                            th:text="${s.clientType != null ? s.clientType : 'UNKNOWN'}">DATACENTER</span>
+                                    </td>
+                                    <td style="text-align: right; font-weight: 700;" th:text="${#numbers.formatInteger(s.requestCount, 1, 'POINT')}">1,200</td>
+                                    <td style="text-align: right;">
+                                        <span th:if="${s.blockedCount > 0}" style="color: var(--color-danger); font-weight: 600;" th:text="${#numbers.formatInteger(s.blockedCount, 1, 'POINT')}">25</span>
+                                        <span th:if="${s.blockedCount == 0}" style="color: var(--text-muted);">-</span>
+                                    </td>
+                                    <td style="text-align: right;">
+                                        <span th:if="${s.authCount > 0}" style="color: var(--color-primary); font-weight: 600;" th:text="${#numbers.formatInteger(s.authCount, 1, 'POINT')}">10</span>
+                                        <span th:if="${s.authCount == 0}" style="color: var(--text-muted);">-</span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Section: Top User-Agents -->
+                <div>
+                    <div style="font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                        <span>&#x1F916;</span> Top User-Agents Targeting This Endpoint
+                    </div>
+                    <div class="table-responsive" style="max-height: 240px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                        <table class="table" style="margin-bottom: 0; font-size: 12px;">
+                            <thead>
+                                <tr>
+                                    <th>User-Agent Header</th>
+                                    <th>Session Attributes</th>
+                                    <th style="text-align: right;">Sampled Events</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:if="${drilldown.topUserAgents == null or drilldown.topUserAgents.empty}">
+                                    <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 16px;">
+                                        No User-Agent telemetry captured for this endpoint.
+                                    </td>
+                                </tr>
+                                <tr th:each="ua : ${drilldown.topUserAgents}">
+                                    <td style="font-family: monospace; font-size: 11px; max-width: 500px; word-break: break-all;" th:text="${ua.userAgent}">
+                                        Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+                                    </td>
+                                    <td>
+                                        <span th:if="${ua.authenticated}" class="badge badge-success" style="font-size: 10px;">Authenticated</span>
+                                        <span th:if="${ua.returningVisitor}" class="badge badge-info" style="font-size: 10px;">Returning Visitor</span>
+                                        <span th:if="${!ua.authenticated and !ua.returningVisitor}" class="badge badge-secondary" style="font-size: 10px;">Cookieless</span>
+                                    </td>
+                                    <td style="text-align: right; font-weight: 700;" th:text="${#numbers.formatInteger(ua.count, 1, 'POINT')}">45</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="note-modal-footer" style="padding: 12px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary" onclick="closeEndpointModal(event)">Close</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+
+</html>

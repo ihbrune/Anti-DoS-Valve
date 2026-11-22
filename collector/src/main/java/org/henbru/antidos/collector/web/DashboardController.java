@@ -62,6 +62,7 @@ public class DashboardController {
 	private final org.henbru.antidos.collector.poller.CollectorPollerService collectorPollerService;
 	private final org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService;
 	private final org.henbru.antidos.collector.aggregation.UserAgentMemoryService userAgentMemoryService;
+	private final org.henbru.antidos.collector.aggregation.EndpointAnalyticsService endpointAnalyticsService;
 
 	@org.springframework.beans.factory.annotation.Autowired
 	public DashboardController(
@@ -88,7 +89,9 @@ public class DashboardController {
 			@org.springframework.beans.factory.annotation.Autowired(required = false)
 			org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService,
 			@org.springframework.beans.factory.annotation.Autowired(required = false)
-			org.henbru.antidos.collector.aggregation.UserAgentMemoryService userAgentMemoryService) {
+			org.henbru.antidos.collector.aggregation.UserAgentMemoryService userAgentMemoryService,
+			@org.springframework.beans.factory.annotation.Autowired(required = false)
+			org.henbru.antidos.collector.aggregation.EndpointAnalyticsService endpointAnalyticsService) {
 		this.heartbeatRepository = heartbeatRepository;
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
@@ -105,6 +108,7 @@ public class DashboardController {
 		this.collectorPollerService = collectorPollerService;
 		this.rollupAggregationService = rollupAggregationService;
 		this.userAgentMemoryService = userAgentMemoryService;
+		this.endpointAnalyticsService = endpointAnalyticsService;
 	}
 
 	public DashboardController(
@@ -117,7 +121,7 @@ public class DashboardController {
 			org.henbru.antidos.collector.config.CollectorProperties properties,
 			org.henbru.antidos.collector.config.ValveRuleResolver valveRuleResolver) {
 		this(heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
-				subnetRollupRepository, documentationService, properties, valveRuleResolver, null, null, null, null, null, null, null, null);
+				subnetRollupRepository, documentationService, properties, valveRuleResolver, null, null, null, null, null, null, null, null, null);
 	}
 
 	public DashboardController(
@@ -129,7 +133,7 @@ public class DashboardController {
 			DocumentationService documentationService,
 			org.henbru.antidos.collector.config.CollectorProperties properties) {
 		this(heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
-				subnetRollupRepository, documentationService, properties, new org.henbru.antidos.collector.config.ValveRuleResolver(properties), null, null, null, null, null, null, null, null);
+				subnetRollupRepository, documentationService, properties, new org.henbru.antidos.collector.config.ValveRuleResolver(properties), null, null, null, null, null, null, null, null, null);
 	}
 
 	@org.springframework.web.bind.annotation.ModelAttribute("demoMode")
@@ -203,8 +207,11 @@ public class DashboardController {
 			@RequestParam(name = "scatterGroupBy", defaultValue = "SUBNET") String scatterGroupBy,
 			@RequestParam(name = "scatterTrafficFilter", defaultValue = "ALL") String scatterTrafficFilter,
 			@RequestParam(name = "scatterAuthFilter", defaultValue = "ALL") String scatterAuthFilter,
+			@RequestParam(name = "excludeInternal", required = false) Boolean excludeInternal,
+			@RequestParam(name = "excludeAutomated", required = false) Boolean excludeAutomated,
+			@RequestParam(name = "endpointStatus", defaultValue = "ALL") String endpointStatus,
 			Model model) {
-		populateAnalyticsModel(servers, valves, hours, fromTime, toTime, tab, scatterGroupBy, scatterTrafficFilter, scatterAuthFilter, model);
+		populateAnalyticsModel(servers, valves, hours, fromTime, toTime, tab, scatterGroupBy, scatterTrafficFilter, scatterAuthFilter, excludeInternal, excludeAutomated, endpointStatus, model);
 		return "analytics";
 	}
 
@@ -219,9 +226,26 @@ public class DashboardController {
 			@RequestParam(name = "scatterGroupBy", defaultValue = "SUBNET") String scatterGroupBy,
 			@RequestParam(name = "scatterTrafficFilter", defaultValue = "ALL") String scatterTrafficFilter,
 			@RequestParam(name = "scatterAuthFilter", defaultValue = "ALL") String scatterAuthFilter,
+			@RequestParam(name = "excludeInternal", required = false) Boolean excludeInternal,
+			@RequestParam(name = "excludeAutomated", required = false) Boolean excludeAutomated,
+			@RequestParam(name = "endpointStatus", defaultValue = "ALL") String endpointStatus,
 			Model model) {
-		populateAnalyticsModel(servers, valves, hours, fromTime, toTime, tab, scatterGroupBy, scatterTrafficFilter, scatterAuthFilter, model);
+		populateAnalyticsModel(servers, valves, hours, fromTime, toTime, tab, scatterGroupBy, scatterTrafficFilter, scatterAuthFilter, excludeInternal, excludeAutomated, endpointStatus, model);
 		return "fragments/analytics-overview :: analyticsCard";
+	}
+
+	@GetMapping("/analytics/endpoint-drilldown")
+	public String endpointDrilldownModal(
+			@RequestParam("endpoint") String endpoint,
+			@RequestParam(name = "method", defaultValue = "GET") String method,
+			@RequestParam(name = "hours", defaultValue = "24") int hours,
+			@RequestParam(name = "servers", required = false) List<String> servers,
+			@RequestParam(name = "valves", required = false) List<String> valves,
+			Model model) {
+		if (endpointAnalyticsService != null) {
+			model.addAttribute("drilldown", endpointAnalyticsService.getEndpointDrilldown(endpoint, method, hours, servers, valves));
+		}
+		return "fragments/endpoint-drilldown-modal :: endpointDrilldownModal";
 	}
 
 	@GetMapping("/analytics/asn-drilldown")
@@ -401,17 +425,41 @@ public class DashboardController {
 			String scatterTrafficFilter,
 			String scatterAuthFilter,
 			Model model) {
+		boolean defAutomated = properties != null && properties.getEndpointAnalytics() != null && properties.getEndpointAnalytics().isDefaultExcludeAutomated();
+		boolean defInternal = properties != null && properties.getEndpointAnalytics() != null && properties.getEndpointAnalytics().isDefaultExcludeInternal();
+		populateAnalyticsModel(servers, valves, hours, fromStr, toStr, tab, scatterGroupBy, scatterTrafficFilter, scatterAuthFilter, defInternal, defAutomated, "ALL", model);
+	}
+
+	private void populateAnalyticsModel(
+			List<String> servers,
+			List<String> valves,
+			int hours,
+			String fromStr,
+			String toStr,
+			String tab,
+			String scatterGroupBy,
+			String scatterTrafficFilter,
+			String scatterAuthFilter,
+			Boolean excludeInternal,
+			Boolean excludeAutomated,
+			String endpointStatus,
+			Model model) {
 		Instant fromTime = parseDateTime(fromStr);
 		Instant toTime = parseDateTime(toStr);
 		String effectiveGroupBy = ("ASN".equalsIgnoreCase(scatterGroupBy)) ? "ASN" : "SUBNET";
 		String effectiveTraffic = (scatterTrafficFilter != null && !scatterTrafficFilter.isBlank()) ? scatterTrafficFilter.trim().toUpperCase() : "ALL";
 		String effectiveAuth = (scatterAuthFilter != null && !scatterAuthFilter.isBlank()) ? scatterAuthFilter.trim().toUpperCase() : "ALL";
 
+		boolean effExcludeAutomated = excludeAutomated != null ? excludeAutomated
+				: (properties != null && properties.getEndpointAnalytics() != null && properties.getEndpointAnalytics().isDefaultExcludeAutomated());
+		boolean effExcludeInternal = excludeInternal != null ? excludeInternal
+				: (properties != null && properties.getEndpointAnalytics() != null && properties.getEndpointAnalytics().isDefaultExcludeInternal());
+
 		String effectiveTab = (tab != null && !tab.isBlank()) ? tab.trim().toLowerCase() : "charts";
 
 		if (analyticsService != null) {
 			org.henbru.antidos.collector.model.AnalyticsDashboardDto analytics =
-					analyticsService.getDashboardAnalytics(effectiveTab, hours, fromTime, toTime, servers, valves, effectiveGroupBy, effectiveTraffic, effectiveAuth);
+					analyticsService.getDashboardAnalytics(effectiveTab, hours, fromTime, toTime, servers, valves, effectiveGroupBy, effectiveTraffic, effectiveAuth, effExcludeInternal, effExcludeAutomated, endpointStatus);
 			model.addAttribute("analytics", analytics);
 			model.addAttribute("analyticsJson", toJson(analytics));
 		}
@@ -420,6 +468,9 @@ public class DashboardController {
 		model.addAttribute("scatterGroupBy", effectiveGroupBy);
 		model.addAttribute("scatterTrafficFilter", effectiveTraffic);
 		model.addAttribute("scatterAuthFilter", effectiveAuth);
+		model.addAttribute("excludeInternal", effExcludeInternal);
+		model.addAttribute("excludeAutomated", effExcludeAutomated);
+		model.addAttribute("endpointStatus", endpointStatus != null ? endpointStatus : "ALL");
 		model.addAttribute("availableServers", getAvailableServerIds());
 		model.addAttribute("availableValves", getAvailableValveNames(servers));
 		model.addAttribute("selectedServers", servers != null ? servers : List.of());

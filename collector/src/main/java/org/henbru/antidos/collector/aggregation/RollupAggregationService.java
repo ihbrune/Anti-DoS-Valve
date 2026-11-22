@@ -3,6 +3,7 @@ package org.henbru.antidos.collector.aggregation;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.model.ClientSubnetRollup;
@@ -29,6 +30,7 @@ public class RollupAggregationService {
 	private final CollectorProperties properties;
 	private final SubnetProfileService subnetProfileService;
 	private final UserAgentMemoryService userAgentMemoryService;
+	private final org.henbru.antidos.collector.storage.EndpointRollupRepository endpointRollupRepository;
 	private final java.util.concurrent.atomic.AtomicBoolean realtimePending = new java.util.concurrent.atomic.AtomicBoolean(false);
 	private final java.util.concurrent.atomic.AtomicBoolean realtimeWorkerRunning = new java.util.concurrent.atomic.AtomicBoolean(false);
 
@@ -38,13 +40,25 @@ public class RollupAggregationService {
 			SubnetRollupRepository rollupRepository,
 			CollectorProperties properties,
 			@Autowired(required = false) SubnetProfileService subnetProfileService,
-			@Autowired(required = false) UserAgentMemoryService userAgentMemoryService
+			@Autowired(required = false) UserAgentMemoryService userAgentMemoryService,
+			@Autowired(required = false) org.henbru.antidos.collector.storage.EndpointRollupRepository endpointRollupRepository
 	) {
 		this.jdbcTemplate = jdbcTemplate;
 		this.rollupRepository = rollupRepository;
 		this.properties = properties;
 		this.subnetProfileService = subnetProfileService;
 		this.userAgentMemoryService = userAgentMemoryService;
+		this.endpointRollupRepository = endpointRollupRepository;
+	}
+
+	public RollupAggregationService(
+			JdbcTemplate jdbcTemplate,
+			SubnetRollupRepository rollupRepository,
+			CollectorProperties properties,
+			SubnetProfileService subnetProfileService,
+			UserAgentMemoryService userAgentMemoryService
+	) {
+		this(jdbcTemplate, rollupRepository, properties, subnetProfileService, userAgentMemoryService, null);
 	}
 
 	public RollupAggregationService(
@@ -53,7 +67,7 @@ public class RollupAggregationService {
 			CollectorProperties properties,
 			SubnetProfileService subnetProfileService
 	) {
-		this(jdbcTemplate, rollupRepository, properties, subnetProfileService, null);
+		this(jdbcTemplate, rollupRepository, properties, subnetProfileService, null, null);
 	}
 
 	public RollupAggregationService(
@@ -61,7 +75,7 @@ public class RollupAggregationService {
 			SubnetRollupRepository rollupRepository,
 			CollectorProperties properties
 	) {
-		this(jdbcTemplate, rollupRepository, properties, null, null);
+		this(jdbcTemplate, rollupRepository, properties, null, null, null);
 	}
 
 	/**
@@ -172,7 +186,119 @@ public class RollupAggregationService {
 			}
 		}
 
+		if (endpointRollupRepository != null) {
+			try {
+				aggregateEndpointsWindow(bucketStart, bucketEnd);
+			} catch (Exception e) {
+				log.debug("Endpoint rollup skipped for [{} -> {}]: {}", bucketStart, bucketEnd, e.getMessage());
+			}
+		}
+
 		return rollups.size();
+	}
+
+	/**
+	 * Aggregates client events for the specified time window into endpoint rollups.
+	 *
+	 * @param bucketStart Start boundary (inclusive)
+	 * @param bucketEnd   End boundary (exclusive)
+	 * @return Number of endpoint rollups persisted
+	 */
+	public int aggregateEndpointsWindow(Instant bucketStart, Instant bucketEnd) {
+		if (endpointRollupRepository == null || bucketStart == null || bucketEnd == null) {
+			return 0;
+		}
+
+		String sql = """
+				SELECT
+				    server_id,
+				    valve_name,
+				    sample_uri,
+				    COALESCE(NULLIF(TRIM(sample_method), ''), 'GET') AS sample_method,
+				    SUM(request_count) AS total_requests,
+				    SUM(CASE WHEN status = 'BLOCKED' THEN request_count ELSE 0 END) AS blocked_requests,
+				    SUM(CASE WHEN status = 'MARKED' THEN request_count ELSE 0 END) AS marked_requests,
+				    SUM(CASE WHEN status = 'ACTIVE' THEN request_count ELSE 0 END) AS active_requests,
+				    COALESCE(SUM(authenticated_count), 0) AS authenticated_requests,
+				    SUM(CASE WHEN client_type IN ('PRIVATE_NETWORK', 'INTERNAL_NETWORK') 
+				             OR (ip_v4_start BETWEEN 167772160 AND 184549375 OR ip_v4_start BETWEEN 2886729728 AND 2887778303 OR ip_v4_start BETWEEN 3232235520 AND 3232301055 OR ip_v4_start BETWEEN 2130706432 AND 2147483647) 
+				             THEN request_count ELSE 0 END) AS internal_requests,
+				    SUM(CASE WHEN client_type IN ('SEARCH_ENGINE', 'AI_CRAWLER') THEN request_count ELSE 0 END) AS crawler_requests,
+				    COUNT(DISTINCT client_key) AS distinct_clients,
+				    COUNT(DISTINCT subnet_group) AS distinct_subnets,
+				    COALESCE(MAX(distinct_user_agents), 0) AS distinct_user_agents,
+				    SUM(CASE WHEN sample_authenticated = TRUE THEN 1 ELSE 0 END) AS auth_samples,
+				    SUM(CASE WHEN sample_returning_visitor = TRUE THEN 1 ELSE 0 END) AS returning_samples
+				FROM client_events
+				WHERE slot_time >= ? AND slot_time < ? AND sample_uri IS NOT NULL AND TRIM(sample_uri) != ''
+				GROUP BY server_id, valve_name, sample_uri, sample_method
+				""";
+
+		java.util.Map<String, org.henbru.antidos.collector.model.EndpointRollup> merged = new java.util.LinkedHashMap<>();
+		jdbcTemplate.query(
+				sql,
+				rs -> {
+					String sId = rs.getString("server_id");
+					String vName = rs.getString("valve_name");
+					String rawUri = rs.getString("sample_uri");
+					String clean = org.henbru.antidos.collector.model.EndpointRollup.normalizeUri(rawUri);
+					String method = rs.getString("sample_method");
+					String key = (sId != null ? sId : "") + "#" + (vName != null ? vName : "") + "#" + clean + "#" + method;
+
+					org.henbru.antidos.collector.model.EndpointRollup existing = merged.get(key);
+					if (existing == null) {
+						merged.put(key, new org.henbru.antidos.collector.model.EndpointRollup(
+								bucketStart,
+								sId,
+								vName,
+								clean,
+								method,
+								rs.getLong("total_requests"),
+								rs.getLong("blocked_requests"),
+								rs.getLong("marked_requests"),
+								rs.getLong("active_requests"),
+								rs.getLong("authenticated_requests"),
+								rs.getLong("internal_requests"),
+								rs.getLong("crawler_requests"),
+								rs.getInt("distinct_clients"),
+								rs.getInt("distinct_subnets"),
+								rs.getInt("distinct_user_agents"),
+								rs.getInt("auth_samples"),
+								rs.getInt("returning_samples")
+						));
+					} else {
+						merged.put(key, new org.henbru.antidos.collector.model.EndpointRollup(
+								bucketStart,
+								sId,
+								vName,
+								clean,
+								method,
+								existing.totalRequests() + rs.getLong("total_requests"),
+								existing.blockedRequests() + rs.getLong("blocked_requests"),
+								existing.markedRequests() + rs.getLong("marked_requests"),
+								existing.activeRequests() + rs.getLong("active_requests"),
+								existing.authenticatedRequests() + rs.getLong("authenticated_requests"),
+								existing.internalRequests() + rs.getLong("internal_requests"),
+								existing.crawlerRequests() + rs.getLong("crawler_requests"),
+								Math.max(existing.distinctClients(), rs.getInt("distinct_clients")),
+								Math.max(existing.distinctSubnets(), rs.getInt("distinct_subnets")),
+								Math.max(existing.distinctUserAgents(), rs.getInt("distinct_user_agents")),
+								existing.authSamples() + rs.getInt("auth_samples"),
+								existing.returningSamples() + rs.getInt("returning_samples")
+						));
+					}
+				},
+				Timestamp.from(bucketStart),
+				Timestamp.from(bucketEnd)
+		);
+
+		if (!merged.isEmpty()) {
+			List<org.henbru.antidos.collector.model.EndpointRollup> list = new ArrayList<>(merged.values());
+			endpointRollupRepository.batchUpsert(list);
+			log.info("Persisted {} endpoint rollups for window [{} -> {}]", list.size(), bucketStart, bucketEnd);
+			return list.size();
+		}
+		return 0;
 	}
 	/**
 	 * Execution result of a subnet rollup aggregation run.
@@ -367,6 +493,13 @@ public class RollupAggregationService {
 				if (deletedUa > 0) {
 					log.info("Purged {} historical User-Agent hourly rollups older than {} days",
 							deletedUa, properties.getRollupRetentionDays());
+				}
+			}
+			if (endpointRollupRepository != null) {
+				int deletedEp = endpointRollupRepository.deleteOlderThan(cutoff);
+				if (deletedEp > 0) {
+					log.info("Purged {} historical endpoint rollups older than {} days",
+							deletedEp, properties.getRollupRetentionDays());
 				}
 			}
 		} catch (Exception e) {

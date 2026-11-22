@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 
 import org.henbru.antidos.collector.advisor.AdvisorReport;
+import org.henbru.antidos.collector.aggregation.EndpointAnalyticsService.EndpointAnalyticsDashboard;
 
 /**
  * Composite payload containing timeline, composition, scatterplot analytical models,
@@ -27,8 +28,33 @@ public record AnalyticsDashboardDto(
 		String scatterGroupBy,
 		String scatterTrafficFilter,
 		String scatterAuthFilter,
-		UserAgentAnalyticsDto userAgents
+		UserAgentAnalyticsDto userAgents,
+		EndpointAnalyticsDashboard endpoints
 ) {
+	public AnalyticsDashboardDto(
+			Instant windowFrom,
+			Instant windowTo,
+			int hours,
+			List<TimelinePoint> timeline,
+			List<TrafficCompositionPoint> composition,
+			List<SubnetScatterPoint> scatterPoints,
+			long totalRequests,
+			long totalActive,
+			long totalBlocked,
+			long totalMarked,
+			double blockedRatioPercent,
+			double markedRatioPercent,
+			AdvisorReport advisorReport,
+			String scatterGroupBy,
+			String scatterTrafficFilter,
+			String scatterAuthFilter,
+			UserAgentAnalyticsDto userAgents
+	) {
+		this(windowFrom, windowTo, hours, timeline, composition, scatterPoints,
+				totalRequests, totalActive, totalBlocked, totalMarked, blockedRatioPercent, markedRatioPercent, advisorReport,
+				scatterGroupBy, scatterTrafficFilter, scatterAuthFilter, userAgents, null);
+	}
+
 	public AnalyticsDashboardDto(
 			Instant windowFrom,
 			Instant windowTo,
@@ -49,7 +75,7 @@ public record AnalyticsDashboardDto(
 	) {
 		this(windowFrom, windowTo, hours, timeline, composition, scatterPoints,
 				totalRequests, totalActive, totalBlocked, totalMarked, blockedRatioPercent, markedRatioPercent, advisorReport,
-				scatterGroupBy, scatterTrafficFilter, scatterAuthFilter, null);
+				scatterGroupBy, scatterTrafficFilter, scatterAuthFilter, null, null);
 	}
 
 	public AnalyticsDashboardDto(

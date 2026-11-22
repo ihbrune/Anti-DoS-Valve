@@ -211,6 +211,9 @@
 
         <!-- User-Agent Evaluation History & Override Modal (loaded dynamically via HTMX) -->
         <div id="ua-drilldown-modal-container"></div>
+
+        <!-- Endpoint Drilldown Modal (loaded dynamically via HTMX) -->
+        <div id="endpoint-drilldown-modal-container"></div>
     </div>
 
     <script>
@@ -244,11 +247,22 @@
             document.querySelectorAll('#ua-modal-wrapper').forEach(el => el.remove());
         }
 
+        function closeEndpointModal(e) {
+            if (e) {
+                if (typeof e.stopPropagation === 'function') e.stopPropagation();
+                if (typeof e.preventDefault === 'function') e.preventDefault();
+            }
+            const c = document.getElementById('endpoint-drilldown-modal-container');
+            if (c) c.innerHTML = '';
+            document.querySelectorAll('#endpoint-modal-wrapper').forEach(el => el.remove());
+        }
+
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {
                 closeNoteModal(e);
                 closeAsnModal(e);
                 closeUaModal(e);
+                closeEndpointModal(e);
             }
         });
 

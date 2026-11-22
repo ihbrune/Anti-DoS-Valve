@@ -58,6 +58,7 @@ public class AnalyticsService {
 	private final MitigationRuleRepository mitigationRuleRepository;
 	private final BrowserVersionSyncService browserVersionSyncService;
 	private final UserAgentMemoryService userAgentMemoryService;
+	private final EndpointAnalyticsService endpointAnalyticsService;
 
 	@Autowired
 	public AnalyticsService(
@@ -69,7 +70,8 @@ public class AnalyticsService {
 			@Autowired(required = false) MonitoredValveRepository monitoredValveRepository,
 			@Autowired(required = false) MitigationRuleRepository mitigationRuleRepository,
 			@Autowired(required = false) BrowserVersionSyncService browserVersionSyncService,
-			@Autowired(required = false) UserAgentMemoryService userAgentMemoryService
+			@Autowired(required = false) UserAgentMemoryService userAgentMemoryService,
+			@Autowired(required = false) EndpointAnalyticsService endpointAnalyticsService
 	) {
 		this.subnetRollupRepository = subnetRollupRepository;
 		this.rollupAggregationService = rollupAggregationService;
@@ -80,6 +82,22 @@ public class AnalyticsService {
 		this.mitigationRuleRepository = mitigationRuleRepository;
 		this.browserVersionSyncService = browserVersionSyncService;
 		this.userAgentMemoryService = userAgentMemoryService;
+		this.endpointAnalyticsService = endpointAnalyticsService;
+	}
+
+	public AnalyticsService(
+			SubnetRollupRepository subnetRollupRepository,
+			RollupAggregationService rollupAggregationService,
+			NetworkAnnotationService networkAnnotationService,
+			org.henbru.antidos.collector.advisor.AdvisorService advisorService,
+			org.henbru.antidos.collector.storage.ClientEventRepository clientEventRepository,
+			MonitoredValveRepository monitoredValveRepository,
+			MitigationRuleRepository mitigationRuleRepository,
+			BrowserVersionSyncService browserVersionSyncService,
+			UserAgentMemoryService userAgentMemoryService
+	) {
+		this(subnetRollupRepository, rollupAggregationService, networkAnnotationService, advisorService,
+				clientEventRepository, monitoredValveRepository, mitigationRuleRepository, browserVersionSyncService, userAgentMemoryService, null);
 	}
 
 	public AnalyticsService(
@@ -93,7 +111,7 @@ public class AnalyticsService {
 			BrowserVersionSyncService browserVersionSyncService
 	) {
 		this(subnetRollupRepository, rollupAggregationService, networkAnnotationService, advisorService,
-				clientEventRepository, monitoredValveRepository, mitigationRuleRepository, browserVersionSyncService, null);
+				clientEventRepository, monitoredValveRepository, mitigationRuleRepository, browserVersionSyncService, null, null);
 	}
 
 	public AnalyticsService(
@@ -208,6 +226,23 @@ public class AnalyticsService {
 			String trafficFilter,
 			String authFilter
 	) {
+		return getDashboardAnalytics(tab, hours, fromTime, toTime, servers, valves, groupBy, trafficFilter, authFilter, false, true, "ALL");
+	}
+
+	public AnalyticsDashboardDto getDashboardAnalytics(
+			String tab,
+			int hours,
+			Instant fromTime,
+			Instant toTime,
+			List<String> servers,
+			List<String> valves,
+			String groupBy,
+			String trafficFilter,
+			String authFilter,
+			boolean excludeInternal,
+			boolean excludeAutomated,
+			String endpointStatus
+	) {
 		int safeHours = hours > 0 ? hours : 24;
 		Instant to = toTime != null ? toTime : Instant.now();
 		Instant from = fromTime != null ? fromTime : to.minus(safeHours, ChronoUnit.HOURS);
@@ -220,6 +255,7 @@ public class AnalyticsService {
 		boolean isScatter = needAll || "scatter".equalsIgnoreCase(tab);
 		boolean isAdvisor = needAll || "advisor".equalsIgnoreCase(tab);
 		boolean isUserAgents = needAll || "useragents".equalsIgnoreCase(tab);
+		boolean isEndpoints = needAll || "endpoints".equalsIgnoreCase(tab);
 
 		// 1. Timeline Points (always required for KPI cards and timeline chart)
 		List<TimelinePoint> timeline = subnetRollupRepository.findTimeline(servers, valves, from, to);
@@ -381,6 +417,10 @@ public class AnalyticsService {
 		UserAgentAnalyticsDto userAgents = isUserAgents
 				? getUserAgentAnalytics(safeHours, from, to, servers, valves) : null;
 
+		// 6. Endpoint Forensics (only needed for endpoints tab or all)
+		EndpointAnalyticsService.EndpointAnalyticsDashboard endpoints = (isEndpoints && endpointAnalyticsService != null)
+				? endpointAnalyticsService.getEndpointAnalytics(safeHours, servers, valves, excludeInternal, excludeAutomated, endpointStatus, 50) : null;
+
 		return new AnalyticsDashboardDto(
 				from,
 				to,
@@ -398,7 +438,8 @@ public class AnalyticsService {
 				effectiveGroupBy,
 				effectiveTraffic,
 				effectiveAuth,
-				userAgents
+				userAgents,
+				endpoints
 		);
 	}
 

@@ -52,6 +52,7 @@ public class CollectorProperties {
 	private BrowserReferenceConfig browserReference = new BrowserReferenceConfig();
 	private SecurityConfig security = new SecurityConfig();
 	private SelfProtectionConfig selfProtection = new SelfProtectionConfig();
+	private EndpointAnalyticsConfig endpointAnalytics = new EndpointAnalyticsConfig();
 	private List<EndpointConfig> endpoints = new ArrayList<>();
 	private EnrichmentConfig enrichment = new EnrichmentConfig();
 	private List<InternalNetworkConfig> internalNetworks = new ArrayList<>();
@@ -439,6 +440,14 @@ public class CollectorProperties {
 		this.browserReference = browserReference != null ? browserReference : new BrowserReferenceConfig();
 	}
 
+	public EndpointAnalyticsConfig getEndpointAnalytics() {
+		return endpointAnalytics;
+	}
+
+	public void setEndpointAnalytics(EndpointAnalyticsConfig endpointAnalytics) {
+		this.endpointAnalytics = endpointAnalytics != null ? endpointAnalytics : new EndpointAnalyticsConfig();
+	}
+
 	/**
 	 * Configuration properties for authoritative browser release version intelligence.
 	 */
@@ -757,5 +766,61 @@ public class CollectorProperties {
 		public void setAlwaysAllowPrivateIPs(boolean alwaysAllowPrivateIPs) { this.alwaysAllowPrivateIPs = alwaysAllowPrivateIPs; }
 		public String getStatusUri() { return statusUri; }
 		public void setStatusUri(String statusUri) { this.statusUri = (statusUri != null && !statusUri.isBlank()) ? statusUri.trim() : null; }
+	}
+
+	/**
+	 * Configuration properties for Endpoint Forensics and URL Hotspot Analysis.
+	 */
+	public static class EndpointAnalyticsConfig {
+		private boolean defaultExcludeAutomated = true;
+		private boolean defaultExcludeInternal = false;
+		private double internalThresholdPercent = 90.0;
+		private List<String> excludedPrefixes = new ArrayList<>(List.of(
+				"/display", "/api/room", "/sync", "/health", "/healthz", "/actuator", "/ping", "/status"
+		));
+
+		public boolean isDefaultExcludeAutomated() {
+			return defaultExcludeAutomated;
+		}
+
+		public void setDefaultExcludeAutomated(boolean defaultExcludeAutomated) {
+			this.defaultExcludeAutomated = defaultExcludeAutomated;
+		}
+
+		public boolean isDefaultExcludeInternal() {
+			return defaultExcludeInternal;
+		}
+
+		public void setDefaultExcludeInternal(boolean defaultExcludeInternal) {
+			this.defaultExcludeInternal = defaultExcludeInternal;
+		}
+
+		public double getInternalThresholdPercent() {
+			return internalThresholdPercent;
+		}
+
+		public void setInternalThresholdPercent(double internalThresholdPercent) {
+			this.internalThresholdPercent = Math.max(0.0, Math.min(100.0, internalThresholdPercent));
+		}
+
+		public List<String> getExcludedPrefixes() {
+			return excludedPrefixes;
+		}
+
+		public void setExcludedPrefixes(List<String> excludedPrefixes) {
+			if (excludedPrefixes != null) {
+				List<String> normalized = new ArrayList<>();
+				for (String p : excludedPrefixes) {
+					if (p != null && !p.isBlank()) {
+						String t = p.trim().toLowerCase(Locale.ROOT);
+						if (!t.startsWith("/")) {
+							t = "/" + t;
+						}
+						normalized.add(t);
+					}
+				}
+				this.excludedPrefixes = normalized;
+			}
+		}
 	}
 }

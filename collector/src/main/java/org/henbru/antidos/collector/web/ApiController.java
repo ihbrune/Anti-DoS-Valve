@@ -42,6 +42,7 @@ public class ApiController {
 	private final org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository;
 	private final org.henbru.antidos.collector.aggregation.SubnetProfileService subnetProfileService;
 	private final org.henbru.antidos.collector.config.CollectorProperties properties;
+	private final org.henbru.antidos.collector.aggregation.EndpointAnalyticsService endpointAnalyticsService;
 
 	@org.springframework.beans.factory.annotation.Autowired
 	public ApiController(
@@ -54,7 +55,8 @@ public class ApiController {
 			org.henbru.antidos.collector.aggregation.AnalyticsService analyticsService,
 			org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository,
 			@org.springframework.beans.factory.annotation.Autowired(required = false) org.henbru.antidos.collector.aggregation.SubnetProfileService subnetProfileService,
-			@org.springframework.beans.factory.annotation.Autowired(required = false) org.henbru.antidos.collector.config.CollectorProperties properties) {
+			@org.springframework.beans.factory.annotation.Autowired(required = false) org.henbru.antidos.collector.config.CollectorProperties properties,
+			@org.springframework.beans.factory.annotation.Autowired(required = false) org.henbru.antidos.collector.aggregation.EndpointAnalyticsService endpointAnalyticsService) {
 		this.heartbeatRepository = heartbeatRepository;
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
@@ -65,6 +67,22 @@ public class ApiController {
 		this.monitoredValveRepository = monitoredValveRepository;
 		this.subnetProfileService = subnetProfileService;
 		this.properties = properties;
+		this.endpointAnalyticsService = endpointAnalyticsService;
+	}
+
+	public ApiController(
+			HeartbeatRepository heartbeatRepository,
+			SlotSnapshotRepository slotSnapshotRepository,
+			ClientEventRepository clientEventRepository,
+			PollEventLogRepository pollEventLogRepository,
+			org.henbru.antidos.collector.storage.SubnetRollupRepository subnetRollupRepository,
+			org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService,
+			org.henbru.antidos.collector.aggregation.AnalyticsService analyticsService,
+			org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository,
+			org.henbru.antidos.collector.aggregation.SubnetProfileService subnetProfileService,
+			org.henbru.antidos.collector.config.CollectorProperties properties) {
+		this(heartbeatRepository, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
+				subnetRollupRepository, rollupAggregationService, analyticsService, monitoredValveRepository, subnetProfileService, properties, null);
 	}
 
 	public ApiController(
@@ -363,5 +381,37 @@ public class ApiController {
 		return monitoredValveRepository.findByServerIdAndValveName(serverId, valveName)
 				.map(ResponseEntity::ok)
 				.orElseGet(() -> ResponseEntity.notFound().build());
+	}
+
+	@GetMapping(value = "/analytics/endpoints", produces = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<org.henbru.antidos.collector.aggregation.EndpointAnalyticsService.EndpointAnalyticsDashboard> getEndpointAnalytics(
+			@RequestParam(name = "hours", defaultValue = "24") int hours,
+			@RequestParam(name = "servers", required = false) List<String> servers,
+			@RequestParam(name = "valves", required = false) List<String> valves,
+			@RequestParam(name = "excludeInternal", required = false) Boolean excludeInternal,
+			@RequestParam(name = "excludeAutomated", required = false) Boolean excludeAutomated,
+			@RequestParam(name = "status", defaultValue = "ALL") String status,
+			@RequestParam(name = "limit", defaultValue = "50") int limit) {
+		if (endpointAnalyticsService == null) {
+			return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+		}
+		boolean effExcludeAutomated = excludeAutomated != null ? excludeAutomated
+				: (properties != null && properties.getEndpointAnalytics() != null && properties.getEndpointAnalytics().isDefaultExcludeAutomated());
+		boolean effExcludeInternal = excludeInternal != null ? excludeInternal
+				: (properties != null && properties.getEndpointAnalytics() != null && properties.getEndpointAnalytics().isDefaultExcludeInternal());
+		return ResponseEntity.ok(endpointAnalyticsService.getEndpointAnalytics(hours, servers, valves, effExcludeInternal, effExcludeAutomated, status, limit));
+	}
+
+	@GetMapping(value = "/analytics/endpoints/drilldown", produces = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<org.henbru.antidos.collector.aggregation.EndpointAnalyticsService.EndpointDrilldownDto> getEndpointDrilldown(
+			@RequestParam("endpoint") String endpoint,
+			@RequestParam(name = "method", defaultValue = "GET") String method,
+			@RequestParam(name = "hours", defaultValue = "24") int hours,
+			@RequestParam(name = "servers", required = false) List<String> servers,
+			@RequestParam(name = "valves", required = false) List<String> valves) {
+		if (endpointAnalyticsService == null) {
+			return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+		}
+		return ResponseEntity.ok(endpointAnalyticsService.getEndpointDrilldown(endpoint, method, hours, servers, valves));
 	}
 }
