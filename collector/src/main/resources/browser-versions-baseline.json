@@ -62,10 +62,10 @@
       "automatedSync": false,
       "sourceNotice": "Static OS-bound matrix. Configurable via collector.browser-reference.safari-versions without code changes.",
       "topVersions": [
-        { "family": "Safari", "majorVersion": 26, "fullVersion": "26.2 STP", "channel": "PREVIEW", "releaseDate": "2026-11", "source": "CONFIGURED_MATRIX", "isPreview": true, "isSupportedLegacy": false },
-        { "family": "Safari", "majorVersion": 26, "fullVersion": "26.1 Tahoe", "channel": "STABLE", "releaseDate": "2026-10", "source": "CONFIGURED_MATRIX", "isPreview": false, "isSupportedLegacy": false },
-        { "family": "Safari", "majorVersion": 26, "fullVersion": "26.0 Tahoe", "channel": "PREVIOUS", "releaseDate": "2026-09", "source": "CONFIGURED_MATRIX", "isPreview": false, "isSupportedLegacy": true },
-        { "family": "Safari", "majorVersion": 18, "fullVersion": "18.2 Sequoia", "channel": "SUPPORTED_LEGACY", "releaseDate": "2026-08", "source": "CONFIGURED_MATRIX", "isPreview": false, "isSupportedLegacy": true },
+        { "family": "Safari", "majorVersion": 27, "fullVersion": "27.2 STP", "channel": "PREVIEW", "releaseDate": "2026-11", "source": "CONFIGURED_MATRIX", "isPreview": true, "isSupportedLegacy": false },
+        { "family": "Safari", "majorVersion": 26, "fullVersion": "26.6 Tahoe", "channel": "STABLE", "releaseDate": "2026-11", "source": "CONFIGURED_MATRIX", "isPreview": false, "isSupportedLegacy": false },
+        { "family": "Safari", "majorVersion": 26, "fullVersion": "26.1 Tahoe", "channel": "PREVIOUS", "releaseDate": "2026-10", "source": "CONFIGURED_MATRIX", "isPreview": false, "isSupportedLegacy": true },
+        { "family": "Safari", "majorVersion": 18, "fullVersion": "18.6 Sequoia", "channel": "SUPPORTED_LEGACY", "releaseDate": "2026-10", "source": "CONFIGURED_MATRIX", "isPreview": false, "isSupportedLegacy": true },
         { "family": "Safari", "majorVersion": 17, "fullVersion": "17.6 Sonoma", "channel": "SUPPORTED_LEGACY", "releaseDate": "2026-07", "source": "CONFIGURED_MATRIX", "isPreview": false, "isSupportedLegacy": true }
       ]
     }

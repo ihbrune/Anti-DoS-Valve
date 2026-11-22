@@ -446,7 +446,7 @@ public class CollectorProperties {
 		private boolean enabled = true;
 		private String chromeApiUrl = "https://versionhistory.googleapis.com/v1/chrome/platforms/all/channels/all/versions";
 		private String firefoxApiUrl = "https://product-details.mozilla.org/1.0/firefox_versions.json";
-		private List<String> safariVersions = new ArrayList<>(List.of("26.2 STP", "26.1", "26.0", "18.2", "17.6"));
+		private List<String> safariVersions = new ArrayList<>(List.of("27.2 STP", "26.6", "26.1", "18.6", "17.6"));
 		private int syncIntervalHours = 24;
 
 		public boolean isEnabled() { return enabled; }
@@ -574,9 +574,9 @@ public class CollectorProperties {
 		private double authImmunityMinSampleRatioPct = 1.0;
 		private double authImmunityMinSlotRatioPct = 2.0;
 
-		private long spreadMinRequests = 10000L;
-		private int spreadMinSubnets = 200;
-		private int spreadMinAsns = 30;
+		private long spreadMinRequests = 2500L;
+		private int spreadMinSubnets = 100;
+		private int spreadMinAsns = 20;
 		private double spreadMaxAvgSlotRequests = 10.0;
 		private int spreadMinVersionLagMajors = 2;
 
@@ -585,7 +585,7 @@ public class CollectorProperties {
 		private double correlatedMinMitigatedAsnRatioPct = 40.0;
 		private double correlatedMinUaMismatchRatioPct = 20.0;
 
-		private long datacenterMinRequests = 5000L;
+		private long datacenterMinRequests = 1500L;
 		private double datacenterMinRatioPct = 80.0;
 
 		public double getInternalImmunityMinRatioPct() { return internalImmunityMinRatioPct; }

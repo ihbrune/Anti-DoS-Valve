@@ -480,6 +480,8 @@ public class UserAgentMemoryService {
 		}
 		if (versionAssessment == BrowserVersionLagAssessment.IMPLAUSIBLE_FUTURE) {
 			sigReasons.add(String.format(Locale.ROOT, "Implausible future version (%s v%s)", browserFamLabel, parsedMajor));
+		} else if (versionAssessment == BrowserVersionLagAssessment.FORGED_BUILD_ANOMALY) {
+			sigReasons.add(String.format(Locale.ROOT, "Forged browser build number (%s v%s non-zero build/patch)", browserFamLabel, parsedMajor));
 		} else if (versionAssessment == BrowserVersionLagAssessment.OBSOLETE_ANOMALY) {
 			sigReasons.add(String.format(Locale.ROOT, "Obsolete browser version (%s v%s, -%s lag)", browserFamLabel, parsedMajor, versionLag));
 		}

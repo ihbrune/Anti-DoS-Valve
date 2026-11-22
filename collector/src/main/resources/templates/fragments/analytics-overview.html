@@ -1512,6 +1512,12 @@
                                                 <span>&#x1F7E3;</span> Future v<span
                                                     th:text="${item.parsedMajorVersion()}">185</span>
                                             </span>
+                                            <span th:if="${item.isForgedBuildVersion()}"
+                                                class="badge badge-danger" style="font-size: 9.5px; padding: 1px 5px;"
+                                                title="Synthetic forged build/patch number violating Chromium .0.0.0 User-Agent Reduction">
+                                                <span>&#x1F3B2;</span> Forged Build v<span
+                                                    th:text="${item.parsedMajorVersion()}">150</span>
+                                            </span>
                                             <span th:if="${item.isObsoleteVersion()}" class="badge badge-danger"
                                                 style="font-size: 9.5px; padding: 1px 5px;"
                                                 title="Obsolete browser version (>3 years behind release)">

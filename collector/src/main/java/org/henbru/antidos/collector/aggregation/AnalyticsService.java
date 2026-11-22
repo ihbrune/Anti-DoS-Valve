@@ -575,6 +575,9 @@ public class AnalyticsService {
 					if (versionAssessment == BrowserVersionLagAssessment.IMPLAUSIBLE_FUTURE) {
 						isSuspicious = true;
 						reasons.add(String.format(Locale.ROOT, "Implausible future version (%s v%d)", vRes.browserFamily(), parsedMajorVersion));
+					} else if (versionAssessment == BrowserVersionLagAssessment.FORGED_BUILD_ANOMALY) {
+						isSuspicious = true;
+						reasons.add(String.format(Locale.ROOT, "Forged browser build number (%s v%d non-zero build/patch)", vRes.browserFamily(), parsedMajorVersion));
 					} else if (versionAssessment == BrowserVersionLagAssessment.OBSOLETE_ANOMALY) {
 						isSuspicious = true;
 						reasons.add(String.format(Locale.ROOT, "Obsolete browser version (%s v%d, -%d lag)", vRes.browserFamily(), parsedMajorVersion, versionLagMajors));

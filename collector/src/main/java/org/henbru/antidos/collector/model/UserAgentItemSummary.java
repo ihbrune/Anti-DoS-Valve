@@ -187,7 +187,8 @@ public record UserAgentItemSummary(
 
 	public boolean hasVersionAnomaly() {
 		return versionAssessment == BrowserVersionLagAssessment.IMPLAUSIBLE_FUTURE
-				|| versionAssessment == BrowserVersionLagAssessment.OBSOLETE_ANOMALY;
+				|| versionAssessment == BrowserVersionLagAssessment.OBSOLETE_ANOMALY
+				|| versionAssessment == BrowserVersionLagAssessment.FORGED_BUILD_ANOMALY;
 	}
 
 	public boolean isPreReleasePreview() {
@@ -204,6 +205,10 @@ public record UserAgentItemSummary(
 
 	public boolean isObsoleteVersion() {
 		return versionAssessment == BrowserVersionLagAssessment.OBSOLETE_ANOMALY;
+	}
+
+	public boolean isForgedBuildVersion() {
+		return versionAssessment == BrowserVersionLagAssessment.FORGED_BUILD_ANOMALY;
 	}
 
 	public UserAgentAutoVerdict safeAutoVerdict() {

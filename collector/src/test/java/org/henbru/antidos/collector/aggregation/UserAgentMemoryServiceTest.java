@@ -292,4 +292,30 @@ class UserAgentMemoryServiceTest {
 			properties.setMode(CollectorMode.FULL);
 		}
 	}
+
+	@Test
+	void testForgedBuildAnomalyAndRefinedVersionLadderThresholds() {
+		EffectiveUaHeuristicSettings cfg = EffectiveUaHeuristicSettings.defaults();
+
+		// 1. Single-slot low-volume randomized UA build (Chrome/150.0.6590.913) -> immediate SUSPICIOUS_SIGNATURE
+		EvaluationOutcome forgedOutcome = memoryService.evaluateVerdict(new EvaluationInput(
+				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.6590.913 Safari/537.36",
+				UserAgentFamily.CHROME_DESKTOP,
+				10L, 1, 0, 0, 1, 1,
+				0, 0L, 0L, 0L, 10L, 0L, 0L, 0L, false, null
+		), cfg);
+		assertEquals(UserAgentAutoVerdict.SUSPICIOUS_SIGNATURE, forgedOutcome.verdict());
+		assertEquals(org.henbru.antidos.collector.model.BrowserVersionLagAssessment.FORGED_BUILD_ANOMALY, forgedOutcome.versionAssessment());
+		assertTrue(forgedOutcome.reason().contains("Forged browser build number"));
+
+		// 2. Sliced version-ladder traffic (3,000 reqs across 120 subnets and 25 ASNs) -> caught by refined Pillar 1 defaults
+		EvaluationOutcome slicedLadder = memoryService.evaluateVerdict(new EvaluationInput(
+				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+				UserAgentFamily.CHROME_DESKTOP,
+				3000L, 450, 0, 0, 120, 25,
+				0, 0L, 0L, 0L, 150L, 2850L, 0L, 0L, false, null
+		), cfg);
+		assertEquals(UserAgentAutoVerdict.SUSPICIOUS_ULTRA_SPREAD, slicedLadder.verdict());
+		assertTrue(slicedLadder.verdict().isSuspicious());
+	}
 }

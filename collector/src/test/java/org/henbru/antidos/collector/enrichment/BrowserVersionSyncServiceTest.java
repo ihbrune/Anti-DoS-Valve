@@ -147,4 +147,31 @@ class BrowserVersionSyncServiceTest {
 		assertEquals(BrowserVersionLagAssessment.PRE_RELEASE_PLAUSIBLE, rSafari27.assessment());
 		assertEquals(27, rSafari27.parsedMajorVersion());
 	}
+
+	@Test
+	void testForgedReducedBrowserBuildDetection() {
+		// Synthetic Chromium build randomizer violating .0.0.0 User-Agent Reduction
+		var forgedChrome = service.assessUserAgent(UserAgentFamily.CHROME_DESKTOP,
+				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.6590.913 Safari/537.36");
+		assertEquals(BrowserVersionLagAssessment.FORGED_BUILD_ANOMALY, forgedChrome.assessment());
+		assertTrue(forgedChrome.assessment().isSuspicious());
+
+		var forgedEdge = service.assessUserAgent(UserAgentFamily.EDGE_DESKTOP,
+				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.1234.5");
+		assertEquals(BrowserVersionLagAssessment.FORGED_BUILD_ANOMALY, forgedEdge.assessment());
+
+		// Legitimate Android WebView (; wv), iOS Chrome (CriOS), and Cronet apps remain exempt
+		var webView = service.assessUserAgent(UserAgentFamily.CHROME_MOBILE,
+				"Mozilla/5.0 (Linux; Android 16; SM-A536B Build/BP2A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/150.0.7123.88 Mobile Safari/537.36");
+		assertNotEquals(BrowserVersionLagAssessment.FORGED_BUILD_ANOMALY, webView.assessment());
+
+		var iosChrome = service.assessUserAgent(UserAgentFamily.CHROME_MOBILE,
+				"Mozilla/5.0 (iPhone; CPU iPhone OS 18_6_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/140.0.7339.101 Mobile/15E148 Safari/604.1");
+		assertNotEquals(BrowserVersionLagAssessment.FORGED_BUILD_ANOMALY, iosChrome.assessment());
+
+		assertFalse(BrowserVersionSyncService.hasForgedReducedBrowserBuild(
+				UserAgentFamily.CHROME_MOBILE,
+				"ExampleApp/165 (Linux; U; Android 16; Cronet/157.0.8103.30)",
+				157));
+	}
 }

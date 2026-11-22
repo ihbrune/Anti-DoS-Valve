@@ -40,7 +40,9 @@ public class BrowserVersionSyncService {
 	private static final Logger log = LoggerFactory.getLogger(BrowserVersionSyncService.class);
 
 	private static final Pattern CHROME_VERSION_PATTERN = Pattern.compile("(?:Chrome|Chromium|CriOS)/(\\d+)");
+	private static final Pattern CHROME_FULL_VERSION_PATTERN = Pattern.compile("Chrome/(\\d+)\\.(\\d+)\\.(\\d+)\\.(\\d+)");
 	private static final Pattern EDGE_VERSION_PATTERN = Pattern.compile("(?:Edg|Edge|EdgA|EdgiOS)/(\\d+)");
+	private static final Pattern EDGE_FULL_VERSION_PATTERN = Pattern.compile("Edg/(\\d+)\\.(\\d+)\\.(\\d+)\\.(\\d+)");
 	private static final Pattern FIREFOX_VERSION_PATTERN = Pattern.compile("(?:Firefox|FxiOS)/(\\d+)");
 	private static final Pattern SAFARI_VERSION_PATTERN = Pattern.compile("Version/(\\d+)");
 
@@ -284,7 +286,7 @@ public class BrowserVersionSyncService {
 	private void applyConfiguredSafariMatrix() {
 		List<String> configured = properties != null ? properties.getBrowserReference().getSafariVersions() : null;
 		if (configured == null || configured.isEmpty()) {
-			configured = List.of("26.2 STP", "26.1", "26.0", "18.2", "17.6");
+			configured = List.of("27.2 STP", "26.6", "26.1", "18.6", "17.6");
 		}
 
 		List<BrowserVersionEntry> versions = new ArrayList<>();
@@ -465,23 +467,78 @@ public class BrowserVersionSyncService {
 			return new UserAgentVersionAssessmentResult(BrowserVersionLagAssessment.IMPLAUSIBLE_FUTURE, majorVersion, lag, targetFamily);
 		}
 
-		// 3. Current Stable
+		// 3. Synthetic Forged Build Number (violates Chromium v101+ User-Agent Reduction .0.0.0)
+		if (hasForgedReducedBrowserBuild(family, userAgent, majorVersion)) {
+			return new UserAgentVersionAssessmentResult(BrowserVersionLagAssessment.FORGED_BUILD_ANOMALY, majorVersion, lag, targetFamily);
+		}
+
+		// 4. Current Stable
 		if (majorVersion >= (ref.latestStableMajor() - 1)) {
 			return new UserAgentVersionAssessmentResult(BrowserVersionLagAssessment.CURRENT_STABLE, majorVersion, lag, targetFamily);
 		}
 
-		// 4. Supported Legacy (ESR or preceding OS generation)
+		// 5. Supported Legacy (ESR or preceding OS generation)
 		if (majorVersion >= ref.minSupportedMajor()) {
 			return new UserAgentVersionAssessmentResult(BrowserVersionLagAssessment.SUPPORTED_LEGACY, majorVersion, lag, targetFamily);
 		}
 
-		// 5. Obsolete Anomaly (> 30 versions / > 3 years behind)
+		// 6. Obsolete Anomaly (> 30 versions / > 3 years behind)
 		if (lag >= 30) {
 			return new UserAgentVersionAssessmentResult(BrowserVersionLagAssessment.OBSOLETE_ANOMALY, majorVersion, lag, targetFamily);
 		}
 
-		// 6. Outdated Lag
+		// 7. Outdated Lag
 		return new UserAgentVersionAssessmentResult(BrowserVersionLagAssessment.OUTDATED_LAG, majorVersion, lag, targetFamily);
+	}
+
+	/**
+	 * Detects synthetic Chromium/Edge User-Agent randomizers carrying non-zero minor/build/patch
+	 * segments on major versions &ge; 105 (violating Chromium's mandatory {@code .0.0.0} User-Agent
+	 * Reduction since v101), while exempting native embedded WebViews, Cronet apps, and iOS shells.
+	 */
+	public static boolean hasForgedReducedBrowserBuild(UserAgentFamily family, String userAgent, int majorVersion) {
+		if (userAgent == null || majorVersion < 105) {
+			return false;
+		}
+		if (family != UserAgentFamily.CHROME_DESKTOP
+				&& family != UserAgentFamily.CHROME_MOBILE
+				&& family != UserAgentFamily.EDGE_DESKTOP) {
+			return false;
+		}
+		if (userAgent.contains("Cronet/")
+				|| userAgent.contains("CriOS/")
+				|| userAgent.contains("; wv)")
+				|| userAgent.contains("Version/4.0")
+				|| userAgent.contains("Electron/")
+				|| userAgent.contains("HeadlessChrome/")
+				|| userAgent.contains("SamsungBrowser/")
+				|| userAgent.contains("YaBrowser/")
+				|| userAgent.contains("OPR/")
+				|| userAgent.contains("OPT/")
+				|| userAgent.contains("Vivaldi/")
+				|| userAgent.contains("UCBrowser/")
+				|| userAgent.contains("DuckDuckGo/")
+				|| userAgent.contains("EdgA/")
+				|| userAgent.contains("EdgiOS/")) {
+			return false;
+		}
+		Matcher chromeMatcher = CHROME_FULL_VERSION_PATTERN.matcher(userAgent);
+		if (chromeMatcher.find()) {
+			if (!"0".equals(chromeMatcher.group(2))
+					|| !"0".equals(chromeMatcher.group(3))
+					|| !"0".equals(chromeMatcher.group(4))) {
+				return true;
+			}
+		}
+		if (family == UserAgentFamily.EDGE_DESKTOP) {
+			Matcher edgeMatcher = EDGE_FULL_VERSION_PATTERN.matcher(userAgent);
+			if (edgeMatcher.find()) {
+				return !"0".equals(edgeMatcher.group(2))
+						|| !"0".equals(edgeMatcher.group(3))
+						|| !"0".equals(edgeMatcher.group(4));
+			}
+		}
+		return false;
 	}
 
 	private int extractVersionWithRegex(String ua, Pattern pattern) {

@@ -703,7 +703,7 @@ All parameters can be configured via `collector-config.yaml` or overridden via e
 | `enabled` | `COLLECTOR_BROWSER_REFERENCE_ENABLED` | `true` | Enables authoritative browser release ground truth for User-Agent analytics. |
 | `chrome-api-url` | `COLLECTOR_BROWSER_CHROME_API_URL` | `https://versionhistory.googleapis.com/...` | Google Version History API endpoint for Chromium/Edge channels. |
 | `firefox-api-url` | `COLLECTOR_BROWSER_FIREFOX_API_URL` | `https://product-details.mozilla.org/...` | Mozilla Product Details API endpoint for Firefox channels. |
-| `safari-versions` | `COLLECTOR_BROWSER_SAFARI_VERSIONS` | `26.2 STP, 26.1, 26.0, 18.2, 17.6` | Configurable static version list for OS-bound Apple Safari releases. |
+| `safari-versions` | `COLLECTOR_BROWSER_SAFARI_VERSIONS` | `27.2 STP, 26.6, 26.1, 18.6, 17.6` | Configurable static version list for OS-bound Apple Safari releases. |
 | `sync-interval-hours` | `COLLECTOR_BROWSER_SYNC_INTERVAL_HOURS` | `24` | Background synchronization interval (in hours) for upstream vendor feeds. |
 
 ### User-Agent 3-Pillar Heuristic & Memory (`collector.user-agent-heuristics.*`)
@@ -717,16 +717,16 @@ Thresholds defined here serve as baseline defaults and can be overridden live in
 | `search-engine-immunity-min-ratio-pct` | `50.0` | Minimum share of verified `SEARCH_ENGINE` IP feed requests to grant `IMMUNE_SEARCH_ENGINE`. |
 | `auth-immunity-min-sample-ratio-pct` | `1.0` | Minimum authenticated sample ratio (%) for Stage-0 `IMMUNE_AUTHENTICATED` exemption. |
 | `auth-immunity-min-slot-ratio-pct` | `2.0` | Minimum slot-level `authenticated_count` share (%) for Stage-0 `IMMUNE_AUTHENTICATED` exemption. |
-| `spread-min-requests` | `10000` | Pillar 1 minimum external unauthenticated request volume. |
-| `spread-min-subnets` | `200` | Pillar 1 minimum distinct `/24` or `/64` subnets. |
-| `spread-min-asns` | `30` | Pillar 1 minimum distinct Autonomous Systems. |
+| `spread-min-requests` | `2500` | Pillar 1 minimum external unauthenticated request volume. |
+| `spread-min-subnets` | `100` | Pillar 1 minimum distinct `/24` or `/64` subnets. |
+| `spread-min-asns` | `20` | Pillar 1 minimum distinct Autonomous Systems. |
 | `spread-max-avg-slot-requests` | `10.0` | Pillar 1 maximum average requests per slot identifying low-and-slow proxy distribution. |
 | `spread-min-version-lag-majors` | `2` | Pillar 1 minimum browser major version lag (combined with ultra-spread scale). |
 | `correlated-min-requests` | `2000` | Pillar 2 minimum external request volume for Guilt-by-Association evaluation. |
 | `correlated-min-incident-ratio-pct` | `30.0` | Pillar 2 minimum rate-limiting incident event share (%). |
 | `correlated-min-mitigated-asn-ratio-pct` | `40.0` | Pillar 2 minimum request share originating from ASNs with active or recent mitigations (%). |
 | `correlated-min-ua-mismatch-ratio-pct` | `20.0` | Pillar 2 minimum request share with Visitor-Cookie User-Agent mismatches (%). |
-| `datacenter-min-requests` | `5000` | Pillar 3 minimum external unauthenticated request volume. |
+| `datacenter-min-requests` | `1500` | Pillar 3 minimum external unauthenticated request volume. |
 | `datacenter-min-ratio-pct` | `80.0` | Pillar 3 minimum request share from datacenter or Tor ASNs (%). |
 
 ---

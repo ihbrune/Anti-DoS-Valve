@@ -10,6 +10,7 @@ public enum BrowserVersionLagAssessment {
 	OUTDATED_LAG("Outdated Release", "badge-warning", false),
 	OBSOLETE_ANOMALY("Obsolete Version (>3 yrs)", "badge-danger", true),
 	IMPLAUSIBLE_FUTURE("Implausible Future Version", "badge-danger", true),
+	FORGED_BUILD_ANOMALY("Forged Build Number", "badge-danger", true),
 	UNTRACKED("Standard", "badge-neutral", false);
 
 	private final String label;
