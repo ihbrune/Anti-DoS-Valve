@@ -508,6 +508,77 @@ public class AntiDoSMonitor {
 	}
 
 	/**
+	 * Registers a request blocked by a dynamic User-Agent rule under the resolved client/subnet
+	 * counter key so slot telemetry and blocked-counter caches remain compatible with IP/CIDR ingestion.
+	 */
+	public void registerDynamicUaBlockRequest(
+			String counterKey,
+			String clientIp,
+			byte[] ipv4Bytes,
+			int ipv4Mask,
+			int ipv6Mask,
+			boolean trackCardinality,
+			boolean returningVisitor,
+			boolean authenticated,
+			boolean uaMismatch,
+			String userAgent,
+			String ruleLabel) {
+		if (counterKey == null || counterKey.isEmpty()) {
+			return;
+		}
+
+		totalrequests.increment();
+		if (authenticated) {
+			totalAuthenticatedRequests.increment();
+		}
+
+		AntiDoSSlot slot = provideCurrentSlot();
+		slot.incrementTotalRequests();
+		if (authenticated) {
+			slot.incrementAuthenticatedRequests();
+		}
+
+		AntiDoSCounter counter = slot.getCounter(counterKey);
+		counter.incrementCount();
+		if (returningVisitor) {
+			counter.incrementReturningCount();
+		}
+		if (authenticated) {
+			counter.incrementAuthenticatedCount();
+		}
+		if (uaMismatch) {
+			counter.incrementUaMismatchCount();
+		}
+		if (trackCardinality) {
+			if (clientIp != null && !counterKey.equals(clientIp)) {
+				counter.registerClientIp(ipv4Bytes, clientIp, ipv4Mask, ipv6Mask);
+			}
+			if (userAgent != null && !userAgent.isEmpty()) {
+				counter.registerUserAgent(userAgent);
+			}
+		}
+
+		if (!counter.isLocked()) {
+			counter.setRetainedCounts(0);
+			counter.lock();
+			slot.blockCounter(counterKey, counter);
+
+			if (log.isInfoEnabled()) {
+				boolean canLog = blockLogThrottler.shouldLog(getTimeInMillis(), suppressed -> {
+					log.info(name4logging + " - [LogThrottler] Suppressed " + suppressed
+							+ " block log events in the previous interval");
+				});
+				if (canLog) {
+					log.info(name4logging + " - DynamicUaBlock Counter for '" + counterKey + "' ("
+							+ (ruleLabel != null ? ruleLabel : "UA") + "): " + counter.toString());
+				}
+			}
+		} else {
+			slot.blockCounter(counterKey, counter);
+		}
+	}
+
+	/**
 	 * This method fetches the desired counter from the current slot. Does not
 	 * modify the status of the counter
 	 * 

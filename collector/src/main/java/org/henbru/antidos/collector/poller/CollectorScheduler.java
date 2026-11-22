@@ -30,6 +30,7 @@ public class CollectorScheduler {
 	private final org.henbru.antidos.collector.system.DatabaseMaintenanceService databaseMaintenanceService;
 	private final CollectorProperties properties;
 	private final org.henbru.antidos.collector.storage.MitigationRuleRepository mitigationRuleRepository;
+	private final org.henbru.antidos.collector.storage.MitigationUaRuleRepository mitigationUaRuleRepository;
 	private final org.henbru.antidos.collector.storage.SubnetProfileRepository subnetProfileRepository;
 	private final org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService;
 
@@ -46,7 +47,27 @@ public class CollectorScheduler {
 			CollectorProperties properties) {
 		this(pollerService, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
 				crawlerSyncService, networkEntityRepository, entityResolver, dailyReportService,
-				databaseMaintenanceService, properties, null, null, null);
+				databaseMaintenanceService, properties, null, null, null, null);
+	}
+
+	public CollectorScheduler(
+			CollectorPollerService pollerService,
+			SlotSnapshotRepository slotSnapshotRepository,
+			ClientEventRepository clientEventRepository,
+			org.henbru.antidos.collector.storage.PollEventLogRepository pollEventLogRepository,
+			org.henbru.antidos.collector.enrichment.CrawlerSyncService crawlerSyncService,
+			org.henbru.antidos.collector.storage.NetworkEntityRepository networkEntityRepository,
+			org.henbru.antidos.collector.enrichment.EntityResolver entityResolver,
+			org.henbru.antidos.collector.report.DailyReportService dailyReportService,
+			org.henbru.antidos.collector.system.DatabaseMaintenanceService databaseMaintenanceService,
+			CollectorProperties properties,
+			org.henbru.antidos.collector.storage.MitigationRuleRepository mitigationRuleRepository,
+			org.henbru.antidos.collector.storage.SubnetProfileRepository subnetProfileRepository,
+			org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService) {
+		this(pollerService, slotSnapshotRepository, clientEventRepository, pollEventLogRepository,
+				crawlerSyncService, networkEntityRepository, entityResolver, dailyReportService,
+				databaseMaintenanceService, properties, mitigationRuleRepository, subnetProfileRepository,
+				rollupAggregationService, null);
 	}
 
 	@org.springframework.beans.factory.annotation.Autowired
@@ -63,7 +84,8 @@ public class CollectorScheduler {
 			CollectorProperties properties,
 			@org.springframework.beans.factory.annotation.Autowired(required = false) org.henbru.antidos.collector.storage.MitigationRuleRepository mitigationRuleRepository,
 			@org.springframework.beans.factory.annotation.Autowired(required = false) org.henbru.antidos.collector.storage.SubnetProfileRepository subnetProfileRepository,
-			@org.springframework.beans.factory.annotation.Autowired(required = false) org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService) {
+			@org.springframework.beans.factory.annotation.Autowired(required = false) org.henbru.antidos.collector.aggregation.RollupAggregationService rollupAggregationService,
+			@org.springframework.beans.factory.annotation.Autowired(required = false) org.henbru.antidos.collector.storage.MitigationUaRuleRepository mitigationUaRuleRepository) {
 		this.pollerService = pollerService;
 		this.slotSnapshotRepository = slotSnapshotRepository;
 		this.clientEventRepository = clientEventRepository;
@@ -77,6 +99,7 @@ public class CollectorScheduler {
 		this.mitigationRuleRepository = mitigationRuleRepository;
 		this.subnetProfileRepository = subnetProfileRepository;
 		this.rollupAggregationService = rollupAggregationService;
+		this.mitigationUaRuleRepository = mitigationUaRuleRepository;
 	}
 
 	@jakarta.annotation.PostConstruct
@@ -245,6 +268,7 @@ public class CollectorScheduler {
 
 		// Clean up expired/revoked mitigation rules and old audit log entries
 		int deletedMitigationRules = mitigationRuleRepository != null ? mitigationRuleRepository.deleteHistoricalRulesOlderThan(cutoff) : 0;
+		int deletedMitigationUaRules = mitigationUaRuleRepository != null ? mitigationUaRuleRepository.deleteHistoricalRulesOlderThan(cutoff) : 0;
 		int deletedMitigationAudits = mitigationRuleRepository != null ? mitigationRuleRepository.deleteAuditEntriesOlderThan(cutoff) : 0;
 
 		// Perform automatic database storage compaction (VACUUM) for SQLite if freelist threshold is exceeded
@@ -265,9 +289,9 @@ public class CollectorScheduler {
 		);
 		this.lastRetentionResult = result;
 
-		log.info("Retention cleanup completed in {}ms: purged {} slot snapshots, {} client events ({} active, {} security), {} poll logs, {} orphan entities, {} stale profiles, {} mitigation rules, {} audit logs, expired {} stale entities, vacuum: {}",
+		log.info("Retention cleanup completed in {}ms: purged {} slot snapshots, {} client events ({} active, {} security), {} poll logs, {} orphan entities, {} stale profiles, {} CIDR mitigation rules, {} UA mitigation rules, {} audit logs, expired {} stale entities, vacuum: {}",
 				durationMs, deletedSlots, totalDeletedEvents, deletedActiveEvents, deletedSecurityEvents, deletedLogs,
-				deletedEntities, deletedProfiles, deletedMitigationRules, deletedMitigationAudits, expiredEntities, vacuumExecuted);
+				deletedEntities, deletedProfiles, deletedMitigationRules, deletedMitigationUaRules, deletedMitigationAudits, expiredEntities, vacuumExecuted);
 		return result;
 	}
 

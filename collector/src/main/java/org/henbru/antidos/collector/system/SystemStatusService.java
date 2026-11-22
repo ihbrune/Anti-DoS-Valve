@@ -208,6 +208,7 @@ public class SystemStatusService {
 		tableCounts.put("crawler_feeds", countTable("crawler_feeds"));
 		tableCounts.put("monitored_valves", countTable("monitored_valves"));
 		tableCounts.put("mitigation_rules", countTable("mitigation_rules"));
+		tableCounts.put("mitigation_ua_rules", countTable("mitigation_ua_rules"));
 		tableCounts.put("mitigation_audit_log", countTable("mitigation_audit_log"));
 
 		SystemStatusDto.HikariPoolInfo hikariInfo = null;

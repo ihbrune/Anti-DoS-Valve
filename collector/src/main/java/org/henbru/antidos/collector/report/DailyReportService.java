@@ -2016,7 +2016,7 @@ public class DailyReportService {
 				dayAuditEntries = ruleRepository.findAuditEntriesBetween(startInstant, endInstant);
 			} else {
 				dayAuditEntries = jdbcTemplate.query("""
-						SELECT id, rule_id, cidr, batch_id, action, actor, ttl_seconds, details, created_at
+						SELECT id, rule_id, cidr, batch_id, action, actor, ttl_seconds, details, created_at, target_type
 						FROM mitigation_audit_log
 						WHERE created_at >= ? AND created_at < ?
 						ORDER BY created_at ASC, id ASC

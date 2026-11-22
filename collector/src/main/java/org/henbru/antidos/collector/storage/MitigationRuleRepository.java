@@ -55,8 +55,18 @@ public class MitigationRuleRepository {
 			rs.getString("actor"),
 			rs.getObject("ttl_seconds") != null ? rs.getInt("ttl_seconds") : null,
 			rs.getString("details"),
-			toInstant(rs.getTimestamp("created_at"))
+			toInstant(rs.getTimestamp("created_at")),
+			getTargetTypeSafe(rs)
 	);
+
+	private static String getTargetTypeSafe(java.sql.ResultSet rs) {
+		try {
+			String tt = rs.getString("target_type");
+			return tt != null && !tt.isBlank() ? tt.trim().toUpperCase() : MitigationAuditEntry.TARGET_CIDR;
+		} catch (java.sql.SQLException ignored) {
+			return MitigationAuditEntry.TARGET_CIDR;
+		}
+	}
 
 	private static Instant toInstant(Timestamp ts) {
 		return ts != null ? ts.toInstant() : null;
@@ -264,8 +274,8 @@ public class MitigationRuleRepository {
 	public void insertAuditEntry(MitigationAuditEntry entry) {
 		String sql = """
 				INSERT INTO mitigation_audit_log (
-				    rule_id, cidr, batch_id, action, actor, ttl_seconds, details, created_at
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+				    rule_id, cidr, batch_id, action, actor, ttl_seconds, details, created_at, target_type
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 				""";
 		Instant created = entry.createdAt() != null ? entry.createdAt() : Instant.now();
 		StorageRetryUtil.executeWithRetry("MitigationRuleRepository.insertAuditEntry", () -> {
@@ -277,7 +287,8 @@ public class MitigationRuleRepository {
 					entry.actor() != null ? entry.actor() : "ADMIN",
 					entry.ttlSeconds(),
 					entry.details(),
-					Timestamp.from(created)
+					Timestamp.from(created),
+					entry.targetTypeOrDefault()
 			);
 			return null;
 		});
@@ -400,35 +411,13 @@ public class MitigationRuleRepository {
 	}
 
 	public List<MitigationAuditEntry> findAuditEntriesFiltered(String search, String action, String actor, int offset, int limit) {
+		return findAuditEntriesFiltered(search, action, actor, "ALL", offset, limit);
+	}
+
+	public List<MitigationAuditEntry> findAuditEntriesFiltered(String search, String action, String actor, String targetType, int offset, int limit) {
 		StringBuilder sql = new StringBuilder("SELECT * FROM mitigation_audit_log WHERE 1=1");
 		List<Object> params = new java.util.ArrayList<>();
-
-		if (action != null && !action.isBlank() && !"ALL".equalsIgnoreCase(action)) {
-			if ("SIMULATION".equalsIgnoreCase(action) || "DRY_RUN_SIMULATION".equalsIgnoreCase(action)) {
-				sql.append(" AND action IN ('AUTO_WOULD_BLOCK', 'AUTO_WOULD_EXTEND')");
-			} else {
-				sql.append(" AND action = ?");
-				params.add(action.trim().toUpperCase());
-			}
-		}
-
-		if (actor != null && !actor.isBlank() && !"ALL".equalsIgnoreCase(actor)) {
-			if ("AUTO_ENGINE".equalsIgnoreCase(actor.trim()) || "AUTO_MITIGATION".equalsIgnoreCase(actor.trim())) {
-				sql.append(" AND actor IN ('AUTO_ENGINE', 'AUTO_MITIGATION')");
-			} else {
-				sql.append(" AND actor = ?");
-				params.add(actor.trim().toUpperCase());
-			}
-		}
-
-		if (search != null && !search.isBlank()) {
-			String term = "%" + search.trim().toLowerCase() + "%";
-			sql.append(" AND (LOWER(COALESCE(cidr, '')) LIKE ? OR LOWER(COALESCE(batch_id, '')) LIKE ? OR LOWER(COALESCE(details, '')) LIKE ? OR LOWER(COALESCE(actor, '')) LIKE ?)");
-			params.add(term);
-			params.add(term);
-			params.add(term);
-			params.add(term);
-		}
+		appendAuditFilters(sql, params, search, action, actor, targetType);
 
 		sql.append(" ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?");
 		params.add(Math.max(1, limit));
@@ -438,12 +427,33 @@ public class MitigationRuleRepository {
 	}
 
 	public long countAuditEntriesFiltered(String search, String action, String actor) {
+		return countAuditEntriesFiltered(search, action, actor, "ALL");
+	}
+
+	public long countAuditEntriesFiltered(String search, String action, String actor, String targetType) {
 		StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM mitigation_audit_log WHERE 1=1");
 		List<Object> params = new java.util.ArrayList<>();
+		appendAuditFilters(sql, params, search, action, actor, targetType);
+
+		Long count = jdbcTemplate.queryForObject(sql.toString(), Long.class, params.toArray());
+		return count != null ? count : 0L;
+	}
+
+	private void appendAuditFilters(StringBuilder sql, List<Object> params, String search, String action, String actor, String targetType) {
+		if (targetType != null && !targetType.isBlank() && !"ALL".equalsIgnoreCase(targetType)) {
+			String normalizedTarget = targetType.trim().toUpperCase();
+			if (MitigationAuditEntry.TARGET_USER_AGENT.equals(normalizedTarget) || "UA".equals(normalizedTarget)) {
+				sql.append(" AND UPPER(COALESCE(target_type, 'CIDR')) = ?");
+				params.add(MitigationAuditEntry.TARGET_USER_AGENT);
+			} else if (MitigationAuditEntry.TARGET_CIDR.equals(normalizedTarget)) {
+				sql.append(" AND UPPER(COALESCE(target_type, 'CIDR')) = ?");
+				params.add(MitigationAuditEntry.TARGET_CIDR);
+			}
+		}
 
 		if (action != null && !action.isBlank() && !"ALL".equalsIgnoreCase(action)) {
 			if ("SIMULATION".equalsIgnoreCase(action) || "DRY_RUN_SIMULATION".equalsIgnoreCase(action)) {
-				sql.append(" AND action IN ('AUTO_WOULD_BLOCK', 'AUTO_WOULD_EXTEND')");
+				sql.append(" AND action IN ('AUTO_WOULD_BLOCK', 'AUTO_WOULD_EXTEND', 'UA_AUTO_WOULD_BLOCK')");
 			} else {
 				sql.append(" AND action = ?");
 				params.add(action.trim().toUpperCase());
@@ -452,7 +462,7 @@ public class MitigationRuleRepository {
 
 		if (actor != null && !actor.isBlank() && !"ALL".equalsIgnoreCase(actor)) {
 			if ("AUTO_ENGINE".equalsIgnoreCase(actor.trim()) || "AUTO_MITIGATION".equalsIgnoreCase(actor.trim())) {
-				sql.append(" AND actor IN ('AUTO_ENGINE', 'AUTO_MITIGATION')");
+				sql.append(" AND actor IN ('AUTO_ENGINE', 'AUTO_MITIGATION', 'AUTO_UA_ENGINE')");
 			} else {
 				sql.append(" AND actor = ?");
 				params.add(actor.trim().toUpperCase());
@@ -467,9 +477,6 @@ public class MitigationRuleRepository {
 			params.add(term);
 			params.add(term);
 		}
-
-		Long count = jdbcTemplate.queryForObject(sql.toString(), Long.class, params.toArray());
-		return count != null ? count : 0L;
 	}
 
 	/**

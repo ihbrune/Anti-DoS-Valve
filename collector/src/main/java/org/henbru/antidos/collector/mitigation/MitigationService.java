@@ -24,18 +24,27 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.henbru.antidos.collector.aggregation.UserAgentClassifier;
 import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.config.EndpointConfig;
 import org.henbru.antidos.collector.enrichment.EntityResolver;
 import org.henbru.antidos.collector.model.MitigationAuditEntry;
 import org.henbru.antidos.collector.model.MitigationRule;
+import org.henbru.antidos.collector.model.MitigationUaRule;
 import org.henbru.antidos.collector.model.MonitoredValve;
 import org.henbru.antidos.collector.model.NetworkEntity;
+import org.henbru.antidos.collector.model.UserAgentAutoVerdict;
+import org.henbru.antidos.collector.model.UserAgentFamily;
+import org.henbru.antidos.collector.model.UserAgentManualOverride;
+import org.henbru.antidos.collector.model.UserAgentProfile;
 import org.henbru.antidos.collector.model.ValveOverviewDto;
 import org.henbru.antidos.collector.notification.AlertNotificationService;
 import org.henbru.antidos.collector.poller.ValveStatusClient;
 import org.henbru.antidos.collector.storage.MitigationRuleRepository;
+import org.henbru.antidos.collector.storage.MitigationUaRuleRepository;
 import org.henbru.antidos.collector.storage.MonitoredValveRepository;
+import org.henbru.antidos.collector.storage.SystemSettingsRepository;
+import org.henbru.antidos.collector.storage.UserAgentMemoryRepository;
 import org.henbru.antidos.collector.util.IpNetworkUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -92,6 +101,9 @@ public class MitigationService {
 	private final EntityResolver entityResolver;
 	private final AlertNotificationService notificationService;
 	private final JdbcTemplate jdbcTemplate;
+	private final MitigationUaRuleRepository uaRuleRepository;
+	private final UserAgentMemoryRepository uaMemoryRepository;
+	private final SystemSettingsRepository settingsRepository;
 
 	private final AtomicBoolean deterrenceRefreshPending = new AtomicBoolean(false);
 	private final AtomicBoolean deterrenceWorkerRunning = new AtomicBoolean(false);
@@ -105,7 +117,10 @@ public class MitigationService {
 			ValveStatusClient statusClient,
 			@Autowired(required = false) EntityResolver entityResolver,
 			@Autowired(required = false) AlertNotificationService notificationService,
-			JdbcTemplate jdbcTemplate) {
+			JdbcTemplate jdbcTemplate,
+			@Autowired(required = false) MitigationUaRuleRepository uaRuleRepository,
+			@Autowired(required = false) UserAgentMemoryRepository uaMemoryRepository,
+			@Autowired(required = false) SystemSettingsRepository settingsRepository) {
 		this.properties = properties;
 		this.ruleRepository = ruleRepository;
 		this.valveRepository = valveRepository;
@@ -113,6 +128,21 @@ public class MitigationService {
 		this.entityResolver = entityResolver;
 		this.notificationService = notificationService;
 		this.jdbcTemplate = jdbcTemplate;
+		this.uaRuleRepository = uaRuleRepository;
+		this.uaMemoryRepository = uaMemoryRepository;
+		this.settingsRepository = settingsRepository;
+	}
+
+	public MitigationService(
+			CollectorProperties properties,
+			MitigationRuleRepository ruleRepository,
+			MonitoredValveRepository valveRepository,
+			ValveStatusClient statusClient,
+			EntityResolver entityResolver,
+			AlertNotificationService notificationService,
+			JdbcTemplate jdbcTemplate) {
+		this(properties, ruleRepository, valveRepository, statusClient, entityResolver, notificationService,
+				jdbcTemplate, null, null, null);
 	}
 
 	public MitigationService(
@@ -366,6 +396,52 @@ public class MitigationService {
 		}
 		List<String> cidrs = active.stream().map(MitigationRule::cidr).toList();
 		return computeRevisionForCidrs(cidrs);
+	}
+
+	/**
+	 * Computes the exact same 53-bit positive FNV-1a revision hash over sorted decimal 32-bit UA hashes
+	 * as {@code AntiDoSDynamicBlockRegistry.computeRevisionForUaHashes}.
+	 */
+	public static long computeRevisionForUaHashes(Collection<Integer> uaHashes) {
+		if (uaHashes == null || uaHashes.isEmpty()) {
+			return 0L;
+		}
+		List<String> sorted = new ArrayList<>(uaHashes.size());
+		for (Integer h : uaHashes) {
+			if (h != null) {
+				sorted.add(Integer.toString(h));
+			}
+		}
+		return computeRevisionForCidrs(sorted);
+	}
+
+	public List<MitigationUaRule> getActiveUaRulesForSync(Instant now) {
+		if (uaRuleRepository == null) {
+			return List.of();
+		}
+		if (!properties.isViewerMode()) {
+			uaRuleRepository.expireElapsedRules(now);
+		}
+		return uaRuleRepository.findActiveRules(now.plus(MIN_SYNC_REMAINING_TTL));
+	}
+
+	public long getExpectedUaRevision(Instant now) {
+		List<MitigationUaRule> active = getActiveUaRulesForSync(now);
+		if (active.isEmpty()) {
+			return 0L;
+		}
+		return computeRevisionForUaHashes(active.stream().map(MitigationUaRule::uaHash32).toList());
+	}
+
+	public List<MitigationUaRule> getActiveUaRules() {
+		if (uaRuleRepository == null) {
+			return List.of();
+		}
+		Instant now = Instant.now();
+		if (!properties.isViewerMode()) {
+			uaRuleRepository.expireElapsedRules(now);
+		}
+		return uaRuleRepository.findActiveRules(now);
 	}
 
 	// =========================================================================
@@ -1053,13 +1129,17 @@ public class MitigationService {
 		String blocksPayload = buildBlocksPayload(activeRules);
 		long expectedRevision = computeRevisionForCidrs(activeRules.stream().map(MitigationRule::cidr).toList());
 
+		List<MitigationUaRule> activeUaRules = getActiveUaRulesForSync(now);
+		String uaBlocksPayload = buildUaBlocksPayload(activeUaRules);
+		long expectedUaRevision = computeRevisionForUaHashes(activeUaRules.stream().map(MitigationUaRule::uaHash32).toList());
+
 		List<MonitoredValve> mitigationValves = valveRepository.findAllActive().stream()
 				.filter(MonitoredValve::dynamicMitigationEnabled)
 				.toList();
 
 		if (properties.getMode().isOperator()) {
-			log.info("Operator mode: persisted {} active mitigation rule(s) (expected revision {}); active Valve push delegated to HEADLESS/FULL collector.",
-					activeRules.size(), expectedRevision);
+			log.info("Operator mode: persisted {} active CIDR rule(s) (rev {}) and {} active UA rule(s) (rev {}); active Valve push delegated to HEADLESS/FULL collector.",
+					activeRules.size(), expectedRevision, activeUaRules.size(), expectedUaRevision);
 			return new FleetSyncResult(mitigationValves.size(), 0, activeRules.size(), expectedRevision, List.of());
 		}
 
@@ -1083,38 +1163,89 @@ public class MitigationService {
 			try {
 				String targetUrl = resolveMitigationUrl(ep, valve.mitigationUri());
 				String token = resolveMitigationToken(ep);
-				ValveStatusClient.MitigationCommandResponse resp = statusClient.sendMitigationCommand(
-						targetUrl,
-						token,
-						valve.valveName(),
-						"replace",
-						null,
-						null,
-						null,
-						blocksPayload
-				);
-				valveRepository.updateDynamicMitigationStats(
-						valve.serverId(),
-						valve.valveName(),
-						true,
-						valve.mitigationUri(),
-						resp.activeCount(),
-						valve.dynamicBlocksBlockedRequests(),
-						resp.revision(),
-						resp.dynamicRulesHashVersionOrDefault(),
-						now
-				);
+				boolean includeUaPayload = uaRuleRepository != null
+						&& (!activeUaRules.isEmpty() || valve.dynamicUaBlocksActiveCount() > 0 || valve.dynamicUaRulesRevision() != 0L);
+
+				ValveStatusClient.MitigationCommandResponse resp = null;
+				if (includeUaPayload) {
+					resp = statusClient.sendMitigationCommand(
+							targetUrl,
+							token,
+							valve.valveName(),
+							"replace",
+							null,
+							null,
+							null,
+							blocksPayload,
+							uaBlocksPayload
+					);
+				}
+				if (resp == null) {
+					resp = statusClient.sendMitigationCommand(
+							targetUrl,
+							token,
+							valve.valveName(),
+							"replace",
+							null,
+							null,
+							null,
+							blocksPayload
+					);
+				}
+				if (includeUaPayload || resp.dynamicUaBlocksActiveCount() != null || resp.dynamicUaRulesRevision() != null) {
+					valveRepository.updateDynamicMitigationStats(
+							valve.serverId(),
+							valve.valveName(),
+							true,
+							valve.mitigationUri(),
+							resp.activeCount(),
+							valve.dynamicBlocksBlockedRequests(),
+							resp.revision(),
+							resp.dynamicRulesHashVersionOrDefault(),
+							resp.dynamicUaBlocksActiveCountOrDefault(),
+							valve.dynamicUaBlocksBlockedRequests(),
+							valve.dynamicUaBlocksBypassedRequests(),
+							resp.dynamicUaRulesRevisionOrDefault(),
+							now
+					);
+				} else {
+					valveRepository.updateDynamicMitigationStats(
+							valve.serverId(),
+							valve.valveName(),
+							true,
+							valve.mitigationUri(),
+							resp.activeCount(),
+							valve.dynamicBlocksBlockedRequests(),
+							resp.revision(),
+							resp.dynamicRulesHashVersionOrDefault(),
+							now
+					);
+				}
 				syncedCount++;
 
-				if (resp.revision() == expectedRevision) {
+				boolean cidrMatch = (resp.revision() == expectedRevision);
+				boolean uaMatch = !includeUaPayload
+						|| resp.dynamicUaRulesRevision() == null
+						|| resp.dynamicUaRulesRevisionOrDefault() == expectedUaRevision;
+
+				if (cidrMatch && uaMatch) {
 					valveSyncStates.remove(valveKey);
 				} else {
-					String reason = "Revision mismatch after fleet sync: expected " + expectedRevision + ", but valve reported " + resp.revision();
+					long trackedExpected = expectedUaRevision == 0L ? expectedRevision : (expectedRevision ^ (expectedUaRevision * 31L));
+					long trackedReported = expectedUaRevision == 0L ? resp.revision() : (resp.revision() ^ (resp.dynamicUaRulesRevisionOrDefault() * 31L));
+					String reason = "Revision mismatch after fleet sync: expected CIDR rev " + expectedRevision
+							+ (includeUaPayload ? " / UA rev " + expectedUaRevision : "")
+							+ ", but valve reported CIDR rev " + resp.revision()
+							+ (includeUaPayload ? " / UA rev " + resp.dynamicUaRulesRevisionOrDefault() : "");
 					Instant backoffUntil = now.plus(Duration.ofMinutes(15));
-					valveSyncStates.put(valveKey, new ValveSyncState(expectedRevision, resp.revision(), 1, now, backoffUntil, reason));
+					valveSyncStates.put(valveKey, new ValveSyncState(trackedExpected, trackedReported, 1, now, backoffUntil, reason));
 					recordAudit(null, valveKey, "SYNC_CIRCUIT_BREAKER",
-							"Fleet sync completed but resulting revision (" + resp.revision() + ") differs from expected ("
-									+ expectedRevision + "). Active rules: " + resp.activeCount() + ". Auto-sync suspended for 15m to prevent loop.",
+							"Fleet sync completed but resulting revision (CIDR " + resp.revision()
+									+ (includeUaPayload ? ", UA " + resp.dynamicUaRulesRevisionOrDefault() : "")
+									+ ") differs from expected (CIDR " + expectedRevision
+									+ (includeUaPayload ? ", UA " + expectedUaRevision : "")
+									+ "). Active rules: " + resp.activeCount() + " CIDR, "
+									+ resp.dynamicUaBlocksActiveCountOrDefault() + " UA. Auto-sync suspended for 15m to prevent loop.",
 							0, "ADMIN");
 				}
 
@@ -1126,15 +1257,18 @@ public class MitigationService {
 				String err = valve.serverId() + "/" + valve.valveName() + ": " + ValveStatusClient.formatErrorMessage(e);
 				log.warn("Failed to sync dynamic mitigations to '{}': {}", valve.serverId() + "/" + valve.valveName(), e.getMessage());
 				errors.add(err);
+				long trackedExpected = expectedUaRevision == 0L ? expectedRevision : (expectedRevision ^ (expectedUaRevision * 31L));
+				long trackedValve = expectedUaRevision == 0L ? valve.dynamicRulesRevision() : (valve.dynamicRulesRevision() ^ (valve.dynamicUaRulesRevision() * 31L));
 				Instant backoffUntil = now.plus(Duration.ofMinutes(5));
-				valveSyncStates.put(valveKey, new ValveSyncState(expectedRevision, valve.dynamicRulesRevision(), 1, now, backoffUntil, err));
+				valveSyncStates.put(valveKey, new ValveSyncState(trackedExpected, trackedValve, 1, now, backoffUntil, err));
 			}
 		}
 
 		if (targetCount > 0) {
 			recordAudit(null, "FLEET", "FLEET_SYNC",
 					"Fleet sync completed: " + syncedCount + "/" + targetCount + " valve(s) synced, "
-							+ activeRules.size() + " active rule(s), expected revision: " + expectedRevision
+							+ activeRules.size() + " active CIDR rule(s) (rev: " + expectedRevision + ")"
+							+ (uaRuleRepository != null ? ", " + activeUaRules.size() + " active UA rule(s) (rev: " + expectedUaRevision + ")" : "")
 							+ (errors.isEmpty() ? "" : ", errors: " + errors.size()),
 					0, "ADMIN");
 		}
@@ -1145,7 +1279,7 @@ public class MitigationService {
 	/**
 	 * Called during the poller cycle when a Valve advertises {@code dynamicMitigationEnabled = true}.
 	 * Automatically reconciles the Valve's in-memory registry if its {@code dynamicRulesRevision}
-	 * differs from the Collector's expected revision (e.g. after a Tomcat restart).
+	 * or {@code dynamicUaRulesRevision} differs from the Collector's expected revision (e.g. after a Tomcat restart).
 	 * <p>
 	 * Protected by a smart revision-scoped circuit breaker to prevent infinite update loops
 	 * across divergent hash versions or guardrail rejections.
@@ -1160,26 +1294,39 @@ public class MitigationService {
 		long valveRevision = valveSummary.dynamicRulesRevisionOrDefault();
 		int valveHashVersion = valveSummary.dynamicRulesHashVersionOrDefault();
 
-		if (valveRevision == expectedRevision) {
+		long expectedUaRevision = getExpectedUaRevision(now);
+		long valveUaRevision = valveSummary.dynamicUaRulesRevisionOrDefault();
+		boolean includeUaPayload = uaRuleRepository != null
+				&& (!getActiveUaRulesForSync(now).isEmpty() || valveUaRevision != 0L || valveSummary.dynamicUaBlocksActiveCountOrDefault() > 0);
+
+		boolean cidrConverged = (valveRevision == expectedRevision);
+		boolean uaConverged = !includeUaPayload || (valveUaRevision == expectedUaRevision);
+
+		long trackedExpected = expectedUaRevision == 0L ? expectedRevision : (expectedRevision ^ (expectedUaRevision * 31L));
+		long trackedValve = expectedUaRevision == 0L ? valveRevision : (valveRevision ^ (valveUaRevision * 31L));
+
+		if (cidrConverged && uaConverged) {
 			ValveSyncState prev = valveSyncStates.remove(valveKey);
 			if (prev != null && prev.consecutiveMismatches() > 0) {
-				log.info("Dynamic rule revision converged for '{}/{}' (revision: {})",
-						endpoint.getName(), valveSummary.monitorName(), expectedRevision);
+				log.info("Dynamic rule revision converged for '{}/{}' (CIDR rev: {}, UA rev: {})",
+						endpoint.getName(), valveSummary.monitorName(), expectedRevision, expectedUaRevision);
 				recordAudit(null, valveKey, "SYNC_RECOVERED",
-						"Dynamic rules revision converged with Collector (revision: " + expectedRevision + ")",
+						"Dynamic rules revision converged with Collector (CIDR rev: " + expectedRevision
+								+ (expectedUaRevision != 0L ? ", UA rev: " + expectedUaRevision : "") + ")",
 						0, "AUTO_POLLER");
 			}
 			return;
 		}
 
 		// 1. Check Circuit Breaker suppression:
-		// Only suppress if the rule set hasn't changed (attemptedExpectedRevision == expectedRevision)
+		// Only suppress if the rule set hasn't changed (attemptedExpectedRevision == trackedExpected)
 		// and we are still in the backoff window.
 		ValveSyncState existingState = valveSyncStates.get(valveKey);
-		if (existingState != null && existingState.isSuppressed(expectedRevision, now)) {
+		if (existingState != null && existingState.isSuppressed(trackedExpected, now)) {
 			if (log.isDebugEnabled()) {
-				log.debug("Auto-sync to '{}/{}' suppressed by circuit breaker until {} (expectedRevision: {}, valveRevision: {})",
-						endpoint.getName(), valveSummary.monitorName(), existingState.backoffUntil(), expectedRevision, valveRevision);
+				log.debug("Auto-sync to '{}/{}' suppressed by circuit breaker until {} (expectedCIDR: {}, valveCIDR: {}, expectedUA: {}, valveUA: {})",
+						endpoint.getName(), valveSummary.monitorName(), existingState.backoffUntil(),
+						expectedRevision, valveRevision, expectedUaRevision, valveUaRevision);
 			}
 			return;
 		}
@@ -1189,64 +1336,113 @@ public class MitigationService {
 			String reason = "Incompatible hash version: Valve reports " + valveHashVersion + " but Collector expects " + CURRENT_HASH_VERSION;
 			log.warn("Auto-sync skipped for '{}/{}': {}", endpoint.getName(), valveSummary.monitorName(), reason);
 			Instant backoffUntil = now.plus(Duration.ofMinutes(15));
-			valveSyncStates.put(valveKey, new ValveSyncState(expectedRevision, valveRevision, 1, now, backoffUntil, reason));
+			valveSyncStates.put(valveKey, new ValveSyncState(trackedExpected, trackedValve, 1, now, backoffUntil, reason));
 			recordAudit(null, valveKey, "SYNC_VERSION_MISMATCH", reason, 0, "AUTO_POLLER");
 			return;
 		}
 
 		List<MitigationRule> activeRules = getActiveRulesForSync(now);
 		String blocksPayload = buildBlocksPayload(activeRules);
+		List<MitigationUaRule> activeUaRules = getActiveUaRulesForSync(now);
+		String uaBlocksPayload = buildUaBlocksPayload(activeUaRules);
 		String targetUrl = resolveMitigationUrl(endpoint, valveSummary.mitigationUri());
 		String token = resolveMitigationToken(endpoint);
 
 		try {
-			ValveStatusClient.MitigationCommandResponse resp = statusClient.sendMitigationCommand(
-					targetUrl,
-					token,
-					valveSummary.monitorName(),
-					"replace",
-					null,
-					null,
-					null,
-					blocksPayload
-			);
-			valveRepository.updateDynamicMitigationStats(
-					endpoint.getName(),
-					valveSummary.monitorName(),
-					true,
-					valveSummary.mitigationUri(),
-					resp.activeCount(),
-					valveSummary.dynamicBlocksBlockedRequestsOrDefault(),
-					resp.revision(),
-					resp.dynamicRulesHashVersionOrDefault(),
-					now
-			);
+			ValveStatusClient.MitigationCommandResponse resp = null;
+			if (includeUaPayload) {
+				resp = statusClient.sendMitigationCommand(
+						targetUrl,
+						token,
+						valveSummary.monitorName(),
+						"replace",
+						null,
+						null,
+						null,
+						blocksPayload,
+						uaBlocksPayload
+				);
+			}
+			if (resp == null) {
+				resp = statusClient.sendMitigationCommand(
+						targetUrl,
+						token,
+						valveSummary.monitorName(),
+						"replace",
+						null,
+						null,
+						null,
+						blocksPayload
+				);
+			}
+			if (includeUaPayload || resp.dynamicUaBlocksActiveCount() != null || resp.dynamicUaRulesRevision() != null) {
+				valveRepository.updateDynamicMitigationStats(
+						endpoint.getName(),
+						valveSummary.monitorName(),
+						true,
+						valveSummary.mitigationUri(),
+						resp.activeCount(),
+						valveSummary.dynamicBlocksBlockedRequestsOrDefault(),
+						resp.revision(),
+						resp.dynamicRulesHashVersionOrDefault(),
+						resp.dynamicUaBlocksActiveCountOrDefault(),
+						valveSummary.dynamicUaBlocksBlockedRequestsOrDefault(),
+						valveSummary.dynamicUaBlocksBypassedRequestsOrDefault(),
+						resp.dynamicUaRulesRevisionOrDefault(),
+						now
+				);
+			} else {
+				valveRepository.updateDynamicMitigationStats(
+						endpoint.getName(),
+						valveSummary.monitorName(),
+						true,
+						valveSummary.mitigationUri(),
+						resp.activeCount(),
+						valveSummary.dynamicBlocksBlockedRequestsOrDefault(),
+						resp.revision(),
+						resp.dynamicRulesHashVersionOrDefault(),
+						now
+				);
+			}
 
-			if (resp.revision() == expectedRevision) {
+			boolean syncedCidrOk = (resp.revision() == expectedRevision);
+			boolean syncedUaOk = !includeUaPayload
+					|| resp.dynamicUaRulesRevision() == null
+					|| resp.dynamicUaRulesRevisionOrDefault() == expectedUaRevision;
+
+			if (syncedCidrOk && syncedUaOk) {
 				ValveSyncState prev = valveSyncStates.remove(valveKey);
 				if (prev != null && prev.consecutiveMismatches() > 0) {
 					recordAudit(null, valveKey, "SYNC_RECOVERED",
-							"Dynamic rules revision converged with Collector (revision: " + expectedRevision + ")",
+							"Dynamic rules revision converged with Collector (CIDR rev: " + expectedRevision
+									+ (includeUaPayload ? ", UA rev: " + expectedUaRevision : "") + ")",
 							0, "AUTO_POLLER");
 				}
-				log.info("Auto-synchronized {} dynamic CIDR rule(s) to '{}/{}' (revision {} -> {})",
-						resp.activeCount(), endpoint.getName(), valveSummary.monitorName(), valveRevision, resp.revision());
+				log.info("Auto-synchronized {} CIDR and {} UA dynamic rule(s) to '{}/{}' (CIDR {} -> {}, UA {} -> {})",
+						resp.activeCount(), resp.dynamicUaBlocksActiveCountOrDefault(),
+						endpoint.getName(), valveSummary.monitorName(),
+						valveRevision, resp.revision(), valveUaRevision, resp.dynamicUaRulesRevisionOrDefault());
 			} else {
 				// Divergence detected immediately after replace!
 				int consecutive = (existingState != null ? existingState.consecutiveMismatches() : 0) + 1;
 				long backoffMinutes = consecutive == 1 ? 5L : 15L;
 				Instant backoffUntil = now.plus(Duration.ofMinutes(backoffMinutes));
-				String reason = "Revision mismatch after sync: expected " + expectedRevision + ", but valve reported " + resp.revision();
-				valveSyncStates.put(valveKey, new ValveSyncState(expectedRevision, resp.revision(), consecutive, now, backoffUntil, reason));
+				long reportedUa = resp.dynamicUaRulesRevisionOrDefault();
+				long trackedReported = expectedUaRevision == 0L ? resp.revision() : (resp.revision() ^ (reportedUa * 31L));
+				String reason = "Revision mismatch after sync: expected CIDR " + expectedRevision
+						+ (includeUaPayload ? " / UA " + expectedUaRevision : "")
+						+ ", but valve reported CIDR " + resp.revision()
+						+ (includeUaPayload ? " / UA " + reportedUa : "");
+				valveSyncStates.put(valveKey, new ValveSyncState(trackedExpected, trackedReported, consecutive, now, backoffUntil, reason));
 
-				log.warn("Dynamic rule revision mismatch for valve '{}/{}' after auto-sync (expected {}, valve reported {}). "
+				log.warn("Dynamic rule revision mismatch for valve '{}/{}' after auto-sync ({}). "
 						+ "Suspected hash algorithm or version mismatch. Auto-sync suspended for {}m for this rule set.",
-						endpoint.getName(), valveSummary.monitorName(), expectedRevision, resp.revision(), backoffMinutes);
+						endpoint.getName(), valveSummary.monitorName(), reason, backoffMinutes);
 
 				recordAudit(null, valveKey, "SYNC_CIRCUIT_BREAKER",
-						"Auto-sync completed but resulting revision (" + resp.revision() + ") differs from expected ("
-								+ expectedRevision + "). Active rules: " + resp.activeCount() + ". Auto-sync suspended for "
-								+ backoffMinutes + "m to prevent loop.",
+						"Auto-sync completed but resulting revision differs (" + reason + "). Active rules: "
+								+ resp.activeCount() + " CIDR, " + resp.dynamicUaBlocksActiveCountOrDefault()
+								+ " UA. Auto-sync suspended for " + backoffMinutes + "m to prevent loop.",
 						0, "AUTO_POLLER");
 			}
 
@@ -1259,9 +1455,9 @@ public class MitigationService {
 			long backoffMinutes = consecutive == 1 ? 2L : 10L;
 			Instant backoffUntil = now.plus(Duration.ofMinutes(backoffMinutes));
 			String errMsg = ValveStatusClient.formatErrorMessage(e);
-			valveSyncStates.put(valveKey, new ValveSyncState(expectedRevision, valveRevision, consecutive, now, backoffUntil, errMsg));
+			valveSyncStates.put(valveKey, new ValveSyncState(trackedExpected, trackedValve, consecutive, now, backoffUntil, errMsg));
 
-			log.warn("Auto-sync of dynamic CIDR rules to '{}/{}' failed: {}. Retries suspended for {}m.",
+			log.warn("Auto-sync of dynamic rules to '{}/{}' failed: {}. Retries suspended for {}m.",
 					endpoint.getName(), valveSummary.monitorName(), errMsg, backoffMinutes);
 
 			recordAudit(null, valveKey, "SYNC_FAILED",
@@ -1349,6 +1545,37 @@ public class MitigationService {
 		} else {
 			label = (r.reason() != null && !r.reason().isBlank()) ? r.reason().trim() : "Dynamic Mitigation";
 		}
+		label = label.replace('|', '/').replace('\n', ' ').replace('\r', ' ').replace(';', ',');
+		if (label.length() > MAX_VALVE_LABEL_LENGTH) {
+			label = label.substring(0, MAX_VALVE_LABEL_LENGTH - 3).trim() + "...";
+		}
+		return label;
+	}
+
+	/**
+	 * Builds the {@code uaHash32|expiresAtMillis|label} payload pushed to the Valves.
+	 */
+	static String buildUaBlocksPayload(List<MitigationUaRule> activeRules) {
+		if (activeRules == null || activeRules.isEmpty()) {
+			return "";
+		}
+		StringBuilder sb = new StringBuilder(activeRules.size() * 48);
+		for (MitigationUaRule r : activeRules) {
+			sb.append(r.uaHash32())
+					.append('|')
+					.append(r.expiresAt().toEpochMilli())
+					.append('|')
+					.append(compactValveUaLabel(r))
+					.append('\n');
+		}
+		return sb.toString();
+	}
+
+	static String compactValveUaLabel(MitigationUaRule r) {
+		String source = (r.source() != null && !r.source().isBlank()) ? r.source().trim() : MitigationUaRule.SOURCE_MANUAL;
+		String label = (r.reason() != null && !r.reason().isBlank())
+				? source + ": " + r.reason().trim()
+				: source + " UA Block";
 		label = label.replace('|', '/').replace('\n', ' ').replace('\r', ' ').replace(';', ',');
 		if (label.length() > MAX_VALVE_LABEL_LENGTH) {
 			label = label.substring(0, MAX_VALVE_LABEL_LENGTH - 3).trim() + "...";
@@ -1762,11 +1989,19 @@ public class MitigationService {
 	}
 
 	public List<MitigationAuditEntry> getAuditEntriesFiltered(String search, String action, String actor, int offset, int limit) {
-		return ruleRepository.findAuditEntriesFiltered(search, action, actor, offset, limit);
+		return ruleRepository.findAuditEntriesFiltered(search, action, actor, "ALL", offset, limit);
+	}
+
+	public List<MitigationAuditEntry> getAuditEntriesFiltered(String search, String action, String actor, String targetType, int offset, int limit) {
+		return ruleRepository.findAuditEntriesFiltered(search, action, actor, targetType, offset, limit);
 	}
 
 	public long countAuditEntriesFiltered(String search, String action, String actor) {
-		return ruleRepository.countAuditEntriesFiltered(search, action, actor);
+		return ruleRepository.countAuditEntriesFiltered(search, action, actor, "ALL");
+	}
+
+	public long countAuditEntriesFiltered(String search, String action, String actor, String targetType) {
+		return ruleRepository.countAuditEntriesFiltered(search, action, actor, targetType);
 	}
 
 	public List<MitigationAuditEntry> getRecentAuditEntries(int limit) {
@@ -1787,8 +2022,637 @@ public class MitigationService {
 
 	public void recordAudit(Long ruleId, String cidr, String batchId, String action, Integer ttlSeconds, String details, String actor) {
 		ruleRepository.insertAuditEntry(new MitigationAuditEntry(
-				null, ruleId, cidr, batchId, action, actor != null ? actor : "AUTO-ENGINE", ttlSeconds, details, Instant.now()
+				null, ruleId, cidr, batchId, action, actor != null ? actor : "AUTO-ENGINE", ttlSeconds, details, Instant.now(),
+				MitigationAuditEntry.TARGET_CIDR
 		));
+	}
+
+	public void recordUaAudit(Long ruleId, String targetLabel, String batchId, String action, Integer ttlSeconds, String details, String actor) {
+		ruleRepository.insertAuditEntry(new MitigationAuditEntry(
+				null, ruleId, targetLabel, batchId, action, actor != null ? actor : "AUTO_UA_ENGINE", ttlSeconds, details, Instant.now(),
+				MitigationAuditEntry.TARGET_USER_AGENT
+		));
+	}
+
+	// =========================================================================
+	// Dynamic User-Agent Mitigation: Pre-Flight, Manual Rules & Auto Engine
+	// =========================================================================
+
+	public static final String KEY_UA_AUTO_ENABLED = "mitigation.ua.auto.enabled";
+	public static final String KEY_UA_AUTO_DRY_RUN = "mitigation.ua.auto.dry_run";
+	public static final String KEY_UA_AUTO_DEFAULT_TTL_MINUTES = "mitigation.ua.auto.default_ttl_minutes";
+	public static final String KEY_UA_AUTO_MAX_ACTIVE_RULES = "mitigation.ua.auto.max_active_rules";
+	public static final String KEY_UA_AUTO_MIN_REQUESTS_24H = "mitigation.ua.auto.min_requests_24h";
+	public static final String KEY_UA_AUTO_BLOCK_MANUAL_CANDIDATES = "mitigation.ua.auto.block_manual_candidates";
+	public static final String KEY_UA_AUTO_BLOCK_PILLAR1_SPREAD = "mitigation.ua.auto.block_pillar1_spread";
+	public static final String KEY_UA_AUTO_BLOCK_PILLAR2_CORRELATED = "mitigation.ua.auto.block_pillar2_correlated";
+	public static final String KEY_UA_AUTO_BLOCK_PILLAR3_DATACENTER = "mitigation.ua.auto.block_pillar3_datacenter";
+	public static final String KEY_UA_AUTO_BLOCK_SIGNATURE_ANOMALIES = "mitigation.ua.auto.block_signature_anomalies";
+
+	public record UaPreflightCheckResult(
+			String rawUserAgent,
+			String userAgentHash,
+			int uaHash32,
+			String browserFamily,
+			boolean valid,
+			boolean alreadyBlocked,
+			List<PreflightWarning> warnings,
+			long observedRequests24h,
+			long authenticatedRequests24h,
+			int authenticatedSamples24h,
+			String autoVerdict,
+			String manualOverride,
+			boolean safeToProceedWithoutOverride
+	) {
+		public boolean hasCriticalWarnings() {
+			return warnings != null && warnings.stream().anyMatch(w -> "CRITICAL".equalsIgnoreCase(w.severity()));
+		}
+
+		public String hexHash32() { return String.format("0x%08x", uaHash32); }
+		public String getRawUserAgent() { return rawUserAgent; }
+		public String getUserAgentHash() { return userAgentHash; }
+		public int getUaHash32() { return uaHash32; }
+		public String getHexHash32() { return hexHash32(); }
+		public String getBrowserFamily() { return browserFamily; }
+		public boolean isValid() { return valid; }
+		public boolean isAlreadyBlocked() { return alreadyBlocked; }
+		public List<PreflightWarning> getWarnings() { return warnings; }
+		public long getObservedRequests24h() { return observedRequests24h; }
+		public long getAuthenticatedRequests24h() { return authenticatedRequests24h; }
+		public int getAuthenticatedSamples24h() { return authenticatedSamples24h; }
+		public String getAutoVerdict() { return autoVerdict; }
+		public String getManualOverride() { return manualOverride; }
+		public boolean isSafeToProceedWithoutOverride() { return safeToProceedWithoutOverride; }
+	}
+
+	public record EffectiveUaAutoSettings(
+			boolean enabled,
+			boolean dryRun,
+			int defaultTtlMinutes,
+			int maxActiveRules,
+			long minRequests24h,
+			boolean blockManualCandidates,
+			boolean blockPillar1Spread,
+			boolean blockPillar2Correlated,
+			boolean blockPillar3Datacenter,
+			boolean blockSignatureAnomalies,
+			boolean hasDatabaseOverrides
+	) {
+		public boolean isEnabled() { return enabled; }
+		public boolean isDryRun() { return dryRun; }
+		public int getDefaultTtlMinutes() { return defaultTtlMinutes; }
+		public int getMaxActiveRules() { return maxActiveRules; }
+		public long getMinRequests24h() { return minRequests24h; }
+		public boolean isBlockManualCandidates() { return blockManualCandidates; }
+		public boolean isBlockPillar1Spread() { return blockPillar1Spread; }
+		public boolean isBlockPillar2Correlated() { return blockPillar2Correlated; }
+		public boolean isBlockPillar3Datacenter() { return blockPillar3Datacenter; }
+		public boolean isBlockSignatureAnomalies() { return blockSignatureAnomalies; }
+		public boolean isHasDatabaseOverrides() { return hasDatabaseOverrides; }
+	}
+
+	public record AutoUaEvaluationResult(
+			int candidatesEvaluated,
+			int rulesActivated,
+			int dryRunLogged,
+			int skippedProtected
+	) {}
+
+	public static String formatUaAuditTarget(int uaHash32, String rawUserAgent) {
+		String prefix = String.format("UA:%08x ", uaHash32);
+		String ua = rawUserAgent != null ? rawUserAgent.trim().replaceAll("\\s+", " ") : "";
+		int maxUaLen = 60 - prefix.length();
+		if (ua.length() > maxUaLen && maxUaLen > 3) {
+			ua = ua.substring(0, maxUaLen - 3) + "...";
+		} else if (ua.length() > maxUaLen) {
+			ua = "";
+		}
+		return (prefix + ua).trim();
+	}
+
+	public UaPreflightCheckResult evaluateUaPreflight(String rawUserAgent) {
+		String trimmed = rawUserAgent != null ? rawUserAgent.trim() : "";
+		List<PreflightWarning> warnings = new ArrayList<>();
+		if (trimmed.isEmpty() || "-".equals(trimmed)) {
+			warnings.add(new PreflightWarning("CRITICAL", "-",
+					"User-Agent must not be blank or '-' (empty User-Agent headers cannot be dynamically blocked globally)."));
+			return new UaPreflightCheckResult("", "", 0, "EMPTY", false, false, warnings,
+					0L, 0L, 0, UserAgentAutoVerdict.NEUTRAL.name(), UserAgentManualOverride.AUTO.name(), false);
+		}
+
+		String sha256 = UserAgentMemoryRepository.computeSha256Hex(trimmed);
+		int uaHash32 = UserAgentMemoryRepository.computeUaHash32(trimmed);
+		UserAgentFamily classifiedFamily = UserAgentClassifier.classify(trimmed);
+		String browserFamily = classifiedFamily != null ? classifiedFamily.name() : "OTHER";
+
+		String targetLabel = formatUaAuditTarget(uaHash32, trimmed);
+		boolean alreadyBlocked = uaRuleRepository != null
+				&& uaRuleRepository.findByHashAndScope(sha256, "ALL")
+						.map(r -> r.isCurrentlyActive(Instant.now()))
+						.orElse(false);
+		if (alreadyBlocked) {
+			warnings.add(new PreflightWarning("WARNING", targetLabel,
+					"An active dynamic User-Agent rule already exists for this signature. Submitting will extend/update it."));
+		}
+
+		long obsReqs24h = 0L;
+		long authReqs24h = 0L;
+		int authSamples24h = 0;
+		String autoVerdictName = UserAgentAutoVerdict.NEUTRAL.name();
+		String manualOverrideName = UserAgentManualOverride.AUTO.name();
+
+		Optional<UserAgentProfile> profileOpt = Optional.empty();
+		if (uaMemoryRepository != null) {
+			profileOpt = uaMemoryRepository.findByRawUserAgent(trimmed);
+		}
+		if (profileOpt.isPresent()) {
+			UserAgentProfile p = profileOpt.get();
+			browserFamily = p.browserFamily() != null ? p.browserFamily().name() : browserFamily;
+			obsReqs24h = p.last24hRequests();
+			authReqs24h = p.last24hAuthRequests();
+			authSamples24h = p.last24hAuthSamples();
+			UserAgentAutoVerdict autoVerdict = p.effectiveAutoVerdict();
+			UserAgentManualOverride manualOverride = p.effectiveOverride();
+			autoVerdictName = autoVerdict.name();
+			manualOverrideName = manualOverride.name();
+
+			if (manualOverride == UserAgentManualOverride.ALWAYS_ALLOW) {
+				warnings.add(new PreflightWarning("CRITICAL", targetLabel,
+						"Protected Override: This User-Agent is marked ALWAYS_ALLOW in UA Memory (" +
+								(p.operatorNote() != null && !p.operatorNote().isBlank() ? p.operatorNote() : "explicit admin allowlist") + ")."));
+			} else if (manualOverride == UserAgentManualOverride.OBSERVE_ONLY) {
+				warnings.add(new PreflightWarning("WARNING", targetLabel,
+						"Watchlist Override: This User-Agent is currently set to OBSERVE_ONLY in UA Memory."));
+			}
+
+			if (autoVerdict.isImmune()) {
+				warnings.add(new PreflightWarning("CRITICAL", targetLabel,
+						"Stage-0 Immunity Barrier: Classified as " + autoVerdict.displayName()
+								+ " (internal network, verified search engine, or authenticated traffic)."));
+			}
+
+			if (authReqs24h > 0 || authSamples24h > 0 || p.totalAuthenticatedRequests() > 0) {
+				warnings.add(new PreflightWarning("CRITICAL", targetLabel,
+						"Collateral Damage Risk: Observed authenticated usage (24h slot auth reqs: " + authReqs24h
+								+ ", 24h auth samples: " + authSamples24h
+								+ ", lifetime auth reqs: " + p.totalAuthenticatedRequests() + ")."));
+			}
+
+			if (p.last24hInternalRequests() > 0) {
+				warnings.add(new PreflightWarning("WARNING", targetLabel,
+						"Internal / campus origin traffic detected (" + p.last24hInternalRequests() + " requests in 24h)."));
+			}
+		} else {
+			warnings.add(new PreflightWarning("INFO", targetLabel,
+					"No 24h profile found in UA Memory yet. 32-bit FNV-1a hash is " + String.format("0x%08x", uaHash32) + "."));
+		}
+
+		boolean safe = warnings.stream().noneMatch(w -> "CRITICAL".equalsIgnoreCase(w.severity()));
+		return new UaPreflightCheckResult(trimmed, sha256, uaHash32, browserFamily, true, alreadyBlocked,
+				warnings, obsReqs24h, authReqs24h, authSamples24h, autoVerdictName, manualOverrideName, safe);
+	}
+
+	public MitigationUaRule createOrUpdateUaBlock(
+			String rawUserAgent,
+			int ttlMinutes,
+			String reason,
+			String source,
+			String batchId,
+			boolean confirmOverride,
+			String actor) {
+		requireWriteMode("Creating or updating dynamic User-Agent blocks");
+		if (uaRuleRepository == null) {
+			throw new IllegalStateException("MitigationUaRuleRepository is not configured.");
+		}
+		UaPreflightCheckResult preflight = evaluateUaPreflight(rawUserAgent);
+		if (!preflight.valid()) {
+			throw new IllegalArgumentException("Invalid User-Agent header: must be non-empty.");
+		}
+		if (preflight.hasCriticalWarnings() && !confirmOverride) {
+			throw new IllegalStateException("Pre-flight check reported critical safety warnings for this User-Agent. Confirm override to proceed.");
+		}
+
+		List<MonitoredValve> valves = getMitigationCapableValves();
+		int maxTtlSec = computeMaxTtlSeconds(valves);
+		int effectiveTtlMin = ttlMinutes > 0 ? ttlMinutes : properties.getDefaultMitigationTtlMinutes();
+		if ((long) effectiveTtlMin * 60L > maxTtlSec) {
+			effectiveTtlMin = Math.max(1, maxTtlSec / 60);
+		}
+		Instant now = Instant.now();
+		Instant expiresAt = now.plus(Duration.ofMinutes(effectiveTtlMin));
+
+		Optional<MitigationUaRule> existingOpt = uaRuleRepository.findByHashAndScope(preflight.userAgentHash(), "ALL");
+		boolean continuesActive = existingOpt.isPresent() && existingOpt.get().isCurrentlyActive(now);
+		Optional<MitigationUaRule> carried = continuesActive ? existingOpt : Optional.empty();
+
+		String safeReason = (reason != null && !reason.isBlank()) ? reason.trim() : "Dynamic User-Agent mitigation";
+		String safeSource = (source != null && !source.isBlank()) ? source.trim() : MitigationUaRule.SOURCE_MANUAL;
+
+		MitigationUaRule rule = new MitigationUaRule(
+				existingOpt.map(MitigationUaRule::id).orElse(null),
+				preflight.userAgentHash(),
+				preflight.uaHash32(),
+				preflight.rawUserAgent(),
+				preflight.browserFamily(),
+				"ALL",
+				MitigationUaRule.STATUS_ACTIVE,
+				safeSource,
+				batchId,
+				safeReason,
+				carried.map(MitigationUaRule::createdAt).orElse(now),
+				now,
+				expiresAt,
+				null,
+				null,
+				carried.map(MitigationUaRule::totalBlockedHits).orElse(0L),
+				carried.map(MitigationUaRule::totalBypassedHits).orElse(0L),
+				carried.map(MitigationUaRule::lastHitAt).orElse(null)
+		);
+		MitigationUaRule saved = uaRuleRepository.upsertRule(rule);
+
+		String auditAction = MitigationUaRule.SOURCE_AUTO_UA.equalsIgnoreCase(safeSource)
+				? (continuesActive ? "UA_AUTO_EXTEND" : "UA_AUTO_BLOCK")
+				: (continuesActive ? "UA_EXTEND" : "UA_BLOCK");
+		recordUaAudit(
+				saved.id(),
+				formatUaAuditTarget(saved.uaHash32(), saved.rawUserAgent()),
+				batchId,
+				auditAction,
+				effectiveTtlMin * 60,
+				safeReason + " | UA=" + saved.rawUserAgent(),
+				actor != null ? actor : "ADMIN"
+		);
+		syncFleetMitigations();
+		return saved;
+	}
+
+	public Optional<MitigationUaRule> extendUaBlock(long ruleId, int additionalMinutes, String actor) {
+		requireWriteMode("Extending dynamic User-Agent blocks");
+		if (uaRuleRepository == null) {
+			return Optional.empty();
+		}
+		Optional<MitigationUaRule> opt = uaRuleRepository.findById(ruleId);
+		if (opt.isEmpty()) {
+			return Optional.empty();
+		}
+		MitigationUaRule existing = opt.get();
+		int addMin = additionalMinutes > 0 ? additionalMinutes : properties.getDefaultMitigationTtlMinutes();
+		int maxTtlSec = getEffectiveMaxTtlSeconds();
+		Instant now = Instant.now();
+		Instant base = (existing.expiresAt() != null && existing.expiresAt().isAfter(now)
+				&& MitigationUaRule.STATUS_ACTIVE.equals(existing.status()))
+				? existing.expiresAt() : now;
+		Instant newExpiresAt = base.plus(Duration.ofMinutes(addMin));
+		Instant maxAllowedExpiry = now.plus(Duration.ofSeconds(Math.max(60, maxTtlSec)));
+		if (newExpiresAt.isAfter(maxAllowedExpiry)) {
+			newExpiresAt = maxAllowedExpiry;
+		}
+
+		MitigationUaRule updated = new MitigationUaRule(
+				existing.id(),
+				existing.userAgentHash(),
+				existing.uaHash32(),
+				existing.rawUserAgent(),
+				existing.browserFamily(),
+				existing.targetScope(),
+				MitigationUaRule.STATUS_ACTIVE,
+				existing.source(),
+				existing.batchId(),
+				existing.reason(),
+				existing.createdAt(),
+				now,
+				newExpiresAt,
+				null,
+				null,
+				existing.totalBlockedHits(),
+				existing.totalBypassedHits(),
+				existing.lastHitAt()
+		);
+		MitigationUaRule saved = uaRuleRepository.upsertRule(updated);
+		recordUaAudit(
+				saved.id(),
+				formatUaAuditTarget(saved.uaHash32(), saved.rawUserAgent()),
+				saved.batchId(),
+				"UA_EXTEND",
+				(int) Math.max(0L, Duration.between(now, newExpiresAt).toSeconds()),
+				"Extended by +" + addMin + " min | UA=" + saved.rawUserAgent(),
+				actor != null ? actor : "ADMIN"
+		);
+		syncFleetMitigations();
+		return Optional.of(saved);
+	}
+
+	public Optional<MitigationUaRule> revokeUaBlock(long ruleId, String revokeReason, String actor) {
+		requireWriteMode("Revoking dynamic User-Agent blocks");
+		if (uaRuleRepository == null) {
+			return Optional.empty();
+		}
+		Optional<MitigationUaRule> opt = uaRuleRepository.findById(ruleId);
+		if (opt.isEmpty()) {
+			return Optional.empty();
+		}
+		MitigationUaRule existing = opt.get();
+		Instant now = Instant.now();
+		String safeRevokeReason = (revokeReason != null && !revokeReason.isBlank())
+				? revokeReason.trim() : "Manually revoked by operator";
+
+		MitigationUaRule updated = new MitigationUaRule(
+				existing.id(),
+				existing.userAgentHash(),
+				existing.uaHash32(),
+				existing.rawUserAgent(),
+				existing.browserFamily(),
+				existing.targetScope(),
+				MitigationUaRule.STATUS_REVOKED,
+				existing.source(),
+				existing.batchId(),
+				existing.reason(),
+				existing.createdAt(),
+				now,
+				now,
+				now,
+				safeRevokeReason,
+				existing.totalBlockedHits(),
+				existing.totalBypassedHits(),
+				existing.lastHitAt()
+		);
+		MitigationUaRule saved = uaRuleRepository.upsertRule(updated);
+		recordUaAudit(
+				saved.id(),
+				formatUaAuditTarget(saved.uaHash32(), saved.rawUserAgent()),
+				saved.batchId(),
+				"UA_REVOKE",
+				0,
+				safeRevokeReason + " | UA=" + saved.rawUserAgent(),
+				actor != null ? actor : "ADMIN"
+		);
+		syncFleetMitigations();
+		return Optional.of(saved);
+	}
+
+	public int revokeAllUaBlocks(String revokeReason, String actor) {
+		requireWriteMode("Emergency flush of User-Agent blocks");
+		if (uaRuleRepository == null) {
+			return 0;
+		}
+		Instant now = Instant.now();
+		String safeReason = (revokeReason != null && !revokeReason.isBlank())
+				? revokeReason.trim() : "Emergency flush of all dynamic User-Agent rules";
+		int count = uaRuleRepository.revokeAllActive(now, safeReason);
+		recordUaAudit(null, "ALL_UA_RULES", null, "UA_FLUSH", 0,
+				safeReason + " (" + count + " rule(s) revoked)", actor != null ? actor : "ADMIN");
+		syncFleetMitigations();
+		return count;
+	}
+
+	public Optional<MitigationUaRule> getUaRuleById(long ruleId) {
+		return uaRuleRepository != null ? uaRuleRepository.findById(ruleId) : Optional.empty();
+	}
+
+	public List<MitigationUaRule> getHistoricalUaRulesFiltered(String search, String status, int offset, int limit) {
+		return uaRuleRepository != null
+				? uaRuleRepository.findHistoricalRulesFiltered(search, status, offset, limit)
+				: List.of();
+	}
+
+	public long countHistoricalUaRulesFiltered(String search, String status) {
+		return uaRuleRepository != null
+				? uaRuleRepository.countHistoricalRulesFiltered(search, status)
+				: 0L;
+	}
+
+	public List<UserAgentProfile> getUaCandidateProfiles(int limit) {
+		if (uaMemoryRepository == null) {
+			return List.of();
+		}
+		List<UserAgentProfile> all = uaMemoryRepository.findAllProfiles(Math.max(limit * 4, 200));
+		List<UserAgentProfile> candidates = new ArrayList<>();
+		for (UserAgentProfile p : all) {
+			if (p.isEffectiveProtected()) {
+				continue;
+			}
+			if (p.isEffectiveSuspicious() || p.effectiveOverride() == UserAgentManualOverride.MANUAL_BLOCK) {
+				candidates.add(p);
+				if (candidates.size() >= limit) {
+					break;
+				}
+			}
+		}
+		return candidates;
+	}
+
+	public EffectiveUaAutoSettings getEffectiveUaAutoSettings() {
+		if (settingsRepository == null) {
+			return new EffectiveUaAutoSettings(
+					false, true, 120, 100, 500L, true, true, true, true, false, false);
+		}
+		Optional<Boolean> dbEnabled = settingsRepository.getBoolean(KEY_UA_AUTO_ENABLED);
+		Optional<Boolean> dbDryRun = settingsRepository.getBoolean(KEY_UA_AUTO_DRY_RUN);
+		Optional<Integer> dbTtl = settingsRepository.getInt(KEY_UA_AUTO_DEFAULT_TTL_MINUTES);
+		Optional<Integer> dbMaxRules = settingsRepository.getInt(KEY_UA_AUTO_MAX_ACTIVE_RULES);
+		Optional<Long> dbMinReqs = settingsRepository.getLong(KEY_UA_AUTO_MIN_REQUESTS_24H);
+		Optional<Boolean> dbManual = settingsRepository.getBoolean(KEY_UA_AUTO_BLOCK_MANUAL_CANDIDATES);
+		Optional<Boolean> dbP1 = settingsRepository.getBoolean(KEY_UA_AUTO_BLOCK_PILLAR1_SPREAD);
+		Optional<Boolean> dbP2 = settingsRepository.getBoolean(KEY_UA_AUTO_BLOCK_PILLAR2_CORRELATED);
+		Optional<Boolean> dbP3 = settingsRepository.getBoolean(KEY_UA_AUTO_BLOCK_PILLAR3_DATACENTER);
+		Optional<Boolean> dbSig = settingsRepository.getBoolean(KEY_UA_AUTO_BLOCK_SIGNATURE_ANOMALIES);
+
+		boolean hasDbOverrides = dbEnabled.isPresent() || dbDryRun.isPresent() || dbTtl.isPresent()
+				|| dbMaxRules.isPresent() || dbMinReqs.isPresent() || dbManual.isPresent()
+				|| dbP1.isPresent() || dbP2.isPresent() || dbP3.isPresent() || dbSig.isPresent();
+
+		return new EffectiveUaAutoSettings(
+				dbEnabled.orElse(false),
+				dbDryRun.orElse(true),
+				dbTtl.orElse(120),
+				dbMaxRules.orElse(100),
+				dbMinReqs.orElse(500L),
+				dbManual.orElse(true),
+				dbP1.orElse(true),
+				dbP2.orElse(true),
+				dbP3.orElse(true),
+				dbSig.orElse(false),
+				hasDbOverrides
+		);
+	}
+
+	public void updateUaAutoSettings(
+			boolean enabled,
+			boolean dryRun,
+			int defaultTtlMinutes,
+			int maxActiveRules,
+			long minRequests24h,
+			boolean blockManualCandidates,
+			boolean blockPillar1Spread,
+			boolean blockPillar2Correlated,
+			boolean blockPillar3Datacenter,
+			boolean blockSignatureAnomalies,
+			String updatedBy) {
+		if (!properties.getMode().isBackgroundProcessingEnabled()) {
+			throw new IllegalStateException("Autonomous User-Agent mitigation settings cannot be modified in " + properties.getMode() + " mode.");
+		}
+		if (settingsRepository == null) {
+			throw new IllegalStateException("SystemSettingsRepository is not configured.");
+		}
+		String actor = updatedBy != null ? updatedBy : "ADMIN";
+		settingsRepository.setSetting(KEY_UA_AUTO_ENABLED, String.valueOf(enabled), "Autonomous UA defense master switch", actor);
+		settingsRepository.setSetting(KEY_UA_AUTO_DRY_RUN, String.valueOf(dryRun), "Autonomous UA defense dry-run simulation mode", actor);
+		settingsRepository.setSetting(KEY_UA_AUTO_DEFAULT_TTL_MINUTES, String.valueOf(Math.max(1, defaultTtlMinutes)), "Default TTL minutes for auto UA blocks", actor);
+		settingsRepository.setSetting(KEY_UA_AUTO_MAX_ACTIVE_RULES, String.valueOf(Math.max(1, maxActiveRules)), "Circuit-breaker max active UA block rules", actor);
+		settingsRepository.setSetting(KEY_UA_AUTO_MIN_REQUESTS_24H, String.valueOf(Math.max(1L, minRequests24h)), "Minimum 24h request volume for automatic UA enforcement", actor);
+		settingsRepository.setSetting(KEY_UA_AUTO_BLOCK_MANUAL_CANDIDATES, String.valueOf(blockManualCandidates), "Enforce MANUAL_BLOCK User-Agent profiles", actor);
+		settingsRepository.setSetting(KEY_UA_AUTO_BLOCK_PILLAR1_SPREAD, String.valueOf(blockPillar1Spread), "Enforce Pillar 1 Ultra-Spread Botnet verdicts", actor);
+		settingsRepository.setSetting(KEY_UA_AUTO_BLOCK_PILLAR2_CORRELATED, String.valueOf(blockPillar2Correlated), "Enforce Pillar 2 Correlated Attack verdicts", actor);
+		settingsRepository.setSetting(KEY_UA_AUTO_BLOCK_PILLAR3_DATACENTER, String.valueOf(blockPillar3Datacenter), "Enforce Pillar 3 Datacenter Scraper verdicts", actor);
+		settingsRepository.setSetting(KEY_UA_AUTO_BLOCK_SIGNATURE_ANOMALIES, String.valueOf(blockSignatureAnomalies), "Enforce Signature / Forged Build anomaly verdicts", actor);
+		log.info("Autonomous UA defense settings updated by '{}': enabled={}, dryRun={}, ttlMin={}, maxRules={}, minReq24h={}",
+				actor, enabled, dryRun, defaultTtlMinutes, maxActiveRules, minRequests24h);
+	}
+
+	public void resetUaAutoSettingsToDefaults(String updatedBy) {
+		if (!properties.getMode().isBackgroundProcessingEnabled()) {
+			throw new IllegalStateException("Autonomous User-Agent mitigation settings cannot be reset in " + properties.getMode() + " mode.");
+		}
+		if (settingsRepository == null) {
+			return;
+		}
+		settingsRepository.deleteSetting(KEY_UA_AUTO_ENABLED);
+		settingsRepository.deleteSetting(KEY_UA_AUTO_DRY_RUN);
+		settingsRepository.deleteSetting(KEY_UA_AUTO_DEFAULT_TTL_MINUTES);
+		settingsRepository.deleteSetting(KEY_UA_AUTO_MAX_ACTIVE_RULES);
+		settingsRepository.deleteSetting(KEY_UA_AUTO_MIN_REQUESTS_24H);
+		settingsRepository.deleteSetting(KEY_UA_AUTO_BLOCK_MANUAL_CANDIDATES);
+		settingsRepository.deleteSetting(KEY_UA_AUTO_BLOCK_PILLAR1_SPREAD);
+		settingsRepository.deleteSetting(KEY_UA_AUTO_BLOCK_PILLAR2_CORRELATED);
+		settingsRepository.deleteSetting(KEY_UA_AUTO_BLOCK_PILLAR3_DATACENTER);
+		settingsRepository.deleteSetting(KEY_UA_AUTO_BLOCK_SIGNATURE_ANOMALIES);
+		log.info("Autonomous UA defense settings reset to defaults by '{}'", updatedBy);
+	}
+
+	public void evaluateAutoUaMitigationIfEnabled() {
+		if (!properties.getMode().isBackgroundProcessingEnabled()
+				|| uaRuleRepository == null || uaMemoryRepository == null) {
+			return;
+		}
+		EffectiveUaAutoSettings config = getEffectiveUaAutoSettings();
+		if (!config.enabled()) {
+			return;
+		}
+		evaluateAutoUaMitigation(config, "AUTO_UA_ENGINE");
+	}
+
+	public AutoUaEvaluationResult evaluateAutoUaMitigation(String actor) {
+		if (!properties.getMode().isBackgroundProcessingEnabled()) {
+			throw new IllegalStateException("Autonomous User-Agent mitigation evaluation is disabled in " + properties.getMode() + " mode.");
+		}
+		return evaluateAutoUaMitigation(getEffectiveUaAutoSettings(), actor);
+	}
+
+	AutoUaEvaluationResult evaluateAutoUaMitigation(EffectiveUaAutoSettings config, String actor) {
+		if (uaRuleRepository == null || uaMemoryRepository == null) {
+			return new AutoUaEvaluationResult(0, 0, 0, 0);
+		}
+		String effectiveActor = (actor != null && !actor.isBlank()) ? actor : "AUTO_UA_ENGINE";
+		return callWithDeferredFleetSync(() -> {
+			Instant now = Instant.now();
+			uaRuleRepository.expireElapsedRules(now);
+			List<MitigationUaRule> currentlyActive = uaRuleRepository.findActiveRules(now);
+			Set<String> activeHashes = new HashSet<>();
+			for (MitigationUaRule r : currentlyActive) {
+				activeHashes.add(r.userAgentHash());
+			}
+			int remainingCapacity = Math.max(0, config.maxActiveRules() - currentlyActive.size());
+
+			List<UserAgentProfile> profiles = new ArrayList<>(uaMemoryRepository.findAllProfiles(500));
+			// Ensure manual block candidates outside top-500 volume are also considered
+			Map<String, UserAgentProfile> overrides = uaMemoryRepository.findAllManualOverrides();
+			Set<String> seenHashes = new HashSet<>();
+			for (UserAgentProfile p : profiles) {
+				seenHashes.add(p.userAgentHash());
+			}
+			for (UserAgentProfile op : overrides.values()) {
+				if (!seenHashes.contains(op.userAgentHash())) {
+					profiles.add(op);
+					seenHashes.add(op.userAgentHash());
+				}
+			}
+
+			int evaluated = 0;
+			int activated = 0;
+			int dryRunLogged = 0;
+			int skippedProtected = 0;
+
+			for (UserAgentProfile p : profiles) {
+				if (p.rawUserAgent() == null || p.rawUserAgent().isBlank() || "-".equals(p.rawUserAgent().trim())) {
+					continue;
+				}
+				boolean hasAuthHistory = p.last24hAuthRequests() > 0
+						|| p.last24hAuthSamples() > 0
+						|| p.totalAuthenticatedRequests() > 0;
+				UserAgentAutoVerdict autoVerdict = p.effectiveAutoVerdict();
+				UserAgentManualOverride override = p.effectiveOverride();
+
+				if (override == UserAgentManualOverride.ALWAYS_ALLOW
+						|| override == UserAgentManualOverride.OBSERVE_ONLY
+						|| autoVerdict.isImmune()
+						|| hasAuthHistory) {
+					if (autoVerdict.isSuspicious() || override == UserAgentManualOverride.MANUAL_BLOCK) {
+						skippedProtected++;
+					}
+					continue;
+				}
+
+				String matchReason = null;
+				if (override == UserAgentManualOverride.MANUAL_BLOCK && config.blockManualCandidates()) {
+					matchReason = "Manual block candidate from UA Memory"
+							+ (p.operatorNote() != null && !p.operatorNote().isBlank() ? " (" + p.operatorNote() + ")" : "");
+				} else if (override == UserAgentManualOverride.AUTO && p.last24hRequests() >= config.minRequests24h()) {
+					boolean matchedPillar = switch (autoVerdict) {
+						case SUSPICIOUS_ULTRA_SPREAD -> config.blockPillar1Spread();
+						case SUSPICIOUS_CORRELATED -> config.blockPillar2Correlated();
+						case SUSPICIOUS_DATACENTER -> config.blockPillar3Datacenter();
+						case SUSPICIOUS_SIGNATURE -> config.blockSignatureAnomalies();
+						default -> false;
+					};
+					if (matchedPillar) {
+						matchReason = autoVerdict.displayName() + " (" + p.last24hRequests() + " req/24h, "
+								+ p.last24hDistinctSubnets() + " subnets, " + p.last24hDistinctAsns() + " ASNs)";
+					}
+				}
+
+				if (matchReason == null) {
+					continue;
+				}
+				evaluated++;
+				if (activeHashes.contains(p.userAgentHash())) {
+					continue;
+				}
+				if (config.dryRun()) {
+					recordUaAudit(null, formatUaAuditTarget(p.uaHash32(), p.rawUserAgent()),
+							"DRY-RUN-UA", "UA_AUTO_WOULD_BLOCK", config.defaultTtlMinutes() * 60,
+							"[DRY-RUN] " + matchReason + " | UA=" + p.rawUserAgent(), effectiveActor);
+					dryRunLogged++;
+					continue;
+				}
+				if (remainingCapacity <= 0) {
+					log.info("[AUTO-UA-CAP] Skipping auto UA block for {} because active UA cap ({}) is reached.",
+							formatUaAuditTarget(p.uaHash32(), p.rawUserAgent()), config.maxActiveRules());
+					continue;
+				}
+				try {
+					createOrUpdateUaBlock(p.rawUserAgent(), config.defaultTtlMinutes(), matchReason,
+							MitigationUaRule.SOURCE_AUTO_UA, "AUTO-UA", false, effectiveActor);
+					activeHashes.add(p.userAgentHash());
+					remainingCapacity--;
+					activated++;
+				} catch (Exception e) {
+					log.debug("Skipped auto UA block for {}: {}", formatUaAuditTarget(p.uaHash32(), p.rawUserAgent()), e.getMessage());
+					skippedProtected++;
+				}
+			}
+
+			return new AutoUaEvaluationResult(evaluated, activated, dryRunLogged, skippedProtected);
+		});
 	}
 
 	public List<MonitoredValve> getMitigationCapableValves() {

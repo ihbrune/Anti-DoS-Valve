@@ -64,14 +64,19 @@ public class MitigationController {
 
 	@GetMapping("/mitigation")
 	public String mitigationPage(
-			@RequestParam(value = "tab", defaultValue = "active") String tab,
+			@RequestParam(value = "tab", defaultValue = "overview") String tab,
 			@RequestParam(value = "historySearch", required = false) String historySearch,
 			@RequestParam(value = "historyStatus", defaultValue = "ALL") String historyStatus,
 			@RequestParam(value = "historyPage", defaultValue = "1") int historyPage,
 			@RequestParam(value = "historyLimit", defaultValue = "50") int historyLimit,
+			@RequestParam(value = "uaHistorySearch", required = false) String uaHistorySearch,
+			@RequestParam(value = "uaHistoryStatus", defaultValue = "ALL") String uaHistoryStatus,
+			@RequestParam(value = "uaHistoryPage", defaultValue = "1") int uaHistoryPage,
+			@RequestParam(value = "uaHistoryLimit", defaultValue = "50") int uaHistoryLimit,
 			@RequestParam(value = "auditSearch", required = false) String auditSearch,
 			@RequestParam(value = "auditAction", defaultValue = "ALL") String auditAction,
 			@RequestParam(value = "auditActor", defaultValue = "ALL") String auditActor,
+			@RequestParam(value = "auditTargetType", defaultValue = "ALL") String auditTargetType,
 			@RequestParam(value = "auditPage", defaultValue = "1") int auditPage,
 			@RequestParam(value = "auditLimit", defaultValue = "50") int auditLimit,
 			@RequestParam(value = "cidr", required = false) String prefillCidr,
@@ -79,10 +84,21 @@ public class MitigationController {
 			@RequestParam(value = "reason", required = false) String prefillReason,
 			@RequestParam(value = "ttlMinutes", required = false) Integer prefillTtlMinutes,
 			@RequestParam(value = "source", required = false) String prefillSource,
+			@RequestParam(value = "prefillUa", required = false) String prefillUa,
 			Model model) {
 
-		populateMitigationModel(model, tab, historySearch, historyStatus, historyPage, historyLimit,
-				auditSearch, auditAction, auditActor, auditPage, auditLimit, null, null);
+		String effectiveRequestTab = tab;
+		if ("overview".equalsIgnoreCase(effectiveRequestTab)) {
+			if ((prefillCidr != null && !prefillCidr.isBlank()) || (prefillAsn != null && prefillAsn > 0)) {
+				effectiveRequestTab = "active";
+			} else if (prefillUa != null && !prefillUa.isBlank()) {
+				effectiveRequestTab = "useragents";
+			}
+		}
+
+		populateMitigationModel(model, effectiveRequestTab, historySearch, historyStatus, historyPage, historyLimit,
+				uaHistorySearch, uaHistoryStatus, uaHistoryPage, uaHistoryLimit,
+				auditSearch, auditAction, auditActor, auditTargetType, auditPage, auditLimit, null, null);
 		int defaultTtl = (prefillTtlMinutes != null && prefillTtlMinutes > 0)
 				? prefillTtlMinutes
 				: properties.getDefaultMitigationTtlMinutes();
@@ -91,6 +107,7 @@ public class MitigationController {
 		model.addAttribute("prefillReason", prefillReason != null ? prefillReason.trim() : "");
 		model.addAttribute("prefillTtlMinutes", defaultTtl);
 		model.addAttribute("prefillSource", prefillSource != null ? prefillSource.trim() : MitigationRule.SOURCE_MANUAL);
+		model.addAttribute("prefillUa", prefillUa != null ? prefillUa.trim() : "");
 
 		if (prefillCidr != null && !prefillCidr.isBlank()) {
 			List<String> lines = parseInputCidrs(prefillCidr);
@@ -99,25 +116,34 @@ public class MitigationController {
 		if (prefillAsn != null && prefillAsn > 0) {
 			model.addAttribute("asnPreview", mitigationService.previewAsnBatch(prefillAsn, 24));
 		}
+		if (prefillUa != null && !prefillUa.isBlank()) {
+			model.addAttribute("uaPreflightResult", mitigationService.evaluateUaPreflight(prefillUa.trim()));
+		}
 
 		return "mitigation";
 	}
 
 	@GetMapping("/fragments/mitigation-content")
 	public String mitigationContentFragment(
-			@RequestParam(value = "tab", defaultValue = "active") String tab,
+			@RequestParam(value = "tab", defaultValue = "overview") String tab,
 			@RequestParam(value = "historySearch", required = false) String historySearch,
 			@RequestParam(value = "historyStatus", defaultValue = "ALL") String historyStatus,
 			@RequestParam(value = "historyPage", defaultValue = "1") int historyPage,
 			@RequestParam(value = "historyLimit", defaultValue = "50") int historyLimit,
+			@RequestParam(value = "uaHistorySearch", required = false) String uaHistorySearch,
+			@RequestParam(value = "uaHistoryStatus", defaultValue = "ALL") String uaHistoryStatus,
+			@RequestParam(value = "uaHistoryPage", defaultValue = "1") int uaHistoryPage,
+			@RequestParam(value = "uaHistoryLimit", defaultValue = "50") int uaHistoryLimit,
 			@RequestParam(value = "auditSearch", required = false) String auditSearch,
 			@RequestParam(value = "auditAction", defaultValue = "ALL") String auditAction,
 			@RequestParam(value = "auditActor", defaultValue = "ALL") String auditActor,
+			@RequestParam(value = "auditTargetType", defaultValue = "ALL") String auditTargetType,
 			@RequestParam(value = "auditPage", defaultValue = "1") int auditPage,
 			@RequestParam(value = "auditLimit", defaultValue = "50") int auditLimit,
 			Model model) {
 		populateMitigationModel(model, tab, historySearch, historyStatus, historyPage, historyLimit,
-				auditSearch, auditAction, auditActor, auditPage, auditLimit, null, null);
+				uaHistorySearch, uaHistoryStatus, uaHistoryPage, uaHistoryLimit,
+				auditSearch, auditAction, auditActor, auditTargetType, auditPage, auditLimit, null, null);
 		return "fragments/mitigation-content :: mitigationDashboard";
 	}
 
@@ -362,18 +388,18 @@ public class MitigationController {
 
 	@PostMapping("/mitigation/sync")
 	public String syncFleet(HttpServletResponse response, Model model) {
-		if (rejectNonAdminMutation(response, model, "Fleet mitigation synchronization")) {
+		if (rejectNonAdminMutation(response, model, "Fleet mitigation synchronization", "overview")) {
 			return "fragments/mitigation-content :: mitigationDashboard";
 		}
 		mitigationService.refreshDeterrenceMetrics();
 		MitigationService.FleetSyncResult res = mitigationService.syncFleetMitigations();
 		if (res.errors().isEmpty()) {
-			populateMitigationModel(model,
+			populateTabModel(model, "overview",
 					"Synchronized " + res.activeRulesCount() + " active rule(s) to " + res.syncedValvesCount()
 							+ "/" + res.targetValvesCount() + " mitigation-enabled Valve(s) (revision: " + res.revision() + ").",
 					null);
 		} else {
-			populateMitigationModel(model,
+			populateTabModel(model, "overview",
 					"Synchronized " + res.syncedValvesCount() + "/" + res.targetValvesCount() + " Valve(s).",
 					"Sync warnings: " + String.join("; ", res.errors()));
 		}
@@ -587,33 +613,257 @@ public class MitigationController {
 		return triggerAutoEvaluation(null, model);
 	}
 
+	// =========================================================================
+	// User-Agent Defense Endpoints (Tab 2)
+	// =========================================================================
+
+	@PostMapping("/mitigation/ua/preflight")
+	public String evaluateUaPreflight(
+			@RequestParam(value = "uaInput", required = false) String uaInput,
+			Model model) {
+		MitigationService.UaPreflightCheckResult preflight = mitigationService.evaluateUaPreflight(uaInput);
+		model.addAttribute("uaPreflightResult", preflight);
+		model.addAttribute("uaPreflightCheckedAt",
+				java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")));
+		return "fragments/mitigation-content :: uaPreflightBox";
+	}
+
+	@PostMapping("/mitigation/ua/block")
+	public String createUaBlock(
+			@RequestParam("uaInput") String uaInput,
+			@RequestParam(value = "ttlMinutes", defaultValue = "120") int ttlMinutes,
+			@RequestParam(value = "reason", required = false) String reason,
+			@RequestParam(value = "confirmOverride", defaultValue = "false") boolean confirmOverride,
+			HttpServletResponse response,
+			Model model) {
+		if (rejectViewerMutation(response, model, "Creating dynamic User-Agent blocks", "useragents")) {
+			return "fragments/mitigation-content :: mitigationDashboard";
+		}
+		MitigationService.UaPreflightCheckResult preflight = mitigationService.evaluateUaPreflight(uaInput);
+		if (!preflight.valid()) {
+			populateUaModel(model, null, "User-Agent header must not be blank or '-'.");
+			model.addAttribute("prefillUa", uaInput != null ? uaInput.trim() : "");
+			model.addAttribute("uaPreflightResult", preflight);
+			return "fragments/mitigation-content :: mitigationDashboard";
+		}
+		if (preflight.hasCriticalWarnings() && !confirmOverride) {
+			populateUaModel(model, null,
+					"Pre-flight safety check detected Stage-0 immunity, ALWAYS_ALLOW override, or authenticated sessions. Check 'Override Safety Warning' to proceed.");
+			model.addAttribute("prefillUa", preflight.rawUserAgent());
+			model.addAttribute("uaPreflightResult", preflight);
+			return "fragments/mitigation-content :: mitigationDashboard";
+		}
+		try {
+			String actor = CollectorAuthContext.getEffectiveActor(properties.getMode().isOperator() ? "OPERATOR" : "ADMIN");
+			var saved = mitigationService.createOrUpdateUaBlock(
+					preflight.rawUserAgent(), ttlMinutes, reason,
+					org.henbru.antidos.collector.model.MitigationUaRule.SOURCE_MANUAL,
+					null, confirmOverride, actor);
+			populateUaModel(model,
+					"Dynamic User-Agent block active for " + saved.hexHash32()
+							+ " (" + saved.shortUserAgent() + ", TTL: " + ttlMinutes + " min) and synchronized to fleet.",
+					null);
+		} catch (Exception e) {
+			populateUaModel(model, null, "Could not activate dynamic User-Agent block: " + e.getMessage());
+			model.addAttribute("prefillUa", uaInput != null ? uaInput.trim() : "");
+		}
+		return "fragments/mitigation-content :: mitigationDashboard";
+	}
+
+	@PostMapping("/mitigation/ua/{id}/extend")
+	public String extendUaRule(
+			@PathVariable("id") long id,
+			@RequestParam(value = "additionalMinutes", defaultValue = "60") int additionalMinutes,
+			HttpServletResponse response,
+			Model model) {
+		if (rejectViewerMutation(response, model, "Extending dynamic User-Agent blocks", "useragents")) {
+			return "fragments/mitigation-content :: mitigationDashboard";
+		}
+		String actor = CollectorAuthContext.getEffectiveActor(properties.getMode().isOperator() ? "OPERATOR" : "ADMIN");
+		var updated = mitigationService.extendUaBlock(id, additionalMinutes, actor);
+		if (updated.isPresent()) {
+			populateUaModel(model,
+					"Extended User-Agent rule " + updated.get().hexHash32() + " by +" + additionalMinutes + " minutes.",
+					null);
+		} else {
+			populateUaModel(model, null, "User-Agent rule #" + id + " not found.");
+		}
+		return "fragments/mitigation-content :: mitigationDashboard";
+	}
+
+	@PostMapping("/mitigation/ua/{id}/revoke")
+	public String revokeUaRule(
+			@PathVariable("id") long id,
+			@RequestParam(value = "reason", required = false) String reason,
+			HttpServletResponse response,
+			Model model) {
+		if (rejectViewerMutation(response, model, "Revoking dynamic User-Agent blocks", "useragents")) {
+			return "fragments/mitigation-content :: mitigationDashboard";
+		}
+		String actor = CollectorAuthContext.getEffectiveActor(properties.getMode().isOperator() ? "OPERATOR" : "ADMIN");
+		var revoked = mitigationService.revokeUaBlock(id, reason, actor);
+		if (revoked.isPresent()) {
+			populateUaModel(model,
+					"Revoked dynamic User-Agent block " + revoked.get().hexHash32() + " and removed from fleet.",
+					null);
+		} else {
+			populateUaModel(model, null, "User-Agent rule #" + id + " not found.");
+		}
+		return "fragments/mitigation-content :: mitigationDashboard";
+	}
+
+	@PostMapping("/mitigation/ua/flush")
+	public String flushAllUaRules(
+			@RequestParam(value = "reason", required = false) String reason,
+			HttpServletResponse response,
+			Model model) {
+		if (rejectViewerMutation(response, model, "Emergency flush of User-Agent blocks", "useragents")) {
+			return "fragments/mitigation-content :: mitigationDashboard";
+		}
+		String actor = CollectorAuthContext.getEffectiveActor(properties.getMode().isOperator() ? "OPERATOR" : "ADMIN");
+		int count = mitigationService.revokeAllUaBlocks(reason, actor);
+		populateUaModel(model,
+				"Emergency flush executed: Revoked all " + count + " active dynamic User-Agent rule(s) across the fleet.",
+				null);
+		return "fragments/mitigation-content :: mitigationDashboard";
+	}
+
+	@PostMapping("/mitigation/ua/auto/toggle")
+	public String toggleUaAutoSetting(
+			@RequestParam("property") String property,
+			HttpServletResponse response,
+			Model model) {
+		if (rejectNonAdminMutation(response, model, "Toggling autonomous User-Agent defense settings", "useragents")) {
+			return "fragments/mitigation-content :: mitigationDashboard";
+		}
+		try {
+			var cur = mitigationService.getEffectiveUaAutoSettings();
+			boolean newEnabled = cur.enabled();
+			boolean newDryRun = cur.dryRun();
+			if ("enabled".equalsIgnoreCase(property)) {
+				newEnabled = !newEnabled;
+			} else if ("dryRun".equalsIgnoreCase(property)) {
+				newDryRun = !newDryRun;
+			}
+			mitigationService.updateUaAutoSettings(
+					newEnabled, newDryRun, cur.defaultTtlMinutes(), cur.maxActiveRules(), cur.minRequests24h(),
+					cur.blockManualCandidates(), cur.blockPillar1Spread(), cur.blockPillar2Correlated(),
+					cur.blockPillar3Datacenter(), cur.blockSignatureAnomalies(), "ADMIN");
+			populateUaModel(model,
+					"Toggled UA auto " + property + " to " + ("enabled".equalsIgnoreCase(property) ? newEnabled : newDryRun) + ".",
+					null);
+		} catch (Exception e) {
+			populateUaModel(model, null, "Failed to toggle User-Agent setting: " + e.getMessage());
+		}
+		return "fragments/mitigation-content :: mitigationDashboard";
+	}
+
+	@PostMapping("/mitigation/ua/auto/settings")
+	public String updateUaAutoSettings(
+			@RequestParam(value = "enabled", defaultValue = "false") boolean enabled,
+			@RequestParam(value = "dryRun", defaultValue = "false") boolean dryRun,
+			@RequestParam(value = "defaultTtlMinutes", defaultValue = "120") int defaultTtlMinutes,
+			@RequestParam(value = "maxActiveRules", defaultValue = "100") int maxActiveRules,
+			@RequestParam(value = "minRequests24h", defaultValue = "500") long minRequests24h,
+			@RequestParam(value = "blockManualCandidates", defaultValue = "false") boolean blockManualCandidates,
+			@RequestParam(value = "blockPillar1Spread", defaultValue = "false") boolean blockPillar1Spread,
+			@RequestParam(value = "blockPillar2Correlated", defaultValue = "false") boolean blockPillar2Correlated,
+			@RequestParam(value = "blockPillar3Datacenter", defaultValue = "false") boolean blockPillar3Datacenter,
+			@RequestParam(value = "blockSignatureAnomalies", defaultValue = "false") boolean blockSignatureAnomalies,
+			HttpServletResponse response,
+			Model model) {
+		if (rejectNonAdminMutation(response, model, "Updating autonomous User-Agent defense settings", "useragents")) {
+			return "fragments/mitigation-content :: mitigationDashboard";
+		}
+		try {
+			mitigationService.updateUaAutoSettings(
+					enabled, dryRun, defaultTtlMinutes, maxActiveRules, minRequests24h,
+					blockManualCandidates, blockPillar1Spread, blockPillar2Correlated,
+					blockPillar3Datacenter, blockSignatureAnomalies, "ADMIN");
+			populateUaModel(model, "Autonomous User-Agent defense settings saved to system_settings.", null);
+		} catch (Exception e) {
+			populateUaModel(model, null, "Failed to update User-Agent defense settings: " + e.getMessage());
+		}
+		return "fragments/mitigation-content :: mitigationDashboard";
+	}
+
+	@PostMapping("/mitigation/ua/auto/reset")
+	public String resetUaAutoSettings(HttpServletResponse response, Model model) {
+		if (rejectNonAdminMutation(response, model, "Resetting autonomous User-Agent defense settings", "useragents")) {
+			return "fragments/mitigation-content :: mitigationDashboard";
+		}
+		try {
+			mitigationService.resetUaAutoSettingsToDefaults("ADMIN");
+			populateUaModel(model, "Autonomous User-Agent defense settings reset to defaults.", null);
+		} catch (Exception e) {
+			populateUaModel(model, null, "Failed to reset User-Agent settings: " + e.getMessage());
+		}
+		return "fragments/mitigation-content :: mitigationDashboard";
+	}
+
+	@PostMapping("/mitigation/ua/auto/evaluate")
+	public String triggerUaAutoEvaluation(HttpServletResponse response, Model model) {
+		if (rejectNonAdminMutation(response, model, "Autonomous User-Agent defense evaluation", "useragents")) {
+			return "fragments/mitigation-content :: mitigationDashboard";
+		}
+		try {
+			var res = mitigationService.evaluateAutoUaMitigation("ADMIN");
+			populateUaModel(model,
+					"User-Agent auto evaluation completed: " + res.candidatesEvaluated()
+							+ " eligible candidate(s), " + res.rulesActivated() + " rule(s) activated, "
+							+ res.dryRunLogged() + " dry-run event(s) logged, "
+							+ res.skippedProtected() + " protected profile(s) skipped.",
+					null);
+		} catch (Exception e) {
+			populateUaModel(model, null, "User-Agent evaluation error: " + e.getMessage());
+		}
+		return "fragments/mitigation-content :: mitigationDashboard";
+	}
+
 	private boolean rejectViewerMutation(HttpServletResponse response, Model model, String actionLabel) {
+		return rejectViewerMutation(response, model, actionLabel, "active");
+	}
+
+	private boolean rejectViewerMutation(HttpServletResponse response, Model model, String actionLabel, String tab) {
 		if (CollectorAuthContext.isAiAgent()) {
 			if (response != null) {
 				response.setStatus(HttpStatus.FORBIDDEN.value());
 			}
-			populateMitigationModel(model, null, actionLabel + " is disabled on Web-UI routes for AI_AGENT. Use guarded /api/v1/mitigation endpoints.");
+			populateTabModel(model, tab, null, actionLabel + " is disabled on Web-UI routes for AI_AGENT. Use guarded /api/v1/mitigation endpoints.");
 			return true;
 		}
 		if (properties.isViewerMode()) {
 			if (response != null) {
 				response.setStatus(HttpStatus.FORBIDDEN.value());
 			}
-			populateMitigationModel(model, null, actionLabel + " is disabled in read-only VIEWER mode.");
+			populateTabModel(model, tab, null, actionLabel + " is disabled in read-only VIEWER mode.");
 			return true;
 		}
 		return false;
 	}
 
 	private boolean rejectNonAdminMutation(HttpServletResponse response, Model model, String actionLabel) {
+		return rejectNonAdminMutation(response, model, actionLabel, "active");
+	}
+
+	private boolean rejectNonAdminMutation(HttpServletResponse response, Model model, String actionLabel, String tab) {
 		if (!properties.canPerformSystemAdmin()) {
 			if (response != null) {
 				response.setStatus(HttpStatus.FORBIDDEN.value());
 			}
-			populateMitigationModel(model, null, actionLabel + " is disabled in " + properties.getMode() + " mode.");
+			populateTabModel(model, tab, null, actionLabel + " is disabled in " + properties.getMode() + " mode.");
 			return true;
 		}
 		return false;
+	}
+
+	private void populateTabModel(Model model, String tab, String feedbackSuccess, String feedbackError) {
+		populateMitigationModel(model, tab, null, "ALL", 1, 50, null, "ALL", 1, 50,
+				null, "ALL", "ALL", "ALL", 1, 50, feedbackSuccess, feedbackError);
+	}
+
+	private void populateUaModel(Model model, String feedbackSuccess, String feedbackError) {
+		populateTabModel(model, "useragents", feedbackSuccess, feedbackError);
 	}
 
 	// =========================================================================
@@ -667,9 +917,34 @@ public class MitigationController {
 			int auditLimit,
 			String feedbackSuccess,
 			String feedbackError) {
+		populateMitigationModel(model, tab, historySearch, historyStatus, historyPage, historyLimit,
+				null, "ALL", 1, 50, auditSearch, auditAction, auditActor, "ALL", auditPage, auditLimit,
+				feedbackSuccess, feedbackError);
+	}
+
+	private void populateMitigationModel(
+			Model model,
+			String tab,
+			String historySearch,
+			String historyStatus,
+			int historyPage,
+			int historyLimit,
+			String uaHistorySearch,
+			String uaHistoryStatus,
+			int uaHistoryPage,
+			int uaHistoryLimit,
+			String auditSearch,
+			String auditAction,
+			String auditActor,
+			String auditTargetType,
+			int auditPage,
+			int auditLimit,
+			String feedbackSuccess,
+			String feedbackError) {
 		Instant now = Instant.now();
 		mitigationService.refreshDeterrenceMetricsIfStale(Duration.ofSeconds(15));
 		List<MitigationRule> activeRules = mitigationService.getActiveRules();
+		List<org.henbru.antidos.collector.model.MitigationUaRule> activeUaRules = mitigationService.getActiveUaRules();
 		List<MonitoredValve> mitigationValves = mitigationService.getMitigationCapableValves();
 
 		long persistentCount = activeRules.stream()
@@ -699,20 +974,22 @@ public class MitigationController {
 			}
 		}
 
-		String effectiveTab = (tab != null && (tab.equalsIgnoreCase("history") || tab.equalsIgnoreCase("audit") || tab.equalsIgnoreCase("radar")))
+		String effectiveTab = (tab != null && (tab.equalsIgnoreCase("overview") || tab.equalsIgnoreCase("active")
+				|| tab.equalsIgnoreCase("history") || tab.equalsIgnoreCase("audit")
+				|| tab.equalsIgnoreCase("radar") || tab.equalsIgnoreCase("useragents")))
 				? tab.toLowerCase()
-				: "active";
+				: "overview";
 
 		// Global counts for tab badges
 		long totalHistoricalCount = mitigationService.countHistoricalRulesFiltered(null, "ALL");
-		long totalAuditCount = mitigationService.countAuditEntriesFiltered(null, "ALL", "ALL");
+		long totalAuditCount = mitigationService.countAuditEntriesFiltered(null, "ALL", "ALL", "ALL");
 
 		// Load teasers / paginated lists only for the actually active tab
-		List<MitigationRule> teaserHistoricalRules = "active".equals(effectiveTab)
+		List<MitigationRule> teaserHistoricalRules = "overview".equals(effectiveTab)
 				? mitigationService.getHistoricalRulesFiltered(null, "ALL", 0, 5)
 				: List.of();
-		List<MitigationAuditEntry> teaserAuditEntries = "active".equals(effectiveTab)
-				? mitigationService.getAuditEntriesFiltered(null, "ALL", "ALL", 0, 5)
+		List<MitigationAuditEntry> teaserAuditEntries = "overview".equals(effectiveTab)
+				? mitigationService.getAuditEntriesFiltered(null, "ALL", "ALL", "ALL", 0, 5)
 				: List.of();
 
 		// History tab pagination & filtering
@@ -729,24 +1006,51 @@ public class MitigationController {
 				: List.of();
 		int totalHistoryPages = Math.max(1, (int) Math.ceil((double) filteredHistoryCount / hLimit));
 
+		// UA Defense tab: historical UA rules pagination & candidate profiles
+		int uahPage = Math.max(1, uaHistoryPage);
+		int uahLimit = (uaHistoryLimit > 0 && uaHistoryLimit <= 500) ? uaHistoryLimit : 50;
+		int uahOffset = (uahPage - 1) * uahLimit;
+		long filteredUaHistoryCount = "useragents".equals(effectiveTab)
+				? mitigationService.countHistoricalUaRulesFiltered(uaHistorySearch, uaHistoryStatus)
+				: 0L;
+		List<org.henbru.antidos.collector.model.MitigationUaRule> historicalUaRules = "useragents".equals(effectiveTab)
+				? mitigationService.getHistoricalUaRulesFiltered(uaHistorySearch, uaHistoryStatus, uahOffset, uahLimit)
+				: List.of();
+		int totalUaHistoryPages = Math.max(1, (int) Math.ceil((double) filteredUaHistoryCount / uahLimit));
+
+		List<org.henbru.antidos.collector.model.UserAgentProfile> uaCandidateProfiles = List.of();
+		if ("useragents".equals(effectiveTab)) {
+			java.util.Set<String> activeUaHashes = activeUaRules.stream()
+					.map(org.henbru.antidos.collector.model.MitigationUaRule::userAgentHash)
+					.collect(java.util.stream.Collectors.toSet());
+			uaCandidateProfiles = mitigationService.getUaCandidateProfiles(30).stream()
+					.filter(p -> !activeUaHashes.contains(p.userAgentHash()))
+					.toList();
+		}
+
 		// Audit tab pagination & filtering
 		int aPage = Math.max(1, auditPage);
 		int aLimit = (auditLimit > 0 && auditLimit <= 500) ? auditLimit : 50;
 		int aOffset = (aPage - 1) * aLimit;
+		String effectiveTargetType = auditTargetType != null && !auditTargetType.isBlank()
+				? auditTargetType.trim().toUpperCase() : "ALL";
 		boolean auditUnfiltered = (auditSearch == null || auditSearch.isBlank())
 				&& (auditAction == null || auditAction.isBlank() || "ALL".equalsIgnoreCase(auditAction))
-				&& (auditActor == null || auditActor.isBlank() || "ALL".equalsIgnoreCase(auditActor));
+				&& (auditActor == null || auditActor.isBlank() || "ALL".equalsIgnoreCase(auditActor))
+				&& "ALL".equalsIgnoreCase(effectiveTargetType);
 		long filteredAuditCount = "audit".equals(effectiveTab)
-				? (auditUnfiltered ? totalAuditCount : mitigationService.countAuditEntriesFiltered(auditSearch, auditAction, auditActor))
+				? (auditUnfiltered ? totalAuditCount : mitigationService.countAuditEntriesFiltered(auditSearch, auditAction, auditActor, effectiveTargetType))
 				: totalAuditCount;
 		List<MitigationAuditEntry> auditEntries = "audit".equals(effectiveTab)
-				? mitigationService.getAuditEntriesFiltered(auditSearch, auditAction, auditActor, aOffset, aLimit)
+				? mitigationService.getAuditEntriesFiltered(auditSearch, auditAction, auditActor, effectiveTargetType, aOffset, aLimit)
 				: List.of();
 		int totalAuditPages = Math.max(1, (int) Math.ceil((double) filteredAuditCount / aLimit));
 
 		model.addAttribute("now", now);
 		model.addAttribute("activeTab", effectiveTab);
 		model.addAttribute("activeRules", activeRules);
+		model.addAttribute("activeUaRules", activeUaRules);
+		model.addAttribute("activeUaRuleCount", activeUaRules.size());
 		model.addAttribute("teaserHistoricalRules", teaserHistoricalRules);
 		model.addAttribute("teaserAuditEntries", teaserAuditEntries);
 		model.addAttribute("totalHistoricalCount", totalHistoricalCount);
@@ -763,11 +1067,25 @@ public class MitigationController {
 		model.addAttribute("historyHasPrev", hPage > 1);
 		model.addAttribute("historyHasNext", hPage < totalHistoryPages);
 
+		// User-Agent Defense tab attributes
+		model.addAttribute("uaAutoSettings", mitigationService.getEffectiveUaAutoSettings());
+		model.addAttribute("historicalUaRules", historicalUaRules);
+		model.addAttribute("uaHistorySearch", uaHistorySearch != null ? uaHistorySearch.trim() : "");
+		model.addAttribute("uaHistoryStatus", uaHistoryStatus != null ? uaHistoryStatus.trim().toUpperCase() : "ALL");
+		model.addAttribute("uaHistoryPage", uahPage);
+		model.addAttribute("uaHistoryLimit", uahLimit);
+		model.addAttribute("uaHistoryTotalCount", filteredUaHistoryCount);
+		model.addAttribute("uaHistoryTotalPages", totalUaHistoryPages);
+		model.addAttribute("uaHistoryHasPrev", uahPage > 1);
+		model.addAttribute("uaHistoryHasNext", uahPage < totalUaHistoryPages);
+		model.addAttribute("uaCandidateProfiles", uaCandidateProfiles);
+
 		// Audit tab attributes
 		model.addAttribute("auditEntries", auditEntries);
 		model.addAttribute("auditSearch", auditSearch != null ? auditSearch.trim() : "");
 		model.addAttribute("auditAction", auditAction != null ? auditAction.trim().toUpperCase() : "ALL");
 		model.addAttribute("auditActor", auditActor != null ? auditActor.trim().toUpperCase() : "ALL");
+		model.addAttribute("auditTargetType", effectiveTargetType);
 		model.addAttribute("auditPage", aPage);
 		model.addAttribute("auditLimit", aLimit);
 		model.addAttribute("auditTotalCount", filteredAuditCount);
@@ -777,11 +1095,20 @@ public class MitigationController {
 
 		long expectedRevision = MitigationService.computeRevisionForCidrs(
 				activeRules.stream().map(MitigationRule::cidr).toList());
+		long expectedUaRevision = MitigationService.computeRevisionForUaHashes(
+				activeUaRules.stream().map(org.henbru.antidos.collector.model.MitigationUaRule::uaHash32).toList());
+		long fleetTotalUaBlockedHits = mitigationValves.stream().mapToLong(MonitoredValve::dynamicUaBlocksBlockedRequests).sum();
+		long fleetTotalUaBypassedHits = mitigationValves.stream().mapToLong(MonitoredValve::dynamicUaBlocksBypassedRequests).sum();
+
 		model.addAttribute("mitigationValves", mitigationValves);
 		model.addAttribute("expectedRevision", expectedRevision);
+		model.addAttribute("expectedUaRevision", expectedUaRevision);
+		model.addAttribute("fleetTotalUaBlockedHits", fleetTotalUaBlockedHits);
+		model.addAttribute("fleetTotalUaBypassedHits", fleetTotalUaBypassedHits);
 		Map<String, Boolean> valveCircuitBreakers = new LinkedHashMap<>();
+		long combinedExpected = expectedUaRevision == 0L ? expectedRevision : (expectedRevision ^ (expectedUaRevision * 31L));
 		for (MonitoredValve mv : mitigationValves) {
-			boolean suppressed = mitigationService.isValveSyncSuppressed(mv.serverId(), mv.valveName(), expectedRevision, now);
+			boolean suppressed = mitigationService.isValveSyncSuppressed(mv.serverId(), mv.valveName(), combinedExpected, now);
 			valveCircuitBreakers.put(mv.serverId() + "/" + mv.valveName(), suppressed);
 		}
 		model.addAttribute("valveCircuitBreakers", valveCircuitBreakers);
@@ -804,7 +1131,8 @@ public class MitigationController {
 	}
 
 	private void populateMitigationModel(Model model, String feedbackSuccess, String feedbackError) {
-		populateMitigationModel(model, "active", null, "ALL", 1, 50, null, "ALL", "ALL", 1, 50, feedbackSuccess, feedbackError);
+		populateMitigationModel(model, "active", null, "ALL", 1, 50, null, "ALL", 1, 50,
+				null, "ALL", "ALL", "ALL", 1, 50, feedbackSuccess, feedbackError);
 	}
 
 	public record ActiveBatchSummary(

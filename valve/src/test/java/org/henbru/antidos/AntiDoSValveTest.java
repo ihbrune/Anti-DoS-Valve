@@ -3683,5 +3683,106 @@ class AntiDoSValveTest {
 		assertTrue(detailsHtml.contains("/40"));
 		assertTrue(detailsHtml.contains("2h 0m"));
 	}
+
+	@Test
+	void testDynamicUserAgentBlockingWithAuthAndValidReturningBypass() throws Exception {
+		AntiDoSValve.getSharedAuthSessionCache().clear();
+		AntiDoSValve valve = createGuardrailTestValve("DYNAMIC_UA_BLOCK_TEST");
+		valve.setStatusUri("/antidos-status");
+		valve.setStatusPassword("uaStatusToken123");
+		valve.setRelevantPaths("/portal/.*");
+		valve.setAllowedRequestsPerSlot(50);
+		valve.setVisitorCookieEnabled(true);
+		valve.setVisitorCookieSecret("00112233445566778899aabbccddeeff");
+		valve.setVisitorCookieEnforceUserAgent(true);
+		valve.setVisitorCookieMinAgeSeconds(10);
+		valve.setAuthTrackingMode("COOKIE");
+		valve.setAuthCookieName("JSESSIONID");
+		valve.setAuthLoginPaths("/trust");
+		valve.reloadMonitor();
+
+		String botUa = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/154.0.0.0 Safari/537.36";
+		String cleanUa = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/157.0.0.0 Safari/537.36";
+		int botHash = AntiDoSVisitorTokenService.computeUserAgentHash32(botUa);
+
+		// Push UA block via /antidos-mitigate endpoint
+		TestResponse upsertUa = sendMitigationCommand(valve,
+				"action", "upsertua",
+				"uaHash32", String.valueOf(botHash),
+				"ttlSeconds", "600",
+				"reason", "Pillar 1 Chrome/154");
+		assertEquals(200, upsertUa.getStatus());
+		assertTrue(upsertUa.getOutput().contains("\"dynamicUaBlocksActiveCount\": 1"));
+		assertEquals(1, valve.getDynamicBlockRegistry().getActiveUaCount(valve.getTimeInMillis()));
+
+		// 1. Unauthenticated first contact with blocked UA -> rejected immediately (HTTP 429) & counted
+		TestRequest r1 = new TestRequest("/portal/catalog", "198.51.100.10");
+		r1.setHeader("User-Agent", botUa);
+		TestResponse resp1 = new TestResponse();
+		valve.invoke(r1, resp1);
+		assertEquals(429, resp1.getErrorCode());
+		assertEquals(1L, valve.getDynamicBlockRegistry().getTotalUaBlockedRequests());
+		assertEquals(0L, valve.getDynamicBlockRegistry().getTotalUaBypassedRequests());
+
+		// 2. Unrelated legitimate UA from same subnet -> allowed
+		TestRequest rClean = new TestRequest("/portal/catalog", "198.51.100.11");
+		rClean.setHeader("User-Agent", cleanUa);
+		TestResponse respClean = new TestResponse();
+		valve.invoke(rClean, respClean);
+		assertEquals(-1, respClean.getErrorCode());
+
+		// 3. Valid mismatch-free returning visitor cookie issued on SSO (same subnet, same UA hash, counter=2 or aged >= minAge) -> BYPASSED!
+		byte[] subnetBytes = valve.extractVisitorSubnetBytes("198.51.100.20");
+		long now = valve.getTimeInMillis();
+		String validSsoCookie = valve.getVisitorTokenService().createToken(
+				subnetBytes, botHash, 2, 900_000L, now);
+		TestRequest rReturning = new TestRequest("/portal/trust", "198.51.100.20");
+		rReturning.setHeader("User-Agent", botUa);
+		rReturning.setCookies(new Cookie[]{new Cookie(valve.getVisitorCookieName(), validSsoCookie)});
+		TestResponse respReturning = new TestResponse();
+		valve.invoke(rReturning, respReturning);
+		assertEquals(-1, respReturning.getErrorCode(), "Valid mismatch-free returning visitor must bypass dynamic UA block");
+		assertEquals(1L, valve.getDynamicBlockRegistry().getTotalUaBypassedRequests());
+
+		// 4. Visitor cookie minted for cleanUa replayed with botUa (uaMismatch=true) -> NOT bypassed, still blocked!
+		int cleanHash = AntiDoSVisitorTokenService.computeUserAgentHash32(cleanUa);
+		String wrongUaCookie = valve.getVisitorTokenService().createToken(
+				subnetBytes, cleanHash, 2, 900_000L, now);
+		TestRequest rMismatch = new TestRequest("/portal/catalog", "198.51.100.20");
+		rMismatch.setHeader("User-Agent", botUa);
+		rMismatch.setCookies(new Cookie[]{new Cookie(valve.getVisitorCookieName(), wrongUaCookie)});
+		TestResponse respMismatch = new TestResponse();
+		valve.invoke(rMismatch, respMismatch);
+		assertEquals(429, respMismatch.getErrorCode(), "Visitor cookie with UA mismatch must NOT bypass UA block");
+		assertEquals(2L, valve.getDynamicBlockRegistry().getTotalUaBlockedRequests());
+
+		// 5. Authenticated session -> BYPASSED even without visitor cookie
+		AntiDoSValve.getSharedAuthSessionCache().registerSession("auth-sess-42", 1_800_000L, now);
+		TestRequest rAuth = new TestRequest("/portal/catalog", "198.51.100.30");
+		rAuth.setHeader("User-Agent", botUa);
+		rAuth.setCookies(new Cookie[]{new Cookie("JSESSIONID", "auth-sess-42")});
+		TestResponse respAuth = new TestResponse();
+		valve.invoke(rAuth, respAuth);
+		assertEquals(-1, respAuth.getErrorCode(), "Authenticated user must bypass dynamic UA block");
+		assertEquals(2L, valve.getDynamicBlockRegistry().getTotalUaBypassedRequests());
+
+		// 6. Status JSON & HTML expose dynamicUaBlocks metrics
+		AntiDoSStatusRenderer renderer = new AntiDoSStatusRenderer(valve);
+		String overviewJson = renderer.buildStatusJson("DYNAMIC_UA_BLOCK_TEST");
+		assertTrue(overviewJson.contains("\"dynamicUaBlocksActiveCount\": 1"));
+		assertTrue(overviewJson.contains("\"dynamicUaBlocksBlockedRequests\": 2"));
+		assertTrue(overviewJson.contains("\"dynamicUaBlocksBypassedRequests\": 2"));
+		String detailsJson = renderer.buildStatusJsonDetails("DYNAMIC_UA_BLOCK_TEST");
+		assertTrue(detailsJson.contains("\"dynamicUaBlocks\": ["));
+
+		// 7. Combined replace command updates both CIDR and UA blocks atomically
+		TestResponse combinedReplace = sendMitigationCommand(valve,
+				"action", "replace",
+				"blocks", "203.0.113.0/24|600|subnet",
+				"uaBlocks", "");
+		assertEquals(200, combinedReplace.getStatus());
+		assertEquals(1, valve.getDynamicBlockRegistry().getActiveCount(valve.getTimeInMillis()));
+		assertEquals(0, valve.getDynamicBlockRegistry().getActiveUaCount(valve.getTimeInMillis()));
+	}
 }
 

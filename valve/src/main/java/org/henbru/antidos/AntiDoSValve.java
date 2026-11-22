@@ -2260,6 +2260,7 @@ public class AntiDoSValve extends ValveBase {
 			// block request:
 			if (httpStatusCode == DEFAULT_HTTP_STATUS_CODE) {
 				int retryAfter = provideRetryAfterSeconds(ip, now);
+				int retryAfter = provideRetryAfterSeconds(ip, userAgent, now);
 				response.setHeader("Retry-After", Integer.toString(retryAfter));
 			}
 			response.sendError(httpStatusCode);
@@ -2403,6 +2404,37 @@ public class AntiDoSValve extends ValveBase {
 						userAgent);
 			} catch (Exception e) {
 				log.warn(name4logging + " Failed to register dynamic block hit in monitor: " + ip, e);
+			}
+		}
+	}
+
+	private void registerDynamicUaBlockInMonitor(
+			AntiDoSDynamicBlockRegistry.DynamicUaBlockEntry uaEntry,
+			String ip,
+			boolean returningVisitor,
+			boolean authenticated,
+			boolean uaMismatch,
+			String userAgent) {
+		AntiDoSMonitor monitor = provideMonitor();
+		if (monitor != null && uaEntry != null) {
+			try {
+				String counterKey = resolveCounterName(ip);
+				byte[] v4Bytes = ip != null && ip.indexOf(':') < 0 ? parseIPv4Literal(ip) : null;
+				boolean trackCard = isExtendedMetricsActive();
+				monitor.registerDynamicUaBlockRequest(
+						counterKey,
+						ip,
+						v4Bytes,
+						this.ipv4SubnetMask > 0 ? this.ipv4SubnetMask : 24,
+						this.ipv6SubnetMask > 0 ? this.ipv6SubnetMask : 64,
+						trackCard,
+						returningVisitor,
+						authenticated,
+						uaMismatch,
+						userAgent,
+						uaEntry.getLabel());
+			} catch (Exception e) {
+				log.warn(name4logging + " Failed to register dynamic UA block hit in monitor: " + ip, e);
 			}
 		}
 	}
@@ -2711,6 +2743,8 @@ public class AntiDoSValve extends ValveBase {
 		try {
 			if ("clear".equals(action) || "clearblocks".equals(action)) {
 				dynamicBlockRegistry.clearAll();
+			} else if ("clearua".equals(action) || "clearuablocks".equals(action)) {
+				dynamicBlockRegistry.clearAllUaBlocks();
 			} else if ("remove".equals(action) || "removeblocks".equals(action)) {
 				String singleCidr = request.getParameter("cidr");
 				if (singleCidr != null && !singleCidr.trim().isEmpty()) {
@@ -2728,11 +2762,51 @@ public class AntiDoSValve extends ValveBase {
 						}
 					}
 				}
+			} else if ("removeua".equals(action) || "removeuablocks".equals(action)) {
+				String hashParam = request.getParameter("uaHash32");
+				if (hashParam != null && !hashParam.trim().isEmpty()) {
+					dynamicBlockRegistry.removeUaBlock(Integer.parseInt(hashParam.trim()));
+				}
+				String rawUaParam = request.getParameter("userAgent");
+				if (rawUaParam != null && !rawUaParam.trim().isEmpty()) {
+					int h = AntiDoSVisitorTokenService.computeUserAgentHash32(rawUaParam.trim());
+					if (h != 0) {
+						dynamicBlockRegistry.removeUaBlock(h);
+					}
+				}
+				String uaBlocksParam = request.getParameter("uaBlocks");
+				if (uaBlocksParam != null && !uaBlocksParam.trim().isEmpty()) {
+					String[] lines = uaBlocksParam.split("[\\r\\n;,]+");
+					for (String line : lines) {
+						String token = line.trim();
+						if (!token.isEmpty()) {
+							int pipeIdx = token.indexOf('|');
+							String hStr = pipeIdx >= 0 ? token.substring(0, pipeIdx).trim() : token;
+							if (!hStr.isEmpty()) {
+								dynamicBlockRegistry.removeUaBlock(Integer.parseInt(hStr));
+							}
+						}
+					}
+				}
 			} else if ("replace".equals(action) || "replaceblocks".equals(action)) {
 				String blocksParam = request.getParameter("blocks");
 				List<AntiDoSDynamicBlockRegistry.BlockSpec> specs = parseBlockSpecs(blocksParam, now);
 				ttlCappedCount = capBlockSpecTtls(specs, now);
 				dynamicBlockRegistry.replaceAllBlocks(specs, now, mitigationMaxActiveBlocks);
+				String uaBlocksParam = request.getParameter("uaBlocks");
+				if (uaBlocksParam != null) {
+					List<AntiDoSDynamicBlockRegistry.UaBlockSpec> uaSpecs = parseUaBlockSpecs(uaBlocksParam, now);
+					ttlCappedCount += capUaBlockSpecTtls(uaSpecs, now);
+					dynamicBlockRegistry.replaceAllBlocks(specs, now, mitigationMaxActiveBlocks);
+					dynamicBlockRegistry.replaceAllUaBlocks(uaSpecs, now, mitigationMaxActiveBlocks);
+				} else {
+					dynamicBlockRegistry.replaceAllBlocks(specs, now, mitigationMaxActiveBlocks);
+				}
+			} else if ("replaceua".equals(action) || "replaceuablocks".equals(action)) {
+				String uaBlocksParam = request.getParameter("uaBlocks");
+				List<AntiDoSDynamicBlockRegistry.UaBlockSpec> uaSpecs = parseUaBlockSpecs(uaBlocksParam, now);
+				ttlCappedCount = capUaBlockSpecTtls(uaSpecs, now);
+				dynamicBlockRegistry.replaceAllUaBlocks(uaSpecs, now, mitigationMaxActiveBlocks);
 			} else if ("upsert".equals(action) || "upsertblocks".equals(action)) {
 				List<AntiDoSDynamicBlockRegistry.BlockSpec> specs = new ArrayList<>();
 				String singleCidr = request.getParameter("cidr");
@@ -2751,6 +2825,33 @@ public class AntiDoSValve extends ValveBase {
 				}
 				ttlCappedCount = capBlockSpecTtls(specs, now);
 				dynamicBlockRegistry.upsertBlocks(specs, now, mitigationMaxActiveBlocks);
+			} else if ("upsertua".equals(action) || "upsertuablocks".equals(action)) {
+				List<AntiDoSDynamicBlockRegistry.UaBlockSpec> uaSpecs = new ArrayList<>();
+				String hashParam = request.getParameter("uaHash32");
+				String rawUaParam = request.getParameter("userAgent");
+				int singleHash = 0;
+				if (hashParam != null && !hashParam.trim().isEmpty()) {
+					singleHash = Integer.parseInt(hashParam.trim());
+				} else if (rawUaParam != null && !rawUaParam.trim().isEmpty()) {
+					singleHash = AntiDoSVisitorTokenService.computeUserAgentHash32(rawUaParam.trim());
+				}
+				if (singleHash != 0) {
+					long expiresAt = resolveExpiresAtMillis(
+							request.getParameter("expiresAt"),
+							request.getParameter("ttlSeconds"),
+							now);
+					String label = request.getParameter("reason");
+					if (label == null || label.trim().isEmpty()) {
+						label = rawUaParam != null && !rawUaParam.trim().isEmpty() ? rawUaParam.trim() : "Dynamic UA Mitigation";
+					}
+					uaSpecs.add(new AntiDoSDynamicBlockRegistry.UaBlockSpec(singleHash, expiresAt, label));
+				}
+				String uaBlocksParam = request.getParameter("uaBlocks");
+				if (uaBlocksParam != null && !uaBlocksParam.trim().isEmpty()) {
+					uaSpecs.addAll(parseUaBlockSpecs(uaBlocksParam, now));
+				}
+				ttlCappedCount = capUaBlockSpecTtls(uaSpecs, now);
+				dynamicBlockRegistry.upsertUaBlocks(uaSpecs, now, mitigationMaxActiveBlocks);
 			} else {
 				response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Unknown mitigation action: " + action);
 				return;
@@ -2765,9 +2866,14 @@ public class AntiDoSValve extends ValveBase {
 		}
 
 		dynamicBlockRegistry.evictExpired(now);
+		dynamicBlockRegistry.evictExpiredUaBlocks(now);
 		int activeCount = dynamicBlockRegistry.getActiveCount(now);
 		long revision = dynamicBlockRegistry.getRevision(now);
 		long totalBlocked = dynamicBlockRegistry.getTotalBlockedRequests();
+		int uaActiveCount = dynamicBlockRegistry.getActiveUaCount(now);
+		long uaRevision = dynamicBlockRegistry.getUaRevision(now);
+		long uaTotalBlocked = dynamicBlockRegistry.getTotalUaBlockedRequests();
+		long uaTotalBypassed = dynamicBlockRegistry.getTotalUaBypassedRequests();
 
 		response.setStatus(HttpServletResponse.SC_OK);
 		response.setContentType("application/json;charset=UTF-8");
@@ -2780,6 +2886,10 @@ public class AntiDoSValve extends ValveBase {
 				+ "  \"dynamicRulesRevision\": " + revision + ",\n"
 				+ "  \"dynamicRulesHashVersion\": " + DYNAMIC_RULES_HASH_VERSION + ",\n"
 				+ "  \"dynamicBlocksBlockedRequests\": " + totalBlocked + ",\n"
+				+ "  \"dynamicUaBlocksActiveCount\": " + uaActiveCount + ",\n"
+				+ "  \"dynamicUaRulesRevision\": " + uaRevision + ",\n"
+				+ "  \"dynamicUaBlocksBlockedRequests\": " + uaTotalBlocked + ",\n"
+				+ "  \"dynamicUaBlocksBypassedRequests\": " + uaTotalBypassed + ",\n"
 				+ "  \"ttlCappedCount\": " + ttlCappedCount + ",\n"
 				+ "  \"mitigationMaxTtlSeconds\": " + mitigationMaxTtlSeconds + ",\n"
 				+ "  \"mitigationMaxActiveBlocks\": " + mitigationMaxActiveBlocks + "\n"
@@ -2834,6 +2944,55 @@ public class AntiDoSValve extends ValveBase {
 			}
 			String reason = parts.length >= 3 ? parts[2].trim() : "Dynamic Mitigation";
 			specs.add(new AntiDoSDynamicBlockRegistry.BlockSpec(cidr, expiresAt, reason));
+		}
+		return specs;
+	}
+
+	int capUaBlockSpecTtls(List<AntiDoSDynamicBlockRegistry.UaBlockSpec> specs, long nowMillis) {
+		long maxExpiresAt = nowMillis + Math.max(1L, (long) mitigationMaxTtlSeconds) * 1000L;
+		int capped = 0;
+		for (int i = 0; i < specs.size(); i++) {
+			AntiDoSDynamicBlockRegistry.UaBlockSpec spec = specs.get(i);
+			if (spec.expiresAtMillis > maxExpiresAt) {
+				specs.set(i, new AntiDoSDynamicBlockRegistry.UaBlockSpec(spec.uaHash32, maxExpiresAt, spec.label));
+				capped++;
+			}
+		}
+		return capped;
+	}
+
+	private List<AntiDoSDynamicBlockRegistry.UaBlockSpec> parseUaBlockSpecs(String uaBlocksParam, long nowMillis) {
+		if (uaBlocksParam == null || uaBlocksParam.trim().isEmpty()) {
+			return Collections.emptyList();
+		}
+		String[] lines = uaBlocksParam.split("[\\r\\n;]+");
+		List<AntiDoSDynamicBlockRegistry.UaBlockSpec> specs = new ArrayList<>(lines.length);
+		for (String rawLine : lines) {
+			String line = rawLine.trim();
+			if (line.isEmpty()) {
+				continue;
+			}
+			String[] parts = line.split("\\|", 3);
+			String hashStr = parts[0].trim();
+			if (hashStr.isEmpty()) {
+				continue;
+			}
+			int uaHash32;
+			try {
+				uaHash32 = Integer.parseInt(hashStr);
+			} catch (NumberFormatException e) {
+				uaHash32 = AntiDoSVisitorTokenService.computeUserAgentHash32(hashStr);
+			}
+			if (uaHash32 == 0) {
+				throw new IllegalArgumentException("Invalid User-Agent hash in uaBlocks: " + hashStr);
+			}
+			long expiresAt = nowMillis + 3600_000L;
+			if (parts.length >= 2 && !parts[1].trim().isEmpty()) {
+				long val = Long.parseLong(parts[1].trim());
+				expiresAt = val > 100_000_000_000L ? val : (nowMillis + val * 1000L);
+			}
+			String label = parts.length >= 3 ? parts[2].trim() : "Dynamic UA Mitigation";
+			specs.add(new AntiDoSDynamicBlockRegistry.UaBlockSpec(uaHash32, expiresAt, label));
 		}
 		return specs;
 	}
@@ -3361,6 +3520,27 @@ public class AntiDoSValve extends ValveBase {
 				long remainingMillis = dynEntry.getExpiresAtMillis() - currentTimeMillis;
 				int remainingSec = (int) Math.ceil(remainingMillis / 1000.0);
 				return Math.max(1, Math.min(3600, remainingSec));
+		return provideRetryAfterSeconds(ip, null, currentTimeMillis);
+	}
+
+	public int provideRetryAfterSeconds(String ip, String userAgent, long currentTimeMillis) {
+		if (isDynamicMitigationEnabled()) {
+			if (ip != null) {
+				AntiDoSDynamicBlockRegistry.DynamicBlockEntry dynEntry = dynamicBlockRegistry.match(ip, null, currentTimeMillis);
+				if (dynEntry != null) {
+					long remainingMillis = dynEntry.getExpiresAtMillis() - currentTimeMillis;
+					int remainingSec = (int) Math.ceil(remainingMillis / 1000.0);
+					return Math.max(1, Math.min(3600, remainingSec));
+				}
+			}
+			if (userAgent != null && !userAgent.isEmpty()) {
+				int uaHash32 = AntiDoSVisitorTokenService.computeUserAgentHash32(userAgent);
+				AntiDoSDynamicBlockRegistry.DynamicUaBlockEntry uaEntry = dynamicBlockRegistry.matchUserAgent(uaHash32, currentTimeMillis);
+				if (uaEntry != null) {
+					long remainingMillis = uaEntry.getExpiresAtMillis() - currentTimeMillis;
+					int remainingSec = (int) Math.ceil(remainingMillis / 1000.0);
+					return Math.max(1, Math.min(3600, remainingSec));
+				}
 			}
 		}
 		return provideRetryAfterSeconds(currentTimeMillis);
@@ -3457,6 +3637,26 @@ public class AntiDoSValve extends ValveBase {
 					log.debug(name4logging + " Dynamically blocked by CIDR rule " + matchedRule.getCidr() + ": " + ip);
 				}
 				return false;
+			}
+			if (userAgent != null && !userAgent.isEmpty()) {
+				int uaHash32 = AntiDoSVisitorTokenService.computeUserAgentHash32(userAgent);
+				AntiDoSDynamicBlockRegistry.DynamicUaBlockEntry matchedUa = dynamicBlockRegistry.matchUserAgent(uaHash32, nowMillis);
+				if (matchedUa != null) {
+					if (authenticated || (returningVisitor && !uaMismatch)) {
+						dynamicBlockRegistry.recordUaBypassedHit(matchedUa, nowMillis);
+						if (log.isDebugEnabled()) {
+							log.debug(name4logging + " Dynamic UA block bypassed (authenticated=" + authenticated
+									+ ", validReturning=" + (returningVisitor && !uaMismatch) + ") for " + ip);
+						}
+					} else {
+						dynamicBlockRegistry.recordUaBlockedHit(matchedUa, nowMillis);
+						registerDynamicUaBlockInMonitor(matchedUa, ip, returningVisitor, authenticated, uaMismatch, userAgent);
+						if (log.isDebugEnabled()) {
+							log.debug(name4logging + " Dynamically blocked by UA rule " + matchedUa.getUaHash32() + ": " + ip);
+						}
+						return false;
+					}
+				}
 			}
 		}
 

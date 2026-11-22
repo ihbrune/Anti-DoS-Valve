@@ -267,7 +267,12 @@
 
             <!-- Modal Footer -->
             <div class="note-modal-footer"
-                style="padding: 12px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px;">
+                style="padding: 12px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <a th:if="${drilldown != null}"
+                    th:href="@{/mitigation(tab='useragents',prefillUa=${drilldown.userAgent})}"
+                    class="btn btn-danger" style="font-size: 12px; text-decoration: none;">
+                    &#x1F575;&#xFE0F; Open in User-Agent Defense &rarr;
+                </a>
                 <button type="button" class="btn" onclick="closeUaModal(event)">Close</button>
             </div>
         </div>

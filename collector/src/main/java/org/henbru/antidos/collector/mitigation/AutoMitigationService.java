@@ -353,21 +353,24 @@ public class AutoMitigationService {
 			return;
 		}
 		EffectiveAutoSettings config = getEffectiveSettings();
-		if (!config.enabled()) {
-			return;
-		}
-
-		if (!scanRunning.compareAndSet(false, true)) {
-			log.debug("Auto-mitigation evaluation already in progress, skipping tick");
-			return;
+		if (config.enabled()) {
+			if (!scanRunning.compareAndSet(false, true)) {
+				log.debug("Auto-mitigation evaluation already in progress, skipping tick");
+			} else {
+				try {
+					runEvaluationCycle(config);
+				} catch (Exception e) {
+					log.error("Error during auto-mitigation evaluation: {}", e.getMessage(), e);
+				} finally {
+					scanRunning.set(false);
+				}
+			}
 		}
 
 		try {
-			runEvaluationCycle(config);
+			mitigationService.evaluateAutoUaMitigationIfEnabled();
 		} catch (Exception e) {
-			log.error("Error during auto-mitigation evaluation: {}", e.getMessage(), e);
-		} finally {
-			scanRunning.set(false);
+			log.error("Error during autonomous User-Agent evaluation: {}", e.getMessage(), e);
 		}
 	}
 

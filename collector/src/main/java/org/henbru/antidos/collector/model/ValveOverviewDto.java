@@ -84,6 +84,10 @@ public record ValveOverviewDto(
 			Integer mitigationMinPrefixV6,
 			Integer mitigationMaxTtlSeconds,
 			Integer mitigationMaxActiveBlocks,
+			Integer dynamicUaBlocksActiveCount,
+			Long dynamicUaBlocksBlockedRequests,
+			Long dynamicUaBlocksBypassedRequests,
+			Long dynamicUaRulesRevision,
 			Boolean alwaysAllowPrivateIPs,
 			long alwaysForbiddenBlockedRequests,
 			int currentActiveCounters,
@@ -100,6 +104,93 @@ public record ValveOverviewDto(
 			boolean isStatusHost,
 			boolean isCurrentHost
 	) {
+		/**
+		 * Overloaded constructor without User-Agent dynamic mitigation fields for backwards compatibility.
+		 */
+		public ValveSummaryDto(
+				String monitorName,
+				String description,
+				int pipelineOrder,
+				String monitorMode,
+				boolean simulationMode,
+				boolean serverWideBlocking,
+				int httpStatusCode,
+				int allowedRequestsPerSlot,
+				int slotLength,
+				int numberOfSlots,
+				float shareOfRetainedFormerRequests,
+				int ipv4SubnetMask,
+				int ipv6SubnetMask,
+				int maxIPCacheSize,
+				int maxBlockedIPCacheSize,
+				String relevantPaths,
+				String nonRelevantPaths,
+				String alwaysAllowedIPs,
+				String alwaysForbiddenIPs,
+				String statusUri,
+				String statusAllowedIPs,
+				String collectorIntegration,
+				boolean visitorCookieEnabled,
+				String visitorCookieName,
+				boolean authTrackingEnabled,
+				String authTrackingMode,
+				String authCookieName,
+				String authLoginPaths,
+				int authSessionTtlSeconds,
+				int maxAuthCacheSize,
+				int activeAuthSessions,
+				String relevantAuthScope,
+				Integer activeSampleThreshold,
+				Boolean dynamicMitigationEnabled,
+				String mitigationUri,
+				String mitigationAllowedIPs,
+				Integer dynamicBlocksActiveCount,
+				Long dynamicBlocksBlockedRequests,
+				Long dynamicRulesRevision,
+				Integer dynamicRulesHashVersion,
+				Integer mitigationMinPrefixV4,
+				Integer mitigationMinPrefixV6,
+				Integer mitigationMaxTtlSeconds,
+				Integer mitigationMaxActiveBlocks,
+				Boolean alwaysAllowPrivateIPs,
+				long alwaysForbiddenBlockedRequests,
+				int currentActiveCounters,
+				int currentBlockedCounters,
+				long currentSlotKey,
+				long lastCompletedSlotKey,
+				long totalRequests,
+				long totalAuthenticatedRequests,
+				long previousTotalRequests,
+				long previousAuthenticatedRequests,
+				int previousActiveCounters,
+				int previousBlockedCounters,
+				int activeSlots,
+				boolean isStatusHost,
+				boolean isCurrentHost
+		) {
+			this(
+					monitorName, description, pipelineOrder, monitorMode, simulationMode, serverWideBlocking,
+					httpStatusCode, allowedRequestsPerSlot, slotLength, numberOfSlots,
+					shareOfRetainedFormerRequests, ipv4SubnetMask, ipv6SubnetMask, maxIPCacheSize,
+					maxBlockedIPCacheSize, relevantPaths, nonRelevantPaths, alwaysAllowedIPs,
+					alwaysForbiddenIPs, statusUri, statusAllowedIPs, collectorIntegration,
+					visitorCookieEnabled, visitorCookieName,
+					authTrackingEnabled, authTrackingMode, authCookieName, authLoginPaths,
+					authSessionTtlSeconds, maxAuthCacheSize, activeAuthSessions,
+					relevantAuthScope, activeSampleThreshold,
+					dynamicMitigationEnabled, mitigationUri, mitigationAllowedIPs,
+					dynamicBlocksActiveCount, dynamicBlocksBlockedRequests, dynamicRulesRevision,
+					dynamicRulesHashVersion,
+					mitigationMinPrefixV4, mitigationMinPrefixV6, mitigationMaxTtlSeconds, mitigationMaxActiveBlocks,
+					0, 0L, 0L, 0L,
+					alwaysAllowPrivateIPs,
+					alwaysForbiddenBlockedRequests, currentActiveCounters, currentBlockedCounters,
+					currentSlotKey, lastCompletedSlotKey, totalRequests, totalAuthenticatedRequests,
+					previousTotalRequests, previousAuthenticatedRequests,
+					previousActiveCounters, previousBlockedCounters, activeSlots, isStatusHost, isCurrentHost
+			);
+		}
+
 		/**
 		 * Overloaded constructor without alwaysAllowPrivateIPs for backwards compatibility.
 		 */
@@ -797,6 +888,22 @@ public record ValveOverviewDto(
 
 		public long dynamicRulesRevisionOrDefault() {
 			return dynamicRulesRevision != null ? Math.max(0L, dynamicRulesRevision) : 0L;
+		}
+
+		public int dynamicUaBlocksActiveCountOrDefault() {
+			return dynamicUaBlocksActiveCount != null ? Math.max(0, dynamicUaBlocksActiveCount) : 0;
+		}
+
+		public long dynamicUaBlocksBlockedRequestsOrDefault() {
+			return dynamicUaBlocksBlockedRequests != null ? Math.max(0L, dynamicUaBlocksBlockedRequests) : 0L;
+		}
+
+		public long dynamicUaBlocksBypassedRequestsOrDefault() {
+			return dynamicUaBlocksBypassedRequests != null ? Math.max(0L, dynamicUaBlocksBypassedRequests) : 0L;
+		}
+
+		public long dynamicUaRulesRevisionOrDefault() {
+			return dynamicUaRulesRevision != null ? Math.max(0L, dynamicUaRulesRevision) : 0L;
 		}
 
 		public int dynamicRulesHashVersionOrDefault() {

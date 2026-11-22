@@ -840,13 +840,18 @@ Admins can trigger asynchronous maintenance actions directly from the web interf
 
 ## Active Fleet Mitigation & Deterrence Monitor (/mitigation)
 
-Accessible via `/mitigation`. The active defense control plane for creating, extending, revoking, and auditing temporary dynamic CIDR blocks across mitigation-enabled Anti-DoS Valve instances.
+Accessible via `/mitigation`. The active defense control plane organized into focused tabs for dynamic fleet protection:
+
+* **`Fleet Overview` (`tab=overview`, Default Start Tab):** High-level operational KPIs (`Active Dynamic CIDR Blocks`, `Active Dynamic UA Blocks`, `Mitigation-Enabled Valves`, `Persistent Attackers`, `Deterred Subnets`), the **Mitigation-Capable Fleet Valves** sync card (`CIDR Rev`, `UA Rev`, blocked & bypassed counts, `Sync Fleet & Refresh Deterrence`), and quick teasers for *Recently Expired & Revoked* rules and the *Mitigation Audit Trail*.
+* **`CIDR & ASN Defense` (`tab=active`):** Creating, extending, revoking, and monitoring temporary dynamic IP/CIDR blocks, ASN subnet batch expansion, attacker deterrence states, and Autonomous CIDR/Carpet Defense.
+* **`User-Agent Defense` (`tab=useragents`):** Managing temporary 32-bit FNV-1a User-Agent signature blocks across Valves with in-place pre-flight safety checks, authenticated & valid-returning-visitor bypass telemetry, and independent Autonomous User-Agent Defense settings.
+* **`Carpet Attack Radar`, `Rule History`, and `Audit Log`:** Investigating emerging multi-subnet threats, historical rules, and the unified audit trail filterable by target type (`CIDR / ASN` vs. `User-Agent`).
 
 ### 1. Selective Valve Targeting & Auto-Discovery
-Dynamic CIDR rules are pushed **exclusively** to Valve instances that have a `mitigationPassword` configured in Tomcat's `server.xml` (which reports `"mitigationEnabled": true` in `/antidos-status`). Upstream monitoring or simulation Valves in the same pipeline remain untouched so they can continue observing full incoming traffic baselines.
-* **Expected Revision & Sync Status:** Each active rule set has a deterministic revision hash. During every 15-second poll cycle, the Collector compares the Valve's `dynamicRulesRevision` against the expected revision and automatically reconciles any newly restarted or out-of-sync Valve.
-* **Server-Wide Enforcement:** Dynamic CIDR blocks act like `serverWideBlocking="true"` for matching subnets, immediately returning HTTP 429 on all paths regardless of `relevantPaths` or `nonRelevantPaths`.
-* **Self-Expiring Fail-Safe:** Every rule carries an explicit `expiresAt` timestamp. If the Collector becomes unreachable, rules automatically expire in the Valve's lock-free memory registry once their TTL elapses.
+Dynamic CIDR and User-Agent rules are pushed **exclusively** to Valve instances that have a `mitigationPassword` configured in Tomcat's `server.xml` (which reports `"mitigationEnabled": true` in `/antidos-status`). Upstream monitoring or simulation Valves in the same pipeline remain untouched so they can continue observing full incoming traffic baselines.
+* **Expected Revisions & Dual Sync Status:** Active CIDR rules and active User-Agent rules each maintain deterministic revision hashes (`dynamicRulesRevision` and `dynamicUaRulesRevision`). During every 15-second poll cycle, the Collector compares both revisions reported by each Valve against the expected fleet revisions and automatically reconciles any newly restarted or out-of-sync Valve via `/antidos-status/mitigation`.
+* **Server-Wide Enforcement:** Dynamic blocks act like `serverWideBlocking="true"`, immediately returning HTTP 429 on all paths regardless of `relevantPaths` or `nonRelevantPaths`.
+* **Self-Expiring Fail-Safe:** Every CIDR and User-Agent rule carries an explicit `expiresAt` timestamp. If the Collector becomes unreachable, rules automatically expire in the Valve's lock-free memory registry once their TTL elapses.
 
 ### 2. Creating Single or Multi-Subnet Dynamic CIDR Blocks
 * **Prefix Guardrails:** To prevent accidental broad-spectrum blackholing, dynamic rules enforce a maximum subnet width of `/16`–`/32` for IPv4 and `/32`–`/128` for IPv6.
@@ -872,6 +877,13 @@ Whenever dynamic CIDR blocks are active, operators have multiple granular rollba
 * **Single Rule Revoke:** Click **Revoke** on any individual row in the active mitigations table to lift that specific CIDR block across all Valves.
 * **Batch Revoke:** Click **Revoke Batch** in the *Active Rule Batches* summary bar to lift all subnets belonging to a specific incident or ASN campaign at once.
 * **🚨 Emergency Flush (Revoke All):** Displayed prominently in the header of the *Active Dynamic CIDR Mitigations* card whenever active rules exist. Prompts with a browser confirmation dialog to prevent accidental clicks. When confirmed, it immediately revokes all active rules in the database, records an `EMERGENCY_FLUSH` audit entry, and synchronizes an empty rule set (`action=replace`, `blocks=""`) to all Valves across the entire fleet—clearing every in-memory block in milliseconds and restoring baseline traffic immediately.
+
+### 5.1 Dynamic User-Agent Defense (`tab=useragents`)
+Managed in its dedicated **`User-Agent Defense`** tab on `/mitigation`:
+* **Auth & Valid-Returning Visitor Bypass (`dynamicUaBlocksBypassedRequests`):** Dynamically blocked User-Agent signatures still permit requests carrying an active authenticated session or a valid, mismatch-free returning visitor cookie (`_adv` matching both client subnet and User-Agent hash). This allows legitimate users with older browsers to authenticate through SSO `/trust` endpoints and use protected applications while stopping unauthenticated rotating scraper traffic. Every bypassed hit is counted in `dynamicUaBlocksBypassedRequests` and shown on the Fleet Valve cards.
+* **Pre-Flight Collateral Damage Check & Immunity Override:** Before activating any User-Agent block, **Run Pre-Flight Check** verifies `dim_user_agent` memory for `ALWAYS_ALLOW` overrides, Stage-0 immunity (`IMMUNE_INTERNAL`, `IMMUNE_SEARCH_ENGINE`, `IMMUNE_AUTHENTICATED`), and observed authenticated requests/samples. Critical matches require explicit **Override Pre-Flight Safety Warning** confirmation.
+* **Independent Autonomous UA Defense:** Maintains independent toggles and `system_settings` guardrails (`enabled = false`, `dryRun = true` by default). Can selectively enforce `MANUAL_BLOCK` candidates as well as Pillars 1–3 (`SUSPICIOUS_ULTRA_SPREAD`, `SUSPICIOUS_CORRELATED`, `SUSPICIOUS_DATACENTER`) and optional signature anomalies while strictly skipping protected/immune/authenticated User-Agents.
+* **Unified Audit Trail Filtering:** The `Audit Log` tab combines CIDR and User-Agent mitigation actions (`UA_BLOCK`, `UA_AUTO_BLOCK`, `UA_AUTO_WOULD_BLOCK`, `UA_EXTEND`, `UA_REVOKE`, `UA_FLUSH`) with a **Target Type** filter (`All Targets`, `CIDR / ASN`, `User-Agent`).
 
 ### 6. Autonomous Defense Engine (Auto-Mitigation)
 Outside business hours or during high-rate overnight waves, the Autonomous Defense Engine continuously monitors telemetry (scheduled every 2 minutes) and can autonomously enforce, extend, and expire dynamic fleet mitigations without manual operator intervention:

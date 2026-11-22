@@ -23,10 +23,18 @@ import org.henbru.antidos.collector.config.CollectorProperties;
 import org.henbru.antidos.collector.config.EndpointConfig;
 import org.henbru.antidos.collector.model.MitigationAuditEntry;
 import org.henbru.antidos.collector.model.MitigationRule;
+import org.henbru.antidos.collector.model.MitigationUaRule;
+import org.henbru.antidos.collector.model.UserAgentAutoVerdict;
+import org.henbru.antidos.collector.model.UserAgentFamily;
+import org.henbru.antidos.collector.model.UserAgentManualOverride;
+import org.henbru.antidos.collector.model.UserAgentProfile;
 import org.henbru.antidos.collector.model.ValveOverviewDto;
 import org.henbru.antidos.collector.poller.ValveStatusClient;
 import org.henbru.antidos.collector.storage.MitigationRuleRepository;
+import org.henbru.antidos.collector.storage.MitigationUaRuleRepository;
 import org.henbru.antidos.collector.storage.MonitoredValveRepository;
+import org.henbru.antidos.collector.storage.SystemSettingsRepository;
+import org.henbru.antidos.collector.storage.UserAgentMemoryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -676,5 +684,207 @@ class MitigationServiceTest {
 		long expectedRevision = mitigationService.getExpectedRevision(now);
 		long stableRevision = MitigationService.computeRevisionForCidrs(List.of("198.51.100.0/24"));
 		assertEquals(stableRevision, expectedRevision, "Expected revision must only account for rules with >= 5s TTL");
+	}
+
+	@Test
+	void testUserAgentPreflightManualLifecycleAndAuditFiltering() {
+		MitigationUaRuleRepository uaRuleRepo = new MitigationUaRuleRepository(jdbcTemplate);
+		UserAgentMemoryRepository uaMemRepo = new UserAgentMemoryRepository(jdbcTemplate);
+		SystemSettingsRepository settingsRepo = new SystemSettingsRepository(jdbcTemplate);
+		CollectorProperties props = new CollectorProperties();
+		props.setDefaultMitigationTtlMinutes(60);
+		MitigationService svc = new MitigationService(
+				props, ruleRepository, valveRepository,
+				new ValveStatusClient(new com.fasterxml.jackson.databind.ObjectMapper()),
+				null, null, jdbcTemplate, uaRuleRepo, uaMemRepo, settingsRepo);
+
+		Instant now = Instant.now();
+		String immuneUa = "ExampleAppClient/3.12 (Mobile)";
+		String botUa = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/142.0.0.0 Safari/537.36";
+
+		uaMemRepo.batchUpdateProfilesPreservingOverrides(List.of(
+				new UserAgentProfile(null, UserAgentMemoryRepository.computeSha256Hex(immuneUa),
+						UserAgentMemoryRepository.computeUaHash32(immuneUa), immuneUa, UserAgentFamily.AUTOMATED_TOOL,
+						3, true, now, now, 500, 0, 0, 20, 400, 100, 0,
+						200, 10, 0, 0, 2, 1, 5, 100, 50, 0, 0, 0, 10, 0,
+						UserAgentAutoVerdict.IMMUNE_AUTHENTICATED, "IMMUNITY", "Authenticated client", now,
+						UserAgentManualOverride.ALWAYS_ALLOW, "Protected mobile client", "admin", now),
+				new UserAgentProfile(null, UserAgentMemoryRepository.computeSha256Hex(botUa),
+						UserAgentMemoryRepository.computeUaHash32(botUa), botUa, UserAgentFamily.CHROME_DESKTOP,
+						142, false, now, now, 12000, 800, 0, 0, 0, 0, 0,
+						5000, 800, 400, 0, 1200, 40, 0, 0, 0, 0, 100, 4900, 0, 12,
+						UserAgentAutoVerdict.SUSPICIOUS_ULTRA_SPREAD, "PILLAR_1", "Spread > 500 subnets", now,
+						UserAgentManualOverride.AUTO, null, null, now)
+		));
+		uaMemRepo.updateManualOverride(immuneUa, UserAgentFamily.AUTOMATED_TOOL, 3, UserAgentManualOverride.ALWAYS_ALLOW, "Protected mobile client", "admin");
+
+		MitigationService.UaPreflightCheckResult immuneCheck = svc.evaluateUaPreflight(immuneUa);
+		assertTrue(immuneCheck.valid());
+		assertTrue(immuneCheck.hasCriticalWarnings());
+		assertFalse(immuneCheck.safeToProceedWithoutOverride());
+		assertThrows(IllegalStateException.class, () -> svc.createOrUpdateUaBlock(
+				immuneUa, 60, "Blocked accidentally", MitigationUaRule.SOURCE_MANUAL, null, false, "admin"));
+
+		MitigationService.UaPreflightCheckResult botCheck = svc.evaluateUaPreflight(botUa);
+		assertTrue(botCheck.valid());
+		assertFalse(botCheck.hasCriticalWarnings());
+		assertTrue(botCheck.safeToProceedWithoutOverride());
+
+		MitigationUaRule created = svc.createOrUpdateUaBlock(
+				botUa, 120, "Scrapers wave #1", MitigationUaRule.SOURCE_MANUAL, null, false, "admin");
+		assertNotNull(created.id());
+		assertEquals(UserAgentMemoryRepository.computeUaHash32(botUa), created.uaHash32());
+		assertTrue(created.isCurrentlyActive(now));
+
+		MitigationUaRule extended = svc.extendUaBlock(created.id(), 60, "admin").orElseThrow();
+		assertTrue(extended.expiresAt().isAfter(created.expiresAt().plusSeconds(1800)));
+
+		// Audit trail separation via targetType
+		svc.createOrUpdateBlock("198.51.100.0/24", 60, "CIDR test", MitigationRule.SOURCE_MANUAL, null, "admin");
+		assertEquals(2L, svc.countAuditEntriesFiltered(null, "ALL", "ALL", MitigationAuditEntry.TARGET_USER_AGENT));
+		assertEquals(1L, svc.countAuditEntriesFiltered(null, "ALL", "ALL", MitigationAuditEntry.TARGET_CIDR));
+
+		MitigationUaRule revoked = svc.revokeUaBlock(created.id(), "Incident mitigated", "admin").orElseThrow();
+		assertEquals(MitigationUaRule.STATUS_REVOKED, revoked.status());
+	}
+
+	@Test
+	void testCombinedCidrAndUaFleetSyncAndRevisionConvergence() throws Exception {
+		MitigationUaRuleRepository uaRuleRepo = new MitigationUaRuleRepository(jdbcTemplate);
+		UserAgentMemoryRepository uaMemRepo = new UserAgentMemoryRepository(jdbcTemplate);
+		SystemSettingsRepository settingsRepo = new SystemSettingsRepository(jdbcTemplate);
+		ValveStatusClient mockClient = mock(ValveStatusClient.class);
+
+		CollectorProperties props = new CollectorProperties();
+		props.setDefaultMitigationTtlMinutes(60);
+		props.setMitigationToken("ua-sync-token");
+		EndpointConfig ep = new EndpointConfig();
+		ep.setName("app-node-1");
+		ep.setUrl("http://localhost:8080/antidos-status");
+		ep.setEnabled(true);
+		props.setEndpoints(List.of(ep));
+
+		MitigationService svc = new MitigationService(
+				props, ruleRepository, valveRepository, mockClient,
+				null, null, jdbcTemplate, uaRuleRepo, uaMemRepo, settingsRepo);
+
+		Instant now = Instant.now();
+		valveRepository.upsert(new org.henbru.antidos.collector.model.MonitoredValve(
+				"app-node-1", "ROOT", "Main", 1, "BLOCKING", false, false, 429,
+				100, 10, 6, 0.5f, 32, 64, 10000, 10000, ".*", null, null, false, null,
+				"/antidos-status", "127.0.0.1", "auto", true, "_adv",
+				false, "OFF", null, null, 900, 50000, "ALL", 5,
+				true, "/antidos-status/mitigation", 0, 0L, 0L, 1, 16, 32, 86400, 5000,
+				0, 0L, 0L, 0L, now, 123, true));
+
+		String botUa = "RotatingScraper/2.1";
+		int uaHash32 = UserAgentMemoryRepository.computeUaHash32(botUa);
+		long expectedUaRev = MitigationService.computeRevisionForUaHashes(List.of(uaHash32));
+		long expectedCidrRev = MitigationService.computeRevisionForCidrs(List.of("198.51.100.0/24"));
+
+		when(mockClient.sendMitigationCommand(any(), any(), eq("ROOT"), eq("replace"), any(), any(), any(), any(), any()))
+				.thenReturn(new ValveStatusClient.MitigationCommandResponse(
+						"ok", "ROOT", "replace", 1, expectedCidrRev, 1, 0L, 0, 86400, 5000,
+						1, expectedUaRev, 0L, 0L));
+
+		svc.createOrUpdateBlock("198.51.100.0/24", 60, "CIDR rule", MitigationRule.SOURCE_MANUAL, null, "admin");
+		svc.createOrUpdateUaBlock(botUa, 60, "UA rule", MitigationUaRule.SOURCE_MANUAL, null, false, "admin");
+
+		// Valve now has 1 CIDR block and 1 UA block synced; simulate poller seeing matching CIDR rev but stale UA rev 0
+		ValveOverviewDto.ValveSummaryDto staleUaSummary = new ValveOverviewDto.ValveSummaryDto(
+				"ROOT", "Main", 1, "BLOCKING", false, false, 429, 100, 10, 6, 0.5f,
+				32, 64, 10000, 10000, ".*", null, null, null, "/antidos-status", "127.0.0.1", "auto",
+				true, "_adv", false, "OFF", null, null, 900, 50000, 0, "ALL", 5,
+				true, "/antidos-status/mitigation", null, 1, 0L, expectedCidrRev, 1, 16, 32, 86400, 5000,
+				0, 0L, 0L, 0L, false,
+				0L, 0, 0, 0L, 0L, 0L, 0L, 0L, 0L, 0, 0, 0, true, true);
+		svc.syncValveIfNeeded(ep, staleUaSummary, now.plusSeconds(15));
+
+		// Verify replace command was pushed with non-empty uaBlocks
+		verify(mockClient, times(2)).sendMitigationCommand(
+				any(), any(), eq("ROOT"), eq("replace"), any(), any(), any(), any(),
+				org.mockito.ArgumentMatchers.contains(String.valueOf(uaHash32)));
+
+		// When Valve reports both matching CIDR rev and matching UA rev, syncValveIfNeeded is a no-op
+		ValveOverviewDto.ValveSummaryDto syncedSummary = new ValveOverviewDto.ValveSummaryDto(
+				"ROOT", "Main", 1, "BLOCKING", false, false, 429, 100, 10, 6, 0.5f,
+				32, 64, 10000, 10000, ".*", null, null, null, "/antidos-status", "127.0.0.1", "auto",
+				true, "_adv", false, "OFF", null, null, 900, 50000, 0, "ALL", 5,
+				true, "/antidos-status/mitigation", null, 1, 0L, expectedCidrRev, 1, 16, 32, 86400, 5000,
+				1, 0L, 0L, expectedUaRev, false,
+				0L, 0, 0, 0L, 0L, 0L, 0L, 0L, 0L, 0, 0, 0, true, true);
+		svc.syncValveIfNeeded(ep, syncedSummary, now.plusSeconds(30));
+
+		// Still only 2 invocations with uaHash32 (1 from createOrUpdateUaBlock, 1 from staleUaSummary)
+		verify(mockClient, times(2)).sendMitigationCommand(
+				any(), any(), eq("ROOT"), eq("replace"), any(), any(), any(), any(),
+				org.mockito.ArgumentMatchers.contains(String.valueOf(uaHash32)));
+	}
+
+	@Test
+	void testAutonomousUaDefenseDryRunAndLiveEnforcement() {
+		MitigationUaRuleRepository uaRuleRepo = new MitigationUaRuleRepository(jdbcTemplate);
+		UserAgentMemoryRepository uaMemRepo = new UserAgentMemoryRepository(jdbcTemplate);
+		SystemSettingsRepository settingsRepo = new SystemSettingsRepository(jdbcTemplate);
+		CollectorProperties props = new CollectorProperties();
+		MitigationService svc = new MitigationService(
+				props, ruleRepository, valveRepository,
+				new ValveStatusClient(new com.fasterxml.jackson.databind.ObjectMapper()),
+				null, null, jdbcTemplate, uaRuleRepo, uaMemRepo, settingsRepo);
+
+		Instant now = Instant.now();
+		String pillar1Ua = "Mozilla/5.0 Chrome/154.0.0.0 DistributedBot";
+		String manualCandUa = "ManualTestCandidate/1.0";
+		String immuneInternalUa = "ExampleInternalApp/3.12";
+		String authBearingUa = "AuthLegacyBrowser/1.0";
+
+		uaMemRepo.batchUpdateProfilesPreservingOverrides(List.of(
+				new UserAgentProfile(null, UserAgentMemoryRepository.computeSha256Hex(pillar1Ua),
+						UserAgentMemoryRepository.computeUaHash32(pillar1Ua), pillar1Ua, UserAgentFamily.CHROME_DESKTOP,
+						154, false, now, now, 3000, 200, 0, 0, 0, 0, 0,
+						2500, 400, 150, 0, 900, 30, 0, 0, 0, 0, 0, 2500, 0, 5,
+						UserAgentAutoVerdict.SUSPICIOUS_ULTRA_SPREAD, "PILLAR_1", "Ultra spread", now,
+						UserAgentManualOverride.AUTO, null, null, now),
+				new UserAgentProfile(null, UserAgentMemoryRepository.computeSha256Hex(manualCandUa),
+						UserAgentMemoryRepository.computeUaHash32(manualCandUa), manualCandUa, UserAgentFamily.UNKNOWN,
+						1, false, now, now, 80, 0, 0, 0, 0, 0, 0,
+						50, 5, 0, 0, 4, 1, 0, 0, 0, 0, 0, 50, 0, 0,
+						UserAgentAutoVerdict.NEUTRAL, "NONE", "Manual candidate", now,
+						UserAgentManualOverride.MANUAL_BLOCK, "Operator queued for manual UA test", "admin", now),
+				new UserAgentProfile(null, UserAgentMemoryRepository.computeSha256Hex(immuneInternalUa),
+						UserAgentMemoryRepository.computeUaHash32(immuneInternalUa), immuneInternalUa, UserAgentFamily.AUTOMATED_TOOL,
+						3, false, now, now, 5000, 0, 0, 0, 0, 5000, 0,
+						5000, 100, 0, 0, 2, 1, 0, 0, 5000, 0, 0, 0, 0, 0,
+						UserAgentAutoVerdict.IMMUNE_INTERNAL, "IMMUNITY", "Internal network", now,
+						UserAgentManualOverride.ALWAYS_ALLOW, "Protected client", "admin", now),
+				new UserAgentProfile(null, UserAgentMemoryRepository.computeSha256Hex(authBearingUa),
+						UserAgentMemoryRepository.computeUaHash32(authBearingUa), authBearingUa, UserAgentFamily.SAFARI_DESKTOP,
+						12, false, now, now, 4000, 10, 0, 5, 50, 0, 0,
+						3000, 200, 5, 0, 600, 20, 3, 25, 0, 0, 100, 2900, 20, 0,
+						UserAgentAutoVerdict.SUSPICIOUS_DATACENTER, "PILLAR_3", "Should be skipped due to auth", now,
+						UserAgentManualOverride.AUTO, null, null, now)
+		));
+		uaMemRepo.updateManualOverride(manualCandUa, UserAgentFamily.UNKNOWN, 1, UserAgentManualOverride.MANUAL_BLOCK, "Operator queued for manual UA test", "admin");
+		uaMemRepo.updateManualOverride(immuneInternalUa, UserAgentFamily.AUTOMATED_TOOL, 3, UserAgentManualOverride.ALWAYS_ALLOW, "Protected client", "admin");
+
+		// 1. Dry-Run simulation
+		svc.updateUaAutoSettings(true, true, 90, 50, 500, true, true, true, true, false, "admin");
+		MitigationService.AutoUaEvaluationResult dryRes = svc.evaluateAutoUaMitigation("admin");
+		assertEquals(2, dryRes.candidatesEvaluated());
+		assertEquals(0, dryRes.rulesActivated());
+		assertEquals(2, dryRes.dryRunLogged());
+		assertTrue(dryRes.skippedProtected() >= 1);
+		assertEquals(0, svc.getActiveUaRules().size());
+
+		// 2. Live enforcement
+		svc.updateUaAutoSettings(true, false, 90, 50, 500, true, true, true, true, false, "admin");
+		MitigationService.AutoUaEvaluationResult liveRes = svc.evaluateAutoUaMitigation("admin");
+		assertEquals(2, liveRes.rulesActivated());
+		List<MitigationUaRule> activeUa = svc.getActiveUaRules();
+		assertEquals(2, activeUa.size());
+		assertTrue(activeUa.stream().anyMatch(r -> r.rawUserAgent().equals(pillar1Ua)));
+		assertTrue(activeUa.stream().anyMatch(r -> r.rawUserAgent().equals(manualCandUa)));
+		assertFalse(activeUa.stream().anyMatch(r -> r.rawUserAgent().equals(immuneInternalUa)));
+		assertFalse(activeUa.stream().anyMatch(r -> r.rawUserAgent().equals(authBearingUa)));
 	}
 }

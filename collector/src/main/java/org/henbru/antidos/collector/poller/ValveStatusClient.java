@@ -118,10 +118,14 @@ public class ValveStatusClient {
 			long dynamicBlocksBlockedRequests,
 			Integer ttlCappedCount,
 			Integer mitigationMaxTtlSeconds,
-			Integer mitigationMaxActiveBlocks
+			Integer mitigationMaxActiveBlocks,
+			Integer dynamicUaBlocksActiveCount,
+			Long dynamicUaRulesRevision,
+			Long dynamicUaBlocksBlockedRequests,
+			Long dynamicUaBlocksBypassedRequests
 	) {
 		public MitigationCommandResponse(String status, String action, String valve, int activeCount, long revision, String error) {
-			this(status, valve, action, activeCount, revision, 1, 0L, 0, 86400, 5000);
+			this(status, valve, action, activeCount, revision, 1, 0L, 0, 86400, 5000, 0, 0L, 0L, 0L);
 		}
 
 		public MitigationCommandResponse(
@@ -136,7 +140,41 @@ public class ValveStatusClient {
 				Integer mitigationMaxActiveBlocks
 		) {
 			this(status, valve, action, dynamicBlocksActiveCount, dynamicRulesRevision, 1,
-					dynamicBlocksBlockedRequests, ttlCappedCount, mitigationMaxTtlSeconds, mitigationMaxActiveBlocks);
+					dynamicBlocksBlockedRequests, ttlCappedCount, mitigationMaxTtlSeconds, mitigationMaxActiveBlocks,
+					0, 0L, 0L, 0L);
+		}
+
+		public MitigationCommandResponse(
+				String status,
+				String valve,
+				String action,
+				int dynamicBlocksActiveCount,
+				long dynamicRulesRevision,
+				Integer dynamicRulesHashVersion,
+				long dynamicBlocksBlockedRequests,
+				Integer ttlCappedCount,
+				Integer mitigationMaxTtlSeconds,
+				Integer mitigationMaxActiveBlocks
+		) {
+			this(status, valve, action, dynamicBlocksActiveCount, dynamicRulesRevision, dynamicRulesHashVersion,
+					dynamicBlocksBlockedRequests, ttlCappedCount, mitigationMaxTtlSeconds, mitigationMaxActiveBlocks,
+					0, 0L, 0L, 0L);
+		}
+
+		public int dynamicUaBlocksActiveCountOrDefault() {
+			return dynamicUaBlocksActiveCount != null ? Math.max(0, dynamicUaBlocksActiveCount) : 0;
+		}
+
+		public long dynamicUaRulesRevisionOrDefault() {
+			return dynamicUaRulesRevision != null ? Math.max(0L, dynamicUaRulesRevision) : 0L;
+		}
+
+		public long dynamicUaBlocksBlockedRequestsOrDefault() {
+			return dynamicUaBlocksBlockedRequests != null ? Math.max(0L, dynamicUaBlocksBlockedRequests) : 0L;
+		}
+
+		public long dynamicUaBlocksBypassedRequestsOrDefault() {
+			return dynamicUaBlocksBypassedRequests != null ? Math.max(0L, dynamicUaBlocksBypassedRequests) : 0L;
 		}
 
 		public int activeCount() {
@@ -173,12 +211,26 @@ public class ValveStatusClient {
 			Integer ttlSeconds,
 			String reason,
 			String blocksPayload) throws IOException, InterruptedException {
+		return sendMitigationCommand(targetUrl, mitigationToken, valveName, action, cidr, ttlSeconds, reason, blocksPayload, null);
+	}
+
+	public MitigationCommandResponse sendMitigationCommand(
+			String targetUrl,
+			String mitigationToken,
+			String valveName,
+			String action,
+			String cidr,
+			Integer ttlSeconds,
+			String reason,
+			String blocksPayload,
+			String uaBlocksPayload) throws IOException, InterruptedException {
 		java.util.Map<String, String> params = new java.util.LinkedHashMap<>();
 		if (action != null) params.put("action", action);
 		if (cidr != null) params.put("cidr", cidr);
 		if (ttlSeconds != null) params.put("ttlSeconds", String.valueOf(ttlSeconds));
 		if (reason != null) params.put("reason", reason);
 		if (blocksPayload != null) params.put("blocks", blocksPayload);
+		if (uaBlocksPayload != null) params.put("uaBlocks", uaBlocksPayload);
 		return sendMitigationCommand(targetUrl, mitigationToken, valveName, params);
 	}
 

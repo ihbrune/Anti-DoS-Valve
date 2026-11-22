@@ -263,6 +263,10 @@ public class CollectorPollerService {
 								v.dynamicBlocksBlockedRequestsOrDefault(),
 								v.dynamicRulesRevisionOrDefault(),
 								v.dynamicRulesHashVersionOrDefault(),
+								v.dynamicUaBlocksActiveCountOrDefault(),
+								v.dynamicUaBlocksBlockedRequestsOrDefault(),
+								v.dynamicUaBlocksBypassedRequestsOrDefault(),
+								v.dynamicUaRulesRevisionOrDefault(),
 								now
 						);
 					}
@@ -740,6 +744,10 @@ public class CollectorPollerService {
 				v.mitigationMinPrefixV6OrDefault(),
 				v.mitigationMaxTtlSecondsOrDefault(),
 				v.mitigationMaxActiveBlocksOrDefault(),
+				v.dynamicUaBlocksActiveCountOrDefault(),
+				v.dynamicUaBlocksBlockedRequestsOrDefault(),
+				v.dynamicUaBlocksBypassedRequestsOrDefault(),
+				v.dynamicUaRulesRevisionOrDefault(),
 				now,
 				configHash,
 				true

@@ -46,6 +46,11 @@ public class AntiDoSDynamicBlockRegistry {
 	private final ConcurrentHashMap<String, DynamicBlockEntry> entriesByCidr = new ConcurrentHashMap<>();
 	private final LongAdder totalBlockedRequests = new LongAdder();
 
+	private final ConcurrentHashMap<Integer, DynamicUaBlockEntry> entriesByUaHash = new ConcurrentHashMap<>();
+	private volatile boolean hasActiveUaBlocks = false;
+	private final LongAdder totalUaBlockedRequests = new LongAdder();
+	private final LongAdder totalUaBypassedRequests = new LongAdder();
+
 	public AntiDoSDynamicBlockRegistry() {
 		for (int i = 1; i <= 32; i++) {
 			ipv4Tables[i] = new ConcurrentHashMap<>();
@@ -829,6 +834,342 @@ public class AntiDoSDynamicBlockRegistry {
 
 		public long getBlockedRequests() {
 			return blockedRequests.sum();
+		}
+
+		public long getLastHitMillis() {
+			return lastHitMillis.get();
+		}
+
+		public long getRemainingSeconds(long nowMillis) {
+			long diff = expiresAtMillis - nowMillis;
+			return diff > 0 ? (diff + 999L) / 1000L : 0L;
+		}
+	}
+
+	// =========================================================================
+	// Dynamic User-Agent Block Registry (O(1) 32-bit FNV-1a Hash Lookup)
+	// =========================================================================
+
+	/**
+	 * Matches an incoming request's 32-bit User-Agent hash against active (non-expired) dynamic UA rules.
+	 *
+	 * @param uaHash32  Folded 32-bit FNV-1a hash of the User-Agent string
+	 * @param nowMillis Current epoch time in milliseconds
+	 * @return Matching {@link DynamicUaBlockEntry} if blocked, or {@code null}
+	 */
+	public DynamicUaBlockEntry matchUserAgent(int uaHash32, long nowMillis) {
+		if (!hasActiveUaBlocks || uaHash32 == 0) {
+			return null;
+		}
+		DynamicUaBlockEntry entry = entriesByUaHash.get(Integer.valueOf(uaHash32));
+		if (entry != null) {
+			if (nowMillis < entry.getExpiresAtMillis()) {
+				return entry;
+			}
+			removeExpiredUaEntry(entry, nowMillis);
+		}
+		return null;
+	}
+
+	public void recordUaBlockedHit(DynamicUaBlockEntry entry, long nowMillis) {
+		totalUaBlockedRequests.increment();
+		if (entry != null) {
+			entry.recordBlockedHit(nowMillis);
+		}
+	}
+
+	public void recordUaBypassedHit(DynamicUaBlockEntry entry, long nowMillis) {
+		totalUaBypassedRequests.increment();
+		if (entry != null) {
+			entry.recordBypassedHit(nowMillis);
+		}
+	}
+
+	public synchronized DynamicUaBlockEntry upsertUaBlock(int uaHash32, long expiresAtMillis, String label, long nowMillis) {
+		if (uaHash32 == 0) {
+			throw new IllegalArgumentException("User-Agent 32-bit hash must not be 0");
+		}
+		if (expiresAtMillis <= nowMillis) {
+			removeUaBlock(uaHash32);
+			return null;
+		}
+		String safeLabel = sanitizeUaLabel(label);
+		Integer key = Integer.valueOf(uaHash32);
+		DynamicUaBlockEntry existing = entriesByUaHash.get(key);
+		DynamicUaBlockEntry entry;
+		if (existing != null) {
+			existing.setExpiresAtMillis(expiresAtMillis);
+			existing.setLabel(safeLabel);
+			entry = existing;
+		} else {
+			entry = new DynamicUaBlockEntry(uaHash32, nowMillis, expiresAtMillis, safeLabel);
+			entriesByUaHash.put(key, entry);
+		}
+		hasActiveUaBlocks = !entriesByUaHash.isEmpty();
+		return entry;
+	}
+
+	public synchronized boolean removeUaBlock(int uaHash32) {
+		DynamicUaBlockEntry removed = entriesByUaHash.remove(Integer.valueOf(uaHash32));
+		hasActiveUaBlocks = !entriesByUaHash.isEmpty();
+		return removed != null;
+	}
+
+	public synchronized int upsertUaBlocks(Collection<UaBlockSpec> specs, long nowMillis, int maxActiveBlocks) {
+		if (specs == null || specs.isEmpty()) {
+			return getActiveUaCount(nowMillis);
+		}
+		if (maxActiveBlocks > 0) {
+			int active = 0;
+			for (DynamicUaBlockEntry entry : entriesByUaHash.values()) {
+				if (nowMillis < entry.getExpiresAtMillis()) {
+					active++;
+				}
+			}
+			Set<Integer> newHashes = new HashSet<>();
+			for (UaBlockSpec spec : specs) {
+				if (spec == null || spec.uaHash32 == 0 || spec.expiresAtMillis <= nowMillis) {
+					continue;
+				}
+				Integer key = Integer.valueOf(spec.uaHash32);
+				DynamicUaBlockEntry existing = entriesByUaHash.get(key);
+				if (existing == null || nowMillis >= existing.getExpiresAtMillis()) {
+					newHashes.add(key);
+				}
+			}
+			if (active + newHashes.size() > maxActiveBlocks) {
+				throw new CapacityExceededException("Upsert would raise active dynamic UA blocks to " + (active + newHashes.size())
+						+ ", exceeding mitigationMaxActiveBlocks=" + maxActiveBlocks + " (currently active: " + active + ")");
+			}
+		}
+		for (UaBlockSpec spec : specs) {
+			if (spec == null || spec.uaHash32 == 0) {
+				continue;
+			}
+			upsertUaBlock(spec.uaHash32, spec.expiresAtMillis, spec.label, nowMillis);
+		}
+		return getActiveUaCount(nowMillis);
+	}
+
+	public synchronized int replaceAllUaBlocks(Collection<UaBlockSpec> specs, long nowMillis, int maxActiveBlocks) {
+		if (maxActiveBlocks > 0 && specs != null) {
+			Set<Integer> desired = new HashSet<>();
+			for (UaBlockSpec spec : specs) {
+				if (spec != null && spec.uaHash32 != 0 && spec.expiresAtMillis > nowMillis) {
+					desired.add(Integer.valueOf(spec.uaHash32));
+				}
+			}
+			if (desired.size() > maxActiveBlocks) {
+				throw new CapacityExceededException("Replace command contains " + desired.size()
+						+ " active dynamic UA blocks, exceeding mitigationMaxActiveBlocks=" + maxActiveBlocks);
+			}
+		}
+		Set<Integer> keep = new HashSet<>();
+		if (specs != null) {
+			for (UaBlockSpec spec : specs) {
+				if (spec == null || spec.uaHash32 == 0 || spec.expiresAtMillis <= nowMillis) {
+					continue;
+				}
+				keep.add(Integer.valueOf(spec.uaHash32));
+				upsertUaBlock(spec.uaHash32, spec.expiresAtMillis, spec.label, nowMillis);
+			}
+		}
+		List<Integer> toRemove = new ArrayList<>();
+		for (Integer existingKey : entriesByUaHash.keySet()) {
+			if (!keep.contains(existingKey)) {
+				toRemove.add(existingKey);
+			}
+		}
+		for (Integer key : toRemove) {
+			entriesByUaHash.remove(key);
+		}
+		hasActiveUaBlocks = !entriesByUaHash.isEmpty();
+		return getActiveUaCount(nowMillis);
+	}
+
+	public synchronized void clearAllUaBlocks() {
+		entriesByUaHash.clear();
+		hasActiveUaBlocks = false;
+	}
+
+	public int evictExpiredUaBlocks(long nowMillis) {
+		if (entriesByUaHash.isEmpty()) {
+			return 0;
+		}
+		int evicted = 0;
+		for (Map.Entry<Integer, DynamicUaBlockEntry> e : entriesByUaHash.entrySet()) {
+			DynamicUaBlockEntry entry = e.getValue();
+			if (nowMillis >= entry.getExpiresAtMillis()) {
+				removeExpiredUaEntry(entry, nowMillis);
+				evicted++;
+			}
+		}
+		return evicted;
+	}
+
+	private synchronized void removeExpiredUaEntry(DynamicUaBlockEntry entry, long nowMillis) {
+		if (nowMillis < entry.getExpiresAtMillis()) {
+			return;
+		}
+		if (entriesByUaHash.remove(Integer.valueOf(entry.getUaHash32()), entry)) {
+			hasActiveUaBlocks = !entriesByUaHash.isEmpty();
+		}
+	}
+
+	public List<DynamicUaBlockEntry> getActiveUaEntries(long nowMillis) {
+		if (entriesByUaHash.isEmpty()) {
+			return Collections.emptyList();
+		}
+		List<DynamicUaBlockEntry> result = new ArrayList<>(entriesByUaHash.size());
+		for (DynamicUaBlockEntry entry : entriesByUaHash.values()) {
+			if (nowMillis < entry.getExpiresAtMillis()) {
+				result.add(entry);
+			}
+		}
+		result.sort(Comparator.comparingInt(DynamicUaBlockEntry::getUaHash32));
+		return result;
+	}
+
+	public int getActiveUaCount(long nowMillis) {
+		if (entriesByUaHash.isEmpty()) {
+			return 0;
+		}
+		int count = 0;
+		for (DynamicUaBlockEntry entry : entriesByUaHash.values()) {
+			if (nowMillis < entry.getExpiresAtMillis()) {
+				count++;
+			}
+		}
+		return count;
+	}
+
+	public DynamicUaBlockEntry getActiveUaEntryByHash(int uaHash32, long nowMillis) {
+		if (uaHash32 == 0 || entriesByUaHash.isEmpty()) {
+			return null;
+		}
+		DynamicUaBlockEntry entry = entriesByUaHash.get(Integer.valueOf(uaHash32));
+		if (entry != null && nowMillis < entry.getExpiresAtMillis()) {
+			return entry;
+		}
+		return null;
+	}
+
+	public long getTotalUaBlockedRequests() {
+		return totalUaBlockedRequests.sum();
+	}
+
+	public long getTotalUaBypassedRequests() {
+		return totalUaBypassedRequests.sum();
+	}
+
+	public long getUaRevision(long nowMillis) {
+		if (entriesByUaHash.isEmpty()) {
+			return 0L;
+		}
+		List<Integer> activeHashes = new ArrayList<>(entriesByUaHash.size());
+		for (DynamicUaBlockEntry entry : entriesByUaHash.values()) {
+			if (nowMillis < entry.getExpiresAtMillis()) {
+				activeHashes.add(Integer.valueOf(entry.getUaHash32()));
+			}
+		}
+		return computeRevisionForUaHashes(activeHashes);
+	}
+
+	/**
+	 * Deterministic FNV-1a 53-bit positive hash over sorted canonical User-Agent 32-bit hashes.
+	 * Safe for JSON numeric serialization and cross-JVM comparison between Collector and Valve.
+	 */
+	public static long computeRevisionForUaHashes(Collection<Integer> uaHashes) {
+		if (uaHashes == null || uaHashes.isEmpty()) {
+			return 0L;
+		}
+		List<String> sorted = new ArrayList<>(uaHashes.size());
+		for (Integer h : uaHashes) {
+			if (h != null && h.intValue() != 0) {
+				sorted.add(Integer.toString(h.intValue()));
+			}
+		}
+		return computeRevisionForCidrs(sorted);
+	}
+
+	private static String sanitizeUaLabel(String label) {
+		String safe = (label != null && !label.trim().isEmpty()) ? label.trim() : "Dynamic UA Mitigation";
+		if (safe.length() > 160) {
+			safe = safe.substring(0, 160);
+		}
+		return safe;
+	}
+
+	public static final class UaBlockSpec {
+		public final int uaHash32;
+		public final long expiresAtMillis;
+		public final String label;
+
+		public UaBlockSpec(int uaHash32, long expiresAtMillis, String label) {
+			this.uaHash32 = uaHash32;
+			this.expiresAtMillis = expiresAtMillis;
+			this.label = label;
+		}
+	}
+
+	/**
+	 * Represents a single active dynamic User-Agent block rule and its runtime hit/bypass telemetry.
+	 */
+	public static final class DynamicUaBlockEntry {
+		private final int uaHash32;
+		private final long createdAtMillis;
+		private volatile long expiresAtMillis;
+		private volatile String label;
+		private final LongAdder blockedRequests = new LongAdder();
+		private final LongAdder bypassedRequests = new LongAdder();
+		private final AtomicLong lastHitMillis = new AtomicLong(0L);
+
+		DynamicUaBlockEntry(int uaHash32, long createdAtMillis, long expiresAtMillis, String label) {
+			this.uaHash32 = uaHash32;
+			this.createdAtMillis = createdAtMillis;
+			this.expiresAtMillis = expiresAtMillis;
+			this.label = label;
+		}
+
+		void recordBlockedHit(long nowMillis) {
+			blockedRequests.increment();
+			lastHitMillis.set(nowMillis);
+		}
+
+		void recordBypassedHit(long nowMillis) {
+			bypassedRequests.increment();
+		}
+
+		public int getUaHash32() {
+			return uaHash32;
+		}
+
+		public long getCreatedAtMillis() {
+			return createdAtMillis;
+		}
+
+		public long getExpiresAtMillis() {
+			return expiresAtMillis;
+		}
+
+		void setExpiresAtMillis(long expiresAtMillis) {
+			this.expiresAtMillis = expiresAtMillis;
+		}
+
+		public String getLabel() {
+			return label;
+		}
+
+		void setLabel(String label) {
+			this.label = label;
+		}
+
+		public long getBlockedRequests() {
+			return blockedRequests.sum();
+		}
+
+		public long getBypassedRequests() {
+			return bypassedRequests.sum();
 		}
 
 		public long getLastHitMillis() {

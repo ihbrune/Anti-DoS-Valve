@@ -362,7 +362,8 @@ The interaction between Tomcat Valves and the Collector is decoupled and asynchr
  |   |                                                                       |   |
  |   |  Step 1: Check alwaysAllowedIPs (Whitelisted IPs bypass all blocks)   |   |
  |   |  Step 2: Check Dynamic CIDR Registry (HTTP 429 if match & not expired)|   |
- |   |  Step 3: Evaluate Sliding-Window Rate Limits (Local IP / Subnet)     |   |
+ |   |  Step 3: Check Dynamic UA Registry (Bypass if Auth / Valid Returning)  |   |
+ |   |  Step 4: Evaluate Sliding-Window Rate Limits (Local IP / Subnet)     |   |
  |   +-----------------------------------------------------------------------+   |
  |            |                                              ^                   |
  |            | Telemetry                                    | Dynamic Blocks    |
@@ -851,7 +852,7 @@ The database separates real-time transient telemetry, persistent subnet aggregat
 12. **`asn_info`:** Autonomous System catalog caching organization names and datacenter / hosting provider classifications.
 13. **`crawler_feeds` & `bot_ip_ranges`:** Automatic synchronization catalog for official bot feeds (Googlebot, Bingbot, OpenAI, Anthropic) with versioning and orphan pruning.
 14. **`poll_event_log`:** Diagnostic audit trail tracking background ingestion cycles (`blocked_events_ingested`, `marked_events_ingested`, `events_ingested`), wire data transfer volume (`payload_bytes`), server-side JSON rendering time (`server_generation_ms`), communication latency, warnings, and recovery gap-fills.
-15. **`mitigation_rules` & `mitigation_audit_log`:** Persistent dynamic CIDR block rules (`cidr`, `status`, `source`, `batch_id`, `expires_at`, `total_blocked_hits`, `peak_distinct_ips`, `deterrence_state`) and full operator/batch and valve synchronization audit history (`CREATE`, `EXTEND`, `REVOKE`, `BATCH_CREATE`, `BATCH_REVOKE`, `FLEET_SYNC`, `SYNC_CIRCUIT_BREAKER`, `SYNC_RECOVERED`, `SYNC_FAILED`, `SYNC_VERSION_MISMATCH`).
+15. **`mitigation_rules`, `mitigation_ua_rules` & `mitigation_audit_log`:** Persistent dynamic CIDR block rules (`mitigation_rules`), TTL-bounded 32-bit FNV-1a User-Agent block rules (`mitigation_ua_rules`), and the unified audit trail (`mitigation_audit_log` with `target_type` distinguishing `CIDR` vs. `USER_AGENT`) tracking manual, autonomous, simulation, and fleet synchronization events.
 
 ---
 
