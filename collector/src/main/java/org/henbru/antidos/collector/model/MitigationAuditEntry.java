@@ -110,5 +110,29 @@ public record MitigationAuditEntry(
 		}
 		return null;
 	}
+
+	/**
+	 * Extracts the raw User-Agent string from details (e.g. "... | UA=python-urllib3/2.0.7")
+	 * or from the target label (e.g. "UA:98af6905 python-urllib3/2.0.7"), or null if not applicable.
+	 */
+	public String getRawUserAgent() {
+		if (!isUserAgentTarget()) {
+			return null;
+		}
+		if (details != null && details.contains(" | UA=")) {
+			String ua = details.substring(details.indexOf(" | UA=") + 6).trim();
+			if (!ua.isEmpty() && !"-".equals(ua)) {
+				return ua;
+			}
+		}
+		if (cidr != null && cidr.startsWith("UA:") && cidr.indexOf(' ') > 0) {
+			String ua = cidr.substring(cidr.indexOf(' ') + 1).trim();
+			if (!ua.isEmpty() && !ua.endsWith("...") && !"-".equals(ua)) {
+				return ua;
+			}
+		}
+		return null;
+	}
 }
+
 

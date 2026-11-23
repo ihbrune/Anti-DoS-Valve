@@ -464,6 +464,44 @@ class MitigationServiceTest {
 	}
 
 	@Test
+	void testMitigationAuditEntryExtractsRawUserAgent() {
+		// 1. CIDR target returns null
+		MitigationAuditEntry cidrEntry = new MitigationAuditEntry(
+				1L, null, "198.51.100.0/24", null, "AUTO_BLOCK", "AUTO_ENGINE", 3600, "Subnet block", Instant.now(),
+				MitigationAuditEntry.TARGET_CIDR);
+		org.junit.jupiter.api.Assertions.assertNull(cidrEntry.getRawUserAgent());
+
+		// 2. UA target with details containing ' | UA=...'
+		MitigationAuditEntry uaEntry1 = new MitigationAuditEntry(
+				2L, 5L, "UA:98af6905 python-urllib3/2.0.7", null, "UA_AUTO_BLOCK", "AUTO_UA_ENGINE", 3600,
+				"Suspicious automated scraper | UA=python-urllib3/2.0.7", Instant.now(),
+				MitigationAuditEntry.TARGET_USER_AGENT);
+		assertEquals("python-urllib3/2.0.7", uaEntry1.getRawUserAgent());
+
+		// 3. UA target without details but extracted from cidr label
+		MitigationAuditEntry uaEntry2 = new MitigationAuditEntry(
+				3L, null, "UA:1234abcd custom-crawler/1.0", null, "UA_BLOCK", "ADMIN", 3600,
+				"Manual block", Instant.now(),
+				MitigationAuditEntry.TARGET_USER_AGENT);
+		assertEquals("custom-crawler/1.0", uaEntry2.getRawUserAgent());
+
+		// 4. Truncated label with '...' returns null if details has no raw UA
+		MitigationAuditEntry uaEntry3 = new MitigationAuditEntry(
+				4L, null, "UA:1234abcd very-long-user-agent-string-truncated...", null, "UA_BLOCK", "ADMIN", 3600,
+				"Manual block without suffix", Instant.now(),
+				MitigationAuditEntry.TARGET_USER_AGENT);
+		org.junit.jupiter.api.Assertions.assertNull(uaEntry3.getRawUserAgent());
+
+		// 5. ALL_UA_RULES flush returns null
+		MitigationAuditEntry uaFlush = new MitigationAuditEntry(
+				5L, null, "ALL_UA_RULES", null, "UA_FLUSH", "ADMIN", 0,
+				"Emergency flush", Instant.now(),
+				MitigationAuditEntry.TARGET_USER_AGENT);
+		org.junit.jupiter.api.Assertions.assertNull(uaFlush.getRawUserAgent());
+	}
+
+
+	@Test
 	void testCircuitBreakerPreventsInfiniteSyncLoopOnRevisionMismatch() throws Exception {
 		Instant now = Instant.now();
 		ValveStatusClient mockClient = mock(ValveStatusClient.class);

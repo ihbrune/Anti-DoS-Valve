@@ -178,7 +178,11 @@ class MitigationControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("UA_BLOCK")))
 				.andExpect(content().string(containsString("UA_EXTEND")))
-				.andExpect(content().string(containsString("UA_REVOKE")));
+				.andExpect(content().string(containsString("UA_REVOKE")))
+				.andExpect(content().string(containsString("/mitigation?tab=useragents")))
+				.andExpect(content().string(containsString("/analytics/user-agent-drilldown")))
+				.andExpect(content().string(org.hamcrest.Matchers.not(containsString("/offenders?clientQuery=UA"))));
+
 
 		assertEquals(0, mitigationService.getActiveUaRules().size());
 	}

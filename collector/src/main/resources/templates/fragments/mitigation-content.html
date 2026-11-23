@@ -343,23 +343,41 @@
                                         <span th:if="${a.cidr == 'ALL'}" class="badge badge-danger">FLEET
                                             WIDE</span>
                                         <a th:if="${a.cidr != null and a.cidr != 'ALL' and !a.cidr.startsWith('ASN-') and a.cidr.contains('/')}"
-                                            th:href="@{/offenders(clientQuery=${a.cidr},groupBy='SUBNET')}"
-                                            style="color: var(--color-primary); text-decoration: none;"
-                                            title="Inspect subnet traffic in Top Offenders"
-                                            th:text="${a.cidr}">198.51.100.0/24</a>
-                                        <span
-                                            th:if="${a.cidr != null and a.cidr != 'ALL' and !a.cidr.startsWith('ASN-') and !a.cidr.contains('/')}"
-                                            th:text="${a.cidr}">Batch target</span>
-                                        <div th:if="${a.getAsn() != null and (a.cidr == null or !a.cidr.startsWith('ASN-'))}"
-                                            style="margin-top: 2px;">
-                                            <a th:href="@{/offenders(asn=${a.getAsn()},groupBy='ASN')}"
-                                                class="badge badge-secondary"
-                                                style="text-decoration: none; font-size: 10px; color: var(--color-primary);"
-                                                title="Inspect ASN in Top Offenders">
-                                                <span th:text="'ASN ' + ${a.getAsn()}">&#x1F3E2; ASN 64496</span>
-                                                &#x2197;
-                                            </a>
-                                        </div>
+                                            <span th:if="${a.isUserAgentTarget() and a.cidr == 'ALL_UA_RULES'}"
+                                            class="badge badge-danger">ALL UA RULES</span>
+                                            <div th:if="${a.isUserAgentTarget() and a.cidr != 'ALL_UA_RULES'}"
+                                                style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                                <a th:href="@{/mitigation(tab='useragents')}"
+                                                    style="color: var(--color-primary); text-decoration: none;"
+                                                    title="Inspect User-Agent Defense &amp; live deterrence"
+                                                    th:text="${a.cidr}">UA:98af6905 python-urllib3/2.0.7</a>
+                                                <button th:if="${a.getRawUserAgent() != null}" type="button" class="btn"
+                                                    style="padding: 1px 6px; font-size: 10px; line-height: 1.2;"
+                                                    th:attr="hx-get=@{/analytics/user-agent-drilldown(ua=${a.getRawUserAgent()},hours=24)}"
+                                                    hx-target="#ua-drilldown-modal-container" hx-swap="innerHTML"
+                                                    onclick="document.getElementById('ua-drilldown-modal-container').style.display='block'"
+                                                    title="Inspect traffic timeline &amp; deterrence curve">&#x1F4C8;
+                                                    Timeline</button>
+                                            </div>
+                                            <a th:if="${!a.isUserAgentTarget() and a.cidr != null and a.cidr != 'ALL' and !a.cidr.startsWith('ASN-') and a.cidr.contains('/')}"
+                                                th:href="@{/offenders(clientQuery=${a.cidr},groupBy='SUBNET')}"
+                                                style="color: var(--color-primary); text-decoration: none;"
+                                                title="Inspect subnet traffic in Top Offenders"
+                                                th:text="${a.cidr}">198.51.100.0/24</a>
+                                            <span
+                                                th:if="${a.cidr != null and a.cidr != 'ALL' and !a.cidr.startsWith('ASN-') and !a.cidr.contains('/')}"
+                                                th:if="${!a.isUserAgentTarget() and a.cidr != null and a.cidr != 'ALL' and !a.cidr.startsWith('ASN-') and !a.cidr.contains('/')}"
+                                                th:text="${a.cidr}">Batch target</span>
+                                            <div th:if="${a.getAsn() != null and (a.cidr == null or !a.cidr.startsWith('ASN-'))}"
+                                                style="margin-top: 2px;">
+                                                <a th:href="@{/offenders(asn=${a.getAsn()},groupBy='ASN')}"
+                                                    class="badge badge-secondary"
+                                                    style="text-decoration: none; font-size: 10px; color: var(--color-primary);"
+                                                    title="Inspect ASN in Top Offenders">
+                                                    <span th:text="'ASN ' + ${a.getAsn()}">&#x1F3E2; ASN 64496</span>
+                                                    &#x2197;
+                                                </a>
+                                            </div>
                                     </td>
                                     <td style="color: var(--text-secondary); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
                                         th:text="${a.details}" th:title="${a.details}">Details</td>
@@ -1848,7 +1866,8 @@
                                 <td style="text-align: right; font-weight: 600;"
                                     th:text="${#numbers.formatInteger(ur.totalBlockedHits, 1, 'COMMA')}">0</td>
                                 <td style="font-size: 11px; color: var(--text-muted); white-space: nowrap;"
-                                    th:text="${ur.lastHitAt != null ? #temporals.format(ur.lastHitAt, 'dd.MM. HH:mm:ss') : '-'}">-</td>
+                                    th:text="${ur.lastHitAt != null ? #temporals.format(ur.lastHitAt, 'dd.MM. HH:mm:ss') : '-'}">
+                                    -</td>
                                 <td>
                                     <span class="badge" th:classappend="${ur.deterrenceBadgeClass()}"
                                         th:text="${ur.deterrenceState}">OBSERVING</span>
@@ -1860,7 +1879,8 @@
                                     <button type="button" class="btn" style="padding: 3px 8px; font-size: 11px;"
                                         th:attr="hx-get=@{/analytics/user-agent-drilldown(ua=${ur.rawUserAgent},hours=6)}"
                                         hx-target="#ua-drilldown-modal-container" hx-swap="innerHTML"
-                                        title="Inspect traffic, deterrence, and historical blocks">&#x1F4C8; Timeline</button>
+                                        title="Inspect traffic, deterrence, and historical blocks">&#x1F4C8;
+                                        Timeline</button>
                                     <button type="button" class="btn" style="padding: 3px 8px; font-size: 11px;"
                                         th:attr="hx-post=@{/mitigation/ua/{id}/extend(id=${ur.id},additionalMinutes=60)}"
                                         hx-target="#mitigation-dashboard-container" hx-swap="outerHTML"
@@ -1949,7 +1969,8 @@
                                 <td style="text-align: right; font-weight: 600;"
                                     th:text="${#numbers.formatInteger(uh.totalBlockedHits, 1, 'COMMA')}">0</td>
                                 <td style="font-size: 11px; color: var(--text-muted); white-space: nowrap;"
-                                    th:text="${uh.lastHitAt != null ? #temporals.format(uh.lastHitAt, 'dd.MM. HH:mm:ss') : '-'}">-</td>
+                                    th:text="${uh.lastHitAt != null ? #temporals.format(uh.lastHitAt, 'dd.MM. HH:mm:ss') : '-'}">
+                                    -</td>
                                 <td>
                                     <span class="badge" th:classappend="${uh.deterrenceBadgeClass()}"
                                         th:text="${uh.deterrenceState}">DETERRED</span>
@@ -1971,7 +1992,8 @@
                                     <button type="button" class="btn" style="padding: 3px 8px; font-size: 11px;"
                                         th:attr="hx-get=@{/analytics/user-agent-drilldown(ua=${uh.rawUserAgent},hours=24)}"
                                         hx-target="#ua-drilldown-modal-container" hx-swap="innerHTML"
-                                        title="Inspect traffic, deterrence, and historical blocks">&#x1F4C8; Timeline</button>
+                                        title="Inspect traffic, deterrence, and historical blocks">&#x1F4C8;
+                                        Timeline</button>
                                     <button type="button" class="btn" style="padding: 3px 8px; font-size: 11px;"
                                         th:attr="hx-post=@{/mitigation/ua/{id}/extend(id=${uh.id},additionalMinutes=60)}"
                                         hx-target="#mitigation-dashboard-container" hx-swap="outerHTML"
@@ -2154,26 +2176,44 @@
                                         title="Inspect ASN in Top Offenders" th:text="${a.cidr}">ASN-64496</a>
                                     <span th:if="${a.cidr == 'ALL'}" class="badge badge-danger">FLEET WIDE</span>
                                     <a th:if="${a.cidr != null and a.cidr != 'ALL' and !a.cidr.startsWith('ASN-') and a.cidr.contains('/')}"
-                                        th:href="@{/offenders(clientQuery=${a.cidr},groupBy='SUBNET')}"
-                                        style="color: var(--color-primary); text-decoration: none;"
-                                        title="Inspect subnet traffic in Top Offenders"
-                                        th:text="${a.cidr}">198.51.100.0/24</a>
-                                    <span
-                                        th:if="${a.cidr != null and a.cidr != 'ALL' and !a.cidr.startsWith('ASN-') and !a.cidr.contains('/')}"
-                                        th:text="${a.cidr}">Batch summary</span>
-                                    <div th:if="${a.getAsn() != null and (a.cidr == null or !a.cidr.startsWith('ASN-'))}"
-                                        style="margin-top: 3px;">
-                                        <a th:href="@{/offenders(asn=${a.getAsn()},groupBy='ASN')}"
-                                            class="badge badge-secondary"
-                                            style="text-decoration: none; font-size: 10px; color: var(--color-primary);"
-                                            title="Inspect ASN in Top Offenders">
-                                            <span th:text="'ASN ' + ${a.getAsn()}">&#x1F3E2; ASN 64496</span>
-                                            &#x2197;
-                                        </a>
-                                    </div>
-                                    <div th:if="${a.batchId != null}"
-                                        style="font-size: 10.5px; color: var(--text-muted); margin-top: 2px;"
-                                        th:text="${a.batchId}">Batch</div>
+                                        <span th:if="${a.isUserAgentTarget() and a.cidr == 'ALL_UA_RULES'}"
+                                        class="badge badge-danger">ALL UA RULES</span>
+                                        <div th:if="${a.isUserAgentTarget() and a.cidr != 'ALL_UA_RULES'}"
+                                            style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                            <a th:href="@{/mitigation(tab='useragents')}"
+                                                style="color: var(--color-primary); text-decoration: none;"
+                                                title="Inspect User-Agent Defense &amp; live deterrence"
+                                                th:text="${a.cidr}">UA:98af6905 python-urllib3/2.0.7</a>
+                                            <button th:if="${a.getRawUserAgent() != null}" type="button" class="btn"
+                                                style="padding: 1px 6px; font-size: 10px; line-height: 1.2;"
+                                                th:attr="hx-get=@{/analytics/user-agent-drilldown(ua=${a.getRawUserAgent()},hours=24)}"
+                                                hx-target="#ua-drilldown-modal-container" hx-swap="innerHTML"
+                                                onclick="document.getElementById('ua-drilldown-modal-container').style.display='block'"
+                                                title="Inspect traffic timeline &amp; deterrence curve">&#x1F4C8;
+                                                Timeline</button>
+                                        </div>
+                                        <a th:if="${!a.isUserAgentTarget() and a.cidr != null and a.cidr != 'ALL' and !a.cidr.startsWith('ASN-') and a.cidr.contains('/')}"
+                                            th:href="@{/offenders(clientQuery=${a.cidr},groupBy='SUBNET')}"
+                                            style="color: var(--color-primary); text-decoration: none;"
+                                            title="Inspect subnet traffic in Top Offenders"
+                                            th:text="${a.cidr}">198.51.100.0/24</a>
+                                        <span
+                                            th:if="${a.cidr != null and a.cidr != 'ALL' and !a.cidr.startsWith('ASN-') and !a.cidr.contains('/')}"
+                                            th:if="${!a.isUserAgentTarget() and a.cidr != null and a.cidr != 'ALL' and !a.cidr.startsWith('ASN-') and !a.cidr.contains('/')}"
+                                            th:text="${a.cidr}">Batch summary</span>
+                                        <div th:if="${a.getAsn() != null and (a.cidr == null or !a.cidr.startsWith('ASN-'))}"
+                                            style="margin-top: 3px;">
+                                            <a th:href="@{/offenders(asn=${a.getAsn()},groupBy='ASN')}"
+                                                class="badge badge-secondary"
+                                                style="text-decoration: none; font-size: 10px; color: var(--color-primary);"
+                                                title="Inspect ASN in Top Offenders">
+                                                <span th:text="'ASN ' + ${a.getAsn()}">&#x1F3E2; ASN 64496</span>
+                                                &#x2197;
+                                            </a>
+                                        </div>
+                                        <div th:if="${a.batchId != null}"
+                                            style="font-size: 10.5px; color: var(--text-muted); margin-top: 2px;"
+                                            th:text="${a.batchId}">Batch</div>
                                 </td>
                                 <td style="font-family: ui-monospace, monospace; font-size: 11px;">
                                     <span th:if="${a.ttlSeconds != null and a.ttlSeconds > 0}"
