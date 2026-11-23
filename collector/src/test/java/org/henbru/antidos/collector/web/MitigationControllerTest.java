@@ -180,6 +180,7 @@ class MitigationControllerTest {
 				.andExpect(content().string(containsString("UA_EXTEND")))
 				.andExpect(content().string(containsString("UA_REVOKE")))
 				.andExpect(content().string(containsString("/mitigation?tab=useragents")))
+				.andExpect(content().string(containsString("prefillUa=")))
 				.andExpect(content().string(containsString("/analytics/user-agent-drilldown")))
 				.andExpect(content().string(org.hamcrest.Matchers.not(containsString("/offenders?clientQuery=UA"))));
 
