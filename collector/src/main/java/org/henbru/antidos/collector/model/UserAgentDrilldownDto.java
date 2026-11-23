@@ -48,6 +48,10 @@ public record UserAgentDrilldownDto(
 		List<UserAgentHourlyPoint> hourlyHistory,
 		boolean historyFromLiveEvents
 ) {
+	public String hexHash32() {
+		return String.format("0x%08x", uaHash32);
+	}
+
 	public boolean hasManualOverride() {
 		return manualOverride != null && manualOverride.isManual();
 	}

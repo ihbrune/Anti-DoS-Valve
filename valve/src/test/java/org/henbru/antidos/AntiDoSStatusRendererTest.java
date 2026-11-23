@@ -694,5 +694,18 @@ class AntiDoSStatusRendererTest {
 		assertTrue(htmlDetails.contains("<span class=\"badge badge-status\">&#127850; COOKIE: my_custom_cookie</span>"));
 		assertTrue(htmlDetails.contains("<tr><th>Visitor Cookie</th><td>Enabled (name: <code>my_custom_cookie</code>, TTL: <strong>1200s</strong>, min-age: <strong>15s</strong>"));
 	}
+
+	@Test
+	void testDynamicUaMitigationsRenderHexAndUaKey() {
+		valve.setMitigationPassword("SecretToken123");
+		int uaHash32 = AntiDoSVisitorTokenService.computeUserAgentHash32("ExampleScraper/1.0");
+		long nowMs = System.currentTimeMillis();
+		valve.getDynamicBlockRegistry().upsertUaBlock(uaHash32, nowMs + 60_000L, "ExampleScraper", nowMs);
+
+		String htmlDetails = renderer.buildStatusHtmlDetails("RENDERER_TEST");
+		assertTrue(htmlDetails.contains("Active Dynamic User-Agent Mitigations"));
+		assertTrue(htmlDetails.contains("<code>" + String.format("0x%08x", uaHash32) + "</code>"));
+		assertTrue(htmlDetails.contains("(UA:" + uaHash32 + ")"));
+	}
 }
 

@@ -21,11 +21,13 @@
                             Chrome Desktop</h3>
                         <span th:if="${drilldown != null and drilldown.hasManualOverride()}" class="badge"
                             th:classappend="${drilldown.manualOverride.badgeClass()}" style="font-size: 11px;">
-                            <span>&#x1F464;</span> Manual: <span th:text="${drilldown.manualOverride.displayName()}">Always Allowed</span>
+                            <span>&#x1F464;</span> Manual: <span
+                                th:text="${drilldown.manualOverride.displayName()}">Always Allowed</span>
                         </span>
                         <span th:if="${drilldown != null and drilldown.liveAutoVerdict != null}" class="badge"
                             th:classappend="${drilldown.liveAutoVerdict.badgeClass()}" style="font-size: 11px;">
-                            <span>&#x1F916;</span> Auto-Heuristic: <span th:text="${drilldown.liveAutoVerdict.displayName()}">Standard</span>
+                            <span>&#x1F916;</span> Auto-Heuristic: <span
+                                th:text="${drilldown.liveAutoVerdict.displayName()}">Standard</span>
                         </span>
                     </div>
                     <div th:if="${drilldown != null}"
@@ -33,12 +35,14 @@
                         th:text="${drilldown.userAgent}">Mozilla/5.0...</div>
                     <div th:if="${drilldown != null}"
                         style="font-size: 11.5px; color: var(--text-muted); margin-top: 6px; display: flex; gap: 12px; flex-wrap: wrap;">
-                        <span>SHA-256: <code th:text="${#strings.abbreviate(drilldown.userAgentHash, 18)}">abc123...</code></span>
-                        <span>32-bit FNV-1a: <code th:text="${drilldown.uaHash32}">12345678</code></span>
+                        <span>32-bit FNV-1a: <code th:text="${drilldown.hexHash32()}">0x1234abcd</code> <span
+                                th:text="'(UA:' + ${drilldown.uaHash32} + ')'">(UA:123456)</span></span>
                         <span th:if="${drilldown.firstSeenAt != null}">First seen: <strong
-                                th:text="${#temporals.format(drilldown.firstSeenAt, 'yyyy-MM-dd HH:mm')}">2026-11-18 09:00</strong></span>
+                                th:text="${#temporals.format(drilldown.firstSeenAt, 'yyyy-MM-dd HH:mm')}">2026-11-18
+                                09:00</strong></span>
                         <span th:if="${drilldown.lastSeenAt != null}">Last seen: <strong
-                                th:text="${#temporals.format(drilldown.lastSeenAt, 'yyyy-MM-dd HH:mm')}">2026-11-21 12:00</strong></span>
+                                th:text="${#temporals.format(drilldown.lastSeenAt, 'yyyy-MM-dd HH:mm')}">2026-11-21
+                                12:00</strong></span>
                     </div>
                 </div>
                 <button type="button" class="drawer-close-btn" onclick="closeUaModal(event)" aria-label="Close"
@@ -57,13 +61,17 @@
                     th:text="${uaModalError}">Error</div>
 
                 <!-- Dual Status & Manual Override Panel -->
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-bottom: 20px;">
+                <div
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-bottom: 20px;">
                     <!-- Left: Auto-Heuristic Diagnostic Breakdown -->
-                    <div style="padding: 14px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
-                        <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+                    <div
+                        style="padding: 14px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                        <div
+                            style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
                             <span>&#x1F916; Automatic 3-Pillar Heuristic Verdict</span>
                             <span class="badge" th:classappend="${drilldown.liveAutoVerdict.badgeClass()}"
-                                style="font-size: 10.5px;" th:text="${drilldown.liveAutoVerdict.displayName()}">Verdict</span>
+                                style="font-size: 10.5px;"
+                                th:text="${drilldown.liveAutoVerdict.displayName()}">Verdict</span>
                         </div>
                         <div style="font-size: 12px; color: var(--text-primary); margin-bottom: 12px; line-height: 1.4;"
                             th:text="${drilldown.liveAutoReason}">
@@ -71,66 +79,86 @@
                         </div>
 
                         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 11.5px;">
-                            <div style="padding: 6px 8px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 4px;">
+                            <div
+                                style="padding: 6px 8px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 4px;">
                                 <div style="color: var(--text-muted); font-size: 10px;">Internal / Private Share</div>
-                                <strong th:classappend="${drilldown.internalRatioPct >= drilldown.thresholds.internalImmunityMinRatioPct() ? 'text-success' : ''}"
+                                <strong
+                                    th:classappend="${drilldown.internalRatioPct >= drilldown.thresholds.internalImmunityMinRatioPct() ? 'text-success' : ''}"
                                     th:text="${drilldown.internalRatioPct} + '% (' + ${#numbers.formatInteger(drilldown.internalRequests, 1, 'COMMA')} + ' reqs)'">0%</strong>
                             </div>
-                            <div style="padding: 6px 8px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 4px;">
+                            <div
+                                style="padding: 6px 8px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 4px;">
                                 <div style="color: var(--text-muted); font-size: 10px;">Sample / Slot Auth</div>
-                                <strong th:classappend="${(drilldown.sampleAuthRatioPct >= drilldown.thresholds.authImmunityMinSampleRatioPct() and drilldown.authSamples >= 2) ? 'text-success' : ''}"
+                                <strong
+                                    th:classappend="${(drilldown.sampleAuthRatioPct >= drilldown.thresholds.authImmunityMinSampleRatioPct() and drilldown.authSamples >= 2) ? 'text-success' : ''}"
                                     th:text="${drilldown.sampleAuthRatioPct} + '% (' + ${drilldown.authSamples} + ') / ' + ${drilldown.slotAuthRatioPct} + '%'">0%</strong>
                             </div>
-                            <div style="padding: 6px 8px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 4px;">
+                            <div
+                                style="padding: 6px 8px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 4px;">
                                 <div style="color: var(--text-muted); font-size: 10px;">Volume &amp; Slot Avg</div>
-                                <strong th:text="${#numbers.formatInteger(drilldown.totalRequests, 1, 'COMMA')} + ' reqs (avg ' + ${drilldown.avgRequestsPerSlot} + '/slot)'">0</strong>
+                                <strong
+                                    th:text="${#numbers.formatInteger(drilldown.totalRequests, 1, 'COMMA')} + ' reqs (avg ' + ${drilldown.avgRequestsPerSlot} + '/slot)'">0</strong>
                             </div>
-                            <div style="padding: 6px 8px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 4px;">
+                            <div
+                                style="padding: 6px 8px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 4px;">
                                 <div style="color: var(--text-muted); font-size: 10px;">Spread (Subnets / ASNs)</div>
-                                <strong th:text="${drilldown.distinctSubnets} + ' subnets / ' + ${drilldown.distinctAsns} + ' ASNs'">0</strong>
+                                <strong
+                                    th:text="${drilldown.distinctSubnets} + ' subnets / ' + ${drilldown.distinctAsns} + ' ASNs'">0</strong>
                             </div>
-                            <div style="padding: 6px 8px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 4px;">
+                            <div
+                                style="padding: 6px 8px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 4px;">
                                 <div style="color: var(--text-muted); font-size: 10px;">Incident / Mitigated ASN</div>
-                                <strong th:text="${drilldown.incidentEventRatioPct} + '% inc / ' + ${drilldown.mitigatedAsnRatioPct} + '% mit-ASN'">0%</strong>
+                                <strong
+                                    th:text="${drilldown.incidentEventRatioPct} + '% inc / ' + ${drilldown.mitigatedAsnRatioPct} + '% mit-ASN'">0%</strong>
                             </div>
-                            <div style="padding: 6px 8px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 4px;">
+                            <div
+                                style="padding: 6px 8px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 4px;">
                                 <div style="color: var(--text-muted); font-size: 10px;">Datacenter / UA Mismatch</div>
-                                <strong th:text="${drilldown.datacenterRatioPct} + '% DC / ' + ${drilldown.uaMismatchRatioPct} + '% mm'">0%</strong>
+                                <strong
+                                    th:text="${drilldown.datacenterRatioPct} + '% DC / ' + ${drilldown.uaMismatchRatioPct} + '% mm'">0%</strong>
                             </div>
                         </div>
                     </div>
 
                     <!-- Right: Manual Status Override & Operator Note Form -->
-                    <div style="padding: 14px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
-                        <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+                    <div
+                        style="padding: 14px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                        <div
+                            style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
                             <span>&#x1F464; Manual Override &amp; Operator Note</span>
                             <span th:if="${drilldown.hasManualOverride()}" class="badge"
                                 th:classappend="${drilldown.manualOverride.badgeClass()}" style="font-size: 10.5px;"
                                 th:text="${drilldown.manualOverride.displayName()}">Override</span>
                         </div>
                         <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
-                            Manual overrides are stored permanently in <code>dim_user_agent</code> and are never overwritten by automatic rollups.
-                            Even when overridden, the automatic heuristic continues to report its live assessment on the left.
+                            Manual overrides are stored permanently in <code>dim_user_agent</code> and are never
+                            overwritten by automatic rollups.
+                            Even when overridden, the automatic heuristic continues to report its live assessment on the
+                            left.
                         </div>
 
-                        <form hx-post="/analytics/user-agents/override" hx-target="#ua-modal-wrapper" hx-swap="outerHTML">
+                        <form hx-post="/analytics/user-agents/override" hx-target="#ua-modal-wrapper"
+                            hx-swap="outerHTML">
                             <input type="hidden" name="ua" th:value="${drilldown.userAgent}">
                             <input type="hidden" name="hours" th:value="${drilldown.lookbackHours}">
 
                             <div style="margin-bottom: 10px;">
-                                <label style="display: block; font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
+                                <label
+                                    style="display: block; font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
                                     Manual Classification Status
                                 </label>
-                                <select name="manualOverride" class="form-control" style="width: 100%; font-size: 12px; padding: 6px 8px;"
+                                <select name="manualOverride" class="form-control"
+                                    style="width: 100%; font-size: 12px; padding: 6px 8px;"
                                     th:disabled="${viewerMode or aiAgentMode}">
                                     <option th:each="opt : ${overrideOptions}" th:value="${opt.name()}"
-                                        th:selected="${drilldown.manualOverride == opt}"
-                                        th:text="${opt.displayName()}">Automatic</option>
+                                        th:selected="${drilldown.manualOverride == opt}" th:text="${opt.displayName()}">
+                                        Automatic</option>
                                 </select>
                             </div>
 
                             <div style="margin-bottom: 10px;">
-                                <label style="display: block; font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
+                                <label
+                                    style="display: block; font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
                                     Operator Note (Optional)
                                 </label>
                                 <textarea name="operatorNote" rows="2" class="form-control"
@@ -140,13 +168,16 @@
                                     th:text="${drilldown.operatorNote}"></textarea>
                             </div>
 
-                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                <span th:if="${drilldown.updatedBy != null}" style="font-size: 10.5px; color: var(--text-muted);">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                <span th:if="${drilldown.updatedBy != null}"
+                                    style="font-size: 10.5px; color: var(--text-muted);">
                                     Last updated by <strong th:text="${drilldown.updatedBy}">ADMIN</strong>
                                     <span th:if="${drilldown.updatedAt != null}"
                                         th:text="'(' + ${#temporals.format(drilldown.updatedAt, 'yyyy-MM-dd HH:mm')} + ')'"></span>
                                 </span>
-                                <span th:unless="${drilldown.updatedBy != null}" style="font-size: 10.5px; color: var(--text-muted);">
+                                <span th:unless="${drilldown.updatedBy != null}"
+                                    style="font-size: 10.5px; color: var(--text-muted);">
                                     No manual edits recorded
                                 </span>
 
@@ -154,7 +185,8 @@
                                     style="font-size: 12px; padding: 6px 12px;">
                                     &#x1F4BE; Save Override &amp; Note
                                 </button>
-                                <span th:if="${viewerMode or aiAgentMode}" class="badge badge-neutral" style="font-size: 10.5px;">
+                                <span th:if="${viewerMode or aiAgentMode}" class="badge badge-neutral"
+                                    style="font-size: 10.5px;">
                                     Read-Only Mode
                                 </span>
                             </div>
@@ -163,26 +195,33 @@
                 </div>
 
                 <!-- Chronological Evaluation History Header + Lookback Selector -->
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                <div
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
                     <div>
-                        <h4 style="margin: 0; font-size: 13.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-secondary);">
+                        <h4
+                            style="margin: 0; font-size: 13.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-secondary);">
                             &#x1F4C8; Chronological Hourly Evaluation History
                         </h4>
                         <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-                            <span th:if="${!drilldown.historyFromLiveEvents}">Source: Persistent <code>user_agent_hourly_rollups</code> (retained up to 30 days)</span>
-                            <span th:if="${drilldown.historyFromLiveEvents}">Source: Live hourly grouping from <code>client_events</code> (hourly rollups pending catch-up)</span>
+                            <span th:if="${!drilldown.historyFromLiveEvents}">Source: Persistent
+                                <code>user_agent_hourly_rollups</code> (retained up to 30 days)</span>
+                            <span th:if="${drilldown.historyFromLiveEvents}">Source: Live hourly grouping from
+                                <code>client_events</code> (hourly rollups pending catch-up)</span>
                         </div>
                     </div>
                     <div style="display: flex; gap: 6px;">
-                        <button type="button" class="btn" th:classappend="${drilldown.lookbackHours == 24 ? 'btn-primary' : ''}"
+                        <button type="button" class="btn"
+                            th:classappend="${drilldown.lookbackHours == 24 ? 'btn-primary' : ''}"
                             style="padding: 3px 9px; font-size: 11px;"
                             th:attr="hx-get=@{/analytics/user-agent-drilldown(ua=${drilldown.userAgent},hours=24)}"
                             hx-target="#ua-modal-wrapper" hx-swap="outerHTML">24h</button>
-                        <button type="button" class="btn" th:classappend="${drilldown.lookbackHours == 168 ? 'btn-primary' : ''}"
+                        <button type="button" class="btn"
+                            th:classappend="${drilldown.lookbackHours == 168 ? 'btn-primary' : ''}"
                             style="padding: 3px 9px; font-size: 11px;"
                             th:attr="hx-get=@{/analytics/user-agent-drilldown(ua=${drilldown.userAgent},hours=168)}"
                             hx-target="#ua-modal-wrapper" hx-swap="outerHTML">7d</button>
-                        <button type="button" class="btn" th:classappend="${drilldown.lookbackHours == 720 ? 'btn-primary' : ''}"
+                        <button type="button" class="btn"
+                            th:classappend="${drilldown.lookbackHours == 720 ? 'btn-primary' : ''}"
                             style="padding: 3px 9px; font-size: 11px;"
                             th:attr="hx-get=@{/analytics/user-agent-drilldown(ua=${drilldown.userAgent},hours=720)}"
                             hx-target="#ua-modal-wrapper" hx-swap="outerHTML">30d</button>
@@ -206,10 +245,12 @@
                         <tbody>
                             <tr th:if="${#lists.isEmpty(drilldown.hourlyHistory)}">
                                 <td colspan="6" style="padding: 24px; text-align: center; color: var(--text-muted);">
-                                    No hourly evaluation history found for this User-Agent within the selected lookback window.
+                                    No hourly evaluation history found for this User-Agent within the selected lookback
+                                    window.
                                 </td>
                             </tr>
-                            <tr th:each="pt : ${drilldown.hourlyHistory}" style="border-top: 1px solid var(--border-color);">
+                            <tr th:each="pt : ${drilldown.hourlyHistory}"
+                                style="border-top: 1px solid var(--border-color);">
                                 <td style="padding: 6px 10px; font-family: monospace; font-weight: 600; white-space: nowrap;"
                                     th:text="${pt.hourLabel()}">21.11. 12:00</td>
                                 <td style="padding: 6px 10px; text-align: right; font-weight: 600;"
@@ -249,7 +290,8 @@
 
                 <!-- Top Origin ASNs & Subnets -->
                 <div th:unless="${#lists.isEmpty(drilldown.topOrigins)}">
-                    <h4 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-secondary);">
+                    <h4
+                        style="margin: 0 0 8px 0; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-secondary);">
                         &#x1F30D; Top Origin Networks in Lookback Window
                     </h4>
                     <div style="display: flex; gap: 6px; flex-wrap: wrap;">
@@ -259,7 +301,8 @@
                                 th:text="${origin.formattedAsn()}">AS7922 Comcast</span>
                             <code th:text="${origin.subnetGroup()}" style="font-size: 11px;">198.51.100.0/24</code>
                             <span style="color: var(--text-muted);"
-                                th:text="${#numbers.formatInteger(origin.requests(), 1, 'COMMA')} + ' reqs'">100 reqs</span>
+                                th:text="${#numbers.formatInteger(origin.requests(), 1, 'COMMA')} + ' reqs'">100
+                                reqs</span>
                         </div>
                     </div>
                 </div>
@@ -269,8 +312,8 @@
             <div class="note-modal-footer"
                 style="padding: 12px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
                 <a th:if="${drilldown != null}"
-                    th:href="@{/mitigation(tab='useragents',prefillUa=${drilldown.userAgent})}"
-                    class="btn btn-danger" style="font-size: 12px; text-decoration: none;">
+                    th:href="@{/mitigation(tab='useragents',prefillUa=${drilldown.userAgent})}" class="btn btn-danger"
+                    style="font-size: 12px; text-decoration: none;">
                     &#x1F575;&#xFE0F; Open in User-Agent Defense &rarr;
                 </a>
                 <button type="button" class="btn" onclick="closeUaModal(event)">Close</button>

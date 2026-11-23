@@ -1321,7 +1321,8 @@ public class AntiDoSStatusRenderer {
 					String lastHitStr = lastHitMs > 0
 							? sdf.format(new Date(lastHitMs)) + " (" + formatDuration(Math.max(0, (nowMs - lastHitMs) / 1000)) + " ago)"
 							: "-";
-					sb.append("      <tr><td><code>").append(u.getUaHash32()).append("</code></td>")
+					sb.append("      <tr><td><code>").append(String.format("0x%08x", u.getUaHash32()))
+							.append("</code> <span style=\"color:var(--muted);font-size:11px;\">(UA:").append(u.getUaHash32()).append(")</span></td>")
 							.append("<td>").append(sdf.format(new Date(u.getCreatedAtMillis()))).append("</td>")
 							.append("<td>").append(sdf.format(new Date(u.getExpiresAtMillis()))).append("</td>")
 							.append("<td><span class=\"badge badge-warn\">").append(formatDuration(remSec)).append("</span></td>")

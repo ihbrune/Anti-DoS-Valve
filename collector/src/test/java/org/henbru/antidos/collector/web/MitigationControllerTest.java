@@ -11,6 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -130,7 +131,8 @@ class MitigationControllerTest {
 		// Pre-flight HTMX check
 		mockMvc.perform(post("/mitigation/ua/preflight").param("uaInput", testUa))
 				.andExpect(status().isOk())
-				.andExpect(content().string(containsString("Pre-Flight Safety Check Passed")));
+				.andExpect(content().string(containsString("Pre-Flight Safety Check Passed")))
+				.andExpect(content().string(containsString("32-bit FNV-1a:")));
 
 		// Manual block via controller
 		mockMvc.perform(post("/mitigation/ua/block")
@@ -142,6 +144,18 @@ class MitigationControllerTest {
 				.andExpect(content().string(containsString("ExampleScraper")));
 
 		MitigationUaRule rule = uaRuleRepository.findByRawUserAgent(testUa, "ALL").orElseThrow();
+
+		// Active Dynamic UA Blocks and Pre-Flight must use consistent 32-bit FNV-1a hex + UA:<int>, with no SHA-256 label
+		mockMvc.perform(get("/fragments/mitigation-content").param("tab", "useragents"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString(rule.hexHash32())))
+				.andExpect(content().string(containsString("UA:" + rule.uaHash32())))
+				.andExpect(content().string(not(containsString("SHA-256:"))));
+
+		mockMvc.perform(post("/mitigation/ua/preflight").param("uaInput", testUa))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString(rule.hexHash32())))
+				.andExpect(content().string(containsString("(UA:" + rule.uaHash32() + ")")));
 
 		// Extend & revoke via controller
 		mockMvc.perform(post("/mitigation/ua/" + rule.id() + "/extend").param("additionalMinutes", "60"))

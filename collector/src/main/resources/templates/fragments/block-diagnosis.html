@@ -6,68 +6,71 @@
     <div th:fragment="diagnosisTab" id="block-diagnosis-tab-container">
 
         <!-- Support Lookup Search Form (Read-Only) -->
-        <form id="block-diagnosis-form"
-              action="/events"
-              method="get"
-              hx-get="/fragments/block-diagnosis"
-              hx-target="#diagnosis-results-container"
-              hx-swap="outerHTML"
-              hx-indicator="#diagnosis-loading"
-              class="filter-panel"
-              style="margin-bottom: 20px;">
+        <form id="block-diagnosis-form" action="/events" method="get" hx-get="/fragments/block-diagnosis"
+            hx-target="#diagnosis-results-container" hx-swap="outerHTML" hx-indicator="#diagnosis-loading"
+            class="filter-panel" style="margin-bottom: 20px;">
             <input type="hidden" name="tab" value="diagnosis">
 
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px;">
+            <div
+                style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px;">
                 <div>
                     <div style="font-size: 15px; font-weight: 700; color: var(--text-primary);">
                         <span>&#x1F9EA;</span> Block Diagnosis (Service Desk &amp; Admin Support Lookup)
                     </div>
                     <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
-                        Read-only multi-pillar investigation across static IP lists, dynamic bypass rules, CIDR &amp; User-Agent rules, observed slot events, and subnet rollups.
+                        Read-only multi-pillar investigation across static IP lists, dynamic bypass rules, CIDR &amp;
+                        User-Agent rules, observed slot events, and subnet rollups.
                     </div>
                 </div>
                 <span class="badge badge-info">Read-Only Forensics</span>
             </div>
 
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-bottom: 12px;">
+            <div
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-bottom: 12px;">
                 <div>
-                    <label for="diag-ip" style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
+                    <label for="diag-ip"
+                        style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
                         Client IP Address or CIDR
                     </label>
                     <input id="diag-ip" type="text" name="ip" th:value="${diagIp}"
-                           placeholder="e.g. 198.51.100.42 or 2001:db8::1"
-                           style="width: 100%; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input, var(--bg-primary)); color: var(--text-primary); font-family: monospace; font-size: 13px;">
+                        placeholder="e.g. 198.51.100.42 or 2001:db8::1"
+                        style="width: 100%; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input, var(--bg-primary)); color: var(--text-primary); font-family: monospace; font-size: 13px;">
                 </div>
 
                 <div>
-                    <label for="diag-ua" style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
+                    <label for="diag-ua"
+                        style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
                         User-Agent (Full Header or Substring)
                     </label>
                     <input id="diag-ua" type="text" name="ua" th:value="${diagUa}"
-                           placeholder="e.g. CustomClient/2.0 or Headless"
-                           style="width: 100%; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input, var(--bg-primary)); color: var(--text-primary); font-size: 13px;">
+                        placeholder="e.g. CustomClient/2.0 or Headless"
+                        style="width: 100%; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input, var(--bg-primary)); color: var(--text-primary); font-size: 13px;">
                 </div>
 
                 <div>
-                    <label for="diag-url" style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
+                    <label for="diag-url"
+                        style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
                         Target URL or Request Path
                     </label>
                     <input id="diag-url" type="text" name="url" th:value="${diagUrl}"
-                           placeholder="e.g. /portal/course/catalog or https://example.com/api/v1/search"
-                           style="width: 100%; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input, var(--bg-primary)); color: var(--text-primary); font-family: monospace; font-size: 13px;">
+                        placeholder="e.g. /portal/course/catalog or https://example.com/api/v1/search"
+                        style="width: 100%; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input, var(--bg-primary)); color: var(--text-primary); font-family: monospace; font-size: 13px;">
                 </div>
             </div>
 
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 12px;">
+            <div
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 12px;">
                 <div>
-                    <label for="diag-preset-hours" style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
+                    <label for="diag-preset-hours"
+                        style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
                         Lookback Window (From Now)
                     </label>
                     <select id="diag-preset-hours" name="presetHours"
-                            style="width: 100%; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input, var(--bg-primary)); color: var(--text-primary); font-size: 13px;">
+                        style="width: 100%; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input, var(--bg-primary)); color: var(--text-primary); font-size: 13px;">
                         <option value="1" th:selected="${diagPresetHours == 1}">Last 1 Hour</option>
                         <option value="6" th:selected="${diagPresetHours == 6}">Last 6 Hours</option>
-                        <option value="24" th:selected="${diagPresetHours == null or diagPresetHours == 24}">Last 24 Hours</option>
+                        <option value="24" th:selected="${diagPresetHours == null or diagPresetHours == 24}">Last 24
+                            Hours</option>
                         <option value="72" th:selected="${diagPresetHours == 72}">Last 3 Days</option>
                         <option value="168" th:selected="${diagPresetHours == 168}">Last 7 Days</option>
                         <option value="720" th:selected="${diagPresetHours == 720}">Last 30 Days</option>
@@ -75,57 +78,60 @@
                 </div>
 
                 <div>
-                    <label for="diag-target-time" style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
+                    <label for="diag-target-time"
+                        style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
                         Exact Incident Time (Optional)
                     </label>
                     <input id="diag-target-time" type="datetime-local" name="targetTime" th:value="${diagTargetTime}"
-                           style="width: 100%; padding: 7px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input, var(--bg-primary)); color: var(--text-primary); font-size: 13px;">
+                        style="width: 100%; padding: 7px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input, var(--bg-primary)); color: var(--text-primary); font-size: 13px;">
                 </div>
 
                 <div>
-                    <label for="diag-tolerance" style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
+                    <label for="diag-tolerance"
+                        style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
                         Incident Time Tolerance (+/-)
                     </label>
                     <select id="diag-tolerance" name="toleranceMinutes"
-                            style="width: 100%; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input, var(--bg-primary)); color: var(--text-primary); font-size: 13px;">
+                        style="width: 100%; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input, var(--bg-primary)); color: var(--text-primary); font-size: 13px;">
                         <option value="15" th:selected="${diagToleranceMinutes == 15}">+/- 15 minutes</option>
-                        <option value="60" th:selected="${diagToleranceMinutes == null or diagToleranceMinutes == 60}">+/- 60 minutes</option>
+                        <option value="60" th:selected="${diagToleranceMinutes == null or diagToleranceMinutes == 60}">
+                            +/- 60 minutes</option>
                         <option value="180" th:selected="${diagToleranceMinutes == 180}">+/- 3 hours</option>
                         <option value="360" th:selected="${diagToleranceMinutes == 360}">+/- 6 hours</option>
                     </select>
                 </div>
 
                 <div>
-                    <label for="diag-server" style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
+                    <label for="diag-server"
+                        style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
                         Server Scope
                     </label>
                     <select id="diag-server" name="server"
-                            style="width: 100%; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input, var(--bg-primary)); color: var(--text-primary); font-size: 13px;">
+                        style="width: 100%; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input, var(--bg-primary)); color: var(--text-primary); font-size: 13px;">
                         <option value="">All Servers</option>
-                        <option th:each="srv : ${availableServers}"
-                                th:value="${srv}"
-                                th:text="${srv}"
-                                th:selected="${diagServer != null and diagServer == srv}">node-1</option>
+                        <option th:each="srv : ${availableServers}" th:value="${srv}" th:text="${srv}"
+                            th:selected="${diagServer != null and diagServer == srv}">node-1</option>
                     </select>
                 </div>
 
                 <div>
-                    <label for="diag-valve" style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
+                    <label for="diag-valve"
+                        style="display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
                         Valve Scope
                     </label>
                     <select id="diag-valve" name="valve"
-                            style="width: 100%; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input, var(--bg-primary)); color: var(--text-primary); font-size: 13px;">
+                        style="width: 100%; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-input, var(--bg-primary)); color: var(--text-primary); font-size: 13px;">
                         <option value="">All Valves</option>
-                        <option th:each="vlv : ${availableValves}"
-                                th:value="${vlv}"
-                                th:text="${vlv}"
-                                th:selected="${diagValve != null and diagValve == vlv}">DefaultValve</option>
+                        <option th:each="vlv : ${availableValves}" th:value="${vlv}" th:text="${vlv}"
+                            th:selected="${diagValve != null and diagValve == vlv}">DefaultValve</option>
                     </select>
                 </div>
             </div>
 
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding-top: 8px; border-top: 1px solid var(--border-color);">
-                <div style="display: flex; gap: 18px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--text-secondary);">
+            <div
+                style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding-top: 8px; border-top: 1px solid var(--border-color);">
+                <div
+                    style="display: flex; gap: 18px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--text-secondary);">
                     <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
                         <input type="checkbox" name="assumeAuth" value="true" th:checked="${diagAssumeAuth}">
                         <span>Assume authenticated user (logged-in session)</span>
@@ -137,7 +143,8 @@
                 </div>
 
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <span id="diagnosis-loading" class="htmx-indicator" style="font-size: 12px; color: var(--text-muted);">
+                    <span id="diagnosis-loading" class="htmx-indicator"
+                        style="font-size: 12px; color: var(--text-muted);">
                         Running 6-pillar analysis...
                     </span>
                     <a href="/events?tab=diagnosis" class="btn" style="font-size: 13px; padding: 7px 14px;">Reset</a>
@@ -160,32 +167,39 @@
                 How Block Diagnosis Investigates User Complaints
             </div>
             <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.5;">
-                Enter a client IP address, a User-Agent string (or fragment), a requested URL/path, or any combination above.
-                If an exact incident timestamp is specified, the lookup centers the search window around that time using the chosen +/- tolerance; otherwise it checks the Lookback Window from now.
+                Enter a client IP address, a User-Agent string (or fragment), a requested URL/path, or any combination
+                above.
+                If an exact incident timestamp is specified, the lookup centers the search window around that time using
+                the chosen +/- tolerance; otherwise it checks the Lookback Window from now.
             </p>
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-label">1. IP &amp; Network Intel</div>
                     <div style="font-size: 12px; color: var(--text-secondary); margin-top: 6px; line-height: 1.45;">
-                        Resolves canonical /24 or /64 subnet, private RFC ranges, ASN/Org, verified crawlers, threat intel feeds, and saved Network Notes.
+                        Resolves canonical /24 or /64 subnet, private RFC ranges, ASN/Org, verified crawlers, threat
+                        intel feeds, and saved Network Notes.
                     </div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-label">2. Static Lists &amp; Mitigation Bypass</div>
                     <div style="font-size: 12px; color: var(--text-secondary); margin-top: 6px; line-height: 1.45;">
-                        Simulates <code>alwaysForbiddenIPs</code>, <code>alwaysAllowPrivateIPs</code>, <code>alwaysAllowedIPs</code>, <code>mitigationBypassPrivateIPs</code>, and <code>mitigationBypassIPs</code>.
+                        Simulates <code>alwaysForbiddenIPs</code>, <code>alwaysAllowPrivateIPs</code>,
+                        <code>alwaysAllowedIPs</code>, <code>mitigationBypassPrivateIPs</code>, and
+                        <code>mitigationBypassIPs</code>.
                     </div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-label">3. Dynamic CIDR &amp; UA Rules</div>
                     <div style="font-size: 12px; color: var(--text-secondary); margin-top: 6px; line-height: 1.45;">
-                        Checks overlapping active/historical CIDR rules, User-Agent hash signatures, context bypasses (Auth / Returning / Private IP), and audit history.
+                        Checks overlapping active/historical CIDR rules, User-Agent hash signatures, context bypasses
+                        (Auth / Returning / Private IP), and audit history.
                     </div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-label">4. Telemetry &amp; Pipeline Match</div>
                     <div style="font-size: 12px; color: var(--text-secondary); margin-top: 6px; line-height: 1.45;">
-                        Searches <code>client_events</code> (including /24 or /64 collateral rate-limits), hourly subnet rollups, and Valve URL/Auth scope regex rules.
+                        Searches <code>client_events</code> (including /24 or /64 collateral rate-limits), hourly subnet
+                        rollups, and Valve URL/Auth scope regex rules.
                     </div>
                 </div>
             </div>
@@ -195,31 +209,36 @@
         <div th:if="${diagnosisReport != null}">
 
             <!-- Verdict Summary Banner -->
-            <div class="table-card" style="padding: 18px 20px; margin-bottom: 18px;"
-                 th:styleappend="${diagnosisReport.verdictLevel().name() == 'LIKELY_BLOCKED' ? 'border-left: 5px solid var(--color-danger);'
+            <div class="table-card" style="padding: 18px 20px; margin-bottom: 18px;" th:styleappend="${diagnosisReport.verdictLevel().name() == 'LIKELY_BLOCKED' ? 'border-left: 5px solid var(--color-danger);'
                      : (diagnosisReport.verdictLevel().name() == 'POSSIBLE_BLOCK' ? 'border-left: 5px solid var(--color-warning);'
                      : (diagnosisReport.verdictLevel().name() == 'BYPASSED_OR_ALLOWED' ? 'border-left: 5px solid var(--color-success);'
                      : 'border-left: 5px solid var(--border-color);'))}">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
+                <div
+                    style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
                     <div>
-                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px;">
-                            <span class="badge"
-                                  th:classappend="${diagnosisReport.verdictLevel().name() == 'LIKELY_BLOCKED' ? 'badge-danger'
+                        <div
+                            style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px;">
+                            <span class="badge" th:classappend="${diagnosisReport.verdictLevel().name() == 'LIKELY_BLOCKED' ? 'badge-danger'
                                       : (diagnosisReport.verdictLevel().name() == 'POSSIBLE_BLOCK' ? 'badge-warning'
                                       : (diagnosisReport.verdictLevel().name() == 'BYPASSED_OR_ALLOWED' ? 'badge-success'
                                       : 'badge-secondary'))}"
-                                  th:text="${diagnosisReport.verdictBadgeLabel()}">VERDICT</span>
-                            <span style="font-size: 16px; font-weight: 700;" th:text="${diagnosisReport.verdictHeadline()}">Headline</span>
+                                th:text="${diagnosisReport.verdictBadgeLabel()}">VERDICT</span>
+                            <span style="font-size: 16px; font-weight: 700;"
+                                th:text="${diagnosisReport.verdictHeadline()}">Headline</span>
                         </div>
                         <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.5;"
-                             th:text="${diagnosisReport.verdictSummary()}">
+                            th:text="${diagnosisReport.verdictSummary()}">
                             Summary
                         </div>
                     </div>
                     <div style="text-align: right; font-size: 12px; color: var(--text-muted);">
-                        <div>Window: <span style="font-family: monospace;" th:text="${diagnosisReport.formattedWindowStart()}">start</span> &rarr; <span style="font-family: monospace;" th:text="${diagnosisReport.formattedWindowEnd()}">end</span></div>
+                        <div>Window: <span style="font-family: monospace;"
+                                th:text="${diagnosisReport.formattedWindowStart()}">start</span> &rarr; <span
+                                style="font-family: monospace;"
+                                th:text="${diagnosisReport.formattedWindowEnd()}">end</span></div>
                         <div th:if="${diagnosisReport.formattedReferenceTime() != null}">
-                            Reference: <span style="font-family: monospace;" th:text="${diagnosisReport.formattedReferenceTime()}">ref</span>
+                            Reference: <span style="font-family: monospace;"
+                                th:text="${diagnosisReport.formattedReferenceTime()}">ref</span>
                         </div>
                     </div>
                 </div>
@@ -227,13 +246,16 @@
                 <!-- Normalized Query Chips -->
                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; font-size: 12px;">
                     <span th:if="${diagnosisReport.normalizedIp() != null}" class="badge badge-info">
-                        IP: <span style="font-family: monospace; margin-left: 4px;" th:text="${diagnosisReport.normalizedIp()}">198.51.100.42</span>
+                        IP: <span style="font-family: monospace; margin-left: 4px;"
+                            th:text="${diagnosisReport.normalizedIp()}">198.51.100.42</span>
                     </span>
                     <span th:if="${diagnosisReport.normalizedUrlPath() != null}" class="badge badge-secondary">
-                        Path: <span style="font-family: monospace; margin-left: 4px;" th:text="${diagnosisReport.normalizedUrlPath()}">/portal/course/catalog</span>
+                        Path: <span style="font-family: monospace; margin-left: 4px;"
+                            th:text="${diagnosisReport.normalizedUrlPath()}">/portal/course/catalog</span>
                     </span>
                     <span th:if="${diagnosisReport.formattedHexUaHash32() != null}" class="badge badge-purple">
-                        UA Hash32: <span style="font-family: monospace; margin-left: 4px;" th:text="${diagnosisReport.formattedHexUaHash32()}">0x1234abcd</span>
+                        UA Hash32: <span style="font-family: monospace; margin-left: 4px;"
+                            th:text="${diagnosisReport.formattedHexUaHash32()}">0x1234abcd</span>
                     </span>
                     <span th:if="${diagnosisReport.assumeAuthenticated()}" class="badge badge-success">
                         Context: Authenticated
@@ -248,32 +270,37 @@
             </div>
 
             <!-- Key Findings + Recommended Actions & Caveats -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 18px;">
+            <div
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 18px;">
                 <div class="table-card" style="padding: 16px;">
                     <div style="font-size: 14px; font-weight: 700; margin-bottom: 12px;">
                         <span>&#x1F50E;</span> Diagnostic Findings
                         <span class="badge badge-secondary" th:text="${diagnosisReport.findings().size()}">0</span>
                     </div>
-                    <div th:if="${diagnosisReport.findings().isEmpty()}" style="font-size: 13px; color: var(--text-muted);">
+                    <div th:if="${diagnosisReport.findings().isEmpty()}"
+                        style="font-size: 13px; color: var(--text-muted);">
                         No rule matches, dynamic mitigations, or recorded slot events were triggered for these criteria.
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 10px;">
                         <div th:each="f : ${diagnosisReport.findings()}"
-                             style="padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-secondary);">
-                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
+                            style="padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-secondary);">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
                                 <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                    <span class="badge"
-                                          th:classappend="${f.severity() == 'BLOCKED' ? 'badge-danger'
+                                    <span class="badge" th:classappend="${f.severity() == 'BLOCKED' ? 'badge-danger'
                                               : (f.severity() == 'WARNING' ? 'badge-warning'
                                               : (f.severity() == 'BYPASSED' ? 'badge-success' : 'badge-info'))}"
-                                          th:text="${f.severity()}">INFO</span>
-                                    <span style="font-size: 11px; color: var(--text-muted); font-weight: 600;" th:text="${f.category()}">Category</span>
+                                        th:text="${f.severity()}">INFO</span>
+                                    <span style="font-size: 11px; color: var(--text-muted); font-weight: 600;"
+                                        th:text="${f.category()}">Category</span>
                                 </div>
-                                <a th:if="${f.actionUrl() != null}" th:href="${f.actionUrl()}" class="btn" style="font-size: 11px; padding: 2px 8px;"
-                                   th:text="${f.actionLabel() != null ? f.actionLabel() : 'Inspect'}">Inspect</a>
+                                <a th:if="${f.actionUrl() != null}" th:href="${f.actionUrl()}" class="btn"
+                                    style="font-size: 11px; padding: 2px 8px;"
+                                    th:text="${f.actionLabel() != null ? f.actionLabel() : 'Inspect'}">Inspect</a>
                             </div>
                             <div style="font-size: 13px; font-weight: 600;" th:text="${f.title()}">Finding Title</div>
-                            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 3px; line-height: 1.4;" th:text="${f.detail()}">
+                            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 3px; line-height: 1.4;"
+                                th:text="${f.detail()}">
                                 Finding detail
                             </div>
                         </div>
@@ -284,76 +311,94 @@
                     <div style="font-size: 14px; font-weight: 700; margin-bottom: 10px;">
                         <span>&#x1F6E0;&#xFE0F;</span> Recommended Next Steps
                     </div>
-                    <ul th:if="${!diagnosisReport.recommendedSteps().isEmpty()}" style="margin: 0 0 16px 18px; padding: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.55;">
-                        <li th:each="step : ${diagnosisReport.recommendedSteps()}" th:text="${step}" style="margin-bottom: 6px;">Step</li>
+                    <ul th:if="${!diagnosisReport.recommendedSteps().isEmpty()}"
+                        style="margin: 0 0 16px 18px; padding: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.55;">
+                        <li th:each="step : ${diagnosisReport.recommendedSteps()}" th:text="${step}"
+                            style="margin-bottom: 6px;">Step</li>
                     </ul>
-                    <div th:if="${diagnosisReport.recommendedSteps().isEmpty()}" style="font-size: 13px; color: var(--text-muted); margin-bottom: 14px;">
+                    <div th:if="${diagnosisReport.recommendedSteps().isEmpty()}"
+                        style="font-size: 13px; color: var(--text-muted); margin-bottom: 14px;">
                         No remediation actions indicated.
                     </div>
 
-                    <div th:if="${!diagnosisReport.transparencyNotes().isEmpty()}" style="border-top: 1px solid var(--border-color); padding-top: 12px;">
+                    <div th:if="${!diagnosisReport.transparencyNotes().isEmpty()}"
+                        style="border-top: 1px solid var(--border-color); padding-top: 12px;">
                         <div style="font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px;">
                             <span>&#x2139;&#xFE0F;</span> Telemetry &amp; Matching Notes
                         </div>
-                        <ul style="margin: 0 0 0 18px; padding: 0; font-size: 12px; color: var(--text-muted); line-height: 1.5;">
-                            <li th:each="note : ${diagnosisReport.transparencyNotes()}" th:text="${note}" style="margin-bottom: 5px;">Note</li>
+                        <ul
+                            style="margin: 0 0 0 18px; padding: 0; font-size: 12px; color: var(--text-muted); line-height: 1.5;">
+                            <li th:each="note : ${diagnosisReport.transparencyNotes()}" th:text="${note}"
+                                style="margin-bottom: 5px;">Note</li>
                         </ul>
                     </div>
                 </div>
             </div>
 
             <!-- Stage 1: Network & Enrichment Context -->
-            <div th:if="${diagnosisReport.networkContext() != null}" class="table-card" style="padding: 16px; margin-bottom: 18px;">
+            <div th:if="${diagnosisReport.networkContext() != null}" class="table-card"
+                style="padding: 16px; margin-bottom: 18px;">
                 <div style="font-size: 14px; font-weight: 700; margin-bottom: 12px;">
                     <span>&#x1F310;</span> Client IP &amp; Network Context
                 </div>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; font-size: 12px;">
+                <div
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; font-size: 12px;">
                     <div>
-                        <div style="color: var(--text-muted);">Canonical Subnet (IPv<span th:text="${diagnosisReport.networkContext().ipVersion()}">4</span>)</div>
+                        <div style="color: var(--text-muted);">Canonical Subnet (IPv<span
+                                th:text="${diagnosisReport.networkContext().ipVersion()}">4</span>)</div>
                         <div style="font-family: monospace; font-weight: 600; margin-top: 2px;"
-                             th:text="${diagnosisReport.networkContext().canonicalSubnet() != null ? diagnosisReport.networkContext().canonicalSubnet() : '-'}">
+                            th:text="${diagnosisReport.networkContext().canonicalSubnet() != null ? diagnosisReport.networkContext().canonicalSubnet() : '-'}">
                             198.51.100.0/24
                         </div>
                     </div>
                     <div>
                         <div style="color: var(--text-muted);">Network Scope</div>
                         <div style="margin-top: 2px;">
-                            <span th:if="${diagnosisReport.networkContext().privateOrLocal()}" class="badge badge-success"
-                                  th:text="${'Private / Local (' + diagnosisReport.networkContext().privateDescription() + ')'}">Private</span>
-                            <span th:if="${!diagnosisReport.networkContext().privateOrLocal()}" class="badge badge-secondary">Public Internet Address</span>
+                            <span th:if="${diagnosisReport.networkContext().privateOrLocal()}"
+                                class="badge badge-success"
+                                th:text="${'Private / Local (' + diagnosisReport.networkContext().privateDescription() + ')'}">Private</span>
+                            <span th:if="${!diagnosisReport.networkContext().privateOrLocal()}"
+                                class="badge badge-secondary">Public Internet Address</span>
                         </div>
                     </div>
                     <div>
                         <div style="color: var(--text-muted);">ASN / Organization</div>
                         <div style="font-weight: 600; margin-top: 2px;">
-                            <span th:if="${diagnosisReport.networkContext().enrichment() != null and diagnosisReport.networkContext().enrichment().asn() != null}"
-                                  th:text="${'AS' + diagnosisReport.networkContext().enrichment().asn() + ' ' + (diagnosisReport.networkContext().enrichment().asOrg() != null ? diagnosisReport.networkContext().enrichment().asOrg() : '')}">AS64512</span>
-                            <span th:if="${diagnosisReport.networkContext().enrichment() == null or diagnosisReport.networkContext().enrichment().asn() == null}">-</span>
+                            <span
+                                th:if="${diagnosisReport.networkContext().enrichment() != null and diagnosisReport.networkContext().enrichment().asn() != null}"
+                                th:text="${'AS' + diagnosisReport.networkContext().enrichment().asn() + ' ' + (diagnosisReport.networkContext().enrichment().asOrg() != null ? diagnosisReport.networkContext().enrichment().asOrg() : '')}">AS64512</span>
+                            <span
+                                th:if="${diagnosisReport.networkContext().enrichment() == null or diagnosisReport.networkContext().enrichment().asn() == null}">-</span>
                         </div>
                     </div>
                     <div>
                         <div style="color: var(--text-muted);">Classification &amp; Feeds</div>
                         <div style="margin-top: 2px; display: flex; flex-wrap: wrap; gap: 4px;">
-                            <span th:if="${diagnosisReport.networkContext().enrichment() != null and diagnosisReport.networkContext().enrichment().clientType() != null}"
-                                  class="badge badge-info"
-                                  th:text="${diagnosisReport.networkContext().enrichment().clientType().name()}">UNKNOWN</span>
-                            <span th:if="${diagnosisReport.networkContext().botName() != null}" class="badge badge-success"
-                                  th:text="${'Crawler: ' + diagnosisReport.networkContext().botName()}">Crawler</span>
-                            <span th:each="lbl : ${diagnosisReport.networkContext().intelLabels()}" class="badge badge-warning" th:text="${lbl}">Intel</span>
+                            <span
+                                th:if="${diagnosisReport.networkContext().enrichment() != null and diagnosisReport.networkContext().enrichment().clientType() != null}"
+                                class="badge badge-info"
+                                th:text="${diagnosisReport.networkContext().enrichment().clientType().name()}">UNKNOWN</span>
+                            <span th:if="${diagnosisReport.networkContext().botName() != null}"
+                                class="badge badge-success"
+                                th:text="${'Crawler: ' + diagnosisReport.networkContext().botName()}">Crawler</span>
+                            <span th:each="lbl : ${diagnosisReport.networkContext().intelLabels()}"
+                                class="badge badge-warning" th:text="${lbl}">Intel</span>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Stages 3 & 4: Dynamic Mitigation Evidence -->
-            <div th:if="${diagnosisReport.hasDynamicEvidence()}" class="table-card" style="padding: 16px; margin-bottom: 18px;">
+            <div th:if="${diagnosisReport.hasDynamicEvidence()}" class="table-card"
+                style="padding: 16px; margin-bottom: 18px;">
                 <div style="font-size: 14px; font-weight: 700; margin-bottom: 12px;">
                     <span>&#x1F6E1;&#xFE0F;</span> Dynamic Mitigation Rules, UA Memory &amp; Audit Trail
                 </div>
 
                 <!-- Dynamic CIDR Rules -->
                 <div th:if="${!diagnosisReport.dynamicCidrMatches().isEmpty()}" style="margin-bottom: 16px;">
-                    <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">Matching Dynamic CIDR Rules</div>
+                    <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">Matching Dynamic CIDR Rules
+                    </div>
                     <div class="table-responsive">
                         <table>
                             <thead>
@@ -369,28 +414,38 @@
                             </thead>
                             <tbody>
                                 <tr th:each="m : ${diagnosisReport.dynamicCidrMatches()}">
-                                    <td style="font-family: monospace; font-weight: 600;" th:text="${m.rule().cidr()}">198.51.100.0/24</td>
+                                    <td style="font-family: monospace; font-weight: 600;" th:text="${m.rule().cidr()}">
+                                        198.51.100.0/24</td>
                                     <td th:text="${m.rule().targetScope()}">ALL</td>
-                                    <td><span class="badge badge-secondary" th:text="${m.rule().status()}">ACTIVE</span></td>
+                                    <td><span class="badge badge-secondary" th:text="${m.rule().status()}">ACTIVE</span>
+                                    </td>
                                     <td>
                                         <span th:if="${m.activeNow()}" class="badge badge-danger">Active Now</span>
-                                        <span th:if="${!m.activeNow() and m.activeInWindow()}" class="badge badge-warning">Active in Window</span>
-                                        <span th:if="${!m.activeNow() and !m.activeInWindow()}" class="badge badge-secondary">Outside Window</span>
+                                        <span th:if="${!m.activeNow() and m.activeInWindow()}"
+                                            class="badge badge-warning">Active in Window</span>
+                                        <span th:if="${!m.activeNow() and !m.activeInWindow()}"
+                                            class="badge badge-secondary">Outside Window</span>
                                     </td>
                                     <td style="font-size: 12px;">
-                                        <div th:if="${!m.enforcedOnValves().isEmpty()}" style="color: var(--color-danger);">
-                                            Enforced: <span th:text="${#strings.listJoin(m.enforcedOnValves(), ', ')}">node-1</span>
+                                        <div th:if="${!m.enforcedOnValves().isEmpty()}"
+                                            style="color: var(--color-danger);">
+                                            Enforced: <span
+                                                th:text="${#strings.listJoin(m.enforcedOnValves(), ', ')}">node-1</span>
                                         </div>
-                                        <div th:if="${!m.bypassedOnValves().isEmpty()}" style="color: var(--color-success);">
-                                            Bypassed: <span th:text="${#strings.listJoin(m.bypassedOnValves(), ', ')}">node-1</span>
+                                        <div th:if="${!m.bypassedOnValves().isEmpty()}"
+                                            style="color: var(--color-success);">
+                                            Bypassed: <span
+                                                th:text="${#strings.listJoin(m.bypassedOnValves(), ', ')}">node-1</span>
                                         </div>
                                     </td>
                                     <td style="font-size: 12px;">
                                         <span class="badge badge-info" th:text="${m.rule().source()}">MANUAL</span>
-                                        <span th:text="${m.rule().reason() != null ? m.rule().reason() : '-'}">Reason</span>
+                                        <span
+                                            th:text="${m.rule().reason() != null ? m.rule().reason() : '-'}">Reason</span>
                                     </td>
                                     <td style="font-family: monospace; font-size: 11px;">
-                                        <span th:text="${m.formattedCreatedAt()}">created</span> &rarr; <span th:text="${m.formattedExpiresAt()}">expires</span>
+                                        <span th:text="${m.formattedCreatedAt()}">created</span> &rarr; <span
+                                            th:text="${m.formattedExpiresAt()}">expires</span>
                                     </td>
                                 </tr>
                             </tbody>
@@ -400,7 +455,8 @@
 
                 <!-- Dynamic UA Rules -->
                 <div th:if="${!diagnosisReport.dynamicUaMatches().isEmpty()}" style="margin-bottom: 16px;">
-                    <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">Matching Dynamic User-Agent Rules</div>
+                    <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">Matching Dynamic User-Agent
+                        Rules</div>
                     <div class="table-responsive">
                         <table>
                             <thead>
@@ -416,29 +472,44 @@
                             </thead>
                             <tbody>
                                 <tr th:each="u : ${diagnosisReport.dynamicUaMatches()}">
-                                    <td style="font-family: monospace;" th:text="${u.rule().hexHash32()}">0x1234</td>
+                                    <td style="font-family: monospace; white-space: nowrap;">
+                                        <span th:text="${u.rule().hexHash32()}">0x1234</span>
+                                        <div style="font-size: 10px; color: var(--text-muted);"
+                                            th:text="'UA:' + ${u.rule().uaHash32()}">UA:123456</div>
+                                    </td>
                                     <td>
-                                        <span th:if="${u.exactHashMatch()}" class="badge badge-danger">Exact Hash32</span>
-                                        <span th:if="${!u.exactHashMatch()}" class="badge badge-warning">Substring Match</span>
+                                        <span th:if="${u.exactHashMatch()}" class="badge badge-danger">Exact
+                                            Hash32</span>
+                                        <span th:if="${!u.exactHashMatch()}" class="badge badge-warning">Substring
+                                            Match</span>
                                     </td>
                                     <td style="font-size: 12px; max-width: 340px; word-break: break-word;">
                                         <strong th:text="${u.rule().browserFamily()}">CUSTOM</strong><br>
-                                        <span style="font-family: monospace;" th:text="${u.rule().rawUserAgent()}">UA</span>
+                                        <span style="font-family: monospace;"
+                                            th:text="${u.rule().rawUserAgent()}">UA</span>
                                     </td>
                                     <td>
                                         <span th:if="${u.activeNow()}" class="badge badge-danger">Active Now</span>
-                                        <span th:if="${!u.activeNow() and u.activeInWindow()}" class="badge badge-warning">Active in Window</span>
-                                        <span th:if="${!u.activeNow() and !u.activeInWindow()}" class="badge badge-secondary" th:text="${u.rule().status()}">EXPIRED</span>
+                                        <span th:if="${!u.activeNow() and u.activeInWindow()}"
+                                            class="badge badge-warning">Active in Window</span>
+                                        <span th:if="${!u.activeNow() and !u.activeInWindow()}"
+                                            class="badge badge-secondary" th:text="${u.rule().status()}">EXPIRED</span>
                                     </td>
                                     <td style="font-size: 12px;">
-                                        <span th:if="${u.bypassedByContext()}" class="badge badge-success">Bypassed</span>
-                                        <span th:if="${!u.bypassedByContext()}" class="badge badge-danger">Enforced</span>
-                                        <div style="margin-top: 3px; color: var(--text-secondary);" th:text="${u.bypassExplanation()}">Reason</div>
+                                        <span th:if="${u.bypassedByContext()}"
+                                            class="badge badge-success">Bypassed</span>
+                                        <span th:if="${!u.bypassedByContext()}"
+                                            class="badge badge-danger">Enforced</span>
+                                        <div style="margin-top: 3px; color: var(--text-secondary);"
+                                            th:text="${u.bypassExplanation()}">Reason</div>
                                     </td>
                                     <td style="font-size: 12px;">
-                                        <span th:text="${u.rule().totalBlockedHits() + ' blocked / ' + u.rule().totalBypassedHits() + ' bypassed'}">0 / 0</span>
+                                        <span
+                                            th:text="${u.rule().totalBlockedHits() + ' blocked / ' + u.rule().totalBypassedHits() + ' bypassed'}">0
+                                            / 0</span>
                                     </td>
-                                    <td style="font-family: monospace; font-size: 11px;" th:text="${u.formattedExpiresAt()}">expires</td>
+                                    <td style="font-family: monospace; font-size: 11px;"
+                                        th:text="${u.formattedExpiresAt()}">expires</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -447,7 +518,8 @@
 
                 <!-- User-Agent Memory Profiles -->
                 <div th:if="${!diagnosisReport.matchedUaProfiles().isEmpty()}" style="margin-bottom: 16px;">
-                    <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">User-Agent Memory Reputation (<code>dim_user_agent</code>)</div>
+                    <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">User-Agent Memory Reputation
+                        (<code>dim_user_agent</code>)</div>
                     <div class="table-responsive">
                         <table>
                             <thead>
@@ -463,15 +535,17 @@
                             <tbody>
                                 <tr th:each="p : ${diagnosisReport.matchedUaProfiles()}">
                                     <td th:text="${p.browserFamily()}">FAMILY</td>
-                                    <td style="font-family: monospace; font-size: 12px; max-width: 320px; word-break: break-word;" th:text="${p.rawUserAgent()}">UA</td>
+                                    <td style="font-family: monospace; font-size: 12px; max-width: 320px; word-break: break-word;"
+                                        th:text="${p.rawUserAgent()}">UA</td>
                                     <td>
                                         <span class="badge"
-                                              th:classappend="${p.isEffectiveSuspicious() ? 'badge-warning' : (p.isEffectiveProtected() ? 'badge-success' : 'badge-secondary')}"
-                                              th:text="${p.effectiveAutoVerdict()}">NEUTRAL</span>
+                                            th:classappend="${p.isEffectiveSuspicious() ? 'badge-warning' : (p.isEffectiveProtected() ? 'badge-success' : 'badge-secondary')}"
+                                            th:text="${p.effectiveAutoVerdict()}">NEUTRAL</span>
                                     </td>
                                     <td th:text="${p.effectiveOverride()}">AUTO</td>
                                     <td th:text="${p.last24hRequests() + ' / ' + p.last24hBlockedRequests()}">0 / 0</td>
-                                    <td style="font-size: 12px;" th:text="${p.autoVerdictReason() != null ? p.autoVerdictReason() : '-'}">-</td>
+                                    <td style="font-size: 12px;"
+                                        th:text="${p.autoVerdictReason() != null ? p.autoVerdictReason() : '-'}">-</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -480,7 +554,8 @@
 
                 <!-- Related Audit Trail -->
                 <div th:if="${!diagnosisReport.relatedAuditEntries().isEmpty()}">
-                    <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">Overlapping Mitigation Audit Trail</div>
+                    <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">Overlapping Mitigation Audit
+                        Trail</div>
                     <div class="table-responsive">
                         <table>
                             <thead>
@@ -495,9 +570,12 @@
                             </thead>
                             <tbody>
                                 <tr th:each="a : ${diagnosisReport.relatedAuditEntries()}">
-                                    <td style="font-family: monospace; font-size: 11px;" th:text="${a.formattedCreatedAt()}">time</td>
-                                    <td><span class="badge badge-secondary" th:text="${a.targetTypeOrDefault()}">CIDR</span></td>
-                                    <td style="font-family: monospace; font-size: 12px;" th:text="${a.cidr()}">target</td>
+                                    <td style="font-family: monospace; font-size: 11px;"
+                                        th:text="${a.formattedCreatedAt()}">time</td>
+                                    <td><span class="badge badge-secondary"
+                                            th:text="${a.targetTypeOrDefault()}">CIDR</span></td>
+                                    <td style="font-family: monospace; font-size: 12px;" th:text="${a.cidr()}">target
+                                    </td>
                                     <td><span class="badge badge-info" th:text="${a.action()}">ACTION</span></td>
                                     <td style="font-size: 12px;" th:text="${a.actor()}">actor</td>
                                     <td style="font-size: 12px;" th:text="${a.details()}">details</td>
@@ -509,7 +587,8 @@
             </div>
 
             <!-- Stage 5: Observed Events & Historical Subnet Rollups -->
-            <div th:if="${diagnosisReport.hasEventEvidence()}" class="table-card" style="padding: 16px; margin-bottom: 18px;">
+            <div th:if="${diagnosisReport.hasEventEvidence()}" class="table-card"
+                style="padding: 16px; margin-bottom: 18px;">
                 <div style="font-size: 14px; font-weight: 700; margin-bottom: 12px;">
                     <span>&#x1F4CB;</span> Observed Telemetry &amp; Historical Subnet Rollups
                 </div>
@@ -517,7 +596,8 @@
                 <div th:if="${!diagnosisReport.blockedOrMarkedEvents().isEmpty()}" style="margin-bottom: 16px;">
                     <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">
                         Blocked, Marked &amp; Honeypot Slot Events
-                        <span class="badge badge-danger" th:text="${diagnosisReport.blockedOrMarkedEvents().size()}">0</span>
+                        <span class="badge badge-danger"
+                            th:text="${diagnosisReport.blockedOrMarkedEvents().size()}">0</span>
                     </div>
                     <div class="table-responsive">
                         <table>
@@ -533,36 +613,47 @@
                             </thead>
                             <tbody>
                                 <tr th:each="ev : ${diagnosisReport.blockedOrMarkedEvents()}">
-                                    <td style="font-family: monospace; font-size: 11px;" th:text="${ev.formattedSlotTime()}">time</td>
+                                    <td style="font-family: monospace; font-size: 11px;"
+                                        th:text="${ev.formattedSlotTime()}">time</td>
                                     <td style="font-size: 12px;">
                                         <strong th:text="${ev.event().serverId()}">srv</strong><br>
-                                        <span style="color: var(--text-muted);" th:text="${ev.event().valveName()}">valve</span>
+                                        <span style="color: var(--text-muted);"
+                                            th:text="${ev.event().valveName()}">valve</span>
                                     </td>
                                     <td style="font-size: 12px;">
-                                        <span style="font-family: monospace; font-weight: 600;" th:text="${ev.event().clientKey()}">198.51.100.42</span>
+                                        <span style="font-family: monospace; font-weight: 600;"
+                                            th:text="${ev.event().clientKey()}">198.51.100.42</span>
                                         <div style="margin-top: 3px;">
-                                            <span th:if="${ev.exactIpMatch()}" class="badge badge-danger">Exact Match</span>
-                                            <span th:if="${ev.subnetCollateralMatch()}" class="badge badge-warning">Shared Subnet Collateral</span>
+                                            <span th:if="${ev.exactIpMatch()}" class="badge badge-danger">Exact
+                                                Match</span>
+                                            <span th:if="${ev.subnetCollateralMatch()}"
+                                                class="badge badge-warning">Shared Subnet Collateral</span>
                                         </div>
                                     </td>
                                     <td>
                                         <span class="badge"
-                                              th:classappend="${ev.event().isMarked() ? 'badge-warning' : 'badge-danger'}"
-                                              th:text="${ev.event().status()}">BLOCKED</span>
+                                            th:classappend="${ev.event().isMarked() ? 'badge-warning' : 'badge-danger'}"
+                                            th:text="${ev.event().status()}">BLOCKED</span>
                                     </td>
                                     <td style="font-size: 12px;">
                                         <strong th:text="${ev.event().requestCount()}">0</strong>
-                                        <span th:if="${ev.event().retainedCount() > 0}" style="color: var(--text-muted);"
-                                              th:text="${' (+ ' + ev.event().retainedCount() + ' retained)'}"></span>
+                                        <span th:if="${ev.event().retainedCount() > 0}"
+                                            style="color: var(--text-muted);"
+                                            th:text="${' (+ ' + ev.event().retainedCount() + ' retained)'}"></span>
                                     </td>
                                     <td style="font-size: 11px; max-width: 340px; word-break: break-word;">
                                         <div th:if="${ev.event().sampleUri() != null}">
-                                            <span style="font-family: monospace;" th:text="${(ev.event().sampleMethod() != null ? ev.event().sampleMethod() + ' ' : '') + ev.event().sampleUri()}">GET /</span>
-                                            <span th:if="${ev.sampleUriMatches()}" class="badge badge-info">URI Match</span>
+                                            <span style="font-family: monospace;"
+                                                th:text="${(ev.event().sampleMethod() != null ? ev.event().sampleMethod() + ' ' : '') + ev.event().sampleUri()}">GET
+                                                /</span>
+                                            <span th:if="${ev.sampleUriMatches()}" class="badge badge-info">URI
+                                                Match</span>
                                         </div>
-                                        <div th:if="${ev.event().sampleUserAgent() != null}" style="color: var(--text-muted); margin-top: 2px;">
+                                        <div th:if="${ev.event().sampleUserAgent() != null}"
+                                            style="color: var(--text-muted); margin-top: 2px;">
                                             <span th:text="${ev.event().sampleUserAgent()}">UA</span>
-                                            <span th:if="${ev.sampleUaMatches()}" class="badge badge-info">UA Match</span>
+                                            <span th:if="${ev.sampleUaMatches()}" class="badge badge-info">UA
+                                                Match</span>
                                         </div>
                                     </td>
                                 </tr>
@@ -573,7 +664,8 @@
 
                 <details th:if="${!diagnosisReport.activeEvents().isEmpty()}" style="margin-bottom: 16px;">
                     <summary style="cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-secondary);">
-                        Below-Threshold Active Slot Events (<span th:text="${diagnosisReport.activeEvents().size()}">0</span>)
+                        Below-Threshold Active Slot Events (<span
+                            th:text="${diagnosisReport.activeEvents().size()}">0</span>)
                     </summary>
                     <div class="table-responsive" style="margin-top: 8px;">
                         <table>
@@ -589,10 +681,14 @@
                             </thead>
                             <tbody>
                                 <tr th:each="ev : ${diagnosisReport.activeEvents()}">
-                                    <td style="font-family: monospace; font-size: 11px;" th:text="${ev.formattedSlotTime()}">time</td>
-                                    <td style="font-size: 12px;" th:text="${ev.event().serverId() + ' / ' + ev.event().valveName()}">srv</td>
-                                    <td style="font-family: monospace; font-size: 12px;" th:text="${ev.event().clientKey()}">key</td>
-                                    <td><span class="badge badge-secondary" th:text="${ev.event().status()}">ACTIVE</span></td>
+                                    <td style="font-family: monospace; font-size: 11px;"
+                                        th:text="${ev.formattedSlotTime()}">time</td>
+                                    <td style="font-size: 12px;"
+                                        th:text="${ev.event().serverId() + ' / ' + ev.event().valveName()}">srv</td>
+                                    <td style="font-family: monospace; font-size: 12px;"
+                                        th:text="${ev.event().clientKey()}">key</td>
+                                    <td><span class="badge badge-secondary"
+                                            th:text="${ev.event().status()}">ACTIVE</span></td>
                                     <td th:text="${ev.event().requestCount()}">0</td>
                                     <td style="font-size: 11px;" th:text="${ev.event().formattedSample()}">-</td>
                                 </tr>
@@ -624,14 +720,16 @@
                                         &rarr;
                                         <span th:text="${diagnosisReport.formatInstant(r.bucketEnd())}">end</span>
                                     </td>
-                                    <td style="font-size: 12px;" th:text="${r.serverId() + ' / ' + r.valveName()}">srv</td>
-                                    <td style="font-family: monospace; font-size: 12px;" th:text="${r.subnetGroup()}">198.51.100.0/24</td>
+                                    <td style="font-size: 12px;" th:text="${r.serverId() + ' / ' + r.valveName()}">srv
+                                    </td>
+                                    <td style="font-family: monospace; font-size: 12px;" th:text="${r.subnetGroup()}">
+                                        198.51.100.0/24</td>
                                     <td th:text="${r.distinctClients()}">0</td>
                                     <td th:text="${r.totalRequests()}">0</td>
                                     <td>
                                         <span class="badge"
-                                              th:classappend="${r.blockedRequests() > 0 ? 'badge-danger' : 'badge-secondary'}"
-                                              th:text="${r.blockedRequests()}">0</span>
+                                            th:classappend="${r.blockedRequests() > 0 ? 'badge-danger' : 'badge-secondary'}"
+                                            th:text="${r.blockedRequests()}">0</span>
                                     </td>
                                 </tr>
                             </tbody>
@@ -661,34 +759,40 @@
                         <tbody>
                             <tr th:each="v : ${diagnosisReport.valveEvaluations()}">
                                 <td style="font-size: 12px;">
-                                    <a th:href="@{'/server/' + ${v.serverId()}}" style="font-weight: 700; text-decoration: none;" th:text="${v.serverId()}">node-1</a>
-                                    <div style="color: var(--text-muted);" th:text="${'#' + v.pipelineOrder() + ' ' + v.valveName()}">#1 Valve</div>
+                                    <a th:href="@{'/server/' + ${v.serverId()}}"
+                                        style="font-weight: 700; text-decoration: none;"
+                                        th:text="${v.serverId()}">node-1</a>
+                                    <div style="color: var(--text-muted);"
+                                        th:text="${'#' + v.pipelineOrder() + ' ' + v.valveName()}">#1 Valve</div>
                                 </td>
                                 <td style="font-size: 11px;">
                                     <span class="badge"
-                                          th:classappend="${v.isEnforcingBlockMode() ? 'badge-danger' : 'badge-warning'}"
-                                          th:text="${v.simulationMode() ? 'SIMULATION (' + v.monitorMode() + ')' : v.monitorMode()}">BLOCKING</span>
+                                        th:classappend="${v.isEnforcingBlockMode() ? 'badge-danger' : 'badge-warning'}"
+                                        th:text="${v.simulationMode() ? 'SIMULATION (' + v.monitorMode() + ')' : v.monitorMode()}">BLOCKING</span>
                                     <div style="margin-top: 4px; display: flex; flex-wrap: wrap; gap: 3px;">
                                         <span th:if="${v.honeypot()}" class="badge badge-danger">Honeypot</span>
-                                        <span th:if="${v.serverWideBlocking()}" class="badge badge-secondary">ServerWide</span>
-                                        <span th:if="${v.dynamicMitigationEnabled()}" class="badge badge-info">DynamicMit</span>
+                                        <span th:if="${v.serverWideBlocking()}"
+                                            class="badge badge-secondary">ServerWide</span>
+                                        <span th:if="${v.dynamicMitigationEnabled()}"
+                                            class="badge badge-info">DynamicMit</span>
                                     </div>
                                 </td>
                                 <td style="font-size: 12px;">
                                     <span class="badge"
-                                          th:classappend="${v.staticIpVerdict().startsWith('FORBIDDEN') ? 'badge-danger' : (v.staticIpVerdict().startsWith('ALWAYS_ALLOWED') ? 'badge-success' : 'badge-secondary')}"
-                                          th:text="${v.staticIpVerdict()}">NEUTRAL</span>
+                                        th:classappend="${v.staticIpVerdict().startsWith('FORBIDDEN') ? 'badge-danger' : (v.staticIpVerdict().startsWith('ALWAYS_ALLOWED') ? 'badge-success' : 'badge-secondary')}"
+                                        th:text="${v.staticIpVerdict()}">NEUTRAL</span>
                                 </td>
                                 <td style="font-size: 12px;">
                                     <span class="badge"
-                                          th:classappend="${v.mitigationBypassVerdict().startsWith('BYPASSED') ? 'badge-success' : (v.mitigationBypassVerdict() == 'ENFORCED' ? 'badge-warning' : 'badge-secondary')}"
-                                          th:text="${v.mitigationBypassVerdict()}">ENFORCED</span>
+                                        th:classappend="${v.mitigationBypassVerdict().startsWith('BYPASSED') ? 'badge-success' : (v.mitigationBypassVerdict() == 'ENFORCED' ? 'badge-warning' : 'badge-secondary')}"
+                                        th:text="${v.mitigationBypassVerdict()}">ENFORCED</span>
                                 </td>
                                 <td style="font-size: 12px;" th:text="${v.urlMatchVerdict()}">N/A</td>
                                 <td style="font-size: 12px;" th:text="${v.authScopeVerdict()}">IN_SCOPE</td>
                                 <td style="font-size: 12px;">
                                     <strong th:text="${v.effectiveOutcome()}">OUTCOME</strong>
-                                    <div style="color: var(--text-muted); margin-top: 2px;" th:text="${v.summaryNote()}">note</div>
+                                    <div style="color: var(--text-muted); margin-top: 2px;"
+                                        th:text="${v.summaryNote()}">note</div>
                                 </td>
                             </tr>
                         </tbody>
@@ -700,4 +804,5 @@
     </div>
 
 </body>
+
 </html>
