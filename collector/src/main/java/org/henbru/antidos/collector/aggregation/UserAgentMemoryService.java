@@ -28,6 +28,7 @@ import org.henbru.antidos.collector.model.UserAgentHourlyPoint;
 import org.henbru.antidos.collector.model.UserAgentManualOverride;
 import org.henbru.antidos.collector.model.UserAgentOriginSummary;
 import org.henbru.antidos.collector.model.UserAgentProfile;
+import org.henbru.antidos.collector.storage.MitigationUaRuleRepository;
 import org.henbru.antidos.collector.security.CollectorAuthContext;
 import org.henbru.antidos.collector.storage.ClientEventRepository;
 import org.henbru.antidos.collector.storage.MitigationRuleRepository;
@@ -84,6 +85,7 @@ public class UserAgentMemoryService {
 	private final CollectorProperties properties;
 	private final SystemSettingsRepository settingsRepository;
 	private final MitigationRuleRepository mitigationRuleRepository;
+	private final MitigationUaRuleRepository mitigationUaRuleRepository;
 	private final ClientEventRepository clientEventRepository;
 	private final BrowserVersionSyncService browserVersionSyncService;
 	private final JdbcTemplate jdbcTemplate;
@@ -98,7 +100,8 @@ public class UserAgentMemoryService {
 			@Autowired(required = false) MitigationRuleRepository mitigationRuleRepository,
 			@Autowired(required = false) ClientEventRepository clientEventRepository,
 			@Autowired(required = false) BrowserVersionSyncService browserVersionSyncService,
-			@Autowired(required = false) JdbcTemplate jdbcTemplate
+			@Autowired(required = false) JdbcTemplate jdbcTemplate,
+			@Autowired(required = false) MitigationUaRuleRepository mitigationUaRuleRepository
 	) {
 		this.memoryRepository = memoryRepository;
 		this.properties = properties != null ? properties : new CollectorProperties();
@@ -107,7 +110,20 @@ public class UserAgentMemoryService {
 		this.clientEventRepository = clientEventRepository;
 		this.browserVersionSyncService = browserVersionSyncService;
 		this.jdbcTemplate = jdbcTemplate;
+		this.mitigationUaRuleRepository = mitigationUaRuleRepository;
 		this.isPostgres = checkIsPostgres(jdbcTemplate);
+	}
+
+	public UserAgentMemoryService(
+			UserAgentMemoryRepository memoryRepository,
+			CollectorProperties properties,
+			SystemSettingsRepository settingsRepository,
+			MitigationRuleRepository mitigationRuleRepository,
+			ClientEventRepository clientEventRepository,
+			BrowserVersionSyncService browserVersionSyncService,
+			JdbcTemplate jdbcTemplate
+	) {
+		this(memoryRepository, properties, settingsRepository, mitigationRuleRepository, clientEventRepository, browserVersionSyncService, jdbcTemplate, null);
 	}
 
 	public UserAgentMemoryService(
@@ -117,7 +133,7 @@ public class UserAgentMemoryService {
 			MitigationRuleRepository mitigationRuleRepository,
 			BrowserVersionSyncService browserVersionSyncService
 	) {
-		this(memoryRepository, properties, settingsRepository, mitigationRuleRepository, null, browserVersionSyncService, null);
+		this(memoryRepository, properties, settingsRepository, mitigationRuleRepository, null, browserVersionSyncService, null, null);
 	}
 
 	private static boolean checkIsPostgres(JdbcTemplate jdbcTemplate) {
@@ -911,14 +927,19 @@ public class UserAgentMemoryService {
 		List<UserAgentHourlyPoint> hourlyHistory = new ArrayList<>();
 		boolean historyFromLiveEvents = false;
 
-		if (existingProfile.isPresent() && existingProfile.get().id() != null && memoryRepository != null) {
-			hourlyHistory = memoryRepository.findHourlyHistoryByUaId(existingProfile.get().id(), from, now);
-		}
-
-		if (hourlyHistory.isEmpty() && jdbcTemplate != null) {
-			// Fall back to live hourly aggregation directly from client_events (works cleanly in VIEWER mode too!)
-			hourlyHistory = queryLiveHourlyHistory(trimmed, family, from, now, cfg);
+		if (safeHours <= 6 && jdbcTemplate != null) {
+			hourlyHistory = queryLive10MinHistory(trimmed, family, from, now, cfg);
 			historyFromLiveEvents = true;
+		} else {
+			if (existingProfile.isPresent() && existingProfile.get().id() != null && memoryRepository != null) {
+				hourlyHistory = memoryRepository.findHourlyHistoryByUaId(existingProfile.get().id(), from, now);
+			}
+
+			if (hourlyHistory.isEmpty() && jdbcTemplate != null) {
+				// Fall back to live hourly aggregation directly from client_events (works cleanly in VIEWER mode too!)
+				hourlyHistory = queryLiveHourlyHistory(trimmed, family, from, now, cfg);
+				historyFromLiveEvents = true;
+			}
 		}
 
 		// Compute aggregate metrics over the drilldown lookback window
@@ -993,6 +1014,10 @@ public class UserAgentMemoryService {
 						.max(Comparator.naturalOrder())
 						.orElse(null));
 
+		List<org.henbru.antidos.collector.model.MitigationUaRule> mitigationRules = mitigationUaRuleRepository != null
+				? mitigationUaRuleRepository.findAllByHashOrRawUserAgent(shaHash, trimmed)
+				: List.of();
+
 		return new UserAgentDrilldownDto(
 				trimmed,
 				shaHash,
@@ -1031,8 +1056,120 @@ public class UserAgentMemoryService {
 				cfg,
 				topOrigins,
 				hourlyHistory,
-				historyFromLiveEvents
+				historyFromLiveEvents,
+				mitigationRules
 		);
+	}
+
+	private List<UserAgentHourlyPoint> queryLive10MinHistory(
+			String ua,
+			UserAgentFamily family,
+			Instant from,
+			Instant to,
+			EffectiveUaHeuristicSettings cfg
+	) {
+		if (jdbcTemplate == null || ua == null || ua.isBlank()) {
+			return List.of();
+		}
+		Set<Long> mitigatedAsns = loadActiveOrRecentMitigatedAsns(from, to);
+		String mitIn = buildNumericAsnInClause(mitigatedAsns);
+		String mitExpr = mitIn != null
+				? "SUM(CASE WHEN asn IN (" + mitIn + ") THEN request_count ELSE 0 END) AS mitigated_asn_requests"
+				: "0 AS mitigated_asn_requests";
+
+		String bucketExpr = isPostgres
+				? "to_timestamp(floor(extract(epoch from slot_time) / 600) * 600)"
+				: "datetime(((slot_time / 1000) / 600) * 600, 'unixepoch')";
+
+		String sql = """
+				SELECT
+				""" + bucketExpr + """
+				 AS hour_bucket,
+				    SUM(request_count) AS total_requests,
+				    COUNT(*) AS event_count,
+				    SUM(CASE WHEN status = 'BLOCKED' THEN request_count ELSE 0 END) AS blocked_requests,
+				    SUM(CASE WHEN status = 'MARKED' THEN request_count ELSE 0 END) AS marked_requests,
+				    SUM(CASE WHEN status IN ('BLOCKED', 'MARKED') THEN 1 ELSE 0 END) AS incident_events,
+				    SUM(CASE WHEN sample_authenticated = TRUE THEN 1 ELSE 0 END) AS auth_samples,
+				    SUM(COALESCE(authenticated_count, 0)) AS auth_requests,
+				    SUM(CASE WHEN client_type IN ('PRIVATE_NETWORK', 'INTERNAL_NETWORK') THEN request_count ELSE 0 END) AS internal_requests,
+				    SUM(CASE WHEN client_type = 'SEARCH_ENGINE' THEN request_count ELSE 0 END) AS search_engine_requests,
+				    SUM(CASE WHEN client_type IN ('SEARCH_ENGINE', 'AI_CRAWLER') THEN request_count ELSE 0 END) AS crawler_requests,
+				    SUM(CASE WHEN client_type IN ('DATACENTER', 'TOR_EXIT_NODE') THEN request_count ELSE 0 END) AS datacenter_requests,
+				    SUM(CASE WHEN client_type IN ('RESIDENTIAL', 'PRIVACY_RELAY') THEN request_count ELSE 0 END) AS residential_requests,
+				    SUM(COALESCE(returning_count, 0)) AS returning_requests,
+				    SUM(COALESCE(ua_mismatch_count, 0)) AS ua_mismatch_requests,
+				    CASE WHEN COALESCE(MAX(CASE WHEN client_key LIKE 'UA:%' THEN distinct_clients ELSE 0 END), 0) > COUNT(DISTINCT NULLIF(subnet_group, '')) THEN COALESCE(MAX(CASE WHEN client_key LIKE 'UA:%' THEN distinct_clients ELSE 0 END), 0) ELSE COUNT(DISTINCT NULLIF(subnet_group, '')) END AS distinct_subnets,
+				    COUNT(DISTINCT asn) AS distinct_asns,
+				""" + mitExpr + """
+				 FROM client_events
+				 WHERE slot_time >= ? AND slot_time < ?
+				   AND sample_user_agent = ?
+				 GROUP BY hour_bucket
+				 ORDER BY hour_bucket DESC
+				""";
+
+		List<UserAgentHourlyPoint> points = new ArrayList<>();
+		try {
+			jdbcTemplate.query(sql, rs -> {
+				Instant bStart;
+				if (isPostgres) {
+					Timestamp ts = rs.getTimestamp("hour_bucket");
+					bStart = ts != null ? ts.toInstant() : Instant.now();
+				} else {
+					String bucketStr = rs.getString("hour_bucket");
+					bStart = parseSqliteHourString(bucketStr);
+				}
+				Instant bEnd = bStart.plus(10, ChronoUnit.MINUTES);
+
+				long totalReqs = rs.getLong("total_requests");
+				int eventCount = rs.getInt("event_count");
+				int incEvents = rs.getInt("incident_events");
+				int authSamples = rs.getInt("auth_samples");
+				long authReqs = rs.getLong("auth_requests");
+				long internalReqs = rs.getLong("internal_requests");
+				long seReqs = rs.getLong("search_engine_requests");
+				long crawlerReqs = rs.getLong("crawler_requests");
+				long dcReqs = rs.getLong("datacenter_requests");
+				long resReqs = rs.getLong("residential_requests");
+				long mmReqs = rs.getLong("ua_mismatch_requests");
+				long mitReqs = rs.getLong("mitigated_asn_requests");
+				int subnets = rs.getInt("distinct_subnets");
+				int asns = rs.getInt("distinct_asns");
+
+				EvaluationOutcome eval = evaluateVerdict(new EvaluationInput(
+						ua, family, totalReqs, eventCount, incEvents, 0,
+						subnets, asns, authSamples, authReqs, internalReqs, seReqs,
+						dcReqs, resReqs, mitReqs, mmReqs, false, null
+				), cfg);
+
+				points.add(new UserAgentHourlyPoint(
+						bStart,
+						bEnd,
+						totalReqs,
+						eventCount,
+						rs.getLong("blocked_requests"),
+						rs.getLong("marked_requests"),
+						incEvents,
+						authSamples,
+						authReqs,
+						internalReqs,
+						crawlerReqs,
+						dcReqs,
+						resReqs,
+						rs.getLong("returning_requests"),
+						mmReqs,
+						subnets,
+						asns,
+						eval.verdict(),
+						eval.verdict().pillarCode(),
+						eval.reason()
+				));
+			}, Timestamp.from(from), Timestamp.from(to), ua);
+		} catch (Exception e) {
+			log.debug("Live 10-minute UA history query failed for '{}': {}", ua, e.getMessage());
+		}
+		return points;
 	}
 
 	private List<UserAgentHourlyPoint> queryLiveHourlyHistory(

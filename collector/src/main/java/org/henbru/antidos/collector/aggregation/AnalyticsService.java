@@ -7,6 +7,7 @@ import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -59,6 +60,7 @@ public class AnalyticsService {
 	private final BrowserVersionSyncService browserVersionSyncService;
 	private final UserAgentMemoryService userAgentMemoryService;
 	private final EndpointAnalyticsService endpointAnalyticsService;
+	private final org.henbru.antidos.collector.storage.UaMitigationRollupRepository uaMitigationRollupRepository;
 
 	@Autowired
 	public AnalyticsService(
@@ -71,7 +73,8 @@ public class AnalyticsService {
 			@Autowired(required = false) MitigationRuleRepository mitigationRuleRepository,
 			@Autowired(required = false) BrowserVersionSyncService browserVersionSyncService,
 			@Autowired(required = false) UserAgentMemoryService userAgentMemoryService,
-			@Autowired(required = false) EndpointAnalyticsService endpointAnalyticsService
+			@Autowired(required = false) EndpointAnalyticsService endpointAnalyticsService,
+			@Autowired(required = false) org.henbru.antidos.collector.storage.UaMitigationRollupRepository uaMitigationRollupRepository
 	) {
 		this.subnetRollupRepository = subnetRollupRepository;
 		this.rollupAggregationService = rollupAggregationService;
@@ -83,6 +86,23 @@ public class AnalyticsService {
 		this.browserVersionSyncService = browserVersionSyncService;
 		this.userAgentMemoryService = userAgentMemoryService;
 		this.endpointAnalyticsService = endpointAnalyticsService;
+		this.uaMitigationRollupRepository = uaMitigationRollupRepository;
+	}
+
+	public AnalyticsService(
+			SubnetRollupRepository subnetRollupRepository,
+			RollupAggregationService rollupAggregationService,
+			NetworkAnnotationService networkAnnotationService,
+			org.henbru.antidos.collector.advisor.AdvisorService advisorService,
+			org.henbru.antidos.collector.storage.ClientEventRepository clientEventRepository,
+			MonitoredValveRepository monitoredValveRepository,
+			MitigationRuleRepository mitigationRuleRepository,
+			BrowserVersionSyncService browserVersionSyncService,
+			UserAgentMemoryService userAgentMemoryService,
+			EndpointAnalyticsService endpointAnalyticsService
+	) {
+		this(subnetRollupRepository, rollupAggregationService, networkAnnotationService, advisorService,
+				clientEventRepository, monitoredValveRepository, mitigationRuleRepository, browserVersionSyncService, userAgentMemoryService, endpointAnalyticsService, null);
 	}
 
 	public AnalyticsService(
@@ -265,6 +285,14 @@ public class AnalyticsService {
 			timeline = subnetRollupRepository.findTimeline(servers, valves, from, to);
 		}
 
+		if (uaMitigationRollupRepository != null) {
+			List<org.henbru.antidos.collector.storage.UaMitigationRollupRepository.UaTimelinePoint> uaTimeline =
+					uaMitigationRollupRepository.findTimeline(servers, valves, from, to);
+			if (!uaTimeline.isEmpty()) {
+				timeline = mergeUaTimeline(timeline, uaTimeline);
+			}
+		}
+
 		long totalRequests = 0;
 		long totalActive = 0;
 		long totalBlocked = 0;
@@ -281,7 +309,21 @@ public class AnalyticsService {
 		List<TrafficCompositionPoint> composition = new ArrayList<>();
 		if (isCharts) {
 			List<SubnetRollupRepository.RawCompositionRow> rawComp =
-					subnetRollupRepository.findTrafficComposition(servers, valves, from, to);
+					new ArrayList<>(subnetRollupRepository.findTrafficComposition(servers, valves, from, to));
+
+			if (uaMitigationRollupRepository != null) {
+				org.henbru.antidos.collector.storage.UaMitigationRollupRepository.UaRollupSummary uaSum =
+						uaMitigationRollupRepository.findSummary(servers, valves, from, to);
+				if (uaSum.totalRequests() > 0 || uaSum.blockedRequests() > 0) {
+					rawComp.add(new SubnetRollupRepository.RawCompositionRow(
+							ClientType.DYNAMIC_UA_MITIGATION,
+							uaSum.totalRequests(),
+							uaSum.blockedRequests(),
+							uaSum.markedRequests(),
+							uaSum.distinctUaRules()
+					));
+				}
+			}
 
 			long compTotal = 0;
 			for (SubnetRollupRepository.RawCompositionRow row : rawComp) {
@@ -865,6 +907,7 @@ public class AnalyticsService {
 			case PRIVACY_RELAY -> "Privacy Relays (iCloud Private Relay)";
 			case PRIVATE_NETWORK -> "Private / Internal RFC 1918";
 			case INTERNAL_NETWORK -> "Internal / Campus Network";
+			case DYNAMIC_UA_MITIGATION -> "Dynamic UA Mitigation";
 			case UNKNOWN -> "Unclassified / Standard Clients";
 		};
 	}
@@ -881,8 +924,42 @@ public class AnalyticsService {
 			case PRIVACY_RELAY -> "🛡️";
 			case PRIVATE_NETWORK -> "🔒";
 			case INTERNAL_NETWORK -> "🏛️";
+			case DYNAMIC_UA_MITIGATION -> "🛡️";
 			case UNKNOWN -> "👤";
 		};
+	}
+
+	private List<TimelinePoint> mergeUaTimeline(
+			List<TimelinePoint> timeline,
+			List<org.henbru.antidos.collector.storage.UaMitigationRollupRepository.UaTimelinePoint> uaTimeline
+	) {
+		Map<Instant, TimelinePoint> byBucket = new LinkedHashMap<>();
+		for (TimelinePoint pt : timeline) {
+			byBucket.put(pt.bucketStart(), pt);
+		}
+		for (org.henbru.antidos.collector.storage.UaMitigationRollupRepository.UaTimelinePoint ua : uaTimeline) {
+			TimelinePoint existing = byBucket.get(ua.bucketStart());
+			if (existing != null) {
+				byBucket.put(ua.bucketStart(), new TimelinePoint(
+						existing.bucketStart(),
+						existing.totalRequests() + ua.totalRequests(),
+						existing.activeRequests(),
+						existing.blockedRequests() + ua.blockedRequests(),
+						existing.markedRequests() + ua.markedRequests()
+				));
+			} else {
+				byBucket.put(ua.bucketStart(), new TimelinePoint(
+						ua.bucketStart(),
+						ua.totalRequests(),
+						0L,
+						ua.blockedRequests(),
+						ua.markedRequests()
+				));
+			}
+		}
+		List<TimelinePoint> merged = new ArrayList<>(byBucket.values());
+		merged.sort(Comparator.comparing(TimelinePoint::bucketStart));
+		return merged;
 	}
 
 	private String extractSnippet(String markdown, int maxLen) {

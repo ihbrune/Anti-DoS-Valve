@@ -41,7 +41,8 @@ public class MitigationUaRuleRepository {
 			rs.getString("revoked_reason"),
 			rs.getLong("total_blocked_hits"),
 			rs.getLong("total_bypassed_hits"),
-			toInstant(rs.getTimestamp("last_hit_at"))
+			toInstant(rs.getTimestamp("last_hit_at")),
+			rs.getString("deterrence_state") != null ? rs.getString("deterrence_state") : MitigationUaRule.DETERRENCE_OBSERVING
 	);
 
 	private static Instant toInstant(Timestamp ts) {
@@ -53,8 +54,9 @@ public class MitigationUaRuleRepository {
 				INSERT INTO mitigation_ua_rules (
 				    user_agent_hash, ua_hash_32, raw_user_agent, browser_family, target_scope,
 				    status, source, batch_id, reason, created_at, updated_at, expires_at,
-				    revoked_at, revoked_reason, total_blocked_hits, total_bypassed_hits, last_hit_at
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				    revoked_at, revoked_reason, total_blocked_hits, total_bypassed_hits, last_hit_at,
+				    deterrence_state
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (user_agent_hash, target_scope) DO UPDATE SET
 				    ua_hash_32 = EXCLUDED.ua_hash_32,
 				    raw_user_agent = EXCLUDED.raw_user_agent,
@@ -70,7 +72,8 @@ public class MitigationUaRuleRepository {
 				    revoked_reason = EXCLUDED.revoked_reason,
 				    total_blocked_hits = EXCLUDED.total_blocked_hits,
 				    total_bypassed_hits = EXCLUDED.total_bypassed_hits,
-				    last_hit_at = EXCLUDED.last_hit_at
+				    last_hit_at = EXCLUDED.last_hit_at,
+				    deterrence_state = EXCLUDED.deterrence_state
 				""";
 
 		Instant now = r.updatedAt() != null ? r.updatedAt() : Instant.now();
@@ -95,7 +98,8 @@ public class MitigationUaRuleRepository {
 					r.revokedReason(),
 					r.totalBlockedHits(),
 					r.totalBypassedHits(),
-					r.lastHitAt() != null ? Timestamp.from(r.lastHitAt()) : null
+					r.lastHitAt() != null ? Timestamp.from(r.lastHitAt()) : null,
+					r.deterrenceState() != null ? r.deterrenceState() : MitigationUaRule.DETERRENCE_OBSERVING
 			);
 			return null;
 		});
@@ -219,12 +223,29 @@ public class MitigationUaRuleRepository {
 		}
 	}
 
+	public List<MitigationUaRule> findAllByHashOrRawUserAgent(String userAgentHash, String rawUserAgent) {
+		String sha = userAgentHash != null && !userAgentHash.isBlank()
+				? userAgentHash.trim()
+				: (rawUserAgent != null && !rawUserAgent.isBlank() ? UserAgentMemoryRepository.computeSha256Hex(rawUserAgent.trim()) : null);
+		if (sha == null) {
+			return List.of();
+		}
+		return jdbcTemplate.query(
+				"SELECT * FROM mitigation_ua_rules WHERE user_agent_hash = ? ORDER BY created_at DESC, id DESC",
+				ROW_MAPPER, sha);
+	}
+
 	public record UaDeterrenceUpdate(
 			long id,
 			long totalBlockedHits,
 			long totalBypassedHits,
-			Instant lastHitAt
-	) {}
+			Instant lastHitAt,
+			String deterrenceState
+	) {
+		public UaDeterrenceUpdate(long id, long totalBlockedHits, long totalBypassedHits, Instant lastHitAt) {
+			this(id, totalBlockedHits, totalBypassedHits, lastHitAt, MitigationUaRule.DETERRENCE_OBSERVING);
+		}
+	}
 
 	public void batchUpdateDeterrenceTelemetry(List<UaDeterrenceUpdate> updates, Instant now) {
 		if (updates == null || updates.isEmpty()) {
@@ -235,6 +256,7 @@ public class MitigationUaRuleRepository {
 				SET total_blocked_hits = ?,
 				    total_bypassed_hits = ?,
 				    last_hit_at = ?,
+				    deterrence_state = ?,
 				    updated_at = ?
 				WHERE id = ?
 				""";
@@ -248,8 +270,9 @@ public class MitigationUaRuleRepository {
 				} else {
 					ps.setNull(3, java.sql.Types.TIMESTAMP);
 				}
-				ps.setTimestamp(4, tsNow);
-				ps.setLong(5, u.id());
+				ps.setString(4, u.deterrenceState() != null ? u.deterrenceState() : MitigationUaRule.DETERRENCE_OBSERVING);
+				ps.setTimestamp(5, tsNow);
+				ps.setLong(6, u.id());
 			});
 			return null;
 		});

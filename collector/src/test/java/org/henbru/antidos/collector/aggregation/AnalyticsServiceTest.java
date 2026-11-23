@@ -555,4 +555,68 @@ class AnalyticsServiceTest {
 		assertNotNull(dto.advisorReport(), "Advisor report must be computed when activeTab is advisor");
 		assertNull(dto.userAgents(), "User agents must not be computed when activeTab is advisor");
 	}
+
+	@Test
+	void testUaMitigationTimelineAndCompositionMerged() {
+		Instant bucket1 = Instant.now().minus(2, ChronoUnit.HOURS).truncatedTo(ChronoUnit.HOURS);
+		Instant bucket2 = Instant.now().minus(1, ChronoUnit.HOURS).truncatedTo(ChronoUnit.HOURS);
+
+		List<TimelinePoint> baseTimeline = List.of(
+				new TimelinePoint(bucket1, 1000, 900, 100, 0),
+				new TimelinePoint(bucket2, 2000, 1800, 200, 0)
+		);
+
+		org.henbru.antidos.collector.storage.UaMitigationRollupRepository mockUaRepo =
+				Mockito.mock(org.henbru.antidos.collector.storage.UaMitigationRollupRepository.class);
+
+		List<org.henbru.antidos.collector.storage.UaMitigationRollupRepository.UaTimelinePoint> mockUaTimeline = List.of(
+				new org.henbru.antidos.collector.storage.UaMitigationRollupRepository.UaTimelinePoint(bucket1, 500, 500, 0, 2),
+				new org.henbru.antidos.collector.storage.UaMitigationRollupRepository.UaTimelinePoint(bucket2, 1000, 1000, 0, 3)
+		);
+
+		when(rollupRepository.findTimeline(any(), any(), any(), any())).thenReturn(baseTimeline);
+		when(mockUaRepo.findTimeline(any(), any(), any(), any())).thenReturn(mockUaTimeline);
+		when(mockUaRepo.findSummary(any(), any(), any(), any())).thenReturn(
+				new org.henbru.antidos.collector.storage.UaMitigationRollupRepository.UaRollupSummary(1500, 1500, 0, 3)
+		);
+
+		List<SubnetRollupRepository.RawCompositionRow> mockComp = List.of(
+				new SubnetRollupRepository.RawCompositionRow(ClientType.UNKNOWN, 3000, 300, 20)
+		);
+		when(rollupRepository.findTrafficComposition(any(), any(), any(), any())).thenReturn(mockComp);
+
+		AnalyticsService service = new AnalyticsService(
+				rollupRepository, rollupAggregationService, null, advisorService,
+				null, null, null, null, null, null, mockUaRepo
+		);
+
+		AnalyticsDashboardDto dto = service.getDashboardAnalytics(24, null, null);
+
+		assertNotNull(dto);
+		// Base: 1000 + 2000 = 3000 total, 100 + 200 = 300 blocked.
+		// UA: 500 + 1000 = 1500 total, 500 + 1000 = 1500 blocked.
+		// Merged: total = 4500, blocked = 1800.
+		assertEquals(4500L, dto.totalRequests());
+		assertEquals(1800L, dto.totalBlocked());
+
+		// Timeline points merged per bucket
+		assertEquals(2, dto.timeline().size());
+		assertEquals(1500L, dto.timeline().get(0).totalRequests());
+		assertEquals(600L, dto.timeline().get(0).blockedRequests());
+		assertEquals(3000L, dto.timeline().get(1).totalRequests());
+		assertEquals(1200L, dto.timeline().get(1).blockedRequests());
+
+		// Traffic composition includes Dynamic UA Mitigation
+		assertEquals(2, dto.composition().size());
+		org.henbru.antidos.collector.model.TrafficCompositionPoint uaPoint = dto.composition().stream()
+				.filter(c -> c.clientType() == ClientType.DYNAMIC_UA_MITIGATION)
+				.findFirst()
+				.orElseThrow();
+		assertEquals("Dynamic UA Mitigation", uaPoint.label());
+		assertEquals("🛡️", uaPoint.icon());
+		assertEquals(1500L, uaPoint.totalRequests());
+		assertEquals(1500L, uaPoint.blockedRequests());
+		// 1500 / 4500 = 33.3%
+		assertEquals(33.3, uaPoint.percentage());
+	}
 }

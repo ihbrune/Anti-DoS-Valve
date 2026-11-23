@@ -71,6 +71,12 @@ class DatabaseMigrationAndRepositoryTest {
 	@Autowired
 	private org.henbru.antidos.collector.storage.DailyReportNoteRepository dailyReportNoteRepository;
 
+	@Autowired
+	private org.henbru.antidos.collector.storage.MitigationUaRuleRepository mitigationUaRuleRepository;
+
+	@Autowired
+	private org.henbru.antidos.collector.storage.UaMitigationRollupRepository uaMitigationRollupRepository;
+
 	@Test
 	void testHeartbeatRepositoryUpsertAndFind() {
 		Instant now = Instant.now();
@@ -1593,6 +1599,76 @@ class DatabaseMigrationAndRepositoryTest {
 			jdbcTemplate.update("DELETE FROM client_events WHERE server_id IN ('DEDUP-SRV-1', 'DEDUP-SRV-2')");
 			jdbcTemplate.update("DELETE FROM slot_snapshots WHERE server_id IN ('DEDUP-SRV-1', 'DEDUP-SRV-2')");
 			jdbcTemplate.update("DELETE FROM monitored_valves WHERE server_id IN ('DEDUP-SRV-1', 'DEDUP-SRV-2')");
+		}
+	}
+
+	@Test
+	void testUaMitigationRollupRepositoryAndDeterrence() {
+		Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+		String testUa = "Mozilla/5.0 (compatible; TestDeterrenceBot/1.0; +https://example.com/bot)";
+		String testSha = org.henbru.antidos.collector.storage.UserAgentMemoryRepository.computeSha256Hex(testUa);
+		int testHash32 = org.henbru.antidos.collector.storage.UserAgentMemoryRepository.computeUaHash32(testUa);
+
+		try {
+			// 1. Create UA Rule with deterrenceState
+			org.henbru.antidos.collector.model.MitigationUaRule rule = new org.henbru.antidos.collector.model.MitigationUaRule(
+					null, testSha, testHash32, testUa, "OTHER", "ALL",
+					org.henbru.antidos.collector.model.MitigationUaRule.STATUS_ACTIVE,
+					org.henbru.antidos.collector.model.MitigationUaRule.SOURCE_MANUAL,
+					null, "Test deterrence", now, now, now.plus(1, ChronoUnit.HOURS),
+					null, null, 100L, 0L, now,
+					org.henbru.antidos.collector.model.MitigationUaRule.DETERRENCE_OBSERVING
+			);
+
+			org.henbru.antidos.collector.model.MitigationUaRule saved = mitigationUaRuleRepository.upsertRule(rule);
+			assertNotNull(saved.id());
+			assertEquals(org.henbru.antidos.collector.model.MitigationUaRule.DETERRENCE_OBSERVING, saved.deterrenceState());
+
+			// 2. Batch update deterrence to PERSISTENT
+			mitigationUaRuleRepository.batchUpdateDeterrenceTelemetry(List.of(
+					new org.henbru.antidos.collector.storage.MitigationUaRuleRepository.UaDeterrenceUpdate(
+							saved.id(), 250L, 0L, now, org.henbru.antidos.collector.model.MitigationUaRule.DETERRENCE_PERSISTENT
+					)
+			), now);
+
+			Optional<org.henbru.antidos.collector.model.MitigationUaRule> updatedOpt =
+					mitigationUaRuleRepository.findById(saved.id());
+			assertTrue(updatedOpt.isPresent());
+			assertEquals(250L, updatedOpt.get().totalBlockedHits());
+			assertEquals(org.henbru.antidos.collector.model.MitigationUaRule.DETERRENCE_PERSISTENT, updatedOpt.get().deterrenceState());
+
+			// 3. Test UaMitigationRollupRepository batch upsert & query
+			Instant bucket1 = now.minus(2, ChronoUnit.HOURS).truncatedTo(ChronoUnit.HOURS);
+			Instant bucket2 = now.minus(1, ChronoUnit.HOURS).truncatedTo(ChronoUnit.HOURS);
+
+			uaMitigationRollupRepository.batchUpsert(List.of(
+					new org.henbru.antidos.collector.model.UaMitigationRollup(
+							bucket1, "TEST-SRV-1", "ALL", 500L, 500L, 0L, 1
+					),
+					new org.henbru.antidos.collector.model.UaMitigationRollup(
+							bucket2, "TEST-SRV-1", "ALL", 1200L, 1200L, 0L, 2
+					)
+			));
+
+			List<org.henbru.antidos.collector.storage.UaMitigationRollupRepository.UaTimelinePoint> timeline =
+					uaMitigationRollupRepository.findTimeline(List.of("TEST-SRV-1"), null, now.minus(3, ChronoUnit.HOURS), now);
+			assertEquals(2, timeline.size());
+			assertEquals(500L, timeline.get(0).totalRequests());
+			assertEquals(500L, timeline.get(0).blockedRequests());
+			assertEquals(1200L, timeline.get(1).totalRequests());
+			assertEquals(1200L, timeline.get(1).blockedRequests());
+
+			org.henbru.antidos.collector.storage.UaMitigationRollupRepository.UaRollupSummary summary =
+					uaMitigationRollupRepository.findSummary(List.of("TEST-SRV-1"), null, now.minus(3, ChronoUnit.HOURS), now);
+			assertEquals(1700L, summary.totalRequests());
+			assertEquals(1700L, summary.blockedRequests());
+
+			// 4. Test deleteOlderThan
+			int deleted = uaMitigationRollupRepository.deleteOlderThan(bucket2);
+			assertEquals(1, deleted);
+		} finally {
+			jdbcTemplate.update("DELETE FROM ua_mitigation_rollups WHERE server_id = 'TEST-SRV-1'");
+			jdbcTemplate.update("DELETE FROM mitigation_ua_rules WHERE user_agent_hash = ?", testSha);
 		}
 	}
 }

@@ -31,6 +31,7 @@ public class RollupAggregationService {
 	private final SubnetProfileService subnetProfileService;
 	private final UserAgentMemoryService userAgentMemoryService;
 	private final org.henbru.antidos.collector.storage.EndpointRollupRepository endpointRollupRepository;
+	private final org.henbru.antidos.collector.storage.UaMitigationRollupRepository uaMitigationRollupRepository;
 	private final java.util.concurrent.atomic.AtomicBoolean realtimePending = new java.util.concurrent.atomic.AtomicBoolean(false);
 	private final java.util.concurrent.atomic.AtomicBoolean realtimeWorkerRunning = new java.util.concurrent.atomic.AtomicBoolean(false);
 
@@ -41,7 +42,8 @@ public class RollupAggregationService {
 			CollectorProperties properties,
 			@Autowired(required = false) SubnetProfileService subnetProfileService,
 			@Autowired(required = false) UserAgentMemoryService userAgentMemoryService,
-			@Autowired(required = false) org.henbru.antidos.collector.storage.EndpointRollupRepository endpointRollupRepository
+			@Autowired(required = false) org.henbru.antidos.collector.storage.EndpointRollupRepository endpointRollupRepository,
+			@Autowired(required = false) org.henbru.antidos.collector.storage.UaMitigationRollupRepository uaMitigationRollupRepository
 	) {
 		this.jdbcTemplate = jdbcTemplate;
 		this.rollupRepository = rollupRepository;
@@ -49,6 +51,18 @@ public class RollupAggregationService {
 		this.subnetProfileService = subnetProfileService;
 		this.userAgentMemoryService = userAgentMemoryService;
 		this.endpointRollupRepository = endpointRollupRepository;
+		this.uaMitigationRollupRepository = uaMitigationRollupRepository;
+	}
+
+	public RollupAggregationService(
+			JdbcTemplate jdbcTemplate,
+			SubnetRollupRepository rollupRepository,
+			CollectorProperties properties,
+			SubnetProfileService subnetProfileService,
+			UserAgentMemoryService userAgentMemoryService,
+			org.henbru.antidos.collector.storage.EndpointRollupRepository endpointRollupRepository
+	) {
+		this(jdbcTemplate, rollupRepository, properties, subnetProfileService, userAgentMemoryService, endpointRollupRepository, null);
 	}
 
 	public RollupAggregationService(
@@ -194,7 +208,63 @@ public class RollupAggregationService {
 			}
 		}
 
+		if (uaMitigationRollupRepository != null) {
+			try {
+				aggregateUaMitigationWindow(bucketStart, bucketEnd);
+			} catch (Exception e) {
+				log.debug("User-Agent mitigation rollup skipped for [{} -> {}]: {}", bucketStart, bucketEnd, e.getMessage());
+			}
+		}
+
 		return rollups.size();
+	}
+
+	/**
+	 * Aggregates client events for the specified time window into dynamic User-Agent mitigation rollups.
+	 *
+	 * @param bucketStart Start boundary (inclusive)
+	 * @param bucketEnd   End boundary (exclusive)
+	 * @return Number of UA mitigation rollups persisted
+	 */
+	public int aggregateUaMitigationWindow(Instant bucketStart, Instant bucketEnd) {
+		if (uaMitigationRollupRepository == null || bucketStart == null || bucketEnd == null) {
+			return 0;
+		}
+
+		String sql = """
+				SELECT
+				    server_id,
+				    valve_name,
+				    SUM(request_count) AS total_requests,
+				    SUM(CASE WHEN status = 'BLOCKED' THEN request_count ELSE 0 END) AS blocked_requests,
+				    SUM(CASE WHEN status = 'MARKED' THEN request_count ELSE 0 END) AS marked_requests,
+				    COUNT(DISTINCT client_key) AS distinct_ua_rules
+				FROM client_events
+				WHERE slot_time >= ? AND slot_time < ?
+				  AND client_key LIKE 'UA:%'
+				GROUP BY server_id, valve_name
+				""";
+
+		List<org.henbru.antidos.collector.model.UaMitigationRollup> list = jdbcTemplate.query(
+				sql,
+				(rs, rowNum) -> new org.henbru.antidos.collector.model.UaMitigationRollup(
+						bucketStart,
+						rs.getString("server_id"),
+						rs.getString("valve_name"),
+						rs.getLong("total_requests"),
+						rs.getLong("blocked_requests"),
+						rs.getLong("marked_requests"),
+						rs.getInt("distinct_ua_rules")
+				),
+				Timestamp.from(bucketStart),
+				Timestamp.from(bucketEnd)
+		);
+
+		if (!list.isEmpty()) {
+			uaMitigationRollupRepository.batchUpsert(list);
+			log.info("Persisted {} UA mitigation rollups for window [{} -> {}]", list.size(), bucketStart, bucketEnd);
+		}
+		return list.size();
 	}
 
 	/**
@@ -508,6 +578,13 @@ public class RollupAggregationService {
 				if (deletedEp > 0) {
 					log.info("Purged {} historical endpoint rollups older than {} days",
 							deletedEp, properties.getRollupRetentionDays());
+				}
+			}
+			if (uaMitigationRollupRepository != null) {
+				int deletedUaMit = uaMitigationRollupRepository.deleteOlderThan(cutoff);
+				if (deletedUaMit > 0) {
+					log.info("Purged {} historical UA mitigation rollups older than {} days",
+							deletedUaMit, properties.getRollupRetentionDays());
 				}
 			}
 		} catch (Exception e) {

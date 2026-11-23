@@ -1816,10 +1816,11 @@
                         <thead>
                             <tr>
                                 <th>User-Agent Signature</th>
-                                <th>Hash (32-bit)</th>
                                 <th>Hash (32-bit FNV-1a)</th>
                                 <th>Source</th>
-                                <th>Reason</th>
+                                <th style="text-align: right;">Blocked Hits</th>
+                                <th>Last Hit</th>
+                                <th>Deterrence</th>
                                 <th>Remaining TTL</th>
                                 <th style="text-align: right;">Actions</th>
                             </tr>
@@ -1831,12 +1832,9 @@
                                     <div style="font-weight: 600;" th:text="${ur.shortUserAgent()}"
                                         th:title="${ur.rawUserAgent}">UA</div>
                                     <div style="font-size: 10px; color: var(--text-muted);">
-                                        <span th:text="${ur.browserFamily}">OTHER</span> &bull; SHA-256: <code
-                                            th:text="${ur.shortSha256()}">abc123</code>
                                         <span th:text="${ur.browserFamily}">OTHER</span>
                                     </div>
                                 </td>
-                                <td style="font-family: ui-monospace, monospace;">
                                 <td style="font-family: ui-monospace, monospace; white-space: nowrap;">
                                     <span class="badge badge-secondary" th:text="${ur.hexHash32()}">0x1234abcd</span>
                                     <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;"
@@ -1847,11 +1845,22 @@
                                         th:classappend="${ur.source == 'AUTO_UA' ? 'badge-purple' : 'badge-info'}"
                                         th:text="${ur.source}">MANUAL</span>
                                 </td>
-                                <td th:text="${ur.reason}">Manual test</td>
+                                <td style="text-align: right; font-weight: 600;"
+                                    th:text="${#numbers.formatInteger(ur.totalBlockedHits, 1, 'COMMA')}">0</td>
+                                <td style="font-size: 11px; color: var(--text-muted); white-space: nowrap;"
+                                    th:text="${ur.lastHitAt != null ? #temporals.format(ur.lastHitAt, 'dd.MM. HH:mm:ss') : '-'}">-</td>
+                                <td>
+                                    <span class="badge" th:classappend="${ur.deterrenceBadgeClass()}"
+                                        th:text="${ur.deterrenceState}">OBSERVING</span>
+                                </td>
                                 <td style="font-family: ui-monospace, monospace; white-space: nowrap;">
                                     <span th:text="${ur.formattedRemaining(now)}">2h</span>
                                 </td>
                                 <td style="text-align: right; white-space: nowrap;">
+                                    <button type="button" class="btn" style="padding: 3px 8px; font-size: 11px;"
+                                        th:attr="hx-get=@{/analytics/user-agent-drilldown(ua=${ur.rawUserAgent},hours=6)}"
+                                        hx-target="#ua-drilldown-modal-container" hx-swap="innerHTML"
+                                        title="Inspect traffic, deterrence, and historical blocks">&#x1F4C8; Timeline</button>
                                     <button type="button" class="btn" style="padding: 3px 8px; font-size: 11px;"
                                         th:attr="hx-post=@{/mitigation/ua/{id}/extend(id=${ur.id},additionalMinutes=60)}"
                                         hx-target="#mitigation-dashboard-container" hx-swap="outerHTML"
@@ -1910,19 +1919,20 @@
                         <thead>
                             <tr>
                                 <th>User-Agent</th>
-                                <th>Hash</th>
                                 <th>Hash (32-bit FNV-1a)</th>
                                 <th>Status</th>
+                                <th style="text-align: right;">Blocked Hits</th>
+                                <th>Last Hit</th>
+                                <th>Deterrence</th>
                                 <th>Reason</th>
-                                <th>Timeline</th>
-                                <th style="text-align: right;">Re-Block</th>
+                                <th>Lifecycle</th>
+                                <th style="text-align: right;">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr th:each="uh : ${historicalUaRules}">
                                 <td style="font-family: ui-monospace, monospace; max-width: 380px; word-break: break-all;"
                                     th:text="${uh.shortUserAgent()}" th:title="${uh.rawUserAgent}">UA</td>
-                                <td style="font-family: ui-monospace, monospace;" th:text="${uh.hexHash32()}">0x0</td>
                                 <td style="font-family: ui-monospace, monospace; white-space: nowrap;">
                                     <span th:text="${uh.hexHash32()}">0x0</span>
                                     <div style="font-size: 10px; color: var(--text-muted);"
@@ -1936,6 +1946,14 @@
                                         style="font-size: 10px; color: var(--text-muted);"
                                         th:text="${uh.revokedReason}">Revoked</div>
                                 </td>
+                                <td style="text-align: right; font-weight: 600;"
+                                    th:text="${#numbers.formatInteger(uh.totalBlockedHits, 1, 'COMMA')}">0</td>
+                                <td style="font-size: 11px; color: var(--text-muted); white-space: nowrap;"
+                                    th:text="${uh.lastHitAt != null ? #temporals.format(uh.lastHitAt, 'dd.MM. HH:mm:ss') : '-'}">-</td>
+                                <td>
+                                    <span class="badge" th:classappend="${uh.deterrenceBadgeClass()}"
+                                        th:text="${uh.deterrenceState}">DETERRED</span>
+                                </td>
                                 <td th:text="${uh.reason}">Reason</td>
                                 <td
                                     style="font-size: 11px; color: var(--text-muted); font-family: ui-monospace, monospace; white-space: nowrap;">
@@ -1945,8 +1963,15 @@
                                     <div th:if="${uh.revokedAt != null}"
                                         th:text="'Revoked: ' + ${#temporals.format(uh.revokedAt, 'yyyy-MM-dd HH:mm')}">
                                         Revoked</div>
+                                    <div th:if="${uh.status == 'EXPIRED' and uh.expiresAt != null}"
+                                        th:text="'Expired: ' + ${#temporals.format(uh.expiresAt, 'yyyy-MM-dd HH:mm')}">
+                                        Expired</div>
                                 </td>
                                 <td style="text-align: right; white-space: nowrap;">
+                                    <button type="button" class="btn" style="padding: 3px 8px; font-size: 11px;"
+                                        th:attr="hx-get=@{/analytics/user-agent-drilldown(ua=${uh.rawUserAgent},hours=24)}"
+                                        hx-target="#ua-drilldown-modal-container" hx-swap="innerHTML"
+                                        title="Inspect traffic, deterrence, and historical blocks">&#x1F4C8; Timeline</button>
                                     <button type="button" class="btn" style="padding: 3px 8px; font-size: 11px;"
                                         th:attr="hx-post=@{/mitigation/ua/{id}/extend(id=${uh.id},additionalMinutes=60)}"
                                         hx-target="#mitigation-dashboard-container" hx-swap="outerHTML"

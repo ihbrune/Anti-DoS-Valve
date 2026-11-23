@@ -1795,6 +1795,7 @@ public class MitigationService {
 			return;
 		}
 
+		Instant recentCutoff = now.minusSeconds(DETERRENCE_WINDOW_SECONDS);
 		List<MitigationUaRuleRepository.UaDeterrenceUpdate> uaUpdates = new ArrayList<>();
 		for (MitigationUaRule rule : activeUaRules) {
 			DeterrenceStatsAccumulator acc = statsByRuleId.get(rule.id());
@@ -1806,10 +1807,20 @@ public class MitigationService {
 					? lastHit
 					: rule.lastHitAt();
 
+			String state;
+			if (effectiveLastHit != null && effectiveLastHit.isAfter(recentCutoff) && effectiveHits > 0) {
+				state = MitigationUaRule.DETERRENCE_PERSISTENT;
+			} else if (rule.createdAt().isBefore(recentCutoff)) {
+				state = MitigationUaRule.DETERRENCE_DETERRED;
+			} else {
+				state = MitigationUaRule.DETERRENCE_OBSERVING;
+			}
+
 			if (effectiveHits != rule.totalBlockedHits()
-					|| !Objects.equals(effectiveLastHit, rule.lastHitAt())) {
+					|| !Objects.equals(effectiveLastHit, rule.lastHitAt())
+					|| !Objects.equals(state, rule.deterrenceState())) {
 				uaUpdates.add(new MitigationUaRuleRepository.UaDeterrenceUpdate(
-						rule.id(), effectiveHits, rule.totalBypassedHits(), effectiveLastHit));
+						rule.id(), effectiveHits, rule.totalBypassedHits(), effectiveLastHit, state));
 			}
 		}
 

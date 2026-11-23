@@ -24,7 +24,8 @@ public record MitigationUaRule(
 		String revokedReason,
 		long totalBlockedHits,
 		long totalBypassedHits,
-		Instant lastHitAt
+		Instant lastHitAt,
+		String deterrenceState
 ) {
 	public static final String STATUS_ACTIVE = "ACTIVE";
 	public static final String STATUS_EXPIRED = "EXPIRED";
@@ -32,6 +33,36 @@ public record MitigationUaRule(
 
 	public static final String SOURCE_MANUAL = "MANUAL";
 	public static final String SOURCE_AUTO_UA = "AUTO_UA";
+
+	public static final String DETERRENCE_OBSERVING = "OBSERVING";
+	public static final String DETERRENCE_DETERRED = "DETERRED";
+	public static final String DETERRENCE_PERSISTENT = "PERSISTENT";
+
+	public MitigationUaRule(
+			Long id,
+			String userAgentHash,
+			int uaHash32,
+			String rawUserAgent,
+			String browserFamily,
+			String targetScope,
+			String status,
+			String source,
+			String batchId,
+			String reason,
+			Instant createdAt,
+			Instant updatedAt,
+			Instant expiresAt,
+			Instant revokedAt,
+			String revokedReason,
+			long totalBlockedHits,
+			long totalBypassedHits,
+			Instant lastHitAt
+	) {
+		this(id, userAgentHash, uaHash32, rawUserAgent, browserFamily, targetScope,
+				status, source, batchId, reason, createdAt, updatedAt, expiresAt,
+				revokedAt, revokedReason, totalBlockedHits, totalBypassedHits, lastHitAt,
+				DETERRENCE_OBSERVING);
+	}
 
 	public boolean isActiveAt(Instant now) {
 		return STATUS_ACTIVE.equalsIgnoreCase(status) && expiresAt != null && expiresAt.isAfter(now);
@@ -107,6 +138,16 @@ public record MitigationUaRule(
 		return "bg-sky-500/20 text-sky-300 border border-sky-500/40";
 	}
 
+	public String deterrenceBadgeClass() {
+		if (DETERRENCE_DETERRED.equalsIgnoreCase(deterrenceState)) {
+			return "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40";
+		}
+		if (DETERRENCE_PERSISTENT.equalsIgnoreCase(deterrenceState)) {
+			return "bg-rose-500/20 text-rose-300 border border-rose-500/40";
+		}
+		return "bg-amber-500/20 text-amber-300 border border-amber-500/40";
+	}
+
 	// JavaBean getters for Thymeleaf / SpringEL compatibility
 	public Long getId() { return id; }
 	public String getUserAgentHash() { return userAgentHash; }
@@ -126,4 +167,5 @@ public record MitigationUaRule(
 	public long getTotalBlockedHits() { return totalBlockedHits; }
 	public long getTotalBypassedHits() { return totalBypassedHits; }
 	public Instant getLastHitAt() { return lastHitAt; }
+	public String getDeterrenceState() { return deterrenceState; }
 }

@@ -202,6 +202,7 @@
             'TOR_EXIT_NODE': { bg: '#a855f7', label: 'Tor Anonymizer' },
             'PRIVATE_NETWORK': { bg: '#64748b', label: 'Private Network' },
             'INTERNAL_NETWORK': { bg: '#0284c7', label: 'Internal / Campus' },
+            'DYNAMIC_UA_MITIGATION': { bg: '#e11d48', label: 'Dynamic UA Mitigation' },
             'UNKNOWN': { bg: '#94a3b8', label: 'Standard / Unclassified' }
         };
 

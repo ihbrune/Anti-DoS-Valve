@@ -29,6 +29,13 @@
                             <span>&#x1F916;</span> Auto-Heuristic: <span
                                 th:text="${drilldown.liveAutoVerdict.displayName()}">Standard</span>
                         </span>
+                        <span th:if="${drilldown != null and drilldown.hasActiveBlockRule()}" class="badge"
+                            th:classappend="${drilldown.activeBlockRule().get().statusBadgeClass()}" style="font-size: 11px;">
+                            <span>&#x1F6E1;&#xFE0F;</span> Blocked (<span
+                                th:text="${drilldown.activeBlockRule().get().formattedRemaining(T(java.time.Instant).now())}">30m</span> remaining &bull; <span
+                                th:text="${#numbers.formatInteger(drilldown.activeBlockRule().get().totalBlockedHits, 1, 'COMMA')}">0</span> hits &bull; <span
+                                th:text="${drilldown.activeBlockRule().get().deterrenceState}">PERSISTENT</span>)
+                        </span>
                     </div>
                     <div th:if="${drilldown != null}"
                         style="margin-top: 8px; padding: 8px 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 4px; font-family: monospace; font-size: 11.5px; word-break: break-all; color: var(--text-primary);"
@@ -211,6 +218,11 @@
                     </div>
                     <div style="display: flex; gap: 6px;">
                         <button type="button" class="btn"
+                            th:classappend="${drilldown.lookbackHours == 6 ? 'btn-primary' : ''}"
+                            style="padding: 3px 9px; font-size: 11px;"
+                            th:attr="hx-get=@{/analytics/user-agent-drilldown(ua=${drilldown.userAgent},hours=6)}"
+                            hx-target="#ua-modal-wrapper" hx-swap="outerHTML">6h (Live 10m)</button>
+                        <button type="button" class="btn"
                             th:classappend="${drilldown.lookbackHours == 24 ? 'btn-primary' : ''}"
                             style="padding: 3px 9px; font-size: 11px;"
                             th:attr="hx-get=@{/analytics/user-agent-drilldown(ua=${drilldown.userAgent},hours=24)}"
@@ -225,6 +237,27 @@
                             style="padding: 3px 9px; font-size: 11px;"
                             th:attr="hx-get=@{/analytics/user-agent-drilldown(ua=${drilldown.userAgent},hours=720)}"
                             hx-target="#ua-modal-wrapper" hx-swap="outerHTML">30d</button>
+                    </div>
+                </div>
+
+                <!-- Traffic & Mitigation Trend Chart Section -->
+                <div th:if="${!#lists.isEmpty(drilldown.hourlyHistory)}"
+                    style="padding: 14px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); margin-bottom: 18px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
+                            <span>&#x1F4C8;</span> Traffic &amp; Mitigation Trend
+                        </span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span th:if="${drilldown.hasActiveBlockRule()}" class="badge"
+                                th:classappend="${drilldown.activeBlockRule().get().deterrenceBadgeClass()}" style="font-size: 10.5px;">
+                                Deterrence: <span th:text="${drilldown.activeBlockRule().get().deterrenceState}">PERSISTENT</span>
+                            </span>
+                            <span style="font-size: 11px; color: var(--text-muted);"
+                                th:text="${drilldown.lookbackHours <= 6 ? '10-minute resolution' : '1-hour resolution'}">1-hour resolution</span>
+                        </div>
+                    </div>
+                    <div style="height: 180px; position: relative;">
+                        <canvas id="uaDrilldownTrendChart"></canvas>
                     </div>
                 </div>
 
@@ -318,6 +351,100 @@
                 </a>
                 <button type="button" class="btn" onclick="closeUaModal(event)">Close</button>
             </div>
+
+            <!-- Client-Side Trend Chart Initialization -->
+            <script th:inline="javascript">
+                (function() {
+                    if (typeof Chart === 'undefined') return;
+                    const canvas = document.getElementById('uaDrilldownTrendChart');
+                    if (!canvas) return;
+
+                    /*[# th:if="${!#lists.isEmpty(drilldown.hourlyHistory)}"]*/
+                    const rawHistory = /*[[${drilldown.hourlyHistory}]]*/ [];
+                    // Reverse descending order to chronological left-to-right
+                    const history = rawHistory.slice().reverse();
+                    const labels = history.map(p => p.hourLabel || '');
+                    const blockedReqs = history.map(p => p.blockedRequests || 0);
+                    const markedReqs = history.map(p => p.markedRequests || 0);
+                    const allowedReqs = history.map(p => Math.max(0, (p.totalRequests || 0) - (p.blockedRequests || 0) - (p.markedRequests || 0)));
+
+                    const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+                    const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
+                    const textColor = isDark ? '#94a3b8' : '#64748b';
+
+                    new Chart(canvas, {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                {
+                                    label: 'Blocked',
+                                    data: blockedReqs,
+                                    backgroundColor: 'rgba(244, 63, 94, 0.85)',
+                                    borderColor: '#f43f5e',
+                                    borderWidth: 1,
+                                    stack: 'traffic'
+                                },
+                                {
+                                    label: 'Marked',
+                                    data: markedReqs,
+                                    backgroundColor: 'rgba(245, 158, 11, 0.85)',
+                                    borderColor: '#f59e0b',
+                                    borderWidth: 1,
+                                    stack: 'traffic'
+                                },
+                                {
+                                    label: 'Allowed',
+                                    data: allowedReqs,
+                                    backgroundColor: 'rgba(59, 130, 246, 0.65)',
+                                    borderColor: '#3b82f6',
+                                    borderWidth: 1,
+                                    stack: 'traffic'
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            interaction: {
+                                mode: 'index',
+                                intersect: false
+                            },
+                            scales: {
+                                x: {
+                                    stacked: true,
+                                    grid: { color: gridColor },
+                                    ticks: { color: textColor, font: { size: 10 } }
+                                },
+                                y: {
+                                    beginAtZero: true,
+                                    stacked: true,
+                                    grid: { color: gridColor },
+                                    ticks: { color: textColor, font: { size: 10 } }
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    position: 'top',
+                                    labels: { color: textColor, font: { size: 11 }, boxWidth: 12 }
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        footer: function(tooltipItems) {
+                                            let sum = 0;
+                                            tooltipItems.forEach(function(item) {
+                                                sum += item.parsed.y;
+                                            });
+                                            return 'Total: ' + sum.toLocaleString();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    /*[/]*/
+                })();
+            </script>
         </div>
     </div>
 

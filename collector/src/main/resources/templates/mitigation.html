@@ -7,6 +7,8 @@
     <title>Active Mitigation &amp; Dynamic CIDR Blocks - Anti-DoS Collector</title>
     <link rel="stylesheet" th:href="@{/css/collector.css}">
     <script th:src="@{/js/theme.js}"></script>
+    <script th:src="@{/js/chart.umd.min.js}"></script>
+    <script th:src="@{/js/collector-charts.js}"></script>
     <script th:src="@{/js/collector-history.js}"></script>
     <script th:src="@{/js/collector-notifications.js}" defer></script>
     <script th:src="@{/js/collector-tables.js}" defer></script>
@@ -35,7 +37,8 @@
                     <a href="/offenders" class="btn" title="Detailed Top Offender &amp; Subnet Rollup Tables">
                         <span>&#x26A0;</span> Top Offenders
                     </a>
-                    <a href="/mitigation" class="btn active" title="Active Dynamic CIDR Mitigation &amp; Deterrence Tracking">
+                    <a href="/mitigation" class="btn active"
+                        title="Active Dynamic CIDR Mitigation &amp; Deterrence Tracking">
                         <span>&#x1F6E1;&#xFE0F;</span> Mitigation
                     </a>
                     <a href="/profiles" class="btn" title="Subnet Traffic Profiles, 30-Day Baselines &amp; Surge Radar">
@@ -69,7 +72,8 @@
                         <span>&#x1F552;</span>
                         <span class="history-badge-count" style="display:none;"></span>
                     </button>
-                    <button type="button" class="nav-util-btn notification-toggle-btn" onclick="toggleNotificationPermission()"
+                    <button type="button" class="nav-util-btn notification-toggle-btn"
+                        onclick="toggleNotificationPermission()"
                         title="Desktop &amp; In-App Notifications for Autonomous Defense"
                         aria-label="Toggle Autonomous Defense Notifications">
                         <span>&#x1F514;</span>
@@ -77,10 +81,8 @@
                     </button>
                     <button type="button" class="nav-util-btn"
                         hx-get="/fragments/help?doc=ui&section=active-fleet-mitigation-deterrence-monitor-mitigation"
-                        hx-target="#help-drawer-content"
-                        onclick="openHelpDrawer()"
-                        title="Open Active Fleet Mitigation Help Guide"
-                        aria-label="Help Guide">
+                        hx-target="#help-drawer-content" onclick="openHelpDrawer()"
+                        title="Open Active Fleet Mitigation Help Guide" aria-label="Help Guide">
                         <span>&#x2753;</span>
                     </button>
                     <a href="/help" class="nav-util-btn" title="Full offline documentation repository"
@@ -106,18 +108,18 @@
                     <span>&#x1F6E1;&#xFE0F;</span> Active Fleet Mitigation &amp; Deterrence Monitor
                 </div>
                 <div style="font-size: 13px; color: var(--text-muted); margin-top: 3px;">
-                    Self-expiring dynamic CIDR blocks, ASN active subnet batch expansion, pre-flight collateral damage guardrails, and attacker persistence tracking
+                    Self-expiring dynamic CIDR blocks, ASN active subnet batch expansion, pre-flight collateral damage
+                    guardrails, and attacker persistence tracking
                 </div>
             </div>
             <div style="display: flex; align-items: center; gap: 8px;">
-                <button type="button" class="btn"
-                        th:attr="hx-get=@{/fragments/mitigation-content(tab=${activeTab})}"
-                        hx-target="#mitigation-dashboard-container"
-                        hx-swap="outerHTML"
-                        title="Refresh active rules and deterrence metrics">
+                <button type="button" class="btn" th:attr="hx-get=@{/fragments/mitigation-content(tab=${activeTab})}"
+                    hx-target="#mitigation-dashboard-container" hx-swap="outerHTML"
+                    title="Refresh active rules and deterrence metrics">
                     <span>&#x21BB;</span> Refresh View
                 </button>
-                <a href="/api/v1/mitigation/rules" target="_blank" class="btn" title="View active mitigation rules JSON payload">
+                <a href="/api/v1/mitigation/rules" target="_blank" class="btn"
+                    title="View active mitigation rules JSON payload">
                     Raw JSON API
                 </a>
             </div>
@@ -129,9 +131,10 @@
         <!-- Contextual Help Drawer -->
         <div th:replace="~{fragments/help-drawer :: helpDrawer}"></div>
 
-        <!-- Note & ASN Modals -->
+        <!-- Note, ASN & UA Modals -->
         <div id="note-modal-container"></div>
         <div id="asn-drilldown-modal-container"></div>
+        <div id="ua-drilldown-modal-container"></div>
     </div>
 
     <script>
@@ -155,13 +158,24 @@
             document.querySelectorAll('#asn-modal-wrapper').forEach(el => el.remove());
         }
 
+        function closeUaModal(e) {
+            if (e) {
+                if (typeof e.stopPropagation === 'function') e.stopPropagation();
+                if (typeof e.preventDefault === 'function') e.preventDefault();
+            }
+            const c = document.getElementById('ua-drilldown-modal-container');
+            if (c) c.innerHTML = '';
+            document.querySelectorAll('#ua-modal-wrapper').forEach(el => el.remove());
+        }
+
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {
                 closeNoteModal(e);
                 closeAsnModal(e);
+                closeUaModal(e);
             }
         });
     </script>
 </body>
-</html>
 
+</html>
