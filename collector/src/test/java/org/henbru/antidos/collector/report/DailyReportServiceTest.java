@@ -16,12 +16,14 @@ import org.henbru.antidos.collector.model.DailyReport;
 import org.henbru.antidos.collector.model.DailyReportNote;
 import org.henbru.antidos.collector.model.MitigationAuditEntry;
 import org.henbru.antidos.collector.model.MitigationRule;
+import org.henbru.antidos.collector.model.MitigationUaRule;
 import org.henbru.antidos.collector.model.MonitoredValve;
 import org.henbru.antidos.collector.model.PollEventLog;
 import org.henbru.antidos.collector.model.SlotSnapshot;
 import org.henbru.antidos.collector.storage.ClientEventRepository;
 import org.henbru.antidos.collector.storage.DailyReportRepository;
 import org.henbru.antidos.collector.storage.MitigationRuleRepository;
+import org.henbru.antidos.collector.storage.MitigationUaRuleRepository;
 import org.henbru.antidos.collector.storage.MonitoredValveRepository;
 import org.henbru.antidos.collector.storage.PollEventLogRepository;
 import org.henbru.antidos.collector.storage.SlotSnapshotRepository;
@@ -62,6 +64,9 @@ class DailyReportServiceTest {
 
 	@Autowired(required = false)
 	private MitigationRuleRepository mitigationRuleRepository;
+
+	@Autowired(required = false)
+	private MitigationUaRuleRepository mitigationUaRuleRepository;
 
 	private final LocalDate testDate = LocalDate.of(2026, 10, 20);
 
@@ -1313,5 +1318,114 @@ class DailyReportServiceTest {
 		// Assert Executive Summary mentions verified bots
 		assertTrue(md.contains("| **Verified Search & AI Bots** |"), "Executive summary must contain Verified Search & AI Bots metric");
 		assertTrue(md.contains("4,800"), "Executive summary must show total 4,800 bot requests");
+	}
+
+	@Test
+	void testDailyReportWithUserAgentMitigations() {
+		LocalDate uaDate = LocalDate.parse("2026-11-21");
+		dailyReportRepository.deleteByReportDate(uaDate.toString());
+		Instant dayStart = uaDate.atStartOfDay(ZoneId.systemDefault()).toInstant();
+		Instant dayEnd = dayStart.plus(1, ChronoUnit.DAYS);
+		Instant h10 = dayStart.plus(10, ChronoUnit.HOURS);
+		Instant h11 = dayStart.plus(11, ChronoUnit.HOURS);
+
+		jdbcTemplate.update("DELETE FROM slot_snapshots WHERE start_time >= ? AND start_time < ?", Timestamp.from(dayStart), Timestamp.from(dayEnd));
+		jdbcTemplate.update("DELETE FROM client_events WHERE slot_time >= ? AND slot_time < ?", Timestamp.from(dayStart), Timestamp.from(dayEnd));
+		jdbcTemplate.update("DELETE FROM mitigation_rules WHERE created_at >= ? AND created_at < ?", Timestamp.from(dayStart), Timestamp.from(dayEnd));
+		jdbcTemplate.update("DELETE FROM mitigation_ua_rules WHERE created_at >= ? AND created_at < ?", Timestamp.from(dayStart), Timestamp.from(dayEnd));
+		jdbcTemplate.update("DELETE FROM mitigation_audit_log WHERE created_at >= ? AND created_at < ?", Timestamp.from(dayStart), Timestamp.from(dayEnd));
+		jdbcTemplate.update("DELETE FROM monitored_valves WHERE server_id = 'SRV-UA-TEST'");
+
+		// Monitored valve with dynamic mitigation enabled
+		monitoredValveRepository.upsert(new MonitoredValve(
+				"SRV-UA-TEST", "VALVE-UA", "User-Agent Test Node", 1, "BLOCKING", false, false,
+				429, 500, 10, 6, 0.5f, 24, 64, 10000, 5000, "", "", "", false, "", "/status", "*", "auto",
+				false, "_adv", false, "", "", "", 0, 0, "ALL", 0,
+				true, "http://srv-ua/antidos-mitigation", 0, 0L, 0L, 1,
+				16, 32, 86400, 5000,
+				2, 1550L, 15L, 1L,
+				Instant.now(), 5556, true
+		));
+
+		slotSnapshotRepository.upsert(new SlotSnapshot(
+				null, "SRV-UA-TEST", "VALVE-UA", 77001L, h10, h10.plus(60, ChronoUnit.SECONDS),
+				25000L, 0, 0, 0, true, h10.plus(60, ChronoUnit.SECONDS)
+		));
+
+		// 1. Dynamic UA Rule 1: Auto-blocked, persistent scraper
+		mitigationUaRuleRepository.upsertRule(new MitigationUaRule(
+				null, "hash-python-urllib", 0x98af6905, "python-urllib3/2.0.7", "PYTHON", "ALL",
+				MitigationUaRule.STATUS_ACTIVE, MitigationUaRule.SOURCE_AUTO_UA, "batch-ua-1",
+				"High-frequency automated scraper flood",
+				h10, h10, h10.plus(2, ChronoUnit.HOURS), null, null,
+				1250L, 15L, h10.plus(30, ChronoUnit.MINUTES), MitigationUaRule.DETERRENCE_PERSISTENT
+		));
+
+		// 2. Audit Entry 1: UA_AUTO_BLOCK
+		mitigationRuleRepository.insertAuditEntry(new MitigationAuditEntry(
+				null, 1L, "UA:98af6905 python-urllib3/2.0.7", "batch-ua-1", "UA_AUTO_BLOCK",
+				"AUTO_UA_ENGINE", 7200, "Autonomous rule created for scraper flood", h10,
+				MitigationAuditEntry.TARGET_USER_AGENT
+		));
+
+		// 3. Dynamic UA Rule 2: Manual rule, deterred
+		mitigationUaRuleRepository.upsertRule(new MitigationUaRule(
+				null, "hash-curl-flood", 0x12345678, "curl/7.88.1", "CURL", "ALL",
+				MitigationUaRule.STATUS_ACTIVE, MitigationUaRule.SOURCE_MANUAL, null,
+				"Manual block of suspicious CLI scraper",
+				h11, h11, h11.plus(1, ChronoUnit.HOURS), null, null,
+				300L, 0L, h11.plus(10, ChronoUnit.MINUTES), MitigationUaRule.DETERRENCE_DETERRED
+		));
+
+		// 4. Audit Entry 2: UA_BLOCK
+		mitigationRuleRepository.insertAuditEntry(new MitigationAuditEntry(
+				null, 2L, "UA:12345678 curl/7.88.1", null, "UA_BLOCK",
+				"ADMIN", 3600, "Admin manual block", h11,
+				MitigationAuditEntry.TARGET_USER_AGENT
+		));
+
+		DailyReport report = dailyReportService.generateDailyReport(uaDate);
+		assertNotNull(report);
+		assertEquals("ATTACK_MITIGATED", report.status(), "Report status must reflect attack mitigated due to active UA defense");
+
+		String md = report.reportMarkdown();
+		assertNotNull(md);
+
+		// Assert Section 1 Executive Summary:
+		assertTrue(md.contains("Dynamic Rules Enforced"), "Executive summary must mention dynamic rules");
+		assertTrue(md.contains("User-Agent"), "Executive summary must mention User-Agent rules");
+		assertTrue(md.contains("1,550 hits"), "Executive summary must aggregate total dynamic blocked hits (1,250 + 300 = 1,550)");
+		assertTrue(md.contains("Autonomous User-Agent Defense"), "Executive summary must mention autonomous UA defense");
+
+		// Assert Section 6 Dynamic Mitigation & Autonomous Defense Audit:
+		assertTrue(md.contains("## 🛡️ 6. Dynamic Mitigation & Autonomous Defense Audit"));
+		assertTrue(md.contains("### 🕵️ User-Agent Threat Mitigation & Deterrence"), "Must contain dedicated User-Agent threat mitigation section");
+
+		// Table assertions:
+		assertTrue(md.contains("UA:98af6905"), "Must show hash32 for python-urllib3");
+		assertTrue(md.contains("python-urllib3/2.0.7"), "Must show raw user agent for python-urllib3");
+		assertTrue(md.contains("PYTHON"), "Must show browser family PYTHON");
+		assertTrue(md.contains("1,250"), "Must show 1,250 blocked hits");
+		assertTrue(md.contains("15"), "Must show 15 bypassed hits");
+		assertTrue(md.contains("PERSISTENT"), "Must show deterrence state PERSISTENT");
+
+		assertTrue(md.contains("UA:12345678"), "Must show hash32 for curl");
+		assertTrue(md.contains("curl/7.88.1"), "Must show raw user agent for curl");
+		assertTrue(md.contains("CURL"), "Must show browser family CURL");
+		assertTrue(md.contains("300"), "Must show 300 blocked hits");
+		assertTrue(md.contains("DETERRED"), "Must show deterrence state DETERRED");
+
+		// Bypassed traffic in audit summary table:
+		assertTrue(md.contains("Legitimate Bypassed Requests"), "Must mention legitimate bypassed requests in Section 6 summary table");
+
+		// Safety Guardrails:
+		assertTrue(md.contains("User-Agent Legitimate Session Bypass"), "Safety guardrails must verify legitimate UA session bypass");
+
+		// Campaign Timeline:
+		assertTrue(md.contains("UA_AUTO_BLOCK"), "Timeline must contain UA_AUTO_BLOCK");
+		assertTrue(md.contains("UA_BLOCK"), "Timeline must contain UA_BLOCK");
+
+		// Admin Action Items:
+		assertTrue(md.contains("User-Agent Threat Mitigation Active"), "Actionable items must mention active UA threat mitigation");
 	}
 }

@@ -158,6 +158,24 @@ public class MitigationUaRuleRepository {
 				ROW_MAPPER, Math.max(1, limit));
 	}
 
+	public List<MitigationUaRule> findRulesCreatedBetween(Instant start, Instant end) {
+		return jdbcTemplate.query("""
+				SELECT * FROM mitigation_ua_rules
+				WHERE created_at >= ? AND created_at < ?
+				ORDER BY total_blocked_hits DESC, created_at DESC
+				""", ROW_MAPPER, Timestamp.from(start), Timestamp.from(end));
+	}
+
+	public List<MitigationUaRule> findRulesCreatedOrActiveBetween(Instant start, Instant end) {
+		return jdbcTemplate.query("""
+				SELECT * FROM mitigation_ua_rules
+				WHERE (created_at >= ? AND created_at < ?)
+				   OR (created_at < ? AND COALESCE(revoked_at, expires_at) >= ? AND (total_blocked_hits > 0 OR total_bypassed_hits > 0))
+				ORDER BY total_blocked_hits DESC, created_at DESC
+				""", ROW_MAPPER, Timestamp.from(start), Timestamp.from(end), Timestamp.from(end), Timestamp.from(start));
+	}
+
+
 	public long countActiveRules(Instant now) {
 		Long count = jdbcTemplate.queryForObject(
 				"SELECT COUNT(*) FROM mitigation_ua_rules WHERE status = 'ACTIVE' AND expires_at > ?",
@@ -286,5 +304,29 @@ public class MitigationUaRuleRepository {
 				jdbcTemplate.update(
 						"DELETE FROM mitigation_ua_rules WHERE status IN ('EXPIRED', 'REVOKED') AND updated_at < ?",
 						Timestamp.from(cutoff)));
+	}
+
+	public List<MitigationUaRule> findRulesCreatedBetween(Instant start, Instant end) {
+		return jdbcTemplate.query("""
+				SELECT id, user_agent_hash, ua_hash_32, raw_user_agent, browser_family, target_scope,
+				       status, source, batch_id, reason, created_at, updated_at, expires_at,
+				       revoked_at, revoked_reason, total_blocked_hits, total_bypassed_hits, last_hit_at,
+				       deterrence_state
+				FROM mitigation_ua_rules
+				WHERE created_at >= ? AND created_at < ?
+				ORDER BY total_blocked_hits DESC, created_at DESC
+				""", ROW_MAPPER, Timestamp.from(start), Timestamp.from(end));
+	}
+
+	public List<MitigationUaRule> findRulesCreatedOrActiveBetween(Instant start, Instant end) {
+		return jdbcTemplate.query("""
+				SELECT id, user_agent_hash, ua_hash_32, raw_user_agent, browser_family, target_scope,
+				       status, source, batch_id, reason, created_at, updated_at, expires_at,
+				       revoked_at, revoked_reason, total_blocked_hits, total_bypassed_hits, last_hit_at,
+				       deterrence_state
+				FROM mitigation_ua_rules
+				WHERE created_at < ? AND (revoked_at IS NULL OR revoked_at >= ?) AND expires_at >= ?
+				ORDER BY total_blocked_hits DESC, created_at DESC
+				""", ROW_MAPPER, Timestamp.from(end), Timestamp.from(start), Timestamp.from(start));
 	}
 }
