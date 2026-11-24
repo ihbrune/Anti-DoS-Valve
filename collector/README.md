@@ -2,6 +2,8 @@
 
 The **Anti-DoS Collector** is a high-throughput, standalone management, monitoring, and analytics service designed to aggregate security events, operational telemetry, and threat intelligence across a distributed fleet of **Anti-DoS-Valve** instances running inside Apache Tomcat servers.
 
+**DISCLAIMER:** The collector is the result of a complete AI-driven development. Its complex architecture and advanced features are already in use in a medium sized production environment with very positive results. However, the collector is still in active development and new features are being added regularly. Bugs are likely, please report them. Feedback is always welcome.
+
 ---
 
 ## 📚 Documentation & Roles
