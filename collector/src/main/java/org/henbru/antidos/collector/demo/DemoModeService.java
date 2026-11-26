@@ -72,6 +72,8 @@ public class DemoModeService {
 			properties.getValveRules().put("IPv6-Rate-Limiter", new org.henbru.antidos.collector.config.ValveRuleConfig(false, 10, "0"));
 			// Scenario 4: Zero-Tolerance Honeypot -> capture every probe immediately
 			properties.getValveRules().put("HONEYPOT-PROBE-VALVE", new org.henbru.antidos.collector.config.ValveRuleConfig(true, 1, "500"));
+			// Scenario 5: Server-Wide Global Surge Cap -> continuous slot totals in snapshots; record GLOBAL:ALL events only when hard cap triggers
+			properties.getValveRules().put("Global-Surge-Cap", new org.henbru.antidos.collector.config.ValveRuleConfig(false, 100, "0"));
 		}
 
 		if (printBanner) {
@@ -106,7 +108,7 @@ public class DemoModeService {
 					"demo-token",
 					false,
 					true,
-					List.of("Primary-Rate-Limiter", "Subnet-Guard", "IPv6-Rate-Limiter", "HONEYPOT-PROBE-VALVE")
+					List.of("Primary-Rate-Limiter", "Subnet-Guard", "IPv6-Rate-Limiter", "HONEYPOT-PROBE-VALVE", "Global-Surge-Cap")
 			));
 			demoEndpoints.add(new EndpointConfig(
 					"Demo-API-Gateway",
@@ -135,7 +137,7 @@ public class DemoModeService {
 						"demo-token",
 						false,
 						true,
-						List.of("Primary-Rate-Limiter", "Subnet-Guard", "IPv6-Rate-Limiter", "HONEYPOT-PROBE-VALVE")
+						List.of("Primary-Rate-Limiter", "Subnet-Guard", "IPv6-Rate-Limiter", "HONEYPOT-PROBE-VALVE", "Global-Surge-Cap")
 				));
 				demoEndpoints.add(new EndpointConfig(
 						"Demo-API-Gateway " + letter,

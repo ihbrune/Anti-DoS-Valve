@@ -67,6 +67,9 @@ class DemoModeTest {
 	@Autowired
 	private org.henbru.antidos.collector.aggregation.AnalyticsService analyticsService;
 
+	@Autowired
+	private org.henbru.antidos.collector.storage.MonitoredValveRepository monitoredValveRepository;
+
 	@Test
 	void testDemoEndpointsAutoConfigured() {
 		assertTrue(properties.isDemoMode(), "Demo mode should be enabled via properties");
@@ -106,11 +109,13 @@ class DemoModeTest {
 		// Verify that ValveStatusClient can deserialize it into ValveOverviewDto
 		ValveOverviewDto overview = objectMapper.readValue(overviewJson, ValveOverviewDto.class);
 		assertNotNull(overview);
-		assertEquals(4, overview.valves().size(), "Edge node should provide Primary-Rate-Limiter, Subnet-Guard, IPv6-Rate-Limiter, and HONEYPOT-PROBE-VALVE");
+		assertEquals(5, overview.valves().size(), "Edge node should provide Primary-Rate-Limiter, Subnet-Guard, IPv6-Rate-Limiter, HONEYPOT-PROBE-VALVE, and Global-Surge-Cap");
 		assertEquals("Primary-Rate-Limiter", overview.valves().getFirst().monitorName());
 		assertEquals("Subnet-Guard", overview.valves().get(1).monitorName());
 		assertEquals("IPv6-Rate-Limiter", overview.valves().get(2).monitorName());
 		assertEquals("HONEYPOT-PROBE-VALVE", overview.valves().get(3).monitorName());
+		assertEquals("Global-Surge-Cap", overview.valves().get(4).monitorName());
+		assertEquals("GLOBAL", overview.valves().get(4).counterScope());
 
 		// Fetch details JSON via MockMvc
 		String detailsJson = mockMvc.perform(get("/mock-valve/api-gateway/antidos-status")
@@ -138,7 +143,7 @@ class DemoModeTest {
 		ValveOverviewDto overview = simulator.buildOverview("edge-eu", null);
 		assertNotNull(overview);
 		assertNotNull(overview.serverTime());
-		assertEquals(4, overview.valves().size(), "Edge node should provide 4 valves");
+		assertEquals(5, overview.valves().size(), "Edge node should provide 5 valves");
 
 		ValveOverviewDto.ValveSummaryDto primary = overview.valves().getFirst();
 		assertEquals("Primary-Rate-Limiter", primary.monitorName());
@@ -183,6 +188,42 @@ class DemoModeTest {
 		assertFalse(honeypotDetails.blockedClients().isEmpty(), "HONEYPOT-PROBE-VALVE should produce blocked probers");
 		assertEquals("HONEYPOT-PROBE-VALVE", honeypotDetails.valve().monitorName());
 
+		ValveOverviewDto.ValveSummaryDto globalSummary = overview.valves().get(4);
+		assertEquals("Global-Surge-Cap", globalSummary.monitorName());
+		assertEquals("GLOBAL", globalSummary.counterScope());
+		assertEquals(1800, globalSummary.allowedRequestsPerSlot());
+		assertEquals(0.0f, globalSummary.shareOfRetainedFormerRequests());
+		assertEquals(10, globalSummary.maxIPCacheSize());
+		assertEquals(10, globalSummary.maxBlockedIPCacheSize());
+		assertEquals("UNAUTHENTICATED_ONLY", globalSummary.relevantAuthScope());
+		assertTrue(Boolean.TRUE.equals(globalSummary.alwaysAllowPrivateIPs()));
+
+		long curGlobalKey = globalSummary.currentSlotKey();
+		long surgeKey = curGlobalKey;
+		long normalKey = curGlobalKey;
+		for (long k = curGlobalKey - MockValveSimulator.NUMBER_OF_SLOTS; k <= curGlobalKey; k++) {
+			if (k % 6 == 0) {
+				surgeKey = k;
+			} else {
+				normalKey = k;
+			}
+		}
+		ValveDetailsDto globalSurgeDetails = simulator.buildDetails("edge-eu", "Global-Surge-Cap", String.valueOf(surgeKey), "all");
+		assertNotNull(globalSurgeDetails);
+		assertEquals(1, globalSurgeDetails.blockedClients().size());
+		ValveDetailsDto.BlockedClientDto globalBlocked = globalSurgeDetails.blockedClients().getFirst();
+		assertEquals("GLOBAL:ALL", globalBlocked.key());
+		assertTrue(globalBlocked.locked());
+		assertTrue(globalBlocked.distinctClients() >= 220);
+		assertEquals(0, globalBlocked.authenticatedCount());
+		assertNotNull(globalBlocked.sampleUri());
+
+		ValveDetailsDto globalNormalDetails = simulator.buildDetails("edge-eu", "Global-Surge-Cap", String.valueOf(normalKey), "all", "all", "50", 1);
+		assertNotNull(globalNormalDetails);
+		assertTrue(globalNormalDetails.blockedClients().isEmpty());
+		assertEquals(1, globalNormalDetails.topActiveClients().size());
+		assertEquals("GLOBAL:ALL", globalNormalDetails.topActiveClients().getFirst().key());
+
 		ValveDetailsDto apiDetails = simulator.buildDetails("api-gateway", "API-DoS-Shield", "previous", "all");
 		assertNotNull(apiDetails);
 		assertFalse(apiDetails.blockedClients().isEmpty(), "API gateway under attack should list blocked clients");
@@ -211,7 +252,7 @@ class DemoModeTest {
 				.getResponse()
 				.getContentAsString();
 		ValveOverviewDto overview = objectMapper.readValue(validResponse, ValveOverviewDto.class);
-		assertEquals(4, overview.valves().size());
+		assertEquals(5, overview.valves().size());
 		assertEquals("Primary-Rate-Limiter", overview.valves().getFirst().monitorName());
 	}
 
@@ -291,6 +332,8 @@ class DemoModeTest {
 				"Subnet rollup should group rotating IPv6 clients into canonical /64 prefix");
 		assertTrue(rollup.stream().anyMatch(o -> o.clientKey().contains("/24")),
 				"Subnet rollup should contain /24 subnets");
+		assertFalse(rollup.stream().anyMatch(o -> "GLOBAL:ALL".equals(o.clientKey())),
+				"Subnet rollup must exclude synthetic GLOBAL:ALL surge cap key");
 
 		// 8. Verify Honeypot events are seeded
 		var honeypotEvents = clientEventRepository.findRecentEventsFiltered(
@@ -300,6 +343,22 @@ class DemoModeTest {
 		assertEquals(1, honeypotEvents.getFirst().requestCount(), "Honeypot events should record individual probe hits");
 		assertTrue(honeypotEvents.stream().anyMatch(e -> e.hasSample()), "Honeypot demo events should include sample probe snapshots");
 
+		// 8b. Verify Global-Surge-Cap valve configuration and GLOBAL:ALL surge wave events
+		var globalValveOpt = monitoredValveRepository.findByServerIdAndValveName("Demo-Edge-EU", "Global-Surge-Cap");
+		assertTrue(globalValveOpt.isPresent(), "Demo-Edge-EU should persist Global-Surge-Cap valve config");
+		assertEquals("GLOBAL", globalValveOpt.get().counterScope());
+		assertTrue(globalValveOpt.get().isGlobalCounterScope());
+
+		var globalEvents = clientEventRepository.findRecentEventsFiltered(
+				java.util.List.of("Demo-Edge-EU"), java.util.List.of("Global-Surge-Cap"), null, null, null, 10, 0);
+		assertFalse(globalEvents.isEmpty(), "Should have seeded GLOBAL:ALL surge events for Global-Surge-Cap");
+		var firstGlobal = globalEvents.getFirst();
+		assertEquals("GLOBAL:ALL", firstGlobal.clientKey());
+		assertEquals("Global Server Rate Cap", firstGlobal.asOrg());
+		assertTrue(firstGlobal.distinctClients() >= 200);
+		assertEquals(0, firstGlobal.authenticatedCount());
+		assertEquals(null, firstGlobal.entityId());
+
 		// 9. Verify Auth Session Tracking is seeded for Demo-Edge-EU events and rendered on Server Details page
 		assertTrue(subnetEvents.stream().anyMatch(e -> e.authenticatedCount() != null && e.authenticatedCount() > 0),
 				"Demo-Edge-EU Subnet-Guard should include seeded events with authenticatedCount > 0");
@@ -307,7 +366,9 @@ class DemoModeTest {
 				.andExpect(status().isOk())
 				.andExpect(content().string(containsString("AUTH: COOKIE (AUTH_COOKIE)")))
 				.andExpect(content().string(containsString("Auth Session Tracking")))
-				.andExpect(content().string(containsString("/trust")));
+				.andExpect(content().string(containsString("/trust")))
+				.andExpect(content().string(containsString("Global-Surge-Cap")))
+				.andExpect(content().string(containsString("COUNTER: GLOBAL")));
 	}
 
 	@Test

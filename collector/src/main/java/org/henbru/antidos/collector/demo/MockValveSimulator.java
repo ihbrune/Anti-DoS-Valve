@@ -91,6 +91,12 @@ public class MockValveSimulator {
 			new SimulatedProbe("GET", "/.git/HEAD", "GitCrawler/2.0")
 	};
 
+	public static final SimulatedProbe[] GLOBAL_SURGE_PROBES = {
+			new SimulatedProbe("GET", "/portal/course/catalog", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"),
+			new SimulatedProbe("GET", "/catalog/details?page=1", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15"),
+			new SimulatedProbe("GET", "/api/v1/search?q=catalog", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36")
+	};
+
 	// IP pool for the simulated distributed attack on API Gateway (mixed IPv4 and IPv6)
 	private static final String[] ATTACKER_IPS = {
 			"45.154.255.12", "185.220.101.5", "194.26.29.110", "91.240.118.77",
@@ -124,6 +130,9 @@ public class MockValveSimulator {
 				}
 				if (matchesFilter(filterValve, "HONEYPOT-PROBE-VALVE")) {
 					valves.add(buildEdgeHoneypotSummary(nodeId, currentSlotKey, lastCompletedSlotKey, 4));
+				}
+				if (matchesFilter(filterValve, "Global-Surge-Cap")) {
+					valves.add(buildEdgeGlobalSurgeSummary(nodeId, currentSlotKey, lastCompletedSlotKey, 5));
 				}
 			}
 			case "api-gateway" -> {
@@ -248,16 +257,38 @@ public class MockValveSimulator {
 		List<ValveDetailsDto.ActiveClientDto> activeList = List.of();
 		if (!"0".equals(effectiveActiveLimit) && totalActive > 0) {
 			int min = (activeMinCount != null && activeMinCount > 0) ? activeMinCount : 1;
-			int c1 = Math.max(min, 2);
-			int c2 = Math.max(min, 5);
-			activeList = List.of(
-					new ValveDetailsDto.ActiveClientDto("192.168.1.50", c1, 0, c1, 60, 5, 1,
-							visitorCookieActive ? c1 : null,
-							authTrackingActive ? Math.max(1, c1 - 1) : null),
-					new ValveDetailsDto.ActiveClientDto("10.0.0.12", c2, 1, c2 + 1, 60, 10, 1,
-							visitorCookieActive ? (c2 - 1) : null,
-							authTrackingActive ? Math.max(1, c2 - 2) : null)
-			);
+			if ("Global-Surge-Cap".equalsIgnoreCase(resolvedValve)) {
+				if (metrics.blockedClients().isEmpty() && metrics.totalRequests() >= min) {
+					int count = (int) metrics.totalRequests();
+					int distinctClients = 140 + (int) Math.abs(targetSlotKey % 50);
+					int distinctUas = 18 + (int) Math.abs(targetSlotKey % 12);
+					activeList = List.of(
+							new ValveDetailsDto.ActiveClientDto(
+									"GLOBAL:ALL",
+									count,
+									0,
+									count,
+									1800,
+									Math.min(100, (count * 100) / 1800),
+									distinctClients,
+									distinctUas,
+									(int) (count * 0.35),
+									0
+							)
+					);
+				}
+			} else {
+				int c1 = Math.max(min, 2);
+				int c2 = Math.max(min, 5);
+				activeList = List.of(
+						new ValveDetailsDto.ActiveClientDto("192.168.1.50", c1, 0, c1, 60, 5, 1,
+								visitorCookieActive ? c1 : null,
+								authTrackingActive ? Math.max(1, c1 - 1) : null),
+						new ValveDetailsDto.ActiveClientDto("10.0.0.12", c2, 1, c2 + 1, 60, 10, 1,
+								visitorCookieActive ? (c2 - 1) : null,
+								authTrackingActive ? Math.max(1, c2 - 2) : null)
+				);
+			}
 		}
 
 		return new ValveDetailsDto(
@@ -564,6 +595,82 @@ public class MockValveSimulator {
 		);
 	}
 
+	private ValveOverviewDto.ValveSummaryDto buildEdgeGlobalSurgeSummary(String nodeId, long currentKey, long lastCompletedKey, int order) {
+		SlotMetrics cur = calculateMetrics(nodeId, "Global-Surge-Cap", currentKey);
+		SlotMetrics prev = calculateMetrics(nodeId, "Global-Surge-Cap", lastCompletedKey);
+
+		long offset = (nodeId != null) ? Math.abs(nodeId.hashCode() % 10_000L) : 0L;
+		long cumulative = 195_000L + offset + (currentKey % 50_000L) * 950L;
+		return new ValveOverviewDto.ValveSummaryDto(
+				"Global-Surge-Cap",
+				"Server-wide unauthenticated surge hard cap (GLOBAL:ALL) absorbing broad residential proxy waves while exempting logged-in sessions and private networks.",
+				order,
+				"BLOCKING",
+				false,
+				false,
+				429,
+				1800,
+				SLOT_LENGTH_SECONDS,
+				NUMBER_OF_SLOTS,
+				0.0f,
+				"GLOBAL",
+				32,
+				64,
+				10,
+				10,
+				null,
+				"*.css, *.js, *.png, *.ico, *.svg, *.woff2, /health",
+				"127.0.0.1, ::1",
+				null,
+				"/antidos-status",
+				null,
+				"auto",
+				true,
+				"_adv",
+				true,
+				"COOKIE",
+				"AUTH_COOKIE",
+				"/trust",
+				900,
+				50000,
+				142,
+				"UNAUTHENTICATED_ONLY",
+				0,
+				Boolean.FALSE,
+				null,
+				null,
+				Boolean.TRUE,
+				null,
+				0,
+				0L,
+				0L,
+				2,
+				16,
+				32,
+				604800,
+				1000,
+				0,
+				0L,
+				0L,
+				0L,
+				Boolean.TRUE,
+				0L,
+				cur.activeCounters(),
+				cur.blockedCounters(),
+				currentKey,
+				lastCompletedKey,
+				cumulative,
+				0L,
+				prev.totalRequests(),
+				0L,
+				prev.activeCounters(),
+				prev.blockedCounters(),
+				NUMBER_OF_SLOTS,
+				false,
+				false
+		);
+	}
+
 	private ValveOverviewDto.ValveSummaryDto buildApiShieldSummary(String nodeId, long currentKey, long lastCompletedKey, int order) {
 		SlotMetrics cur = calculateMetrics(nodeId, "API-DoS-Shield", currentKey);
 		SlotMetrics prev = calculateMetrics(nodeId, "API-DoS-Shield", lastCompletedKey);
@@ -722,6 +829,9 @@ public class MockValveSimulator {
 				}
 				if ("HONEYPOT-PROBE-VALVE".equalsIgnoreCase(valveName)) {
 					yield calculateHoneypotMetrics(slotKey, rnd);
+				}
+				if ("Global-Surge-Cap".equalsIgnoreCase(valveName)) {
+					yield calculateGlobalSurgeMetrics(slotKey, rnd);
 				}
 				yield calculateEdgePrimaryMetrics(slotKey, rnd);
 			}
@@ -894,6 +1004,37 @@ public class MockValveSimulator {
 			));
 		}
 		return new SlotMetrics(probeCount, 0, blocked.size(), blocked);
+	}
+
+	private SlotMetrics calculateGlobalSurgeMetrics(long slotKey, Random rnd) {
+		// Surge wave triggers once per 6-slot window (60s) so operators always observe a live surge cap trigger
+		if (slotKey % 6 == 0) {
+			int surgeReqs = 2150 + rnd.nextInt(650);
+			String lastUpdate = DateTimeFormatter.ISO_INSTANT.format(
+					Instant.ofEpochMilli(slotKey * SLOT_LENGTH_MILLIS + (SLOT_LENGTH_MILLIS - 400))
+			);
+			SimulatedProbe probe = GLOBAL_SURGE_PROBES[Math.abs((int) (slotKey % GLOBAL_SURGE_PROBES.length))];
+			List<ValveDetailsDto.BlockedClientDto> blocked = List.of(
+					new ValveDetailsDto.BlockedClientDto(
+							"GLOBAL:ALL",
+							surgeReqs,
+							0,
+							surgeReqs,
+							true,
+							lastUpdate,
+							220 + rnd.nextInt(37),
+							2 + rnd.nextInt(3),
+							(int) (surgeReqs * 0.04),
+							0,
+							probe.method(),
+							probe.uri(),
+							probe.userAgent()
+					)
+			);
+			return new SlotMetrics(surgeReqs, 1, 1, blocked);
+		}
+		long totalRequests = 850L + rnd.nextInt(550);
+		return new SlotMetrics(totalRequests, 1, 0, List.of());
 	}
 
 	private SlotMetrics calculateStagingMetrics(long slotKey, Random rnd) {

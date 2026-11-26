@@ -140,6 +140,7 @@ public class DemoDataSeeder {
 			seedDemoMonitoredValves(Instant.now());
 			seedDemoAnnotationsIfEmpty();
 			seedMarkedDemoTelemetryIfMissing();
+			seedGlobalSurgeCapTelemetryIfMissing();
 			if (subnetProfileService != null && subnetProfileService.countProfilesFiltered("ALL", null, null, null, null, null) == 0) {
 				if (rollupAggregationService != null) {
 					try {
@@ -474,6 +475,30 @@ public class DemoDataSeeder {
 						null, edgeServer, "HONEYPOT-PROBE-VALVE", slotKey,
 						startTime, endTime, edgeHoneypotReqs, 0, edgeHoneypotBlocked, true, endTime
 				));
+
+				// Server 1 - Valve 5: Global-Surge-Cap (server-wide unauthenticated surge cap emitting GLOBAL:ALL)
+				boolean isGlobalSurgeWave = (hoursAgo == 18 && (slotKey + idx * 3) % 3 == 0)
+						|| (hoursAgo == 52 && (slotKey + idx * 5) % 2 == 0)
+						|| (hoursAgo <= 4 && (slotKey + idx * 7) % 29 == 0);
+				long edgeGlobalReqs;
+				int edgeGlobalBlocked;
+				if (isGlobalSurgeWave) {
+					edgeGlobalReqs = 2150L + sRnd.nextInt(700);
+					edgeGlobalBlocked = 1;
+					events.add(createEnrichedEvent(
+							edgeServer, "Global-Surge-Cap", slotKey, startTime,
+							"GLOBAL:ALL", null, "Global Server Rate Cap", null, org.henbru.antidos.collector.model.ClientType.UNKNOWN,
+							(int) edgeGlobalReqs, 0, true, true, endTime, 215 + sRnd.nextInt(42)
+					));
+				} else {
+					edgeGlobalReqs = (long) (550 + 750 * diurnal + sRnd.nextInt(250));
+					edgeGlobalBlocked = 0;
+				}
+
+				snapshots.add(new SlotSnapshot(
+						null, edgeServer, "Global-Surge-Cap", slotKey,
+						startTime, endTime, edgeGlobalReqs, 1, edgeGlobalBlocked, true, endTime
+				));
 			}
 
 			// -----------------------------------------------------------------
@@ -615,8 +640,8 @@ public class DemoDataSeeder {
 					int activeEvs = 40 + rnd.nextInt(30);
 					logs.add(new PollEventLog(
 							null, name, url,
-							pollTime, "SUCCESS", 200, 12L + rnd.nextInt(15), 4, 4, activeEvs, 0,
-							"Polled 4 valve(s), 4 slot(s), " + activeEvs + " event(s)", null
+							pollTime, "SUCCESS", 200, 12L + rnd.nextInt(15), 5, 5, activeEvs, 0,
+							"Polled 5 valve(s), 5 slot(s), " + activeEvs + " event(s)", null
 					));
 				} else if (name.contains("API")) {
 					boolean underAttack = (h >= 12 && h <= 15) || (h <= 1);
@@ -816,8 +841,14 @@ public class DemoDataSeeder {
 
 		boolean isHoneypot = valveName != null && valveName.toUpperCase().contains("HONEYPOT");
 		boolean isMarked = ClientEvent.STATUS_MARKED.equalsIgnoreCase(status);
-		if (locked || isHoneypot || isMarked) {
-			int hash = Math.abs((int) ((slotKey * 31L) ^ ip.hashCode() ^ (valveName != null ? valveName.hashCode() : 0)));
+		boolean isGlobalKey = org.henbru.antidos.collector.util.IpNetworkUtil.isSyntheticGlobalKey(ip);
+		int hash = Math.abs((int) ((slotKey * 31L) ^ ip.hashCode() ^ (valveName != null ? valveName.hashCode() : 0)));
+		if (isGlobalKey && locked) {
+			MockValveSimulator.SimulatedProbe probe = MockValveSimulator.GLOBAL_SURGE_PROBES[hash % MockValveSimulator.GLOBAL_SURGE_PROBES.length];
+			sampleMethod = probe.method();
+			sampleUri = probe.uri();
+			sampleUserAgent = probe.userAgent();
+		} else if (locked || isHoneypot || isMarked) {
 			if (isHoneypot || isMarked || (hash % 10 < 7)) {
 				MockValveSimulator.SimulatedProbe probe = DEMO_HISTORICAL_PROBES[hash % DEMO_HISTORICAL_PROBES.length];
 				sampleMethod = probe.method();
@@ -829,7 +860,10 @@ public class DemoDataSeeder {
 		org.henbru.antidos.collector.model.IpNetworkInfo net = org.henbru.antidos.collector.util.IpNetworkUtil.parse(ip);
 		Integer returningCount = null;
 		Integer authenticatedCount = null;
-		if (serverId == null || !serverId.toLowerCase().contains("api")) {
+		if (isGlobalKey) {
+			returningCount = (int) Math.round(requestCount * 0.04);
+			authenticatedCount = 0;
+		} else if (serverId == null || !serverId.toLowerCase().contains("api")) {
 			// Visitor Cookie and Auth Session Tracking are active on Demo-Edge-EU and Demo-Staging-Node
 			switch (ip) {
 				case "10.68.42.0/24", "10.68.42.15" -> {
@@ -859,7 +893,9 @@ public class DemoDataSeeder {
 			}
 		}
 		Integer distinctUserAgents = null;
-		if (distinctClients > 1) {
+		if (isGlobalKey) {
+			distinctUserAgents = 2 + (hash % 3);
+		} else if (distinctClients > 1) {
 			// Residential proxy botnets exhibit low UA diversity (monokultur = 1)
 			if (ip.startsWith("185.246.221.") || ip.startsWith("73.15.20.")) {
 				distinctUserAgents = 1;
@@ -911,6 +947,7 @@ public class DemoDataSeeder {
 								v.slotLength(),
 								v.numberOfSlots(),
 								v.shareOfRetainedFormerRequests(),
+								v.counterScopeOrDefault(),
 								v.ipv4SubnetMask() > 0 ? v.ipv4SubnetMask() : 32,
 								v.ipv6SubnetMask() > 0 ? v.ipv6SubnetMask() : 64,
 								v.maxIPCacheSize() > 0 ? v.maxIPCacheSize() : 10000,
@@ -918,6 +955,7 @@ public class DemoDataSeeder {
 								v.relevantPaths(),
 								v.nonRelevantPaths(),
 								v.alwaysAllowedIPs(),
+								v.alwaysAllowPrivateIPsOrDefault(),
 								v.alwaysForbiddenIPs(),
 								v.statusUri(),
 								v.statusAllowedIPs(),
@@ -937,6 +975,17 @@ public class DemoDataSeeder {
 								v.dynamicBlocksActiveCountOrDefault(),
 								v.dynamicBlocksBlockedRequestsOrDefault(),
 								v.dynamicRulesRevisionOrDefault(),
+								v.dynamicRulesHashVersionOrDefault(),
+								v.mitigationMinPrefixV4OrDefault(),
+								v.mitigationMinPrefixV6OrDefault(),
+								v.mitigationMaxTtlSecondsOrDefault(),
+								v.mitigationMaxActiveBlocksOrDefault(),
+								v.dynamicUaBlocksActiveCountOrDefault(),
+								v.dynamicUaBlocksBlockedRequestsOrDefault(),
+								v.dynamicUaBlocksBypassedRequestsOrDefault(),
+								v.dynamicUaRulesRevisionOrDefault(),
+								v.mitigationBypassPrivateIPsOrDefault(),
+								v.mitigationBypassIPs(),
 								now,
 								v.configHashCode(),
 								true
@@ -1045,6 +1094,7 @@ public class DemoDataSeeder {
 					    END
 					WHERE server_id NOT LIKE '%API%'
 					  AND authenticated_count IS NULL
+					  AND client_key NOT LIKE 'GLOBAL:%'
 					""");
 			if (backfilledAuth > 0) {
 				log.info("Backfilled visitor cookie and auth session counts for {} legacy demo events.", backfilledAuth);
@@ -1058,7 +1108,7 @@ public class DemoDataSeeder {
 					}
 				}
 			}
-			// Ensure network_entity records exist for all demo events
+			// Ensure network_entity records exist for all non-synthetic demo events
 			jdbcTemplate.update("""
 					INSERT INTO network_entity (
 					    client_key, ip_version, cidr_prefix,
@@ -1091,6 +1141,7 @@ public class DemoDataSeeder {
 					WHERE NOT EXISTS (
 					    SELECT 1 FROM network_entity ne WHERE ne.client_key = b.client_key
 					)
+					  AND b.client_key NOT LIKE 'GLOBAL:%'
 					GROUP BY b.client_key
 					""");
 			// Link entity_id
@@ -1098,6 +1149,7 @@ public class DemoDataSeeder {
 					UPDATE client_events
 					SET entity_id = (SELECT ne.id FROM network_entity ne WHERE ne.client_key = client_events.client_key)
 					WHERE entity_id IS NULL
+					  AND client_key NOT LIKE 'GLOBAL:%'
 					""");
 		} catch (DataAccessException e) {
 			log.warn("Could not backfill legacy demo events: {}", e.getMessage());
@@ -1246,6 +1298,58 @@ public class DemoDataSeeder {
 			}
 		} catch (Exception e) {
 			log.warn("Could not backfill marked demo telemetry: {}", e.getMessage());
+		}
+	}
+
+	private void seedGlobalSurgeCapTelemetryIfMissing() {
+		try {
+			Integer existingCount = jdbcTemplate.queryForObject(
+					"SELECT COUNT(*) FROM slot_snapshots WHERE valve_name = 'Global-Surge-Cap'", Integer.class);
+			if (existingCount != null && existingCount > 0) {
+				return;
+			}
+			List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+					"SELECT server_id, slot_key FROM slot_snapshots WHERE valve_name = 'Primary-Rate-Limiter'");
+			if (rows.isEmpty()) {
+				return;
+			}
+			log.info("Demo database contains no Global-Surge-Cap telemetry. Backfilling snapshots and GLOBAL:ALL surge events...");
+			Random bRnd = new Random(97L);
+			List<SlotSnapshot> globalSnapshots = new ArrayList<>(rows.size());
+			List<ClientEvent> globalEvents = new ArrayList<>();
+			for (Map<String, Object> r : rows) {
+				String serverId = (String) r.get("server_id");
+				long slotKey = ((Number) r.get("slot_key")).longValue();
+				Instant start = Instant.ofEpochMilli(slotKey * SLOT_LENGTH_MILLIS);
+				Instant end = start.plusMillis(SLOT_LENGTH_MILLIS);
+				boolean isSurge = Math.abs(slotKey) % 29 == 0;
+				long totalReqs;
+				int blocked;
+				if (isSurge) {
+					totalReqs = 2150L + bRnd.nextInt(700);
+					blocked = 1;
+					globalEvents.add(createEnrichedEvent(
+							serverId, "Global-Surge-Cap", slotKey, start,
+							"GLOBAL:ALL", null, "Global Server Rate Cap", null, org.henbru.antidos.collector.model.ClientType.UNKNOWN,
+							(int) totalReqs, 0, true, true, end, 215 + bRnd.nextInt(42)
+					));
+				} else {
+					totalReqs = 650L + bRnd.nextInt(550);
+					blocked = 0;
+				}
+				globalSnapshots.add(new SlotSnapshot(
+						null, serverId, "Global-Surge-Cap", slotKey,
+						start, end, totalReqs, 1, blocked, true, end
+				));
+			}
+			slotSnapshotRepository.batchUpsert(globalSnapshots);
+			if (!globalEvents.isEmpty()) {
+				clientEventRepository.batchUpsert(globalEvents);
+			}
+			jdbcTemplate.update("UPDATE endpoint_heartbeats SET valves_count = 5 WHERE endpoint_name LIKE 'Demo-Edge-EU%'");
+			log.info("Backfilled {} Global-Surge-Cap slot snapshots and {} GLOBAL:ALL events.", globalSnapshots.size(), globalEvents.size());
+		} catch (Exception e) {
+			log.warn("Could not backfill Global-Surge-Cap demo telemetry: {}", e.getMessage());
 		}
 	}
 }
