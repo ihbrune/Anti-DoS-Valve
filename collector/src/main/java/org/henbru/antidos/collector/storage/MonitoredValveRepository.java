@@ -49,6 +49,7 @@ public class MonitoredValveRepository {
 			rs.getInt("slot_length"),
 			rs.getInt("number_of_slots"),
 			rs.getFloat("share_of_retained_former_requests"),
+			getStringSafe(rs, "counter_scope") != null ? getStringSafe(rs, "counter_scope") : "CLIENT",
 			rs.getInt("ipv4_subnet_mask"),
 			rs.getInt("ipv6_subnet_mask"),
 			rs.getInt("max_ip_cache_size"),
@@ -143,7 +144,7 @@ public class MonitoredValveRepository {
 				    server_id, valve_name, description, pipeline_order, monitor_mode,
 				    simulation_mode, server_wide_blocking, http_status_code, allowed_requests_per_slot,
 				    slot_length, number_of_slots, share_of_retained_former_requests,
-				    ipv4_subnet_mask, ipv6_subnet_mask, max_ip_cache_size, max_blocked_ip_cache_size,
+				    counter_scope, ipv4_subnet_mask, ipv6_subnet_mask, max_ip_cache_size, max_blocked_ip_cache_size,
 				    relevant_paths, non_relevant_paths, always_allowed_ips, always_allow_private_ips, always_forbidden_ips,
 				    status_uri, status_allowed_ips, collector_integration,
 				    visitor_cookie_enabled, visitor_cookie_name,
@@ -159,7 +160,7 @@ public class MonitoredValveRepository {
 				    mitigation_bypass_private_ips, mitigation_bypass_ips,
 				    last_updated_at, config_hash, is_active
 				)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (server_id, valve_name) DO UPDATE SET
 				    description = EXCLUDED.description,
 				    pipeline_order = EXCLUDED.pipeline_order,
@@ -171,6 +172,7 @@ public class MonitoredValveRepository {
 				    slot_length = EXCLUDED.slot_length,
 				    number_of_slots = EXCLUDED.number_of_slots,
 				    share_of_retained_former_requests = EXCLUDED.share_of_retained_former_requests,
+				    counter_scope = EXCLUDED.counter_scope,
 				    ipv4_subnet_mask = EXCLUDED.ipv4_subnet_mask,
 				    ipv6_subnet_mask = EXCLUDED.ipv6_subnet_mask,
 				    max_ip_cache_size = EXCLUDED.max_ip_cache_size,
@@ -227,6 +229,7 @@ public class MonitoredValveRepository {
 				v.slotLength(),
 				v.numberOfSlots(),
 				v.shareOfRetainedFormerRequests(),
+				v.counterScope(),
 				v.ipv4SubnetMask(),
 				v.ipv6SubnetMask(),
 				v.maxIPCacheSize(),

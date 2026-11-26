@@ -563,7 +563,10 @@ public class BlockDiagnosisService {
 				effectiveOutcome = (!v.simulationMode() && "BLOCKING".equalsIgnoreCase(v.monitorMode()))
 						? "MONITORED_ENFORCING"
 						: "MONITORED_NON_BLOCKING (" + (v.simulationMode() ? "Simulation" : v.monitorMode()) + ")";
-				summaryNote = "Request falls inside active rate-limit scope ("
+				summaryNote = (v.isGlobalCounterScope()
+						? "Global shared counter (GLOBAL:ALL): "
+						: "")
+						+ "Request falls inside active rate-limit scope ("
 						+ v.allowedRequestsPerSlot() + " req / " + v.slotLength() + "s slot).";
 			} else {
 				effectiveOutcome = v.dynamicMitigationEnabled() && !dynamicBypassedForIp
@@ -803,12 +806,13 @@ public class BlockDiagnosisService {
 			boolean exactIp = false;
 			boolean collateralSubnet = false;
 			boolean isSyntheticUa = IpNetworkUtil.isSyntheticUaKey(ev.clientKey());
+			boolean isSyntheticGlobal = IpNetworkUtil.isSyntheticGlobalKey(ev.clientKey());
 			if (ipInfo != null) {
 				if (isSyntheticUa) {
 					if (uaLower == null) {
 						continue;
 					}
-				} else {
+				} else if (!isSyntheticGlobal) {
 					IpNetworkInfo evIp = parseStrictIp(ev.clientKey());
 					if (evIp == null || !ipIntervalsOverlap(ipInfo, evIp)) {
 						continue;
@@ -901,6 +905,9 @@ public class BlockDiagnosisService {
 			long syntheticUaBlockedCount = blockedOrMarkedEvents.stream()
 					.filter(m -> IpNetworkUtil.isSyntheticUaKey(m.event().clientKey()) && (m.event().isBlocked() || m.event().isHoneypot()))
 					.count();
+			long syntheticGlobalBlockedCount = blockedOrMarkedEvents.stream()
+					.filter(m -> IpNetworkUtil.isSyntheticGlobalKey(m.event().clientKey()) && (m.event().isBlocked() || m.event().isHoneypot()))
+					.count();
 			long uaMatchBlockedCount = blockedOrMarkedEvents.stream()
 					.filter(m -> m.sampleUaMatches() && (m.event().isBlocked() || m.event().isHoneypot()))
 					.count();
@@ -928,6 +935,17 @@ public class BlockDiagnosisService {
 						null,
 						eventsUrl,
 						"Inspect UA Block Events"));
+			}
+			if (syntheticGlobalBlockedCount > 0) {
+				findings.add(new Finding(
+						"BLOCKED",
+						"Observed Global Rate-Cap Events",
+						syntheticGlobalBlockedCount + " global server rate-cap block event(s) recorded in time window",
+						"A server-wide counterScope=GLOBAL rate cap (GLOBAL:ALL) triggered during the inspected time window.",
+						null,
+						null,
+						"/events?clientQuery=" + encodeUrl("GLOBAL:ALL"),
+						"Inspect Global Cap Events"));
 			}
 			if (subnetCollateralDetected) {
 				findings.add(new Finding(

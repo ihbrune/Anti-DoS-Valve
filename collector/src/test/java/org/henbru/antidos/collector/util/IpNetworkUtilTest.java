@@ -168,4 +168,22 @@ class IpNetworkUtilTest {
 		assertFalse(IpNetworkUtil.isPrivateOrLocal("some-random-hostname"));
 		assertNull(IpNetworkUtil.getPrivateNetworkDescription("some-random-hostname"));
 	}
+
+	@Test
+	void testSyntheticGlobalCounterKey() {
+		assertTrue(IpNetworkUtil.isSyntheticGlobalKey("GLOBAL:ALL"));
+		assertTrue(IpNetworkUtil.isSyntheticCounterKey("GLOBAL:ALL"));
+		assertFalse(IpNetworkUtil.isSyntheticUaKey("GLOBAL:ALL"));
+		assertFalse(IpNetworkUtil.isSyntheticGlobalKey("UA:123456"));
+		assertFalse(IpNetworkUtil.isSyntheticGlobalKey("192.168.1.1"));
+
+		IpNetworkInfo info = IpNetworkUtil.parse("GLOBAL:ALL");
+		assertEquals(4, info.version());
+		assertEquals(32, info.prefix());
+		assertNull(info.v4Start());
+		assertNull(info.v4End());
+		assertNull(info.v6Start());
+		assertNull(info.v6End());
+		assertEquals("", info.subnetGroup());
+	}
 }

@@ -224,6 +224,11 @@
                                             th:title="'Auth session tracking: ' + ${runtimeValvesMap[v.valveName].authTrackingLabel()}"
                                             th:text="'AUTH: ' + ${runtimeValvesMap[v.valveName].authTrackingLabel()}">AUTH:
                                             OFF</span>
+                                        <span class="badge badge-warning"
+                                            th:if="${runtimeValvesMap[v.valveName].isGlobalCounterScope()}"
+                                            style="font-size: 9.5px; padding: 1px 5px;"
+                                            title="Counter scope: GLOBAL (all matching requests share a single counter GLOBAL:ALL)">COUNTER:
+                                            GLOBAL</span>
                                         <span class="badge"
                                             th:if="${runtimeValvesMap[v.valveName].relevantAuthScope() != 'ALL'}"
                                             th:classappend="${runtimeValvesMap[v.valveName].relevantAuthScopeBadgeClass()}"
@@ -361,6 +366,8 @@
                             <span class="badge" th:classappend="${rv.authTrackingBadgeClass()}"
                                 th:title="'Authentication session tracking: ' + ${rv.authTrackingLabel()}"
                                 th:text="'AUTH: ' + ${rv.authTrackingLabel()}">AUTH: OFF</span>
+                            <span class="badge badge-warning" th:if="${rv.isGlobalCounterScope()}"
+                                title="Counter scope: GLOBAL (all matching requests share a single counter GLOBAL:ALL)">COUNTER: GLOBAL</span>
                             <span class="badge" th:if="${rv.relevantAuthScope() != 'ALL'}"
                                 th:classappend="${rv.relevantAuthScopeBadgeClass()}"
                                 th:title="'Relevant auth scope: ' + ${rv.relevantAuthScope()}"
@@ -432,11 +439,13 @@
 
                         <div
                             style="background: rgba(0,0,0,0.18); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px;">
-                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Subnet Masking
+                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;"
+                                th:text="${rv.isGlobalCounterScope() ? 'Counter Partition Scope' : 'Subnet Masking Partition'}">Subnet Masking
                                 Partition</div>
                             <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);"
                                 th:utext="${rv.formattedSubnetMasks()}">/32 (IPv4) &bull; /64 (IPv6)</div>
-                            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;">Traffic grouped
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;"
+                                th:text="${rv.isGlobalCounterScope() ? 'All matching traffic shares GLOBAL:ALL' : 'Traffic grouped by subnet prefix'}">Traffic grouped
                                 by subnet prefix</div>
                         </div>
 

@@ -77,6 +77,7 @@ import jakarta.servlet.http.HttpServletResponse;
  * <li>{@link #setServerWideBlocking(boolean)}
  * <li>{@link #setMaxIPCacheSize(int)}
  * <li>{@link #setMaxBlockedIPCacheSize(int)}
+ * <li>{@link #setCounterScope(String)}
  * <li>{@link #setIpv4SubnetMask(int)}
  * <li>{@link #setIpv6SubnetMask(int)}
  * <li>{@link #setNumberOfSlots(int)}
@@ -173,6 +174,21 @@ public class AntiDoSValve extends ValveBase {
 	 * Relevant auth scope constant: applies rate limiting only to unauthenticated requests.
 	 */
 	public static final String RELEVANT_AUTH_SCOPE_UNAUTHENTICATED_ONLY = "UNAUTHENTICATED_ONLY";
+
+	/**
+	 * Counter scope constant: tracks requests per individual IP address or configured CIDR subnet (default).
+	 */
+	public static final String COUNTER_SCOPE_CLIENT = "CLIENT";
+
+	/**
+	 * Counter scope constant: aggregates all matching IPv4 and IPv6 requests into a single shared server-wide counter.
+	 */
+	public static final String COUNTER_SCOPE_GLOBAL = "GLOBAL";
+
+	/**
+	 * Synthetic counter key used by {@link AntiDoSMonitor} when {@code counterScope="GLOBAL"}.
+	 */
+	public static final String GLOBAL_COUNTER_KEY = "GLOBAL:ALL";
 
 	public AntiDoSValve() {
 		super(true);
@@ -275,6 +291,7 @@ public class AntiDoSValve extends ValveBase {
 
 	private volatile int maxIPCacheSize = -1;
 	private volatile int maxBlockedIPCacheSize = -1;
+	private volatile String counterScope = COUNTER_SCOPE_CLIENT;
 	private volatile int ipv4SubnetMask = 32;
 	private volatile int ipv6SubnetMask = 128;
 	private volatile String collectorIntegration = DEFAULT_COLLECTOR_INTEGRATION;
@@ -827,6 +844,44 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
+	 * @return The counter partitioning scope ("CLIENT" or "GLOBAL"). Defaults to "CLIENT".
+	 */
+	public String getCounterScope() {
+		return counterScope;
+	}
+
+	/**
+	 * Sets the counter partitioning scope for rate limiting.
+	 * <ul>
+	 * <li><code>CLIENT</code> (default): tracks requests per individual client IP or configured CIDR subnet.</li>
+	 * <li><code>GLOBAL</code>: tracks all matching IPv4 and IPv6 requests in a single shared server-wide counter (<code>GLOBAL:ALL</code>), ignoring subnet masks.</li>
+	 * </ul>
+	 *
+	 * @param counterScope "CLIENT" or "GLOBAL"
+	 */
+	public void setCounterScope(String counterScope) {
+		if (counterScope == null || counterScope.trim().isEmpty()) {
+			this.counterScope = COUNTER_SCOPE_CLIENT;
+		} else {
+			this.counterScope = counterScope.trim().toUpperCase(Locale.ROOT);
+		}
+	}
+
+	/**
+	 * @return <code>true</code> if {@link #getCounterScope()} is "CLIENT" or "GLOBAL"
+	 */
+	public boolean isCounterScopeValid() {
+		return COUNTER_SCOPE_CLIENT.equals(counterScope) || COUNTER_SCOPE_GLOBAL.equals(counterScope);
+	}
+
+	/**
+	 * @return <code>true</code> if {@link #getCounterScope()} is "GLOBAL"
+	 */
+	public boolean isGlobalCounterScope() {
+		return COUNTER_SCOPE_GLOBAL.equals(counterScope);
+	}
+
+	/**
 	 * @return The IPv4 subnet mask prefix length (e.g. 24 for /24, 32 for no aggregation)
 	 */
 	public int getIpv4SubnetMask() {
@@ -893,10 +948,10 @@ public class AntiDoSValve extends ValveBase {
 	}
 
 	/**
-	 * @return <code>true</code> if subnet aggregation / monitoring is active (IPv4 prefix &lt; 32 or IPv6 prefix &lt; 128)
+	 * @return <code>true</code> if subnet aggregation / monitoring is active (counterScope=CLIENT and IPv4 prefix &lt; 32 or IPv6 prefix &lt; 128)
 	 */
 	public boolean isSubnetAggregationActive() {
-		return (ipv4SubnetMask > 0 && ipv4SubnetMask < 32) || (ipv6SubnetMask > 0 && ipv6SubnetMask < 128);
+		return !isGlobalCounterScope() && ((ipv4SubnetMask > 0 && ipv4SubnetMask < 32) || (ipv6SubnetMask > 0 && ipv6SubnetMask < 128));
 	}
 
 	/**
@@ -3430,6 +3485,8 @@ public class AntiDoSValve extends ValveBase {
 			throw new LifecycleException(name4logging + ".httpStatusCode is invalid: " + httpStatusCode);
 		if (statusConcurrencyTimeoutMs < -1)
 			throw new LifecycleException(name4logging + ".statusConcurrencyTimeoutMs must be >= -1: " + statusConcurrencyTimeoutMs);
+		if (!isCounterScopeValid())
+			throw new LifecycleException(name4logging + ".counterScope is invalid: " + counterScope);
 		if (!isIpv4SubnetMaskValid())
 			throw new LifecycleException(name4logging + ".ipv4SubnetMask is invalid: " + ipv4SubnetMask);
 		if (!isIpv6SubnetMaskValid())
@@ -3533,6 +3590,9 @@ public class AntiDoSValve extends ValveBase {
 
 					if (serverWideBlocking)
 						log.info(name4logging + " is in SERVER-WIDE BLOCKING mode");
+
+					if (isGlobalCounterScope())
+						log.info(name4logging + " is in GLOBAL COUNTER mode (counterScope=GLOBAL)");
 				}
 				return null;
 			} catch (IllegalArgumentException ex) {
@@ -3879,28 +3939,41 @@ public class AntiDoSValve extends ValveBase {
 		if (ip == null || ip.isEmpty()) {
 			throw new IllegalArgumentException("IP address must not be null or empty");
 		}
-		int v4Mask = this.ipv4SubnetMask;
-		int v6Mask = this.ipv6SubnetMask;
-		boolean v4Active = v4Mask > 0 && v4Mask < 32;
-		boolean v6Active = v6Mask > 0 && v6Mask < 128;
-
-		String counterName = ip;
+		final String counterName;
 		byte[] rawIpv4Bytes = null;
-		if (v4Active || v6Active) {
-			if (v4Active) {
-				rawIpv4Bytes = parseIPv4Literal(ip);
-				if (rawIpv4Bytes != null) {
-					byte[] maskedBytes = rawIpv4Bytes.clone();
-					maskBytes(maskedBytes, v4Mask);
-					counterName = formatIPv4Subnet(maskedBytes, v4Mask);
+		final int v4Mask;
+		final int v6Mask;
+		final boolean trackCardinality;
+
+		if (isGlobalCounterScope()) {
+			counterName = GLOBAL_COUNTER_KEY;
+			v4Mask = 32;
+			v6Mask = 128;
+			trackCardinality = isExtendedMetricsActive();
+		} else {
+			v4Mask = this.ipv4SubnetMask;
+			v6Mask = this.ipv6SubnetMask;
+			boolean v4Active = v4Mask > 0 && v4Mask < 32;
+			boolean v6Active = v6Mask > 0 && v6Mask < 128;
+
+			String resolved = ip;
+			if (v4Active || v6Active) {
+				if (v4Active) {
+					rawIpv4Bytes = parseIPv4Literal(ip);
+					if (rawIpv4Bytes != null) {
+						byte[] maskedBytes = rawIpv4Bytes.clone();
+						maskBytes(maskedBytes, v4Mask);
+						resolved = formatIPv4Subnet(maskedBytes, v4Mask);
+					}
+				}
+				if (resolved.equals(ip) && v6Active && ip.indexOf(':') >= 0) {
+					resolved = aggregateSubnet(ip, false, v4Mask, true, v6Mask);
 				}
 			}
-			if (counterName.equals(ip) && v6Active && ip.indexOf(':') >= 0) {
-				counterName = aggregateSubnet(ip, false, v4Mask, true, v6Mask);
-			}
+			counterName = resolved;
+			trackCardinality = isExtendedMetricsActive() && !counterName.equals(ip);
 		}
 
-		boolean trackCardinality = isExtendedMetricsActive() && !counterName.equals(ip);
 		AntiDoSMonitor monitor = provideMonitor();
 		if (monitor == null || monitor.registerAndCheckRequest(counterName, ip, rawIpv4Bytes, trackCardinality, v4Mask,
 				v6Mask, returningVisitor, authenticated, uaMismatch, userAgent)) {
@@ -3988,6 +4061,9 @@ public class AntiDoSValve extends ValveBase {
 	public String resolveCounterName(String ip) {
 		if (ip == null || ip.isEmpty()) {
 			return ip;
+		}
+		if (isGlobalCounterScope()) {
+			return GLOBAL_COUNTER_KEY;
 		}
 
 		int v4Mask = this.ipv4SubnetMask;

@@ -199,6 +199,7 @@ public class ClientEventRepository {
 			List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
 					SELECT id, client_key FROM client_events
 					WHERE client_key NOT LIKE 'UA:%'
+					  AND client_key NOT LIKE 'GLOBAL:%'
 					  AND ((ip_version = 4 AND (ip_v4_start IS NULL OR ip_v4_end IS NULL))
 					   OR (ip_version = 6 AND (ip_v6_start IS NULL OR ip_v6_end IS NULL))
 					   OR (subnet_group NOT LIKE '%/%' AND (client_key LIKE '%.%' OR client_key LIKE '%:%')))
@@ -581,7 +582,7 @@ public class ClientEventRepository {
 				.append("MIN(slot_time) AS first_seen, ")
 				.append("MAX(slot_time) AS last_seen ")
 				.append("FROM client_events ")
-				.append("WHERE client_key NOT LIKE 'UA:%' ");
+				.append("WHERE client_key NOT LIKE 'UA:%' AND client_key NOT LIKE 'GLOBAL:%' ");
 
 		List<Object> params = new ArrayList<>();
 		appendFilterCriteria(sql, params, serverIds, valveNames, fromTime, toTime, clientQuery, clientTypes, asn, asOrg, status);

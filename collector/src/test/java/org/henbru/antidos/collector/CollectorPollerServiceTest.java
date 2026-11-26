@@ -1165,6 +1165,128 @@ class CollectorPollerServiceTest {
 		assertEquals("^198\\.51\\.100\\.250$", valveOpt.get().mitigationBypassIPs());
 		assertTrue(valveOpt.get().hasIpLists());
 	}
+
+	@Test
+	void testPollEndpointGlobalCounterScopeAndSyntheticKey() throws Exception {
+		EndpointConfig endpoint = new EndpointConfig("GLOBAL-CAP-NODE", "http://localhost:8080/antidos-status", "tok", false, true);
+
+		ValveOverviewDto.ValveSummaryDto summary = new ValveOverviewDto.ValveSummaryDto(
+				"GLOBAL_CAP_VALVE",
+				"Global surge cap valve",
+				2,
+				"BLOCKING",
+				false,
+				false,
+				429,
+				200,
+				5,
+				12,
+				0.0f,
+				"GLOBAL",
+				32,
+				128,
+				10,
+				10,
+				"/portal/.*",
+				null,
+				null,
+				null,
+				"/antidos-status",
+				"127.0.0.1",
+				"auto",
+				false,
+				"_adv",
+				false,
+				"OFF",
+				null,
+				null,
+				900,
+				50000,
+				0,
+				"UNAUTHENTICATED_ONLY",
+				0,
+				false,
+				null,
+				null,
+				true,
+				null,
+				0,
+				0L,
+				0L,
+				1,
+				16,
+				32,
+				86400,
+				5000,
+				0,
+				0L,
+				0L,
+				0L,
+				true,
+				0L,
+				0,
+				1,
+				500L,
+				499L,
+				250L,
+				0L,
+				250L,
+				0L,
+				0,
+				1,
+				12,
+				true,
+				true
+		);
+		when(statusClient.fetchOverview(any())).thenReturn(new ValveOverviewDto("2026-10-18T10:00:00Z", List.of(summary), null));
+
+		ValveDetailsDto.SelectedSlotDto slotDto = new ValveDetailsDto.SelectedSlotDto(
+				"previous", 4, 499L, false, "2026-10-18T09:59:55Z", "2026-10-18T10:00:00Z", 250L, 0, 1
+		);
+		ValveDetailsDto.BlockedClientDto globalCounter = new ValveDetailsDto.BlockedClientDto(
+				"GLOBAL:ALL", 250, 0, 250, true, "2026-10-18T09:59:59Z", 180, 12, 0, 0, 0,
+				"GET", "/portal/course/catalog", "Mozilla/5.0", false, false
+		);
+		ValveDetailsDto details = new ValveDetailsDto(
+				"2026-10-18T10:00:00Z", null, slotDto, 1, "all", List.of(globalCounter), null
+		);
+		when(statusClient.fetchSlotDetails(any(), eq("GLOBAL_CAP_VALVE"), eq("previous"), eq("all"), eq("all"), eq("0"))).thenReturn(details);
+
+		pollerService.pollEndpoint(endpoint);
+
+		// 1. MonitoredValve persisted with counterScope="GLOBAL"
+		var valveOpt = monitoredValveRepository.findByServerIdAndValveName("GLOBAL-CAP-NODE", "GLOBAL_CAP_VALVE");
+		assertTrue(valveOpt.isPresent());
+		assertEquals("GLOBAL", valveOpt.get().counterScope());
+		assertTrue(valveOpt.get().isGlobalCounterScope());
+
+		// 2. ClientEvent stored as ENRICHED without creating a network_entity
+		var globalEvents = clientEventRepository.findRecentEventsFiltered(
+				List.of("GLOBAL-CAP-NODE"), List.of("GLOBAL_CAP_VALVE"), null, null, "GLOBAL:ALL", 10, 0);
+		assertEquals(1, globalEvents.size());
+		var ev = globalEvents.getFirst();
+		assertEquals("GLOBAL:ALL", ev.clientKey());
+		assertEquals(org.henbru.antidos.collector.model.EnrichmentStatus.ENRICHED, ev.enrichmentStatus());
+		assertEquals("Global Server Rate Cap", ev.asOrg());
+		assertEquals("", ev.subnetGroup());
+		assertNull(ev.ipV4Start());
+		assertNull(ev.ipV6Start());
+		assertEquals(180, ev.distinctClients());
+
+		Integer entityCount = jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM network_entity WHERE client_key = ?", Integer.class, "GLOBAL:ALL");
+		assertEquals(0, entityCount);
+
+		// 3. Unrelated IPv4 search must NOT match GLOBAL:ALL
+		var ipSearch = clientEventRepository.findRecentEventsFiltered(
+				List.of("GLOBAL-CAP-NODE"), List.of("GLOBAL_CAP_VALVE"), null, null, "198.51.100.42", 10, 0);
+		assertTrue(ipSearch.isEmpty(), "Unrelated IP search must not match synthetic GLOBAL:ALL event");
+
+		// 4. Top offenders ranking must exclude synthetic GLOBAL:ALL key
+		var offenders = clientEventRepository.findTopOffendersFiltered(
+				List.of("GLOBAL-CAP-NODE"), List.of("GLOBAL_CAP_VALVE"), null, null, null, "CLIENT", 10);
+		assertTrue(offenders.stream().noneMatch(o -> o.clientKey().startsWith("GLOBAL:")));
+	}
 }
 
 

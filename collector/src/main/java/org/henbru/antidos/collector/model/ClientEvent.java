@@ -667,10 +667,12 @@ public record ClientEvent(
 				completed,
 				lastUpdatedAt,
 				null,
-				IpNetworkUtil.isSyntheticUaKey(clientKey) ? "Dynamic User-Agent Rule" : null,
+				IpNetworkUtil.isSyntheticUaKey(clientKey)
+						? "Dynamic User-Agent Rule"
+						: (IpNetworkUtil.isSyntheticGlobalKey(clientKey) ? "Global Server Rate Cap" : null),
 				null,
 				ClientType.UNKNOWN,
-				IpNetworkUtil.isSyntheticUaKey(clientKey) ? EnrichmentStatus.ENRICHED : EnrichmentStatus.PENDING,
+				IpNetworkUtil.isSyntheticCounterKey(clientKey) ? EnrichmentStatus.ENRICHED : EnrichmentStatus.PENDING,
 				null,
 				Math.max(1, distinctClients),
 				distinctUserAgents,

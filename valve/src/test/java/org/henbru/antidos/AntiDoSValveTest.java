@@ -3059,6 +3059,127 @@ class AntiDoSValveTest {
 		}
 	}
 
+	@Test
+	void testCounterScopeConfigurationValidation() throws Exception {
+		AntiDoSValve valve = new AntiDoSValve();
+		assertEquals(AntiDoSValve.COUNTER_SCOPE_CLIENT, valve.getCounterScope());
+		assertTrue(valve.isCounterScopeValid());
+		assertFalse(valve.isGlobalCounterScope());
+
+		valve.setCounterScope("global");
+		assertEquals(AntiDoSValve.COUNTER_SCOPE_GLOBAL, valve.getCounterScope());
+		assertTrue(valve.isCounterScopeValid());
+		assertTrue(valve.isGlobalCounterScope());
+
+		valve.setCounterScope("   ");
+		assertEquals(AntiDoSValve.COUNTER_SCOPE_CLIENT, valve.getCounterScope());
+
+		valve.setCounterScope(null);
+		assertEquals(AntiDoSValve.COUNTER_SCOPE_CLIENT, valve.getCounterScope());
+
+		valve.setCounterScope("INVALID_SCOPE");
+		assertFalse(valve.isCounterScopeValid());
+		valve.setContainer(new org.apache.catalina.core.StandardEngine());
+		valve.setMonitorName("INVALID_COUNTER_SCOPE_TEST");
+		setValidAntiDoSMonitorconfiguration(valve, "INVALID_COUNTER_SCOPE_TEST");
+
+		LifecycleException thrown = assertThrows(LifecycleException.class, valve::init);
+		assertTrue(thrown.getMessage().contains("counterScope is invalid"));
+	}
+
+	@Test
+	void testGlobalCounterScopeSharedAcrossIpv4AndIpv6WithExemptionsAndStatus() throws Exception {
+		AntiDoSValve.clearActiveValves();
+		AntiDoSValve valve = new AntiDoSValve();
+		valve.setContainer(new org.apache.catalina.core.StandardEngine());
+		valve.setMonitorName("GLOBAL_CAP_TEST");
+		valve.setCounterScope("GLOBAL");
+		valve.setIpv4SubnetMask(24);
+		valve.setIpv6SubnetMask(64);
+		valve.setAlwaysAllowPrivateIPs(true);
+		valve.setAlwaysAllowedIPs("198\\.51\\.100\\.99");
+		valve.setRelevantPaths("/portal/.*");
+		valve.setNonRelevantPaths("/portal/health");
+		valve.setCollectorIntegration("true");
+		valve.setAllowedRequestsPerSlot(3);
+		valve.setNumberOfSlots(5);
+		valve.setSlotLength(60);
+		valve.setShareOfRetainedFormerRequests(0);
+		valve.setMaxIPCacheSize(10);
+		valve.setMaxBlockedIPCacheSize(10);
+		valve.reloadMonitor();
+		valve.start();
+
+		try {
+			assertFalse(valve.isSubnetAggregationActive(), "Subnet aggregation must be inactive in GLOBAL mode");
+			assertEquals(AntiDoSValve.GLOBAL_COUNTER_KEY, valve.resolveCounterName("203.0.113.10"));
+			assertEquals(AntiDoSValve.GLOBAL_COUNTER_KEY, valve.resolveCounterName("2001:db8::1"));
+
+			// Private IP & alwaysAllowedIP & nonRelevantPath must bypass GLOBAL counter
+			assertTrue(valve.isRequestAllowed("10.0.0.5", "/portal/home"));
+			assertTrue(valve.isRequestAllowed("198.51.100.99", "/portal/home"));
+			assertTrue(valve.isRequestAllowed("203.0.113.1", "/portal/health"));
+			assertNull(valve.provideMonitor().provideCurrentCounter(AntiDoSValve.GLOBAL_COUNTER_KEY));
+
+			// Distinct IPv4 and IPv6 clients share the single GLOBAL:ALL quota of 3 requests
+			TestRequest req1 = new TestRequest("/portal/a", "198.51.100.1");
+			req1.headers.put("User-Agent", "BotAlpha/1.0");
+			TestResponse resp1 = new TestResponse();
+			valve.invoke(req1, resp1);
+			assertEquals(200, resp1.getStatus());
+
+			TestRequest req2 = new TestRequest("/portal/b", "203.0.113.5");
+			req2.headers.put("User-Agent", "BotBeta/2.0");
+			TestResponse resp2 = new TestResponse();
+			valve.invoke(req2, resp2);
+			assertEquals(200, resp2.getStatus());
+
+			TestRequest req3 = new TestRequest("/portal/c", "2001:db8:abcd::9");
+			req3.headers.put("User-Agent", "BotGamma/3.0");
+			TestResponse resp3 = new TestResponse();
+			valve.invoke(req3, resp3);
+			assertEquals(200, resp3.getStatus());
+
+			// 4th request from a brand-new IPv4 address exceeds the global cap -> 429
+			TestRequest req4 = new TestRequest("/portal/login", "192.0.2.44");
+			req4.headers.put("User-Agent", "Scraper/4.0");
+			TestResponse resp4 = new TestResponse();
+			valve.invoke(req4, resp4);
+			assertEquals(429, resp4.getErrorCode());
+
+			// Even after global counter is locked, private/whitelisted/non-relevant remain allowed
+			assertTrue(valve.isRequestAllowed("10.0.0.5", "/portal/home"));
+			assertTrue(valve.isRequestAllowed("198.51.100.99", "/portal/home"));
+			assertTrue(valve.isRequestAllowed("203.0.113.1", "/portal/health"));
+
+			AntiDoSCounter counter = valve.provideMonitor().provideCurrentCounter(AntiDoSValve.GLOBAL_COUNTER_KEY);
+			assertNotNull(counter);
+			assertTrue(counter.isLocked());
+			assertEquals(4, counter.getCount());
+			assertEquals(4, counter.getDistinctClients());
+			assertEquals(4, counter.getDistinctUserAgents());
+
+			String overviewJson = valve.getStatusRenderer().buildStatusJson("GLOBAL_CAP_TEST");
+			assertTrue(overviewJson.contains("\"counterScope\": \"GLOBAL\""));
+
+			String detailsJson = valve.getStatusRenderer().buildStatusJsonDetails("GLOBAL_CAP_TEST");
+			assertTrue(detailsJson.contains("\"counterScope\": \"GLOBAL\""));
+			assertTrue(detailsJson.contains("\"key\": \"GLOBAL:ALL\""));
+
+			String overviewHtml = valve.getStatusRenderer().buildStatusHtml("GLOBAL_CAP_TEST", null);
+			assertTrue(overviewHtml.contains("COUNTER SCOPE: GLOBAL"));
+			assertTrue(overviewHtml.contains("GLOBAL:ALL"));
+
+			String detailsHtml = valve.getStatusRenderer().buildStatusHtmlDetails("GLOBAL_CAP_TEST", null);
+			assertTrue(detailsHtml.contains("COUNTER SCOPE: GLOBAL"));
+			assertTrue(detailsHtml.contains("GLOBAL:ALL"));
+			assertTrue(detailsHtml.contains("Distinct IPs"));
+		} finally {
+			valve.stop();
+			AntiDoSValve.clearActiveValves();
+		}
+	}
+
 	private static class TestRequest extends Request {
 		private final String testUri;
 		private final String testRemoteAddr;

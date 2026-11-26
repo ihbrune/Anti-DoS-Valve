@@ -167,6 +167,25 @@
                          slotLength="60"
                     />
 
+                    <!-- AntiDoSValve Global Surge Hard-Cap demo configuration:
+                         Aggregates all matching unauthenticated IPv4 & IPv6 requests into a single
+                         shared server-wide counter (GLOBAL:ALL) to protect against distributed surges. -->
+                    <Valve className="org.henbru.antidos.AntiDoSValve"
+                         monitorName="GLOBAL-SURGE-CAP-VALVE"
+                         description="Global server-wide surge hard-cap protecting session-creating routes"
+                         alwaysAllowPrivateIPs="true"
+                         relevantPaths="/globalcapdemo.*"
+                         nonRelevantPaths=".*\.(css|js|png|jpg|gif|svg|ico|woff2?)$"
+                         maxIPCacheSize="10"
+                         counterScope="GLOBAL"
+                         slotLength="5"
+                         allowedRequestsPerSlot="200"
+                         numberOfSlots="12"
+                         shareOfRetainedFormerRequests="0"
+                         relevantAuthScope="UNAUTHENTICATED_ONLY"
+                         httpStatusCode="429"
+                    />
+
                </Host>
           </Engine>
      </Service>

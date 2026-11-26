@@ -1506,33 +1506,53 @@
               <div id="hintMaxBlockedIPCacheSize" class="cache-mode-hint sync"></div>
             </div>
 
-            <!-- 8. ipv4SubnetMask -->
+            <!-- 7b. counterScope -->
             <div class="field-group">
               <div class="field-header">
-                <label for="ipv4SubnetMask" class="field-label">ipv4SubnetMask</label>
+                <label for="counterScope" class="field-label">counterScope</label>
                 <span class="badge badge-optional">Optional</span>
               </div>
-              <div class="field-desc">Subnet prefix length for aggregating IPv4 addresses (1 to 32, e.g.
-                <code>24</code>, <code>/24</code>, or <code>255.255.255.0</code>). <code>32</code> or empty disables
-                aggregation. <strong>Recommendation:</strong> Use <code>/24</code> for IPv4 to enable exact 256-bit
-                cardinality tracking for Residential Proxy cluster detection.
+              <div class="field-desc">Controls how incoming requests are partitioned into rate-limiting counters.
+                <code>CLIENT</code> (default) tracks each client IP or CIDR subnet separately. <code>GLOBAL</code>
+                aggregates all matching IPv4 and IPv6 requests into a single shared server-wide counter
+                (<code>GLOBAL:ALL</code>) and ignores subnet masks.
               </div>
-              <input type="text" id="ipv4SubnetMask" name="ipv4SubnetMask"
-                placeholder="e.g. 24, /24, or 255.255.255.0 (Default: 32)">
-              <div id="hintIpv4SubnetMask" class="subnet-mask-hint neutral"></div>
+              <select id="counterScope" name="counterScope">
+                <option value="CLIENT" selected>CLIENT (Default - per-IP or per-subnet counters)</option>
+                <option value="GLOBAL">GLOBAL (Single server-wide counter across all traffic)</option>
+              </select>
+              <div id="hintCounterScope" class="status-field-hint neutral"></div>
             </div>
 
-            <!-- 9. ipv6SubnetMask -->
-            <div class="field-group">
-              <div class="field-header">
-                <label for="ipv6SubnetMask" class="field-label">ipv6SubnetMask</label>
-                <span class="badge badge-optional">Optional</span>
+            <div id="subnetMaskFieldsContainer">
+              <!-- 8. ipv4SubnetMask -->
+              <div class="field-group">
+                <div class="field-header">
+                  <label for="ipv4SubnetMask" class="field-label">ipv4SubnetMask</label>
+                  <span class="badge badge-optional">Optional</span>
+                </div>
+                <div class="field-desc">Subnet prefix length for aggregating IPv4 addresses (1 to 32, e.g.
+                  <code>24</code>, <code>/24</code>, or <code>255.255.255.0</code>). <code>32</code> or empty disables
+                  aggregation. <strong>Recommendation:</strong> Use <code>/24</code> for IPv4 to enable exact 256-bit
+                  cardinality tracking for Residential Proxy cluster detection.
+                </div>
+                <input type="text" id="ipv4SubnetMask" name="ipv4SubnetMask"
+                  placeholder="e.g. 24, /24, or 255.255.255.0 (Default: 32)">
+                <div id="hintIpv4SubnetMask" class="subnet-mask-hint neutral"></div>
               </div>
-              <div class="field-desc">Subnet prefix length for aggregating IPv6 addresses (1 to 128, e.g.
-                <code>64</code> or <code>/64</code>). <code>128</code> or empty disables aggregation.
+
+              <!-- 9. ipv6SubnetMask -->
+              <div class="field-group" style="margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #f1f5f9;">
+                <div class="field-header">
+                  <label for="ipv6SubnetMask" class="field-label">ipv6SubnetMask</label>
+                  <span class="badge badge-optional">Optional</span>
+                </div>
+                <div class="field-desc">Subnet prefix length for aggregating IPv6 addresses (1 to 128, e.g.
+                  <code>64</code> or <code>/64</code>). <code>128</code> or empty disables aggregation.
+                </div>
+                <input type="text" id="ipv6SubnetMask" name="ipv6SubnetMask" placeholder="e.g. 64 or /64 (Default: 128)">
+                <div id="hintIpv6SubnetMask" class="subnet-mask-hint neutral"></div>
               </div>
-              <input type="text" id="ipv6SubnetMask" name="ipv6SubnetMask" placeholder="e.g. 64 or /64 (Default: 128)">
-              <div id="hintIpv6SubnetMask" class="subnet-mask-hint neutral"></div>
             </div>
 
             <!-- 9b. collectorIntegration -->
@@ -2689,6 +2709,7 @@
           nonRelevantPaths: '',
           maxIPCacheSize: 50,
           maxBlockedIPCacheSize: '',
+          counterScope: 'CLIENT',
           ipv4SubnetMask: '',
           ipv6SubnetMask: '',
           slotLength: 30,
@@ -2715,6 +2736,7 @@
           serverWideBlocking: false,
           maxIPCacheSize: 500,
           maxBlockedIPCacheSize: 500,
+          counterScope: 'CLIENT',
           ipv4SubnetMask: '',
           ipv6SubnetMask: '',
           slotLength: 60,
@@ -2740,6 +2762,7 @@
           serverWideBlocking: false,
           maxIPCacheSize: 1000,
           maxBlockedIPCacheSize: 1000,
+          counterScope: 'CLIENT',
           ipv4SubnetMask: '24',
           ipv6SubnetMask: '64',
           slotLength: 15,
@@ -2765,6 +2788,7 @@
           serverWideBlocking: false,
           maxIPCacheSize: 100,
           maxBlockedIPCacheSize: '',
+          counterScope: 'CLIENT',
           ipv4SubnetMask: '',
           ipv6SubnetMask: '',
           slotLength: 30,
@@ -2790,12 +2814,41 @@
           serverWideBlocking: true,
           maxIPCacheSize: 500,
           maxBlockedIPCacheSize: 1000,
+          counterScope: 'CLIENT',
           ipv4SubnetMask: '',
           ipv6SubnetMask: '',
           slotLength: 300,
           allowedRequestsPerSlot: 0,
           numberOfSlots: 6,
           shareOfRetainedFormerRequests: 0,
+          monitorMode: 'BLOCKING',
+          simulationMode: false,
+          httpStatusCode: 429
+        }
+      },
+      {
+        id: 'global_surge_cap',
+        name: 'Global Surge Hard-Cap',
+        description: 'Single server-wide counter protecting against distributed residential proxy waves',
+        values: {
+          monitorName: 'GLOBAL-SURGE-CAP',
+          description: 'Server-wide hard cap for unauthenticated dynamic requests',
+          alwaysForbiddenIPs: '',
+          alwaysAllowedIPs: '',
+          alwaysAllowPrivateIPs: true,
+          relevantPaths: '.*(/portal/|/api/).*',
+          nonRelevantPaths: '.*\\.(css|js|png|jpg|gif|svg|ico|woff2?)$',
+          serverWideBlocking: false,
+          maxIPCacheSize: 10,
+          maxBlockedIPCacheSize: 10,
+          counterScope: 'GLOBAL',
+          ipv4SubnetMask: '',
+          ipv6SubnetMask: '',
+          slotLength: 5,
+          allowedRequestsPerSlot: 1000,
+          numberOfSlots: 12,
+          shareOfRetainedFormerRequests: 0,
+          relevantAuthScope: 'UNAUTHENTICATED_ONLY',
           monitorMode: 'BLOCKING',
           simulationMode: false,
           httpStatusCode: 429
@@ -2818,6 +2871,7 @@
       { key: 'serverWideBlocking', isRequired: false, defaultVal: false, isBoolean: true },
       { key: 'maxIPCacheSize', isRequired: true, defaultVal: 50 },
       { key: 'maxBlockedIPCacheSize', isRequired: false, defaultVal: '' },
+      { key: 'counterScope', isRequired: false, defaultVal: 'CLIENT' },
       { key: 'ipv4SubnetMask', isRequired: false, defaultVal: '' },
       { key: 'ipv6SubnetMask', isRequired: false, defaultVal: '' },
       { key: 'collectorIntegration', isRequired: false, defaultVal: 'auto' },
@@ -2954,6 +3008,12 @@
         const el = document.getElementById(param.key);
         if (!el) return;
 
+        const counterScopeEl = document.getElementById('counterScope');
+        const counterScopeVal = ((counterScopeEl && counterScopeEl.value) || 'CLIENT').trim().toUpperCase();
+        if ((param.key === 'ipv4SubnetMask' || param.key === 'ipv6SubnetMask') && counterScopeVal !== 'CLIENT') {
+          return;
+        }
+
         let val;
         if (param.isBoolean) {
           val = el.checked;
@@ -2992,6 +3052,7 @@
             if (val === '') return;
             if (param.key === 'monitorMode' && val === 'BLOCKING') return;
             if (param.key === 'httpStatusCode' && (val === '429' || val === 429)) return;
+            if (param.key === 'counterScope' && (val.toUpperCase() === 'CLIENT' || val === '')) return;
             if (param.key === 'ipv4SubnetMask' && (val === '32' || val === '-1')) return;
             if (param.key === 'ipv6SubnetMask' && (val === '128' || val === '-1')) return;
             if (param.key === 'collectorIntegration' && (val === 'auto' || val === '')) return;
@@ -3259,6 +3320,32 @@
     }
 
     function updateSubnetMaskIndicators() {
+      const counterScopeEl = document.getElementById('counterScope');
+      const counterScopeHint = document.getElementById('hintCounterScope');
+      const subnetContainer = document.getElementById('subnetMaskFieldsContainer');
+      const retainedEl = document.getElementById('shareOfRetainedFormerRequests');
+      const isGlobalScope = counterScopeEl && counterScopeEl.value.trim().toUpperCase() === 'GLOBAL';
+
+      if (subnetContainer) {
+        subnetContainer.style.display = isGlobalScope ? 'none' : 'block';
+      }
+
+      if (counterScopeHint) {
+        if (isGlobalScope) {
+          const retainedVal = retainedEl ? (parseFloat(retainedEl.value) || 0) : 0;
+          if (retainedVal > 0) {
+            counterScopeHint.className = 'status-field-hint warning';
+            counterScopeHint.innerHTML = '<span>&#9888;</span><div><strong>Global Counter Mode (<code>GLOBAL:ALL</code>) with Retention &gt; 0:</strong> Subnet masks are hidden and ignored. Set <code>shareOfRetainedFormerRequests="0"</code> so a brief spike does not keep the entire server locked out across subsequent slots.</div>';
+          } else {
+            counterScopeHint.className = 'status-field-hint valid';
+            counterScopeHint.innerHTML = '<span>&#10003;</span><div><strong>Global Counter Mode (<code>GLOBAL:ALL</code>):</strong> All matching IPv4 and IPv6 requests share one server-wide counter (<code>maxIPCacheSize="10"</code> suffices). Subnet masks are hidden and ignored. Combine with <code>relevantAuthScope="UNAUTHENTICATED_ONLY"</code> and narrow <code>relevantPaths</code>.</div>';
+          }
+        } else {
+          counterScopeHint.className = 'status-field-hint neutral';
+          counterScopeHint.innerHTML = '<span>&#9432;</span><div><strong>Per-Client / Subnet Mode (<code>CLIENT</code>):</strong> Requests are partitioned by individual IP address or aggregated CIDR subnet using <code>ipv4SubnetMask</code> and <code>ipv6SubnetMask</code> below.</div>';
+        }
+      }
+
       const v4Input = document.getElementById('ipv4SubnetMask');
       const v6Input = document.getElementById('ipv6SubnetMask');
       const v4Hint = document.getElementById('hintIpv4SubnetMask');
@@ -4015,10 +4102,14 @@
       const totalClients = goodClients + badClients;
       const totalFleetRate = (goodClients * goodRate) + (badClients * badRate);
 
+      const isGlobalCounterMode = (document.getElementById('counterScope') && document.getElementById('counterScope').value.trim().toUpperCase() === 'GLOBAL');
+
       if (isMixed) {
-        simMixedSummaryHint.textContent = `Combined Fleet: ${totalClients.toLocaleString()} clients (${goodClients.toLocaleString()} visitors + ${badClients.toLocaleString()} bots) • Total Ingress: ${Math.round(totalFleetRate).toLocaleString()} req/s (${Math.round(totalFleetRate * slotLength).toLocaleString()} reqs / slot)`;
+        simMixedSummaryHint.textContent = `Combined Fleet: ${totalClients.toLocaleString()} clients (${goodClients.toLocaleString()} visitors + ${badClients.toLocaleString()} bots) • Total Ingress: ${Math.round(totalFleetRate).toLocaleString()} req/s (${Math.round(totalFleetRate * slotLength).toLocaleString()} reqs / slot)${isGlobalCounterMode ? ' • Counter Scope: GLOBAL (single shared counter GLOBAL:ALL)' : ''}`;
       } else {
-        simMultiClientsHint.textContent = `Simulating ${totalClients.toLocaleString()} concurrent IP addresses`;
+        simMultiClientsHint.textContent = isGlobalCounterMode
+          ? `Simulating ${totalClients.toLocaleString()} concurrent IP addresses sharing 1 global counter (GLOBAL:ALL)`
+          : `Simulating ${totalClients.toLocaleString()} concurrent IP addresses`;
         simMultiFleetIngressHint.textContent = `Total Ingress: ${Math.round(totalFleetRate).toLocaleString()} req/s across fleet (${Math.round(totalFleetRate * slotLength).toLocaleString()} reqs / slot)`;
       }
 
@@ -4044,9 +4135,57 @@
       // Group historical data
       const goodHistory = [];
       const badHistory = [];
+      const globalHistory = [];
 
       for (let i = 1; i <= TOTAL_SLOTS; i++) {
         const startTime = (i - 1) * slotLength;
+
+        if (isGlobalCounterMode) {
+          const goodAttemptedSlot = (goodClients > 0 && goodRate > 0) ? (Math.round(goodRate * slotLength) * goodClients) : 0;
+          const badAttemptedSlot = (badClients > 0 && badRate > 0) ? (Math.round(badRate * slotLength) * badClients) : 0;
+          const attemptedSlot = goodAttemptedSlot + badAttemptedSlot;
+
+          let retained = 0;
+          if (i > 1 && shareOfRetained > 0 && numberOfSlots > 0) {
+            let sumC = 0;
+            const lb = Math.min(i - 1, numberOfSlots);
+            for (let k = 1; k <= lb; k++) {
+              sumC += globalHistory[i - 1 - k];
+            }
+            retained = Math.round((sumC * shareOfRetained) / numberOfSlots);
+          }
+          globalHistory.push(attemptedSlot);
+
+          const thresholdInSlot = Math.max(0, allowedRequestsPerSlot - retained);
+          const isGlobalBlocked = attemptedSlot > 0 && (attemptedSlot + retained) > allowedRequestsPerSlot;
+          const totalAllowedInSlot = Math.min(attemptedSlot, thresholdInSlot);
+          const totalBlockedInSlot = Math.max(0, attemptedSlot - totalAllowedInSlot);
+
+          const slotActiveDemand = (attemptedSlot > 0 && !isGlobalBlocked) ? 1 : 0;
+          const slotBlockedDemand = (attemptedSlot > 0 && isGlobalBlocked) ? 1 : 0;
+          if (slotActiveDemand > peakActiveIPs) peakActiveIPs = slotActiveDemand;
+          if (slotBlockedDemand > peakBlockedIPs) peakBlockedIPs = slotBlockedDemand;
+
+          totalFleetAllowed += totalAllowedInSlot;
+          totalFleetBlocked += totalBlockedInSlot;
+
+          slotData.push({
+            slotNumber: i,
+            startTime,
+            attempted: attemptedSlot,
+            retained,
+            sumEvaluated: attemptedSlot + retained,
+            isBlocked: isGlobalBlocked,
+            allowed: totalAllowedInSlot,
+            blocked: totalBlockedInSlot,
+            leaked: 0,
+            activeIPs: slotActiveDemand,
+            blockedIPs: slotBlockedDemand,
+            evictedActive: 0,
+            evictedBlocked: 0
+          });
+          continue;
+        }
 
         // Good clients calculations
         let goodAttemptedSlot = 0;

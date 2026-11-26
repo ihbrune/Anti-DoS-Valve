@@ -343,6 +343,7 @@ public final class AntiDoSOpenApiSpec {
           "slotLength",
           "numberOfSlots",
           "shareOfRetainedFormerRequests",
+          "counterScope",
           "ipv4SubnetMask",
           "ipv6SubnetMask",
           "collectorIntegration",
@@ -462,6 +463,14 @@ public final class AntiDoSOpenApiSpec {
             "type": "number",
             "format": "double",
             "description": "Fraction of request counts retained and carried forward into subsequent slots."
+          },
+          "counterScope": {
+            "type": "string",
+            "enum": [
+              "CLIENT",
+              "GLOBAL"
+            ],
+            "description": "Counter partitioning mode: 'CLIENT' (default; per-IP or per-subnet counters) or 'GLOBAL' (single shared server-wide counter 'GLOBAL:ALL' across IPv4 and IPv6)."
           },
           "ipv4SubnetMask": {
             "type": "integer",

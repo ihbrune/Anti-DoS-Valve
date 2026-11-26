@@ -549,7 +549,7 @@ public class CollectorPollerService {
 				}
 				for (ValveDetailsDto.BlockedClientDto c : details.blockedClients()) {
 					Long entityId = null;
-					if (entityResolver != null && !org.henbru.antidos.collector.util.IpNetworkUtil.isSyntheticUaKey(c.key())) {
+					if (entityResolver != null && !org.henbru.antidos.collector.util.IpNetworkUtil.isSyntheticCounterKey(c.key())) {
 						entityId = entityResolver.getCached(c.key())
 								.map(entity -> entity.id())
 								.orElse(null);
@@ -610,7 +610,7 @@ public class CollectorPollerService {
 						}
 					}
 					Long entityId = null;
-					if (entityResolver != null) {
+					if (entityResolver != null && !org.henbru.antidos.collector.util.IpNetworkUtil.isSyntheticCounterKey(c.key())) {
 						entityId = entityResolver.getCached(c.key())
 								.map(entity -> entity.id())
 								.orElse(null);
@@ -712,6 +712,7 @@ public class CollectorPollerService {
 				v.slotLength(),
 				v.numberOfSlots(),
 				v.shareOfRetainedFormerRequests(),
+				v.counterScopeOrDefault(),
 				v.ipv4SubnetMask() > 0 ? v.ipv4SubnetMask() : 32,
 				v.ipv6SubnetMask() > 0 ? v.ipv6SubnetMask() : 64,
 				v.maxIPCacheSize() > 0 ? v.maxIPCacheSize() : 10000,

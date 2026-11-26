@@ -1037,6 +1037,71 @@ class DatabaseMigrationAndRepositoryTest {
 		int deleted = monitoredValveRepository.deleteByServerIdAndValveName("VALVE-NODE-1", "Secondary-Limiter");
 		assertEquals(1, deleted);
 		assertTrue(monitoredValveRepository.findByServerIdAndValveName("VALVE-NODE-1", "Secondary-Limiter").isEmpty());
+
+		// Test counterScope="GLOBAL" persistence (V43)
+		org.henbru.antidos.collector.model.MonitoredValve globalValve = new org.henbru.antidos.collector.model.MonitoredValve(
+				"VALVE-NODE-GLOBAL",
+				"Global-Surge-Cap",
+				"Server-wide surge cap",
+				3,
+				"BLOCKING",
+				false,
+				false,
+				429,
+				200,
+				5,
+				12,
+				0.0f,
+				"GLOBAL",
+				32,
+				128,
+				10,
+				10,
+				"/portal/.*",
+				null,
+				null,
+				true,
+				null,
+				null,
+				null,
+				"auto",
+				false,
+				"_adv",
+				false,
+				"OFF",
+				null,
+				null,
+				900,
+				50000,
+				"UNAUTHENTICATED_ONLY",
+				0,
+				false,
+				null,
+				0,
+				0L,
+				0L,
+				1,
+				16,
+				32,
+				86400,
+				5000,
+				0,
+				0L,
+				0L,
+				0L,
+				true,
+				null,
+				now,
+				77777,
+				true
+		);
+		monitoredValveRepository.upsert(globalValve);
+		Optional<org.henbru.antidos.collector.model.MonitoredValve> foundGlobal =
+				monitoredValveRepository.findByServerIdAndValveName("VALVE-NODE-GLOBAL", "Global-Surge-Cap");
+		assertTrue(foundGlobal.isPresent());
+		assertEquals("GLOBAL", foundGlobal.get().counterScope());
+		assertTrue(foundGlobal.get().isGlobalCounterScope());
+		assertEquals("GLOBAL (Single Counter)", foundGlobal.get().formattedSubnetMasks());
 	}
 
 

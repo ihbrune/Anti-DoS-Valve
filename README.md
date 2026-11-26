@@ -176,7 +176,7 @@ When an incoming HTTP request reaches the valve, it is processed in two distinct
    * If `relevantAuthScope="UNAUTHENTICATED_ONLY"` and the request is authenticated &rarr; **Allow** *(bypasses rate limiting; request is not counted in the monitor)*.
    * If `relevantAuthScope="ALL"` (default) or matches the scope &rarr; continues to step 4.
 4. **Detector Match (`relevantPaths`)**: Does the request URI match `relevantPaths`?
-   * **Yes**: The client IP is resolved to a counter key — either the **individual IP address** or the **aggregated CIDR subnet** (if `ipv4SubnetMask` or `ipv6SubnetMask` is configured). The request is registered and counted in the rate limiting monitor (tracking returning-visitor and authenticated status). If the threshold for this counter key is exceeded (or already locked) &rarr; **Block**; otherwise &rarr; **Allow**.
+   * **Yes**: The request is resolved to a counter key — either the **individual IP address**, the **aggregated CIDR subnet** (if `counterScope="CLIENT"` and `ipv4SubnetMask` or `ipv6SubnetMask` is configured), or the **shared global counter** (`GLOBAL:ALL` when `counterScope="GLOBAL"`). The request is registered and counted in the rate limiting monitor (tracking returning-visitor and authenticated status). If the threshold for this counter key is exceeded (or already locked) &rarr; **Block**; otherwise &rarr; **Allow**.
 5. **Server-Wide Enforcement (`serverWideBlocking`)**: If the URI does *not* match `relevantPaths`, but `serverWideBlocking="true"` is enabled:
    * Is the client IP address (or its aggregated subnet) currently blocked by the monitor? &rarr; **Block** (read-only check; the request is not counted and creates no cache entries).
 6. **Default / Unmonitored**: If the URI does *not* match `relevantPaths` and the client IP address (or its subnet) is not blocked &rarr; **Allow** (neither counted nor blocked).
@@ -197,16 +197,17 @@ If the request is allowed (or if the Valve runs in `simulationMode="true"`):
 > * **When `authLoginPaths` matches `nonRelevantPaths`**: Authentication callbacks (e.g. `/trust`) bypass DoS rate-limiting counters completely, preventing legitimate SSO login roundtrips from being accidentally blocked. When the backend completes the handshake and issues the cookie, the Valve **still inspects the response and registers the session**.
 > * **When `authLoginPaths` matches `relevantPaths`**: Authentication endpoints are counted against the Valve's rate-limiting threshold (useful to protect standard password login forms against brute-force or credential stuffing attacks). If a client is blocked (HTTP 429), the request is halted before reaching the backend and no session cookie is registered.
 
-### Scope: Individual IP Address vs. Subnet Aggregation
+### Scope: Individual IP Address, Subnet Aggregation, and Global Counter
 
-Understanding how the valve identifies clients is important when subnet aggregation is active:
+Understanding how the valve groups requests into counters is important when subnet aggregation or global server caps are active:
 
-* **Static IP Rules (`alwaysForbiddenIPs`, `alwaysAllowedIPs`)**:  
-  Operate strictly on the **individual client IP address** string, before and independently of any subnet mask settings. This makes it possible, for example, to whitelist a specific administrator workstation (`192.168.1.99`) so it is never locked out, even if its entire parent subnet (`192.168.1.0/24`) is currently blocked by dynamic rate limiting.
+* **Static IP Rules (`alwaysForbiddenIPs`, `alwaysAllowedIPs`, `alwaysAllowPrivateIPs`)**:  
+  Operate strictly on the **individual client IP address** string, before and independently of `counterScope` or any subnet mask settings. This makes it possible, for example, to whitelist a specific administrator workstation (`192.168.1.99`) or internal private networks so they are never locked out, even if their parent subnet (`192.168.1.0/24`) or the global server counter (`GLOBAL:ALL`) is currently blocked by dynamic rate limiting.
 * **Dynamic Rate Limiting (`AntiDoSMonitor`) & `serverWideBlocking`**:  
   Operate on the resolved counter key:
-  * **Individual IP address (default)** when no subnet mask is defined (`ipv4SubnetMask=32`, `ipv6SubnetMask=128`).
-  * **Aggregated subnet** when a subnet mask is defined (e.g. `ipv4SubnetMask="24"` or `ipv6SubnetMask="64"`). In this case, all client IPs within that subnet share a common request quota, and when the limit is exceeded, the entire subnet is blocked together.
+  * **Individual IP address (default, `counterScope="CLIENT"`)** when no subnet mask is defined (`ipv4SubnetMask=32`, `ipv6SubnetMask=128`).
+  * **Aggregated subnet (`counterScope="CLIENT"`)** when a subnet mask is defined (e.g. `ipv4SubnetMask="24"` or `ipv6SubnetMask="64"`). In this case, all client IPs within that subnet share a common request quota, and when the limit is exceeded, the entire subnet is blocked together.
+  * **Global server-wide counter (`counterScope="GLOBAL"`)**: All matching IPv4 and IPv6 requests that pass earlier filters (`alwaysAllowedIPs`, `alwaysAllowPrivateIPs`, `nonRelevantPaths`, `relevantAuthScope`) share a single synthetic counter (`GLOBAL:ALL`), ignoring `ipv4SubnetMask` and `ipv6SubnetMask`.
 
 ## monitorName
 
@@ -329,6 +330,22 @@ Defines the maximum number of blocked IP addresses tracked in a slot. This preve
 Blocked IP addresses continue to count subsequent requests even after being blocked, and these counts are factored into the retained request calculations of subsequent time slots to prevent attackers from immediately unblocking when a new slot begins.
 
 Like *maxIPCacheSize*, if *maxBlockedIPCacheSize* exceeds 500, it utilizes asynchronous batch eviction with a 90% low-watermark and a 120% hard-cap. If the blocked cache reaches its hard-cap during an aggressive distributed attack, newly locked counters are safely retained in the active cache rather than dropped, guaranteeing that attackers cannot evade rate limits by attempting to flood or poison the blocked cache.
+
+## counterScope (optional)
+
+Controls how incoming requests are partitioned into rate-limiting counters (`"CLIENT"` by default, or `"GLOBAL"`):
+
+* **`"CLIENT"` (default):** Requests are tracked per individual client IP address or per aggregated CIDR subnet as configured via `ipv4SubnetMask` and `ipv6SubnetMask`.
+* **`"GLOBAL"`:** All matching IPv4 and IPv6 requests share a **single server-wide counter (`GLOBAL:ALL`)**. Subnet mask settings (`ipv4SubnetMask` and `ipv6SubnetMask`) are ignored in this mode.
+
+Use `counterScope="GLOBAL"` as a server-wide surge circuit breaker against sudden, broadly distributed traffic waves (such as residential proxy networks spreading single requests across thousands of distinct subnets) to protect backend session pools from rapid exhaustion.
+
+**Recommended Configuration Guidelines for `counterScope="GLOBAL"`:**
+* **Restrict the Scope (`relevantPaths`, `nonRelevantPaths`, `relevantAuthScope`):** Exclude static assets via `nonRelevantPaths` and limit `relevantPaths` to resource-intensive or session-creating routes (e.g. `/portal/.*`, `/api/.*`). Combine with `relevantAuthScope="UNAUTHENTICATED_ONLY"` and `alwaysAllowPrivateIPs="true"` so authenticated users and internal services remain unaffected during a surge.
+* **Keep Retention at Zero (`shareOfRetainedFormerRequests="0"`):** Setting a positive retention ratio on a global hard cap can keep the entire server locked out across multiple subsequent slots after a brief spike.
+* **Minimal Cache Sizing (`maxIPCacheSize="10"`):** Because only a single `GLOBAL:ALL` counter exists per slot, small cache limits are sufficient.
+* **Collector Polling Alignment:** If monitored by an Anti-DoS Collector polling every 15–30 seconds, prefer slightly larger slot lengths (e.g. `slotLength="5"` with `numberOfSlots="12"`) over 1-second slots so completed slots fit cleanly within the Collector's ring-buffer catch-up window.
+* **Pipeline Placement:** Place a `GLOBAL` surge-cap Valve **after** per-IP / per-subnet Valves and dynamic mitigation Valves so localized abusers are stopped first without consuming the shared global budget.
 
 ## ipv4SubnetMask (optional)
 

@@ -26,6 +26,22 @@ public final class IpNetworkUtil {
 	}
 
 	/**
+	 * Checks whether the given client key represents a synthetic global counter
+	 * emitted by AntiDoSValve when {@code counterScope="GLOBAL"} (e.g. {@code "GLOBAL:ALL"}).
+	 */
+	public static boolean isSyntheticGlobalKey(String clientKey) {
+		return clientKey != null && clientKey.trim().regionMatches(true, 0, "GLOBAL:", 0, 7);
+	}
+
+	/**
+	 * Checks whether the given client key is a synthetic non-IP counter emitted by AntiDoSValve
+	 * (such as {@code "UA:..."} or {@code "GLOBAL:ALL"}).
+	 */
+	public static boolean isSyntheticCounterKey(String clientKey) {
+		return isSyntheticUaKey(clientKey) || isSyntheticGlobalKey(clientKey);
+	}
+
+	/**
 	 * Parses a clientKey string (e.g. "192.168.1.42", "192.168.1.0/24", "2001:db8::1", "2001:db8::/64")
 	 * into structured network information.
 	 */
@@ -36,7 +52,7 @@ public final class IpNetworkUtil {
 
 		String trimmed = clientKey.trim();
 
-		if (isSyntheticUaKey(trimmed)) {
+		if (isSyntheticCounterKey(trimmed)) {
 			return new IpNetworkInfo(4, 32, null, null, null, null, "");
 		}
 

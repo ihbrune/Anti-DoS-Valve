@@ -821,7 +821,7 @@ public class AdvisorService {
 			}
 
 			// Subnet-aggregated valves lacking active forensic sampling
-			if (v.ipv4SubnetMask() <= 24 && v.activeSampleThreshold() <= 0) {
+			if (!v.isGlobalCounterScope() && v.ipv4SubnetMask() <= 24 && v.activeSampleThreshold() <= 0) {
 				String id = "samp-" + sanitizeId(v.serverId() + "-" + v.valveName());
 				String title = String.format("Forensic Active Sampling Inactive on '%s' (%s)", v.valveName(), v.serverId());
 				String explanation = String.format(

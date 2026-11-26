@@ -786,6 +786,9 @@ public class AntiDoSStatusRenderer {
 			if (v.isServerWideBlocking()) {
 				sb.append("      <span class=\"badge badge-warn\">SERVER-WIDE BLOCKING</span>\n");
 			}
+			if (v.isGlobalCounterScope()) {
+				sb.append("      <span class=\"badge badge-warn\">COUNTER SCOPE: GLOBAL</span>\n");
+			}
 			if (v.isDynamicMitigationEnabled()) {
 				int dynActive = v.getDynamicBlockRegistry().getActiveCount(getTimeInMillis());
 				sb.append("      <span class=\"badge badge-blocking\">&#128737;&#65039; DYNAMIC MITIGATION (")
@@ -890,11 +893,17 @@ public class AntiDoSStatusRenderer {
 					.append("</strong> req / <strong>").append(v.getSlotLength()).append("s</strong> slot (Slots: ")
 					.append(v.getNumberOfSlots()).append(", Retention: ").append(retentionPct).append("%)</td></tr>\n");
 
-			// Subnet masks
-			String v4Str = v.getIpv4SubnetMask() == 32 ? "single IP (/32, no aggregation)" : "/" + v.getIpv4SubnetMask();
-			String v6Str = v.getIpv6SubnetMask() == 128 ? "single IP (/128, no aggregation)" : "/" + v.getIpv6SubnetMask();
-			sb.append("    <tr><th>Subnet Aggregation</th><td>IPv4: <code>").append(v4Str)
-					.append("</code> &bull; IPv6: <code>").append(v6Str).append("</code></td></tr>\n");
+			// Counter scope & Subnet masks
+			if (v.isGlobalCounterScope()) {
+				sb.append("    <tr><th>Counter Scope</th><td><span class=\"badge badge-warn\">GLOBAL</span> &bull; Single shared server counter (<code>")
+						.append(AntiDoSValve.GLOBAL_COUNTER_KEY)
+						.append("</code>; subnet masks ignored)</td></tr>\n");
+			} else {
+				String v4Str = v.getIpv4SubnetMask() == 32 ? "single IP (/32, no aggregation)" : "/" + v.getIpv4SubnetMask();
+				String v6Str = v.getIpv6SubnetMask() == 128 ? "single IP (/128, no aggregation)" : "/" + v.getIpv6SubnetMask();
+				sb.append("    <tr><th>Subnet Aggregation</th><td>IPv4: <code>").append(v4Str)
+						.append("</code> &bull; IPv6: <code>").append(v6Str).append("</code></td></tr>\n");
+			}
 
 			// Collector Integration
 			String cMode = v.getCollectorIntegration();
@@ -1116,6 +1125,9 @@ public class AntiDoSStatusRenderer {
 		if (target.isServerWideBlocking()) {
 			sb.append("      <span class=\"badge badge-warn\">SERVER-WIDE BLOCKING</span>\n");
 		}
+		if (target.isGlobalCounterScope()) {
+			sb.append("      <span class=\"badge badge-warn\">COUNTER SCOPE: GLOBAL</span>\n");
+		}
 		if (target.isDynamicMitigationEnabled()) {
 			int dynActive = target.getDynamicBlockRegistry().getActiveCount(getTimeInMillis());
 			sb.append("      <span class=\"badge badge-blocking\">&#128737;&#65039; DYNAMIC MITIGATION (")
@@ -1212,10 +1224,16 @@ public class AntiDoSStatusRenderer {
 				.append("</strong> req / <strong>").append(target.getSlotLength()).append("s</strong> slot (Slots: ")
 				.append(target.getNumberOfSlots()).append(", Retention: ").append(retentionPct).append("%)</td></tr>\n");
 
-		String v4Str = target.getIpv4SubnetMask() == 32 ? "single IP (/32, no aggregation)" : "/" + target.getIpv4SubnetMask();
-		String v6Str = target.getIpv6SubnetMask() == 128 ? "single IP (/128, no aggregation)" : "/" + target.getIpv6SubnetMask();
-		sb.append("    <tr><th>Subnet Aggregation</th><td>IPv4: <code>").append(v4Str)
-				.append("</code> &bull; IPv6: <code>").append(v6Str).append("</code></td></tr>\n");
+		if (target.isGlobalCounterScope()) {
+			sb.append("    <tr><th>Counter Scope</th><td><span class=\"badge badge-warn\">GLOBAL</span> &bull; Single shared server counter (<code>")
+					.append(AntiDoSValve.GLOBAL_COUNTER_KEY)
+					.append("</code>; subnet masks ignored)</td></tr>\n");
+		} else {
+			String v4Str = target.getIpv4SubnetMask() == 32 ? "single IP (/32, no aggregation)" : "/" + target.getIpv4SubnetMask();
+			String v6Str = target.getIpv6SubnetMask() == 128 ? "single IP (/128, no aggregation)" : "/" + target.getIpv6SubnetMask();
+			sb.append("    <tr><th>Subnet Aggregation</th><td>IPv4: <code>").append(v4Str)
+					.append("</code> &bull; IPv6: <code>").append(v6Str).append("</code></td></tr>\n");
+		}
 
 		String cModeTarget = target.getCollectorIntegration();
 		boolean cActiveTarget = target.isExtendedMetricsActive();
@@ -1338,7 +1356,10 @@ public class AntiDoSStatusRenderer {
 
 		// Card 2: Slot Timeline
 		boolean isSubnetMode = target.isSubnetAggregationActive();
+		boolean isGlobalMode = target.isGlobalCounterScope();
 		boolean showAuthTimeline = target.isAuthTrackingActive();
+		String activeColHeader = isGlobalMode ? "Active Counters" : (isSubnetMode ? "Active Subnets" : "Active IPs");
+		String blockedColHeader = isGlobalMode ? "Blocked Counters" : (isSubnetMode ? "Blocked Subnets" : "Blocked IPs");
 		sb.append("<div class=\"card\">\n")
 				.append("  <div class=\"card-header\"><div class=\"card-title-group\"><span class=\"valve-name\">Slot Ring Buffer Timeline</span>")
 				.append(" <span class=\"subtitle\">(").append(numSlots).append(" slots &bull; ").append(slotLength / 1000).append("s each)</span></div></div>\n")
@@ -1346,9 +1367,9 @@ public class AntiDoSStatusRenderer {
 				.append("    <thead><tr><th>Slot #</th><th>Slot Key</th><th>Start Time</th><th>Age</th><th>Status</th><th>Requests</th>")
 				.append(showAuthTimeline ? "<th title=\"Authenticated requests in this slot\">Authenticated</th>" : "")
 				.append("<th>")
-				.append(isSubnetMode ? "Active Subnets" : "Active IPs")
+				.append(activeColHeader)
 				.append("</th><th>")
-				.append(isSubnetMode ? "Blocked Subnets" : "Blocked IPs")
+				.append(blockedColHeader)
 				.append("</th><th>Action</th></tr></thead>\n")
 				.append("    <tbody>\n");
 
@@ -1433,7 +1454,7 @@ public class AntiDoSStatusRenderer {
 		if (blockedDisplay == 0) {
 			sb.append("  <div style=\"color:var(--muted);padding:4px 0;\">No blocked clients in ").append(escapeHtml(slotLabel.toLowerCase())).append(".</div>\n");
 		} else {
-			boolean showSubnetDistinct = target.isSubnetAggregationActive();
+			boolean showSubnetDistinct = target.isSubnetAggregationActive() || target.isGlobalCounterScope();
 			boolean showReturning = target.isVisitorTrackingActive();
 			boolean showAuthenticated = target.isAuthTrackingActive();
 			sb.append("  <table class=\"data-table\">\n")
@@ -1518,7 +1539,7 @@ public class AntiDoSStatusRenderer {
 		if (activeDisplay == 0) {
 			sb.append("  <div style=\"color:var(--muted);padding:4px 0;\">No active clients in ").append(escapeHtml(slotLabel.toLowerCase())).append(".</div>\n");
 		} else {
-			boolean showSubnetDistinct = target.isSubnetAggregationActive();
+			boolean showSubnetDistinct = target.isSubnetAggregationActive() || target.isGlobalCounterScope();
 			boolean showReturning = target.isVisitorTrackingActive();
 			boolean showAuthenticated = target.isAuthTrackingActive();
 			sb.append("  <table class=\"data-table\">\n")
@@ -1864,6 +1885,7 @@ public class AntiDoSStatusRenderer {
 					.append("      \"slotLength\": ").append(v.getSlotLength()).append(",\n")
 					.append("      \"numberOfSlots\": ").append(v.getNumberOfSlots()).append(",\n")
 					.append("      \"shareOfRetainedFormerRequests\": ").append(v.getShareOfRetainedFormerRequests()).append(",\n")
+					.append("      \"counterScope\": \"").append(escapeJson(v.getCounterScope())).append("\",\n")
 					.append("      \"ipv4SubnetMask\": ").append(v.getIpv4SubnetMask()).append(",\n")
 					.append("      \"ipv6SubnetMask\": ").append(v.getIpv6SubnetMask()).append(",\n")
 					.append("      \"collectorIntegration\": \"").append(escapeJson(v.getCollectorIntegration())).append("\",\n")
@@ -1994,6 +2016,7 @@ public class AntiDoSStatusRenderer {
 				.append("    \"slotLength\": ").append(target.getSlotLength()).append(",\n")
 				.append("    \"numberOfSlots\": ").append(target.getNumberOfSlots()).append(",\n")
 				.append("    \"shareOfRetainedFormerRequests\": ").append(target.getShareOfRetainedFormerRequests()).append(",\n")
+				.append("    \"counterScope\": \"").append(escapeJson(target.getCounterScope())).append("\",\n")
 				.append("    \"ipv4SubnetMask\": ").append(target.getIpv4SubnetMask()).append(",\n")
 				.append("    \"ipv6SubnetMask\": ").append(target.getIpv6SubnetMask()).append(",\n")
 				.append("    \"collectorIntegration\": \"").append(escapeJson(target.getCollectorIntegration())).append("\",\n")

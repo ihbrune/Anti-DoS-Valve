@@ -19,6 +19,7 @@ public record MonitoredValve(
 		int slotLength,
 		int numberOfSlots,
 		float shareOfRetainedFormerRequests,
+		String counterScope,
 		int ipv4SubnetMask,
 		int ipv6SubnetMask,
 		int maxIPCacheSize,
@@ -61,6 +62,81 @@ public record MonitoredValve(
 		int configHash,
 		boolean isActive
 ) {
+	/**
+	 * Backwards-compatible constructor without counterScope.
+	 */
+	public MonitoredValve(
+			String serverId,
+			String valveName,
+			String description,
+			int pipelineOrder,
+			String monitorMode,
+			boolean simulationMode,
+			boolean serverWideBlocking,
+			int httpStatusCode,
+			int allowedRequestsPerSlot,
+			int slotLength,
+			int numberOfSlots,
+			float shareOfRetainedFormerRequests,
+			int ipv4SubnetMask,
+			int ipv6SubnetMask,
+			int maxIPCacheSize,
+			int maxBlockedIPCacheSize,
+			String relevantPaths,
+			String nonRelevantPaths,
+			String alwaysAllowedIPs,
+			boolean alwaysAllowPrivateIPs,
+			String alwaysForbiddenIPs,
+			String statusUri,
+			String statusAllowedIPs,
+			String collectorIntegration,
+			boolean visitorCookieEnabled,
+			String visitorCookieName,
+			boolean authTrackingEnabled,
+			String authTrackingMode,
+			String authCookieName,
+			String authLoginPaths,
+			int authSessionTtlSeconds,
+			int maxAuthCacheSize,
+			String relevantAuthScope,
+			int activeSampleThreshold,
+			boolean dynamicMitigationEnabled,
+			String mitigationUri,
+			int dynamicBlocksActiveCount,
+			long dynamicBlocksBlockedRequests,
+			long dynamicRulesRevision,
+			int dynamicRulesHashVersion,
+			int mitigationMinPrefixV4,
+			int mitigationMinPrefixV6,
+			int mitigationMaxTtlSeconds,
+			int mitigationMaxActiveBlocks,
+			int dynamicUaBlocksActiveCount,
+			long dynamicUaBlocksBlockedRequests,
+			long dynamicUaBlocksBypassedRequests,
+			long dynamicUaRulesRevision,
+			boolean mitigationBypassPrivateIPs,
+			String mitigationBypassIPs,
+			Instant lastUpdatedAt,
+			int configHash,
+			boolean isActive
+	) {
+		this(serverId, valveName, description, pipelineOrder, monitorMode, simulationMode,
+				serverWideBlocking, httpStatusCode, allowedRequestsPerSlot, slotLength, numberOfSlots,
+				shareOfRetainedFormerRequests, "CLIENT", ipv4SubnetMask, ipv6SubnetMask, maxIPCacheSize,
+				maxBlockedIPCacheSize, relevantPaths, nonRelevantPaths, alwaysAllowedIPs,
+				alwaysAllowPrivateIPs, alwaysForbiddenIPs, statusUri, statusAllowedIPs, collectorIntegration,
+				visitorCookieEnabled, visitorCookieName, authTrackingEnabled, authTrackingMode,
+				authCookieName, authLoginPaths, authSessionTtlSeconds, maxAuthCacheSize,
+				relevantAuthScope, activeSampleThreshold,
+				dynamicMitigationEnabled, mitigationUri, dynamicBlocksActiveCount,
+				dynamicBlocksBlockedRequests, dynamicRulesRevision, dynamicRulesHashVersion,
+				mitigationMinPrefixV4, mitigationMinPrefixV6, mitigationMaxTtlSeconds, mitigationMaxActiveBlocks,
+				dynamicUaBlocksActiveCount, dynamicUaBlocksBlockedRequests,
+				dynamicUaBlocksBypassedRequests, dynamicUaRulesRevision,
+				mitigationBypassPrivateIPs, mitigationBypassIPs,
+				lastUpdatedAt, configHash, isActive);
+	}
+
 	/**
 	 * Backwards-compatible constructor without mitigation bypass fields.
 	 */
@@ -713,7 +789,20 @@ public record MonitoredValve(
 		return (slotLength * numberOfSlots) + "s (" + numberOfSlots + " x " + slotLength + "s)";
 	}
 
+	public String counterScope() {
+		return counterScope != null && !counterScope.isBlank()
+				? counterScope.trim().toUpperCase(java.util.Locale.ROOT)
+				: "CLIENT";
+	}
+
+	public boolean isGlobalCounterScope() {
+		return "GLOBAL".equalsIgnoreCase(counterScope());
+	}
+
 	public String formattedSubnetMasks() {
+		if (isGlobalCounterScope()) {
+			return "GLOBAL (Single Counter)";
+		}
 		return "/" + ipv4SubnetMask + " (IPv4) &bull; /" + ipv6SubnetMask + " (IPv6)";
 	}
 
