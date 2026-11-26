@@ -104,8 +104,8 @@ public record MitigationUaRule(
 	}
 
 	public String shortUserAgent() {
-		if (rawUserAgent == null) {
-			return "-";
+		if (rawUserAgent == null || rawUserAgent.isBlank() || "<EMPTY>".equalsIgnoreCase(rawUserAgent.trim())) {
+			return "[Empty / Missing User-Agent]";
 		}
 		return rawUserAgent.length() > 96 ? rawUserAgent.substring(0, 93) + "..." : rawUserAgent;
 	}

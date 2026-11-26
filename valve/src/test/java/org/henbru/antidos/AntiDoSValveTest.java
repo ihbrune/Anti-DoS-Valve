@@ -4000,6 +4000,93 @@ class AntiDoSValveTest {
 	}
 
 	@Test
+	void testDynamicUserAgentBlock_emptyAndMissingUserAgent() throws Exception {
+		AntiDoSValve.getSharedAuthSessionCache().clear();
+		AntiDoSValve valve = createGuardrailTestValve("DYNAMIC_UA_EMPTY_TEST");
+		valve.setStatusUri("/antidos-status");
+		valve.setStatusPassword("uaEmptyStatusToken123");
+		valve.setRelevantPaths("/portal/.*");
+		valve.setAllowedRequestsPerSlot(50);
+		valve.setAuthTrackingMode("COOKIE");
+		valve.setAuthCookieName("JSESSIONID");
+		valve.setMitigationBypassPrivateIPs(true);
+		valve.reloadMonitor();
+
+		// Push dynamic rule for empty User-Agent (uaHash32 = 0)
+		TestResponse upsertEmptyUa = sendMitigationCommand(valve,
+				"action", "upsertua",
+				"uaHash32", "0",
+				"ttlSeconds", "600",
+				"reason", "Block empty / missing User-Agents");
+		assertEquals(200, upsertEmptyUa.getStatus());
+		assertEquals(1, valve.getDynamicBlockRegistry().getActiveUaCount(valve.getTimeInMillis()));
+
+		// 1. Missing User-Agent header (null) from public IP -> blocked (HTTP 429) & registered under UA:0
+		TestRequest rNullUa = new TestRequest("/portal/catalog", "198.51.100.50");
+		TestResponse respNullUa = new TestResponse();
+		valve.invoke(rNullUa, respNullUa);
+		assertEquals(429, respNullUa.getErrorCode());
+		assertEquals(1L, valve.getDynamicBlockRegistry().getTotalUaBlockedRequests());
+
+		// Slot blockedCounters should contain UA:0
+		AntiDoSSlot currentSlot = AntiDoSStatusRenderer.resolveTargetSlot(valve.provideMonitor(), "current");
+		assertNotNull(currentSlot.getBlockedCounters().get(AntiDoSValve.DYNAMIC_UA_COUNTER_PREFIX + "0"),
+				"Blocked empty UA request must be accounted under UA:0 counter");
+
+		// 2. Blank / Empty User-Agent string ("   ") from public IP -> blocked (HTTP 429)
+		TestRequest rBlankUa = new TestRequest("/portal/catalog", "198.51.100.51");
+		rBlankUa.setHeader("User-Agent", "   ");
+		TestResponse respBlankUa = new TestResponse();
+		valve.invoke(rBlankUa, respBlankUa);
+		assertEquals(429, respBlankUa.getErrorCode());
+		assertEquals(2L, valve.getDynamicBlockRegistry().getTotalUaBlockedRequests());
+
+		// 3. Normal legitimate User-Agent from public IP -> allowed
+		TestRequest rNormalUa = new TestRequest("/portal/catalog", "198.51.100.52");
+		rNormalUa.setHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+		TestResponse respNormalUa = new TestResponse();
+		valve.invoke(rNormalUa, respNormalUa);
+		assertEquals(-1, respNormalUa.getErrorCode());
+
+		// 4. Missing User-Agent header from private IP (10.0.0.1) -> BYPASSED via mitigationBypassPrivateIPs
+		TestRequest rPrivateIp = new TestRequest("/portal/catalog", "10.0.0.1");
+		TestResponse respPrivateIp = new TestResponse();
+		valve.invoke(rPrivateIp, respPrivateIp);
+		assertEquals(-1, respPrivateIp.getErrorCode(), "Private IP must bypass empty UA block when mitigationBypassPrivateIPs=true");
+		assertEquals(1L, valve.getDynamicBlockRegistry().getTotalUaBypassedRequests());
+
+		// 5. Missing User-Agent header from authenticated user -> BYPASSED
+		long now = valve.getTimeInMillis();
+		AntiDoSValve.getSharedAuthSessionCache().registerSession("auth-empty-ua", 1_800_000L, now);
+		TestRequest rAuthEmpty = new TestRequest("/portal/catalog", "198.51.100.53");
+		rAuthEmpty.setCookies(new Cookie[]{new Cookie("JSESSIONID", "auth-empty-ua")});
+		TestResponse respAuthEmpty = new TestResponse();
+		valve.invoke(rAuthEmpty, respAuthEmpty);
+		assertEquals(-1, respAuthEmpty.getErrorCode(), "Authenticated user must bypass empty UA block");
+		assertEquals(2L, valve.getDynamicBlockRegistry().getTotalUaBypassedRequests());
+
+		// 6. Status HTML rendering includes "Empty UA" badge
+		AntiDoSStatusRenderer renderer = new AntiDoSStatusRenderer(valve);
+		String detailsHtml = renderer.buildStatusHtmlDetails("DYNAMIC_UA_EMPTY_TEST");
+		assertTrue(detailsHtml.contains("<code>0x00000000</code>"));
+		assertTrue(detailsHtml.contains("(UA:0)"));
+		assertTrue(detailsHtml.contains("Empty UA"));
+
+		// 7. Remove empty UA block via removeua
+		TestResponse removeEmpty = sendMitigationCommand(valve,
+				"action", "removeua",
+				"uaHash32", "0");
+		assertEquals(200, removeEmpty.getStatus());
+		assertEquals(0, valve.getDynamicBlockRegistry().getActiveUaCount(valve.getTimeInMillis()));
+
+		// 8. Now missing User-Agent is allowed again
+		TestRequest rAfterRemove = new TestRequest("/portal/catalog", "198.51.100.50");
+		TestResponse respAfterRemove = new TestResponse();
+		valve.invoke(rAfterRemove, respAfterRemove);
+		assertEquals(-1, respAfterRemove.getErrorCode());
+	}
+
+	@Test
 	void testMitigationBypassPrivateIPsAndMitigationBypassIPs() throws Exception {
 		AntiDoSValve valve = createGuardrailTestValve("MITIGATION_BYPASS_TEST");
 		valve.setContainer(new StandardEngine());

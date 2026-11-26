@@ -672,6 +672,7 @@ public class BlockDiagnosisService {
 		if (rawUa == null || rawUa.isBlank()) {
 			return List.of();
 		}
+		boolean isEmptyUaSearch = "<EMPTY>".equalsIgnoreCase(rawUa.trim());
 
 		Map<Long, MitigationUaRule> candidates = new LinkedHashMap<>();
 		for (MitigationUaRule r : mitigationUaRuleRepository.findRulesOverlappingWindow(
@@ -685,14 +686,22 @@ public class BlockDiagnosisService {
 		String uaLower = rawUa.toLowerCase(Locale.ROOT);
 		List<DynamicUaMatch> matches = new ArrayList<>();
 		for (MitigationUaRule rule : candidates.values()) {
-			boolean exactHashMatch = computedUaHash32 != null
-					&& rule.uaHash32() == computedUaHash32
-					&& rule.rawUserAgent() != null
-					&& rule.rawUserAgent().equals(rawUa);
+			boolean isRuleEmptyUa = rule.uaHash32() == 0 || (rule.rawUserAgent() == null || rule.rawUserAgent().isBlank() || "<EMPTY>".equalsIgnoreCase(rule.rawUserAgent().trim()));
+			boolean exactHashMatch;
+			if (isEmptyUaSearch) {
+				exactHashMatch = isRuleEmptyUa;
+			} else {
+				exactHashMatch = computedUaHash32 != null
+						&& rule.uaHash32() == computedUaHash32
+						&& rule.rawUserAgent() != null
+						&& rule.rawUserAgent().equals(rawUa);
+			}
 			boolean partialMatch = false;
-			if (!exactHashMatch && rule.rawUserAgent() != null) {
+			if (!exactHashMatch && !isEmptyUaSearch && rule.rawUserAgent() != null) {
 				String ruleLower = rule.rawUserAgent().toLowerCase(Locale.ROOT);
-				partialMatch = ruleLower.contains(uaLower) || uaLower.contains(ruleLower);
+				if (!ruleLower.isBlank() && !uaLower.isBlank()) {
+					partialMatch = ruleLower.contains(uaLower) || uaLower.contains(ruleLower);
+				}
 			}
 			if (!exactHashMatch && !partialMatch) {
 				continue;

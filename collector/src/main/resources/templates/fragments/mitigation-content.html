@@ -1682,12 +1682,18 @@
                     <form hx-post="/mitigation/ua/block" hx-target="#mitigation-dashboard-container"
                         hx-swap="outerHTML">
                         <div style="margin-bottom: 12px;">
-                            <label
-                                style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
-                                Exact User-Agent Header String
-                            </label>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <label
+                                    style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-secondary);">
+                                    Exact User-Agent Header String
+                                </label>
+                                <button type="button" class="btn" style="padding: 2px 8px; font-size: 11px;"
+                                    onclick="var f=document.getElementById('ua-input-field'); if(f){f.value='<EMPTY>';} var b=document.getElementById('ua-run-preflight-btn'); if(b){b.click();}">
+                                    &#x2205; Insert Empty / Missing UA
+                                </button>
+                            </div>
                             <textarea name="uaInput" id="ua-input-field" rows="3"
-                                placeholder="e.g. Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/142.0.0.0 Safari/537.36"
+                                placeholder="e.g. Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/142.0.0.0 Safari/537.36 (or <EMPTY>)"
                                 style="width: 100%; background: var(--bg-input, rgba(0,0,0,0.3)); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 10px; font-family: ui-monospace, monospace; font-size: 12px;"
                                 th:text="${prefillUa}"></textarea>
                         </div>
@@ -2464,10 +2470,11 @@
 
             <div th:if="${uaPreflightResult.valid}">
                 <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">
-                    Hash: <code th:text="${uaPreflightResult.hexHash32()}">0x1234abcd</code>
                     32-bit FNV-1a: <code th:text="${uaPreflightResult.hexHash32()}">0x1234abcd</code> <span
                         style="font-weight: 400; color: var(--text-muted);"
                         th:text="'(UA:' + ${uaPreflightResult.uaHash32} + ')'">(UA:123456)</span>
+                    <span th:if="${uaPreflightResult.uaHash32 == 0}" class="badge"
+                        style="background: #e0f2fe; color: #0369a1; font-size: 10.5px; margin-left: 4px;">Empty / Missing User-Agent</span>
                     (<span th:text="${uaPreflightResult.browserFamily}">OTHER</span>) &bull;
                     24h Requests: <span
                         th:text="${#numbers.formatInteger(uaPreflightResult.observedRequests24h, 1, 'COMMA')}">0</span>

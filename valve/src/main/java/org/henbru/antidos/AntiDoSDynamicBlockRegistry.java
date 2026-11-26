@@ -867,7 +867,7 @@ public class AntiDoSDynamicBlockRegistry {
 	 * @return Matching {@link DynamicUaBlockEntry} if blocked, or {@code null}
 	 */
 	public DynamicUaBlockEntry matchUserAgent(int uaHash32, long nowMillis) {
-		if (!hasActiveUaBlocks || uaHash32 == 0) {
+		if (!hasActiveUaBlocks) {
 			return null;
 		}
 		DynamicUaBlockEntry entry = entriesByUaHash.get(Integer.valueOf(uaHash32));
@@ -895,9 +895,6 @@ public class AntiDoSDynamicBlockRegistry {
 	}
 
 	public synchronized DynamicUaBlockEntry upsertUaBlock(int uaHash32, long expiresAtMillis, String label, long nowMillis) {
-		if (uaHash32 == 0) {
-			throw new IllegalArgumentException("User-Agent 32-bit hash must not be 0");
-		}
 		if (expiresAtMillis <= nowMillis) {
 			removeUaBlock(uaHash32);
 			return null;
@@ -937,7 +934,7 @@ public class AntiDoSDynamicBlockRegistry {
 			}
 			Set<Integer> newHashes = new HashSet<>();
 			for (UaBlockSpec spec : specs) {
-				if (spec == null || spec.uaHash32 == 0 || spec.expiresAtMillis <= nowMillis) {
+				if (spec == null || spec.expiresAtMillis <= nowMillis) {
 					continue;
 				}
 				Integer key = Integer.valueOf(spec.uaHash32);
@@ -952,7 +949,7 @@ public class AntiDoSDynamicBlockRegistry {
 			}
 		}
 		for (UaBlockSpec spec : specs) {
-			if (spec == null || spec.uaHash32 == 0) {
+			if (spec == null) {
 				continue;
 			}
 			upsertUaBlock(spec.uaHash32, spec.expiresAtMillis, spec.label, nowMillis);
@@ -964,7 +961,7 @@ public class AntiDoSDynamicBlockRegistry {
 		if (maxActiveBlocks > 0 && specs != null) {
 			Set<Integer> desired = new HashSet<>();
 			for (UaBlockSpec spec : specs) {
-				if (spec != null && spec.uaHash32 != 0 && spec.expiresAtMillis > nowMillis) {
+				if (spec != null && spec.expiresAtMillis > nowMillis) {
 					desired.add(Integer.valueOf(spec.uaHash32));
 				}
 			}
@@ -976,7 +973,7 @@ public class AntiDoSDynamicBlockRegistry {
 		Set<Integer> keep = new HashSet<>();
 		if (specs != null) {
 			for (UaBlockSpec spec : specs) {
-				if (spec == null || spec.uaHash32 == 0 || spec.expiresAtMillis <= nowMillis) {
+				if (spec == null || spec.expiresAtMillis <= nowMillis) {
 					continue;
 				}
 				keep.add(Integer.valueOf(spec.uaHash32));
@@ -1053,7 +1050,7 @@ public class AntiDoSDynamicBlockRegistry {
 	}
 
 	public DynamicUaBlockEntry getActiveUaEntryByHash(int uaHash32, long nowMillis) {
-		if (uaHash32 == 0 || entriesByUaHash.isEmpty()) {
+		if (entriesByUaHash.isEmpty()) {
 			return null;
 		}
 		DynamicUaBlockEntry entry = entriesByUaHash.get(Integer.valueOf(uaHash32));

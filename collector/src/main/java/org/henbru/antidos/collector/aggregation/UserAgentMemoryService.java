@@ -901,7 +901,9 @@ public class UserAgentMemoryService {
 	 * Safe to invoke in all modes including {@code VIEWER} (never performs writes).
 	 */
 	public UserAgentDrilldownDto getUserAgentDrilldown(String rawUserAgent, int hours) {
-		String trimmed = rawUserAgent != null ? rawUserAgent.trim() : "";
+		final String trimmed = (rawUserAgent != null && !"<EMPTY>".equalsIgnoreCase(rawUserAgent.trim()))
+				? rawUserAgent.trim()
+				: "";
 		int safeHours = Math.max(1, Math.min(720, hours > 0 ? hours : 168));
 		Instant now = Instant.now();
 		Instant from = now.minus(safeHours, ChronoUnit.HOURS);

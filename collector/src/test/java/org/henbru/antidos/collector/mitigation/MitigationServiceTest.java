@@ -787,6 +787,52 @@ class MitigationServiceTest {
 	}
 
 	@Test
+	void testEmptyUserAgentPreflightAndBlock() throws Exception {
+		MitigationUaRuleRepository uaRuleRepo = new MitigationUaRuleRepository(jdbcTemplate);
+		UserAgentMemoryRepository uaMemRepo = new UserAgentMemoryRepository(jdbcTemplate);
+		SystemSettingsRepository settingsRepo = new SystemSettingsRepository(jdbcTemplate);
+		ValveStatusClient mockClient = mock(ValveStatusClient.class);
+
+		CollectorProperties props = new CollectorProperties();
+		props.setDefaultMitigationTtlMinutes(60);
+		MitigationService svc = new MitigationService(
+				props, ruleRepository, valveRepository,
+				mockClient, null, null, jdbcTemplate,
+				uaRuleRepo, uaMemRepo, settingsRepo);
+
+		// 1. Evaluate preflight for "<EMPTY>"
+		MitigationService.UaPreflightCheckResult emptyCheck = svc.evaluateUaPreflight("<EMPTY>");
+		assertTrue(emptyCheck.valid());
+		assertEquals(0, emptyCheck.uaHash32());
+		assertEquals("0x00000000", emptyCheck.hexHash32());
+		assertEquals("EMPTY", emptyCheck.browserFamily());
+		assertFalse(emptyCheck.hasCriticalWarnings());
+		assertTrue(emptyCheck.safeToProceedWithoutOverride());
+
+		// 2. Evaluate preflight for ""
+		MitigationService.UaPreflightCheckResult blankCheck = svc.evaluateUaPreflight("   ");
+		assertTrue(blankCheck.valid());
+		assertEquals(0, blankCheck.uaHash32());
+
+		// 3. Create block for empty User-Agent
+		MitigationUaRule emptyRule = svc.createOrUpdateUaBlock(
+				"<EMPTY>", 60, "Block missing UA scanners", MitigationUaRule.SOURCE_MANUAL, null, false, "admin");
+		assertNotNull(emptyRule.id());
+		assertEquals(0, emptyRule.uaHash32());
+		assertEquals("[Empty / Missing User-Agent]", emptyRule.shortUserAgent());
+		assertEquals(MitigationUaRule.STATUS_ACTIVE, emptyRule.status());
+
+		// 4. Verify payload generation for fleet sync includes 0|<expiresAt>|<label>
+		String payload = MitigationService.buildUaBlocksPayload(List.of(emptyRule));
+		assertTrue(payload.startsWith("0|"), "Payload must start with 0| for empty UA rule: " + payload);
+		assertTrue(payload.contains("Block missing UA scanners"));
+
+		// 5. Revoking rule
+		MitigationUaRule revoked = svc.revokeUaBlock(emptyRule.id(), "Done testing", "admin").orElseThrow();
+		assertEquals(MitigationUaRule.STATUS_REVOKED, revoked.status());
+	}
+
+	@Test
 	void testCombinedCidrAndUaFleetSyncAndRevisionConvergence() throws Exception {
 		MitigationUaRuleRepository uaRuleRepo = new MitigationUaRuleRepository(jdbcTemplate);
 		UserAgentMemoryRepository uaMemRepo = new UserAgentMemoryRepository(jdbcTemplate);

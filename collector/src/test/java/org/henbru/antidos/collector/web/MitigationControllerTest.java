@@ -3,6 +3,7 @@ package org.henbru.antidos.collector.web;
 import org.henbru.antidos.collector.mitigation.MitigationService;
 import org.henbru.antidos.collector.model.MitigationUaRule;
 import org.henbru.antidos.collector.storage.MitigationUaRuleRepository;
+import org.henbru.antidos.collector.storage.UserAgentMemoryRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -186,6 +187,34 @@ class MitigationControllerTest {
 
 
 		assertEquals(0, mitigationService.getActiveUaRules().size());
+
+		// Test empty User-Agent preflight and blocking via controller
+		mockMvc.perform(post("/mitigation/ua/preflight").param("uaInput", "<EMPTY>"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("0x00000000")))
+				.andExpect(content().string(containsString("(UA:0)")))
+				.andExpect(content().string(containsString("Empty / Missing User-Agent")));
+
+		mockMvc.perform(post("/mitigation/ua/block")
+						.param("uaInput", "<EMPTY>")
+						.param("ttlMinutes", "60")
+						.param("reason", "Block empty UA scanners"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("Dynamic User-Agent block active")))
+				.andExpect(content().string(containsString("0x00000000")));
+
+		MitigationUaRule emptyRule = uaRuleRepository.findByHashAndScope(
+				UserAgentMemoryRepository.computeSha256Hex(""), "ALL").orElseThrow();
+		assertEquals(0, emptyRule.uaHash32());
+		assertEquals("[Empty / Missing User-Agent]", emptyRule.shortUserAgent());
+
+		mockMvc.perform(get("/fragments/mitigation-content").param("tab", "useragents"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("0x00000000")))
+				.andExpect(content().string(containsString("UA:0")))
+				.andExpect(content().string(containsString("[Empty / Missing User-Agent]")));
+
+		mitigationService.revokeUaBlock(emptyRule.id(), "Clean up test", "admin");
 	}
 }
 

@@ -1575,7 +1575,7 @@ public class MitigationService {
 		String source = (r.source() != null && !r.source().isBlank()) ? r.source().trim() : MitigationUaRule.SOURCE_MANUAL;
 		String label = (r.reason() != null && !r.reason().isBlank())
 				? source + ": " + r.reason().trim()
-				: source + " UA Block";
+				: (r.uaHash32() == 0 ? source + ": Block Empty / Missing UA" : source + " UA Block");
 		label = label.replace('|', '/').replace('\n', ' ').replace('\r', ' ').replace(';', ',');
 		if (label.length() > MAX_VALVE_LABEL_LENGTH) {
 			label = label.substring(0, MAX_VALVE_LABEL_LENGTH - 3).trim() + "...";
@@ -1743,11 +1743,11 @@ public class MitigationService {
 		Map<String, List<MitigationUaRule>> rulesByRawUa = new HashMap<>(activeUaRules.size() * 2);
 		Instant earliestCutoff = null;
 		for (MitigationUaRule rule : activeUaRules) {
-			if (rule.uaHash32() != 0) {
-				rulesBySyntheticKey.computeIfAbsent("UA:" + rule.uaHash32(), k -> new ArrayList<>(1)).add(rule);
-			}
-			if (rule.rawUserAgent() != null && !rule.rawUserAgent().isBlank()) {
+			rulesBySyntheticKey.computeIfAbsent("UA:" + rule.uaHash32(), k -> new ArrayList<>(1)).add(rule);
+			if (rule.rawUserAgent() != null && !rule.rawUserAgent().isBlank() && !"<EMPTY>".equalsIgnoreCase(rule.rawUserAgent().trim())) {
 				rulesByRawUa.computeIfAbsent(rule.rawUserAgent().trim(), k -> new ArrayList<>(1)).add(rule);
+			} else {
+				rulesByRawUa.computeIfAbsent("", k -> new ArrayList<>(1)).add(rule);
 			}
 			Instant ruleCutoff = rule.createdAt().minusSeconds(60);
 			if (earliestCutoff == null || ruleCutoff.isBefore(earliestCutoff)) {
@@ -2224,6 +2224,9 @@ public class MitigationService {
 	public static String formatUaAuditTarget(int uaHash32, String rawUserAgent) {
 		String prefix = String.format("UA:%08x ", uaHash32);
 		String ua = rawUserAgent != null ? rawUserAgent.trim().replaceAll("\\s+", " ") : "";
+		if (ua.isEmpty() || "<EMPTY>".equalsIgnoreCase(ua)) {
+			ua = "[Empty / Missing User-Agent]";
+		}
 		int maxUaLen = 60 - prefix.length();
 		if (ua.length() > maxUaLen && maxUaLen > 3) {
 			ua = ua.substring(0, maxUaLen - 3) + "...";
@@ -2236,19 +2239,20 @@ public class MitigationService {
 	public UaPreflightCheckResult evaluateUaPreflight(String rawUserAgent) {
 		String trimmed = rawUserAgent != null ? rawUserAgent.trim() : "";
 		List<PreflightWarning> warnings = new ArrayList<>();
-		if (trimmed.isEmpty() || "-".equals(trimmed)) {
-			warnings.add(new PreflightWarning("CRITICAL", "-",
-					"User-Agent must not be blank or '-' (empty User-Agent headers cannot be dynamically blocked globally)."));
-			return new UaPreflightCheckResult("", "", 0, "EMPTY", false, false, warnings,
-					0L, 0L, 0, UserAgentAutoVerdict.NEUTRAL.name(), UserAgentManualOverride.AUTO.name(), false);
+		if ("-".equals(trimmed)) {
+			warnings.add(new PreflightWarning("WARNING", "-",
+					"Dash '-' detected as User-Agent string. If this is a placeholder for empty/missing User-Agent from access logs, use '<EMPTY>' or leave input blank."));
 		}
 
-		String sha256 = UserAgentMemoryRepository.computeSha256Hex(trimmed);
-		int uaHash32 = UserAgentMemoryRepository.computeUaHash32(trimmed);
-		UserAgentFamily classifiedFamily = UserAgentClassifier.classify(trimmed);
+		boolean isEmptyUa = trimmed.isEmpty() || "<EMPTY>".equalsIgnoreCase(trimmed) || "-".equals(trimmed);
+		String effectiveRaw = isEmptyUa ? "" : trimmed;
+
+		String sha256 = UserAgentMemoryRepository.computeSha256Hex(effectiveRaw);
+		int uaHash32 = isEmptyUa ? 0 : UserAgentMemoryRepository.computeUaHash32(effectiveRaw);
+		UserAgentFamily classifiedFamily = isEmptyUa ? UserAgentFamily.EMPTY : UserAgentClassifier.classify(effectiveRaw);
 		String browserFamily = classifiedFamily != null ? classifiedFamily.name() : "OTHER";
 
-		String targetLabel = formatUaAuditTarget(uaHash32, trimmed);
+		String targetLabel = formatUaAuditTarget(uaHash32, effectiveRaw);
 		boolean alreadyBlocked = uaRuleRepository != null
 				&& uaRuleRepository.findByHashAndScope(sha256, "ALL")
 						.map(r -> r.isCurrentlyActive(Instant.now()))
@@ -2256,6 +2260,11 @@ public class MitigationService {
 		if (alreadyBlocked) {
 			warnings.add(new PreflightWarning("WARNING", targetLabel,
 					"An active dynamic User-Agent rule already exists for this signature. Submitting will extend/update it."));
+		}
+
+		if (isEmptyUa) {
+			warnings.add(new PreflightWarning("WARNING", targetLabel,
+					"Missing/Empty User-Agent header (0x00000000 / UA:0). Legitimate automated tools, internal APIs, or CLI clients might omit User-Agent headers. Authenticated users and private subnet IPs will bypass this rule if configured."));
 		}
 
 		long obsReqs24h = 0L;
@@ -2266,7 +2275,7 @@ public class MitigationService {
 
 		Optional<UserAgentProfile> profileOpt = Optional.empty();
 		if (uaMemoryRepository != null) {
-			profileOpt = uaMemoryRepository.findByRawUserAgent(trimmed);
+			profileOpt = uaMemoryRepository.findByRawUserAgent(effectiveRaw);
 		}
 		if (profileOpt.isPresent()) {
 			UserAgentProfile p = profileOpt.get();
@@ -2313,7 +2322,7 @@ public class MitigationService {
 		}
 
 		boolean safe = warnings.stream().noneMatch(w -> "CRITICAL".equalsIgnoreCase(w.severity()));
-		return new UaPreflightCheckResult(trimmed, sha256, uaHash32, browserFamily, true, alreadyBlocked,
+		return new UaPreflightCheckResult(effectiveRaw, sha256, uaHash32, browserFamily, true, alreadyBlocked,
 				warnings, obsReqs24h, authReqs24h, authSamples24h, autoVerdictName, manualOverrideName, safe);
 	}
 

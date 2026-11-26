@@ -2470,8 +2470,7 @@ public class AntiDoSValve extends ValveBase {
 					counter = dynCounter;
 				}
 			}
-			if ((counter == null || !counter.isLocked()) && dynamicBlockRegistry.hasActiveUaBlocks()
-					&& userAgent != null && !userAgent.isEmpty()) {
+			if ((counter == null || !counter.isLocked()) && dynamicBlockRegistry.hasActiveUaBlocks()) {
 				int uaHash32 = AntiDoSVisitorTokenService.computeUserAgentHash32(userAgent);
 				AntiDoSDynamicBlockRegistry.DynamicUaBlockEntry uaEntry = dynamicBlockRegistry.matchUserAgent(uaHash32, nowMillis);
 				if (uaEntry != null) {
@@ -2936,11 +2935,9 @@ public class AntiDoSValve extends ValveBase {
 					dynamicBlockRegistry.removeUaBlock(Integer.parseInt(hashParam.trim()));
 				}
 				String rawUaParam = request.getParameter("userAgent");
-				if (rawUaParam != null && !rawUaParam.trim().isEmpty()) {
+				if (rawUaParam != null) {
 					int h = AntiDoSVisitorTokenService.computeUserAgentHash32(rawUaParam.trim());
-					if (h != 0) {
-						dynamicBlockRegistry.removeUaBlock(h);
-					}
+					dynamicBlockRegistry.removeUaBlock(h);
 				}
 				String uaBlocksParam = request.getParameter("uaBlocks");
 				if (uaBlocksParam != null && !uaBlocksParam.trim().isEmpty()) {
@@ -2997,12 +2994,15 @@ public class AntiDoSValve extends ValveBase {
 				String hashParam = request.getParameter("uaHash32");
 				String rawUaParam = request.getParameter("userAgent");
 				int singleHash = 0;
+				boolean hashProvided = false;
 				if (hashParam != null && !hashParam.trim().isEmpty()) {
 					singleHash = Integer.parseInt(hashParam.trim());
-				} else if (rawUaParam != null && !rawUaParam.trim().isEmpty()) {
+					hashProvided = true;
+				} else if (rawUaParam != null) {
 					singleHash = AntiDoSVisitorTokenService.computeUserAgentHash32(rawUaParam.trim());
+					hashProvided = true;
 				}
-				if (singleHash != 0) {
+				if (hashProvided) {
 					long expiresAt = resolveExpiresAtMillis(
 							request.getParameter("expiresAt"),
 							request.getParameter("ttlSeconds"),
@@ -3149,9 +3149,6 @@ public class AntiDoSValve extends ValveBase {
 				uaHash32 = Integer.parseInt(hashStr);
 			} catch (NumberFormatException e) {
 				uaHash32 = AntiDoSVisitorTokenService.computeUserAgentHash32(hashStr);
-			}
-			if (uaHash32 == 0) {
-				throw new IllegalArgumentException("Invalid User-Agent hash in uaBlocks: " + hashStr);
 			}
 			long expiresAt = nowMillis + 3600_000L;
 			if (parts.length >= 2 && !parts[1].trim().isEmpty()) {
@@ -3701,7 +3698,7 @@ public class AntiDoSValve extends ValveBase {
 					return Math.max(1, Math.min(3600, remainingSec));
 				}
 			}
-			if (dynamicBlockRegistry.hasActiveUaBlocks() && userAgent != null && !userAgent.isEmpty()) {
+			if (dynamicBlockRegistry.hasActiveUaBlocks()) {
 				int uaHash32 = AntiDoSVisitorTokenService.computeUserAgentHash32(userAgent);
 				AntiDoSDynamicBlockRegistry.DynamicUaBlockEntry uaEntry = dynamicBlockRegistry.matchUserAgent(uaHash32, currentTimeMillis);
 				if (uaEntry != null) {
@@ -3812,7 +3809,7 @@ public class AntiDoSValve extends ValveBase {
 					return false;
 				}
 			}
-			if (dynamicBlockRegistry.hasActiveUaBlocks() && userAgent != null && !userAgent.isEmpty()) {
+			if (dynamicBlockRegistry.hasActiveUaBlocks()) {
 				int uaHash32 = AntiDoSVisitorTokenService.computeUserAgentHash32(userAgent);
 				AntiDoSDynamicBlockRegistry.DynamicUaBlockEntry matchedUa = dynamicBlockRegistry.matchUserAgent(uaHash32, nowMillis);
 				if (matchedUa != null) {

@@ -630,7 +630,7 @@ public class MitigationController {
 
 	@PostMapping("/mitigation/ua/block")
 	public String createUaBlock(
-			@RequestParam("uaInput") String uaInput,
+			@RequestParam(value = "uaInput", required = false) String uaInput,
 			@RequestParam(value = "ttlMinutes", defaultValue = "120") int ttlMinutes,
 			@RequestParam(value = "reason", required = false) String reason,
 			@RequestParam(value = "confirmOverride", defaultValue = "false") boolean confirmOverride,
@@ -641,7 +641,7 @@ public class MitigationController {
 		}
 		MitigationService.UaPreflightCheckResult preflight = mitigationService.evaluateUaPreflight(uaInput);
 		if (!preflight.valid()) {
-			populateUaModel(model, null, "User-Agent header must not be blank or '-'.");
+			populateUaModel(model, null, "User-Agent header is invalid.");
 			model.addAttribute("prefillUa", uaInput != null ? uaInput.trim() : "");
 			model.addAttribute("uaPreflightResult", preflight);
 			return "fragments/mitigation-content :: mitigationDashboard";

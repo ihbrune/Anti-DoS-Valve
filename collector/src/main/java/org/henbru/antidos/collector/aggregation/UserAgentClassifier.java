@@ -13,7 +13,7 @@ public final class UserAgentClassifier {
 	}
 
 	public static UserAgentFamily classify(String ua) {
-		if (ua == null || ua.isBlank()) {
+		if (ua == null || ua.isBlank() || "<EMPTY>".equalsIgnoreCase(ua.trim())) {
 			return UserAgentFamily.EMPTY;
 		}
 		String lower = ua.toLowerCase(Locale.ROOT);

@@ -46,7 +46,7 @@ public class UserAgentMemoryRepository {
 	 * Computes lowercase SHA-256 hex digest of a normalized (trimmed) User-Agent string.
 	 */
 	public static String computeSha256Hex(String rawUserAgent) {
-		String normalized = rawUserAgent != null ? rawUserAgent.trim() : "";
+		String normalized = (rawUserAgent == null || "<EMPTY>".equalsIgnoreCase(rawUserAgent.trim())) ? "" : rawUserAgent.trim();
 		try {
 			MessageDigest md = MessageDigest.getInstance("SHA-256");
 			byte[] digest = md.digest(normalized.getBytes(StandardCharsets.UTF_8));
@@ -66,7 +66,7 @@ public class UserAgentMemoryRepository {
 	 * share the exact 32-bit User-Agent hash computed inside the Valve.
 	 */
 	public static int computeUaHash32(String userAgent) {
-		if (userAgent == null || userAgent.isBlank()) {
+		if (userAgent == null || userAgent.isBlank() || "<EMPTY>".equalsIgnoreCase(userAgent.trim())) {
 			return 0;
 		}
 		String trimmed = userAgent.trim();
